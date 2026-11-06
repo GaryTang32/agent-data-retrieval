@@ -1,12 +1,12 @@
 # Research source library
 
-Catalog of every unique source cited in 1 research folder(s): 967 sources (666 papers, 301 web/docs), 656 PDFs downloaded locally.
+Catalog of every unique source cited in 2 research folder(s): 1791 sources (1219 papers, 572 web/docs), 1210 PDFs downloaded locally.
 
 PDFs are **not committed** (they are git-ignored) because many licenses do not allow public
 redistribution. Rebuild the local library on any machine with:
 
 ```bash
-python3 scripts/download_papers.py "research_notes/Deterministic retrieval data conversion"
+python3 scripts/download_papers.py "research_notes/Deterministic retrieval data conversion" "research_notes/Searchable agent knowledge base construction"
 ```
 
 Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv`.
@@ -205,7 +205,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2019 | [LayoutLM: Pre-training of Text and Layout for Document Image Understanding](https://arxiv.org/abs/1912.13318) | KDD 2020 | paper | local |
 | 2019 | [Image-based table recognition: data, model, and evaluation](https://arxiv.org/abs/1911.10683) | ECCV 2020 | paper | local |
 | 2019 | [FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents](https://arxiv.org/abs/1905.13538) | ICDAR-OST 2019 | paper | local |
-| 2019 | [CORD: A Consolidated Receipt Dataset for Post-OCR Parsing](https://github.com/clovaai/cord) | NeurIPS 2019 Document Intelligence Workshop | paper | pending |
+| 2019 | [CORD: A Consolidated Receipt Dataset for Post-OCR Parsing](https://github.com/clovaai/cord) | NeurIPS 2019 Document Intelligence Workshop | paper | http_403 |
 
 ## 03_llm_information_extraction (93)
 
@@ -749,7 +749,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2024 | [Performance of two large language models for data extraction in evidence synthesis](https://pubmed.ncbi.nlm.nih.gov/38895747/) | Research Synthesis Methods 15(5):818-824 | paper | — |
 | 2024 | [OpenChemIE: An Information Extraction Toolkit For Chemistry Literature](https://arxiv.org/abs/2404.01462) | Journal of Chemical Information and Modeling 2024 | paper | local |
 | 2024 | [Data extraction from polymer literature using large language models](https://doi.org/10.1038/s43246-024-00708-9) | Communications Materials | paper | local |
-| 2024 | [Data extraction for evidence synthesis using a large language model: A proof-of-concept study](https://doi.org/10.1002/jrsm.1710) | Research Synthesis Methods 15(4):576-589 | paper | pending |
+| 2024 | [Data extraction for evidence synthesis using a large language model: A proof-of-concept study](https://doi.org/10.1002/jrsm.1710) | Research Synthesis Methods 15(4):576-589 | paper | http_403 |
 | 2024 | [ChartAssisstant: A Universal Chart Multimodal Language Model via Chart-to-Table Pre-training and Multitask Instruction Tuning](https://arxiv.org/abs/2401.02384) | arXiv preprint | paper | local |
 | 2024 | [Can large language models replace humans in the systematic review process? Evaluating GPT-4's efficacy in screening and extracting data from peer-reviewed and grey literature in multiple languages](https://arxiv.org/abs/2310.17526) | Research Synthesis Methods 2024 | paper | local |
 | 2024 | [AutoScraper: A Progressive Understanding Web Agent for Web Scraper Generation](https://arxiv.org/abs/2404.12753) | arXiv preprint | paper | local |
@@ -798,7 +798,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2018 | [CERES: Distantly Supervised Relation Extraction from the Semi-Structured Web](https://arxiv.org/abs/1804.04635) | PVLDB 2018 | paper | local |
 | 2018 | [Auto-generated materials database of Curie and Néel temperatures via semi-supervised relationship extraction](https://doi.org/10.1038/sdata.2018.111) | Scientific Data 5:180111 | paper | local |
 | 2017 | [Drain: An Online Log Parsing Approach with Fixed Depth Tree](https://doi.org/10.1109/ICWS.2017.13) | IEEE ICWS 2017 | paper | local |
-| 2016 | [ChemDataExtractor: A Toolkit for Automated Extraction of Chemical Information from the Scientific Literature](https://doi.org/10.1021/acs.jcim.6b00207) | Journal of Chemical Information and Modeling 56:1894-1904 | paper | pending |
+| 2016 | [ChemDataExtractor: A Toolkit for Automated Extraction of Chemical Information from the Scientific Literature](https://doi.org/10.1021/acs.jcim.6b00207) | Journal of Chemical Information and Modeling 56:1894-1904 | paper | local |
 | 2016 | [A Large Public Corpus of Web Tables containing Time and Context Metadata](https://doi.org/10.1145/2872518.2889386) | WWW 2016 Companion | paper | local |
 | 2011 | [Structured Web Data Extraction Dataset (SWDE) - Academic Torrents record](https://academictorrents.com/details/411576c7e80787e4b40452360f5f24acba9b5159) | Academic Torrents | web | — |
 | 2011 | [From One Tree to a Forest: a Unified Solution for Structured Web Data Extraction](https://doi.org/10.1145/2009916.2010020) | SIGIR 2011 | paper | — |
@@ -1044,3 +1044,869 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2024 | [LLM-powered data classification for data entities at scale](https://engineering.grab.com/llm-powered-data-classification) | Grab Engineering Blog | web | — |
 | 2023 | [LLMs Accelerate Annotation for Medical Information Extraction](https://arxiv.org/abs/2312.02296) | arXiv | paper | local |
 | 2023 | [DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines](https://arxiv.org/abs/2310.03714) | arXiv (ICLR 2024) | paper | local |
+
+# Searchable agent knowledge base construction (824)
+
+## 01_indexing_chunking_enrichment (127)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [When Is Complex Chunking Worth It? A Multi-Objective Evaluation of Chunking Methods at Scale](https://arxiv.org/abs/2608.16586) | arXiv 2026 | paper | local |
+| 2026 | [Visual Late Chunking: An Empirical Study of Contextual Chunking for Efficient Visual Document Retrieval](https://arxiv.org/abs/2604.10167) | arXiv 2026 | paper | local |
+| 2026 | [Upgrade the Retriever First: What an LLM Call per Chunk Buys in RAG](https://arxiv.org/abs/2603.23533) | arXiv 2026 | paper | local |
+| 2026 | [Tree Navigation Without LLM Summaries: A Matched-Cost Study of Hierarchical Retrieval for Long-Document QA](https://arxiv.org/abs/2610.06902) | arXiv 2026 | paper | local |
+| 2026 | [TopoChunker: Topology-Aware Agentic Document Chunking Framework](https://arxiv.org/abs/2603.18409) | NLPCC 2026 | paper | local |
+| 2026 | [Tessera: Structure-Completed Evidence Units for Web Retrieval-Augmented Generation](https://arxiv.org/abs/2610.37080) | arXiv 2026 | paper | local |
+| 2026 | [Structure-Aware Semantic Chunking with Title-Chain Prefixes: A 1600-Query Evaluation and the Measurement Trap in Text-Transform Ablations](https://arxiv.org/abs/2608.00824) | arXiv 2026 | paper | local |
+| 2026 | [Structure-Aware Chunking for Tabular Data in Retrieval-Augmented Generation](https://arxiv.org/abs/2605.00318) | arXiv 2026 | paper | local |
+| 2026 | [Semantic Compression Trees: Multi-Resolution Knowledge Retrieval via Hierarchical Semantic Residuals](https://arxiv.org/abs/2608.21610) | arXiv 2026 | paper | local |
+| 2026 | [SciRet: A Compute-Aware Empirical Study of Retrieval and Reranking for Scientific RAG](https://arxiv.org/abs/2608.03860) | arXiv 2026 | paper | local |
+| 2026 | [SPIRE: Structure-Preserving Interpretable Retrieval of Evidence](https://arxiv.org/abs/2604.20849) | arXiv 2026 | paper | local |
+| 2026 | [SAGE: Structure Aware Graph Expansion for Retrieval of Heterogeneous Data](https://arxiv.org/abs/2602.16964) | arXiv 2026 | paper | local |
+| 2026 | [RAG Chunking Strategies: The 2026 Benchmark Guide](https://www.premai.io/blog/rag-chunking-strategies-the-2026-benchmark-guide/) | PremAI blog | web | — |
+| 2026 | [QChunker: Learning Question-Aware Text Chunking for Domain RAG via Multi-Agent Debate](https://arxiv.org/abs/2603.11650) | arXiv 2026 | paper | local |
+| 2026 | [Parser, Chunking, and Embedding Interactions in Retrieval-Augmented Generation over Indian Government Regulatory Documents](https://arxiv.org/abs/2609.31660) | arXiv 2026 | paper | local |
+| 2026 | [ORPHEAS: A Cross-Lingual Greek-English Embedding Model for Retrieval-Augmented Generation](https://arxiv.org/abs/2604.20666) | arXiv 2026 | paper | local |
+| 2026 | [Metadata, Structure, or Strategy? A Decomposition of RAG Context Enrichment](https://arxiv.org/abs/2606.29645) | ECML-PKDD 2026 | paper | local |
+| 2026 | [MCompassRAG: Topic Metadata as a Semantic Compass for Paragraph-Level Retrieval](https://arxiv.org/abs/2606.18508) | arXiv 2026 | paper | local |
+| 2026 | [Lost in a Single Vector: Improving Long-Document Retrieval with Chunk Evidence Aggregation](https://arxiv.org/abs/2606.18781) | arXiv 2026 | paper | local |
+| 2026 | [Intent-Driven Dynamic Chunking: Segmenting Documents to Reflect Predicted Information Needs](https://arxiv.org/abs/2602.14784) | arXiv 2026 | paper | local |
+| 2026 | [Hierarchical Abstract Tree for Cross-Document Retrieval-Augmented Generation](https://arxiv.org/abs/2605.00529) | ICML 2026 | paper | local |
+| 2026 | [H-RAG at SemEval-2026 Task 8: Hierarchical Parent-Child Retrieval for Multi-Turn RAG Conversations](https://arxiv.org/abs/2605.00631) | SemEval 2026 | paper | local |
+| 2026 | [Graph-Aware Late Chunking for Retrieval-Augmented Generation in Biomedical Literature](https://arxiv.org/abs/2603.22633) | arXiv 2026 | paper | local |
+| 2026 | [From PDF to RAG-Ready: Evaluating Document Conversion Frameworks for Domain-Specific Question Answering](https://arxiv.org/abs/2604.04948) | Applied Sciences 2026 | paper | local |
+| 2026 | [Evaluation of Chunking Strategies for Effective Text Embedding in Low-Resource Language on Agricultural Documents](https://arxiv.org/abs/2605.22203) | arXiv 2026 | paper | local |
+| 2026 | [Evaluating Chunking Strategies for Retrieval-Augmented Generation on Academic Texts](https://arxiv.org/abs/2607.01852) | arXiv 2026 | paper | local |
+| 2026 | [Evaluating Chunking Strategies For Retrieval-Augmented Generation in Oil and Gas Enterprise Documents](https://arxiv.org/abs/2603.24556) | CCSEIT 2026 | paper | local |
+| 2026 | [Empirical Evaluation of PDF Parsing and Chunking for Financial Question Answering with RAG](https://arxiv.org/abs/2604.12047) | arXiv 2026 | paper | local |
+| 2026 | [Document Retrieval-Aware Chunking (D-RAC): Universal Retrieval-Aware Ingestion of Enterprise Documents via PDF Normalization and Multimodal Markdown Conversion](https://arxiv.org/abs/2609.24220) | arXiv 2026 | paper | local |
+| 2026 | [Diffusion-Pretrained Dense and Contextual Embeddings](https://arxiv.org/abs/2602.11151) | arXiv 2026 | paper | local |
+| 2026 | [DTCRS: Dynamic Tree Construction for Recursive Summarization](https://arxiv.org/abs/2604.07012) | arXiv 2026 | paper | local |
+| 2026 | [Contextual Embeddings Beyond the Gold Chunk](https://arxiv.org/abs/2610.38854) | arXiv 2026 | paper | local |
+| 2026 | [Comparing Chunking and Embedding Strategies for Turkish RAG Systems](https://arxiv.org/abs/2608.26192) | INTCEC 2026 | paper | local |
+| 2026 | [Chunking, Retrieval, and Re-ranking: An Empirical Evaluation of RAG Architectures for Policy Document Question Answering](https://arxiv.org/abs/2601.15457) | arXiv 2026 | paper | local |
+| 2026 | [Chunking German Legal Code](https://arxiv.org/abs/2605.19806) | ASAIL Workshop @ ICAIL 2026 | paper | local |
+| 2026 | [Chunk Recomputation under Real Document Revisions: Measuring Update Cost and Retrieval Quality of Fixed, Recursive, and Content-Defined Chunking](https://arxiv.org/abs/2610.31019) | AIBDCC 2026 | paper | local |
+| 2026 | [Bridging the Question-Answer Gap in Retrieval-Augmented Generation: Hypothetical Prompt Embeddings](https://arxiv.org/abs/2607.29402) | IEEE Access 2025 | paper | local |
+| 2026 | [Beyond Chunk-Then-Embed: A Comprehensive Taxonomy and Evaluation of Document Chunking Strategies for Information Retrieval](https://arxiv.org/abs/2602.16974) | arXiv 2026 | paper | local |
+| 2026 | [Adaptive Chunking: Optimizing Chunking-Method Selection for RAG](https://arxiv.org/abs/2603.25333) | LREC 2026 | paper | local |
+| 2026 | [A Systematic Investigation of Document Chunking Strategies and Embedding Sensitivity](https://arxiv.org/abs/2603.06976) | arXiv 2026 | paper | local |
+| 2026 | [A Systematic Analysis of Chunking Strategies for Reliable Question Answering](https://arxiv.org/abs/2601.14123) | arXiv 2026 | paper | local |
+| 2026 | [A Navigational Approach for Comprehensive RAG via Traversal over Proposition Graphs](https://arxiv.org/abs/2601.04859) | arXiv 2026 | paper | local |
+| 2025 | [jina-embeddings-v4: Universal Embeddings for Multimodal Multilingual Retrieval](https://arxiv.org/abs/2506.18902) | arXiv 2025 | paper | local |
+| 2025 | [dsRAG documentation (AutoContext contextual chunk headers, Relevant Segment Extraction)](https://d-star-ai.github.io/dsRAG) | Project documentation | web | — |
+| 2025 | [What's the Best Way to Retrieve Slides? A Comparative Study of Multimodal, Caption-Based, and Hybrid Retrieval Techniques](https://arxiv.org/abs/2509.15211) | arXiv 2025 | paper | local |
+| 2025 | [VoyageAI provider documentation (pricing and limits)](https://docs.litellm.ai/docs/providers/voyage) | LiteLLM docs | web | — |
+| 2025 | [Vision-Guided Chunking Is All You Need: Enhancing RAG with Multimodal Document Understanding](https://arxiv.org/abs/2506.16035) | arXiv 2025 | paper | local |
+| 2025 | [Towards Reliable Retrieval in RAG Systems for Large Legal Datasets](https://arxiv.org/abs/2510.06999) | NLLP Workshop 2025 | paper | local |
+| 2025 | [Tools are under-documented: Simple Document Expansion Boosts Tool Retrieval](https://arxiv.org/abs/2510.22670) | arXiv 2025 | paper | local |
+| 2025 | [TCDE: Topic-Centric Dual Expansion of Queries and Documents with Large Language Models for Information Retrieval](https://arxiv.org/abs/2512.17164) | arXiv 2025 | paper | local |
+| 2025 | [SlimRAG: Retrieval without Graphs via Entity-Aware Context Selection](https://arxiv.org/abs/2506.17288) | arXiv 2025 | paper | local |
+| 2025 | [SitEmb-v1.5: Improved Context-Aware Dense Retrieval for Semantic Association and Long Story Comprehension](https://arxiv.org/abs/2508.01959) | ACL 2025 | paper | local |
+| 2025 | [Rethinking Chunk Size For Long-Document Retrieval: A Multi-Dataset Analysis](https://arxiv.org/abs/2505.21700) | arXiv 2025 | paper | local |
+| 2025 | [Remining Hard Negatives for Generative Pseudo Labeled Domain Adaptation](https://arxiv.org/abs/2501.14434) | arXiv 2025 | paper | local |
+| 2025 | [Reconstructing Context: Evaluating Advanced Chunking Strategies for Retrieval-Augmented Generation](https://arxiv.org/abs/2504.19754) | ECIR 2025 Workshop (KEIR) | paper | local |
+| 2025 | [Qwen3 Embedding: Advancing Text Embedding and Reranking Through Foundation Models](https://arxiv.org/abs/2506.05176) | arXiv 2025 | paper | local |
+| 2025 | [QuOTE: Question-Oriented Text Embeddings](https://arxiv.org/abs/2502.10976) | arXiv 2025 | paper | local |
+| 2025 | [QuIM-RAG: Advancing Retrieval-Augmented Generation with Inverted Question Matching for Enhanced QA Performance](https://arxiv.org/abs/2501.02702) | IEEE Access 2024 | paper | local |
+| 2025 | [PageIndex: Document Index for Vectorless, Reasoning-based RAG](https://github.com/VectifyAI/PageIndex) | GitHub repository | web | — |
+| 2025 | [MoC: Mixtures of Text Chunking Learners for Retrieval-Augmented Generation System](https://arxiv.org/abs/2503.09600) | arXiv 2025 | paper | local |
+| 2025 | [Metadata-Driven Retrieval-Augmented Generation for Financial Question Answering](https://arxiv.org/abs/2510.24402) | arXiv 2025 | paper | local |
+| 2025 | [MetaGen Blended RAG: Unlocking Zero-Shot Precision for Specialized Domain Question-Answering](https://arxiv.org/abs/2505.18247) | arXiv 2025 | paper | local |
+| 2025 | [MMTEB: Massive Multilingual Text Embedding Benchmark](https://arxiv.org/abs/2502.13595) | ICLR 2025 | paper | local |
+| 2025 | [Knowledge Compression via Question Generation: Enhancing Multihop Document Retrieval without Fine-tuning](https://arxiv.org/abs/2506.13778) | arXiv 2025 | paper | local |
+| 2025 | [Introducing voyage-context-3: focused chunk-level details with global document context](https://blog.voyageai.com/2025/07/23/voyage-context-3/) | Voyage AI blog | web | — |
+| 2025 | [Improving Retrieval and RAG with Embedding Model Finetuning](https://www.databricks.com/blog/improving-retrieval-and-rag-embedding-model-finetuning) | Databricks blog | web | — |
+| 2025 | [How to retrieve using multiple vectors per document (MultiVectorRetriever)](https://python.langchain.com/docs/how_to/multi_vector) | LangChain documentation | web | — |
+| 2025 | [Gemini Embedding: Generalizable Embeddings from Gemini](https://arxiv.org/abs/2503.07891) | arXiv 2025 | paper | local |
+| 2025 | [From RAG to Memory: Non-Parametric Continual Learning for Large Language Models](https://arxiv.org/abs/2502.14802) | ICML 2025 | paper | local |
+| 2025 | [Finding the Best Chunking Strategy for Accurate AI Responses](https://developer.nvidia.com/blog/finding-the-best-chunking-strategy-for-accurate-ai-responses/) | NVIDIA Technical Blog | web | — |
+| 2025 | [EmbeddingGemma: Powerful and Lightweight Text Representations](https://arxiv.org/abs/2509.20354) | arXiv 2025 | paper | local |
+| 2025 | [Effective Inference-Free Retrieval for Learned Sparse Representations](https://arxiv.org/abs/2505.01452) | arXiv 2025 | paper | local |
+| 2025 | [Docling chunking concepts (HierarchicalChunker, HybridChunker)](https://docling-project.github.io/docling/concepts/chunking/) | Docling documentation | web | — |
+| 2025 | [Doc2Query++: Topic-Coverage based Document Expansion and its Application to Dense Retrieval via Dual-Index Fusion](https://arxiv.org/abs/2510.09557) | arXiv 2025 | paper | local |
+| 2025 | [Cross-Document Topic-Aligned Chunking for Retrieval-Augmented Generation](https://arxiv.org/abs/2601.05265) | arXiv 2025 | paper | local |
+| 2025 | [Context is Gold to find the Gold Passage: Evaluating and Training Contextual Document Embeddings](https://arxiv.org/abs/2505.24782) | arXiv 2025 | paper | local |
+| 2025 | [AMAQA: A Metadata-based QA Dataset for RAG Systems](https://arxiv.org/abs/2505.13557) | arXiv 2025 | paper | local |
+| 2025 | [A Systematic Framework for Enterprise Knowledge Retrieval: Leveraging LLM-Generated Metadata to Enhance RAG Systems](https://arxiv.org/abs/2512.05411) | IEEE CAI 2026 | paper | local |
+| 2024 | [jina-embeddings-v3: Multilingual Embeddings With Task LoRA](https://arxiv.org/abs/2409.10173) | arXiv 2024 | paper | local |
+| 2024 | [Towards Competitive Search Relevance For Inference-Free Learned Sparse Retrievers](https://arxiv.org/abs/2411.04403) | arXiv 2024 | paper | local |
+| 2024 | [SiReRAG: Indexing Similar and Related Information for Multihop Reasoning](https://arxiv.org/abs/2412.06206) | ICLR 2025 | paper | local |
+| 2024 | [SPLADE-v3: New baselines for SPLADE](https://arxiv.org/abs/2403.06789) | arXiv 2024 | paper | local |
+| 2024 | [Recursive Abstractive Processing for Retrieval in Dynamic Datasets](https://arxiv.org/abs/2410.01736) | arXiv 2024 | paper | local |
+| 2024 | [Ragnarök: A Reusable RAG Framework and Baselines for TREC 2024 Retrieval-Augmented Generation Track](https://arxiv.org/abs/2406.16828) | arXiv 2024 | paper | local |
+| 2024 | [RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval](https://arxiv.org/abs/2401.18059) | ICLR 2024 | paper | local |
+| 2024 | [Nomic Embed: Training a Reproducible Long Context Text Embedder](https://arxiv.org/abs/2402.01613) | TMLR | paper | local |
+| 2024 | [Multilingual E5 Text Embeddings: A Technical Report](https://arxiv.org/abs/2402.05672) | arXiv 2024 | paper | local |
+| 2024 | [Mix-of-Granularity: Optimize the Chunking Granularity for Retrieval-Augmented Generation](https://arxiv.org/abs/2406.00456) | COLING 2025 | paper | local |
+| 2024 | [Meta-Chunking: Learning Text Segmentation and Semantic Completion via Logical Perception](https://arxiv.org/abs/2410.12788) | arXiv 2024 | paper | local |
+| 2024 | [Mafin: Enhancing Black-Box Embeddings with Model Augmented Fine-Tuning](https://arxiv.org/abs/2402.12177) | arXiv 2024 | paper | local |
+| 2024 | [MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings](https://arxiv.org/abs/2405.19504) | NeurIPS 2024 | paper | local |
+| 2024 | [M3-Embedding: Multi-Linguality, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation](https://arxiv.org/abs/2402.03216) | Findings of ACL 2024 | paper | local |
+| 2024 | [LumberChunker: Long-Form Narrative Document Segmentation](https://arxiv.org/abs/2406.17526) | Findings of EMNLP 2024 | paper | local |
+| 2024 | [LongRAG: Enhancing Retrieval-Augmented Generation with Long-context LLMs](https://arxiv.org/abs/2406.15319) | arXiv 2024 | paper | local |
+| 2024 | [LongEmbed: Extending Embedding Models for Long Context Retrieval](https://arxiv.org/abs/2404.12096) | EMNLP 2024 | paper | local |
+| 2024 | [Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models](https://arxiv.org/abs/2409.04701) | arXiv 2024 | paper | local |
+| 2024 | [Late Chunking in Long-Context Embedding Models](https://jina.ai/news/late-chunking-in-long-context-embedding-models/) | Jina AI blog | web | — |
+| 2024 | [Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever](https://arxiv.org/abs/2408.16672) | arXiv 2024 | paper | local |
+| 2024 | [Is Semantic Chunking Worth the Computational Cost?](https://arxiv.org/abs/2410.13070) | arXiv 2024 (Vectara; reported NAACL 2025 Findings) | paper | local |
+| 2024 | [HyQE: Ranking Contexts with Hypothetical Query Embeddings](https://arxiv.org/abs/2410.15262) | arXiv 2024 | paper | local |
+| 2024 | [HtmlRAG: HTML is Better Than Plain Text for Modeling Retrieved Knowledge in RAG Systems](https://arxiv.org/abs/2411.02959) | WWW 2025 | paper | local |
+| 2024 | [HiQA: A Hierarchical Contextual Augmentation RAG for Multi-Documents QA](https://arxiv.org/abs/2402.01767) | arXiv 2024 | paper | local |
+| 2024 | [From Isolated Conversations to Hierarchical Schemas: Dynamic Tree Memory Representation for LLMs](https://arxiv.org/abs/2410.14052) | arXiv 2024 | paper | local |
+| 2024 | [Financial Report Chunking for Effective Retrieval Augmented Generation](https://arxiv.org/abs/2402.05131) | arXiv 2024 | paper | local |
+| 2024 | [Evaluating Chunking Strategies for Retrieval](https://www.trychroma.com/research/evaluating-chunking) | Chroma technical report | web | — |
+| 2024 | [Contextual Document Embeddings](https://arxiv.org/abs/2410.02525) | ICLR 2025 | paper | local |
+| 2024 | [ColPali: Efficient Document Retrieval with Vision Language Models](https://arxiv.org/abs/2407.01449) | ICLR 2025 | paper | local |
+| 2024 | [BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval](https://arxiv.org/abs/2407.12883) | ICLR 2025 | paper | local |
+| 2024 | [ARAGOG: Advanced RAG Output Grading](https://arxiv.org/abs/2404.01037) | arXiv 2024 | paper | local |
+| 2024 | [AGRaME: Any-Granularity Ranking with Multi-Vector Embeddings](https://arxiv.org/abs/2405.15028) | arXiv 2024 | paper | local |
+| 2023 | [Sub-Sentence Encoder: Contrastive Learning of Propositional Semantic Representations](https://arxiv.org/abs/2311.04335) | arXiv 2023 | paper | local |
+| 2023 | [Jina Embeddings 2: 8192-Token General-Purpose Text Embeddings for Long Documents](https://arxiv.org/abs/2310.19923) | arXiv 2023 | paper | local |
+| 2023 | [Doc2Query--: When Less is More](https://arxiv.org/abs/2301.03266) | ECIR 2023 | paper | local |
+| 2023 | [Dense X Retrieval: What Retrieval Granularity Should We Use?](https://arxiv.org/abs/2312.06648) | EMNLP 2024 | paper | local |
+| 2023 | [Azure AI Search: Outperforming vector search with hybrid retrieval and ranking capabilities](https://techcommunity.microsoft.com/t5/azure-ai-foundry-blog/azure-ai-search-outperforming-vector-search-with-hybrid/ba-p/3929167) | Microsoft Tech Community blog | web | — |
+| 2022 | [Table Retrieval May Not Necessitate Table-specific Model Design](https://arxiv.org/abs/2205.09843) | arXiv 2022 | paper | local |
+| 2022 | [Promptagator: Few-shot Dense Retrieval From 8 Examples](https://arxiv.org/abs/2209.11755) | ICLR 2023 | paper | local |
+| 2022 | [Precise Zero-Shot Dense Retrieval without Relevance Labels](https://arxiv.org/abs/2212.10496) | ACL 2023 | paper | local |
+| 2022 | [PLAID: An Efficient Engine for Late Interaction Retrieval](https://arxiv.org/abs/2205.09707) | CIKM 2022 | paper | local |
+| 2022 | [Making a MIRACL: Multilingual Information Retrieval Across a Continuum of Languages](https://arxiv.org/abs/2210.09984) | TACL 2023 (MIRACL) | paper | local |
+| 2021 | [SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking](https://arxiv.org/abs/2107.05720) | SIGIR 2021 (short) | paper | local |
+| 2021 | [SPLADE v2: Sparse Lexical and Expansion Model for Information Retrieval](https://arxiv.org/abs/2109.10086) | arXiv 2021 | paper | local |
+| 2021 | [GPL: Generative Pseudo Labeling for Unsupervised Domain Adaptation of Dense Retrieval](https://arxiv.org/abs/2112.07577) | NAACL 2022 | paper | local |
+| 2021 | [ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction](https://arxiv.org/abs/2112.01488) | NAACL 2022 | paper | local |
+| 2020 | [ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT](https://arxiv.org/abs/2004.12832) | SIGIR 2020 | paper | local |
+| 2019 | [FAQ Retrieval using Query-Question Similarity and BERT-Based Query-Answer Relevance](https://arxiv.org/abs/1905.02851) | SIGIR 2019 (short) | paper | local |
+| 2019 | [Document Expansion by Query Prediction](https://arxiv.org/abs/1904.08375) | arXiv 2019 | paper | local |
+
+## 02_procedures_sops_workflows (111)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [tau2-bench repository (incl. tau3 banking_knowledge domain)](https://github.com/sierra-research/tau2-bench) | GitHub | web | — |
+| 2026 | [tau-Knowledge: advancing agent benchmarking to knowledge](https://sierra.ai/blog/tau-knowledge) | Sierra blog | web | — |
+| 2026 | [VIGIL: Runtime Enforcement of Behavioral Specifications in AI Agent Skills](https://arxiv.org/abs/2606.26524) | arXiv preprint | paper | local |
+| 2026 | [The Agentforce Guide to Context Engineering](https://www.salesforce.com/agentforce/guide) | Salesforce | web | — |
+| 2026 | [TSG Suggester: Tree-Structured Knowledge-Graph Retrieval for Troubleshooting Guide Recommendation in Cloud Incident Management](https://arxiv.org/abs/2609.35780) | arXiv preprint | paper | local |
+| 2026 | [Solver-Aided Verification of Policy Compliance in Tool-Augmented LLM Agents](https://arxiv.org/abs/2603.20449) | arXiv preprint | paper | local |
+| 2026 | [SkillsBench: Benchmarking How Well Agent Skills Work Across Diverse Tasks](https://arxiv.org/abs/2602.12670) | arXiv preprint | paper | local |
+| 2026 | [Skill-as-Pseudocode: Refactoring Skill Libraries to Pseudocode for LLM Agents](https://arxiv.org/abs/2605.27955) | arXiv preprint | paper | local |
+| 2026 | [Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices) | Claude Platform Documentation | web | — |
+| 2026 | [Skill Availability and Presentation Granularity in Large-Language-Model Agents: A Controlled SkillsBench Study](https://arxiv.org/abs/2605.31408) | arXiv preprint | paper | local |
+| 2026 | [Shortening agent skills leaves LLM agent cost unchanged](https://arxiv.org/abs/2607.03048) | arXiv preprint | paper | local |
+| 2026 | [SWE-Skills-Bench: Do Agent Skills Actually Help in Real-World Software Engineering?](https://arxiv.org/abs/2603.15401) | arXiv preprint | paper | local |
+| 2026 | [SPEM: Structure-Aware Procedural Memory for Efficient Skill Use in LLM Agents](https://arxiv.org/abs/2610.26995) | arXiv preprint | paper | local |
+| 2026 | [SOPRAG: Multi-view Graph Experts Retrieval for Industrial Standard Operating Procedures](https://arxiv.org/abs/2602.01858) | arXiv preprint | paper | local |
+| 2026 | [SKILL.state: Scalable Long-Horizon Agent Skills](https://arxiv.org/abs/2608.26263) | arXiv preprint | paper | local |
+| 2026 | [SAGE: A Service Agent Graph-guided Evaluation Benchmark](https://arxiv.org/abs/2604.09285) | arXiv preprint | paper | local |
+| 2026 | [Report: Progressive Disclosure of Agent Skills](https://arxiv.org/abs/2609.35692) | arXiv preprint | paper | local |
+| 2026 | [Progressive Skill Discovery as Access Control for Tool-Using LLM Agents: Structural Governance through Role-Scoped Capability Delivery](https://arxiv.org/abs/2609.28693) | arXiv preprint | paper | local |
+| 2026 | [Procedural Knowledge Extraction from Industrial Troubleshooting Guides Using Vision Language Models](https://arxiv.org/abs/2601.22754) | arXiv preprint | paper | local |
+| 2026 | [Procedural Graphs: Self-Evolving Execution Structures for LLM Agents](https://arxiv.org/abs/2609.09153) | arXiv preprint | paper | local |
+| 2026 | [Policy Loopholes in Agent Evaluation: When Policy Ambiguity Masquerades as Agent Error](https://arxiv.org/abs/2609.14400) | arXiv preprint | paper | local |
+| 2026 | [Organizational Memory for Agentic Business Process Execution](https://arxiv.org/abs/2607.03228) | arXiv preprint | paper | local |
+| 2026 | [Multi-Agent Procedural Graph Extraction with Structural and Logical Refinement](https://arxiv.org/abs/2601.19170) | arXiv preprint | paper | local |
+| 2026 | [Managing Procedural Memory in LLM Agents: Control, Adaptation, and Evaluation](https://arxiv.org/abs/2606.23127) | arXiv preprint | paper | local |
+| 2026 | [Learning by Doing: Autonomously Compiling and Curating Agent Skills from Verified Traces](https://arxiv.org/abs/2611.01386) | arXiv preprint | paper | local |
+| 2026 | [Inducing Task Models from Computer-Use Traces](https://arxiv.org/abs/2608.20319) | arXiv preprint | paper | local |
+| 2026 | [Grounding LLM Agents in Business Processes: Process-Aware Knowledge Graphs for Reliable Multi-Step Service Invocation](https://arxiv.org/abs/2610.37242) | arXiv preprint | paper | local |
+| 2026 | [From Atomic Actions to Standard Operating Procedures: Iterative Tool Optimization for Self-Evolving LLM Agents](https://arxiv.org/abs/2607.07321) | arXiv preprint | paper | local |
+| 2026 | [From Anatomy to Smells: An Empirical Study of SKILL.md in Agent Skills](https://arxiv.org/abs/2607.01456) | arXiv preprint | paper | local |
+| 2026 | [FlowExtract: Procedural Knowledge Extraction from Maintenance Flowcharts](https://arxiv.org/abs/2604.06770) | arXiv preprint | paper | local |
+| 2026 | [FixItFlow: Automated Troubleshooting Guide Generation from Cloud Incidents](https://arxiv.org/abs/2607.13035) | arXiv preprint | paper | local |
+| 2026 | [Fidelity Is Not Safety: Gently-Compressed LLMs Pass Every Data-Free Quality Guard Yet Invent Procedure Steps in Agentic Execution](https://arxiv.org/abs/2607.28196) | arXiv preprint | paper | local |
+| 2026 | [Donating Agent Skills to the Agentic AI Foundation](https://www.anthropic.com/news/donating-agent-skills-to-the-agentic-ai-foundation) | Anthropic News | web | — |
+| 2026 | [Compile, Then Page: Executable SOP Programs and a Capability-Gated Runtime for Procedural LLM Agents](https://arxiv.org/abs/2607.11346) | arXiv preprint | paper | local |
+| 2026 | [Comparative Approaches to Agent Retrieval over Large Skill Libraries](https://arxiv.org/abs/2608.06196) | arXiv preprint | paper | local |
+| 2026 | [CARE: Grounded Recursive Self-Improvement for Production Customer-Service Agents](https://arxiv.org/abs/2611.02839) | arXiv preprint | paper | local |
+| 2026 | [Building Fin Procedures](https://www.intercom.com/help/en/articles/13449439-building-fin-procedures) | Intercom Help Center | web | — |
+| 2026 | [Beyond State Machines: Executing Network Procedures with Agentic Tool-Calling Sequences](https://arxiv.org/abs/2605.02584) | arXiv preprint | paper | local |
+| 2026 | [Azure SRE Agent overview](https://learn.microsoft.com/en-us/azure/sre-agent/overview) | Microsoft Learn | web | — |
+| 2026 | [Autonomous AKS incident response with Azure SRE Agent](https://techcommunity.microsoft.com/t5/apps-on-azure-blog/autonomous-aks-incident-response-with-azure-sre-agent-from-alert/ba-p/4511343) | Microsoft Tech Community | web | — |
+| 2026 | [Automatic Generation of Executable BPMN Models from Medical Guidelines](https://arxiv.org/abs/2604.07817) | arXiv preprint | paper | local |
+| 2026 | [Automated BPMN Model Generation from Textual Process Descriptions: A Multi-Stage LLM-Driven Approach](https://arxiv.org/abs/2604.12105) | arXiv preprint | paper | local |
+| 2026 | [An honest Decagon AI review for 2026: Features, limitations, and pricing](https://eesel.ai/blog/decagon-ai-review) | eesel.ai blog | web | — |
+| 2026 | [Agent Skills for Large Language Models: Architecture, Acquisition, Security, and the Path Forward](https://arxiv.org/abs/2602.12430) | arXiv preprint | paper | local |
+| 2026 | [Agent Skills Can Be Harmful: An Empirical Study of Skill-Induced Failures in LLM Agents](https://arxiv.org/abs/2608.11888) | arXiv preprint | paper | local |
+| 2026 | [Agent SDK](https://sierra.ai/product/agent-sdk) | Sierra product page | web | — |
+| 2026 | [Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents](https://arxiv.org/abs/2602.22302) | arXiv preprint | paper | local |
+| 2026 | [A Framework for Evaluating Agentic Skills at Scale](https://arxiv.org/abs/2606.17819) | arXiv preprint | paper | local |
+| 2026 | [$τ$-Knowledge: Evaluating Conversational Agents over Unstructured Knowledge](https://arxiv.org/abs/2603.04370) | arXiv preprint | paper | local |
+| 2025 | [What is the Best Process Model Representation? A Comparative Analysis for Process Modeling with Large Language Models](https://arxiv.org/abs/2507.11356) | arXiv preprint | paper | local |
+| 2025 | [TOD-ProcBench: Benchmarking Complex Instruction-Following in Task-Oriented Dialogues](https://arxiv.org/abs/2511.15976) | arXiv preprint | paper | local |
+| 2025 | [StepFly: Agentic Troubleshooting Guide Automation for Incident Diagnosis](https://arxiv.org/abs/2510.10074) | arXiv preprint | paper | local |
+| 2025 | [SkillWeaver: Web Agents can Self-Improve by Discovering and Honing Skills](https://arxiv.org/abs/2504.07079) | arXiv preprint | paper | local |
+| 2025 | [SOPBench: Evaluating Language Agents at Following Standard Operating Procedures and Constraints](https://arxiv.org/abs/2503.08669) | arXiv preprint | paper | local |
+| 2025 | [SOP-Maze: Evaluating Large Language Models on Complicated Business Standard Operating Procedures](https://arxiv.org/abs/2510.08942) | arXiv preprint | paper | local |
+| 2025 | [SOP-Bench: Complex Industrial SOPs for Evaluating LLM Agents](https://arxiv.org/abs/2506.08119) | arXiv preprint | paper | local |
+| 2025 | [SOP-Agent: Empower General Purpose AI Agent with Domain-Specific SOPs](https://arxiv.org/abs/2501.09316) | arXiv preprint | paper | local |
+| 2025 | [Remember Me, Refine Me: A Dynamic Procedural Memory Framework for Experience-Driven Agent Evolution](https://arxiv.org/abs/2512.10696) | arXiv preprint | paper | local |
+| 2025 | [Rasa CALM concepts](https://rasa.com/docs/learn/concepts/calm/) | Rasa documentation | web | — |
+| 2025 | [Procedural Knowledge Improves Agentic LLM Workflows](https://arxiv.org/abs/2511.07568) | arXiv preprint | paper | local |
+| 2025 | [PagerDuty SRE Agent](https://pagerduty.com/platform/ai-agents/sre) | PagerDuty product page | web | — |
+| 2025 | [Memp: Exploring Agent Procedural Memory](https://arxiv.org/abs/2508.06433) | arXiv preprint | paper | local |
+| 2025 | [Learning Hierarchical Procedural Memory for LLM Agents through Bayesian Selection and Contrastive Refinement](https://arxiv.org/abs/2512.18950) | arXiv preprint | paper | local |
+| 2025 | [LEGOMem: Modular Procedural Memory for Multi-agent LLM Systems for Workflow Automation](https://arxiv.org/abs/2510.04851) | arXiv preprint | paper | local |
+| 2025 | [Introducing Hybrid Reasoning with Agent Script](https://developer.salesforce.com/blogs/2025/10/introducing-hybrid-reasoning-with-agent-script) | Salesforce Developers Blog | web | — |
+| 2025 | [Instruction-Tuning Open-Weight Language Models for BPMN Model Generation](https://arxiv.org/abs/2512.12063) | arXiv preprint | paper | local |
+| 2025 | [Generating Structured Plan Representation of Procedures with LLMs](https://arxiv.org/abs/2504.00029) | arXiv preprint | paper | local |
+| 2025 | [From SOPs to Agent Operating Procedures](https://decagon.ai/resources/from-sops-to-agent-operating-procedures) | Decagon blog | web | — |
+| 2025 | [Follow the Flow: Fine-grained Flowchart Attribution with Neurosymbolic Agents](https://arxiv.org/abs/2506.01344) | arXiv preprint | paper | local |
+| 2025 | [FlowAgent: Achieving Compliance and Flexibility for Workflow Agents](https://arxiv.org/abs/2502.14345) | arXiv preprint | paper | local |
+| 2025 | [Flow-of-Action: SOP Enhanced LLM-Based Multi-Agent System for Root Cause Analysis](https://arxiv.org/abs/2502.08224) | arXiv preprint | paper | local |
+| 2025 | [FLOW-BENCH: Towards Conversational Generation of Enterprise Workflows](https://arxiv.org/abs/2505.11646) | arXiv preprint | paper | local |
+| 2025 | [Equipping agents for the real world with Agent Skills](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) | Anthropic Engineering Blog | web | — |
+| 2025 | [Azure SRE Agent: bring your runbooks (Apps on Azure blog)](https://techcommunity.microsoft.com/blog/appsonazureblog/-/4479811) | Microsoft Tech Community | web | — |
+| 2025 | [An Agentic Flow for Finite State Machine Extraction using Prompt Chaining](https://arxiv.org/abs/2507.11222) | arXiv preprint | paper | local |
+| 2025 | [Agentic Plan Caching: Test-Time Memory for Fast and Cost-Efficient LLM Agents](https://arxiv.org/abs/2506.14852) | arXiv preprint | paper | local |
+| 2025 | [AgentSpec: Customizable Runtime Enforcement for Safe and Reliable LLM Agents](https://arxiv.org/abs/2503.18666) | arXiv preprint | paper | local |
+| 2025 | [Agent Skills Enable a New Class of Realistic and Trivially Simple Prompt Injections](https://arxiv.org/abs/2510.26328) | arXiv preprint | paper | local |
+| 2025 | [Agent Skills (agentskills.io specification commentary)](https://simonwillison.net/2025/Dec/19/agent-skills) | simonwillison.net | web | — |
+| 2025 | [Agent KB: Leveraging Cross-Domain Experience for Agentic Problem Solving](https://arxiv.org/abs/2507.06229) | arXiv preprint | paper | local |
+| 2025 | [AIOpsLab: A Holistic Framework to Evaluate AI Agents for Enabling Autonomous Clouds](https://arxiv.org/abs/2501.06706) | arXiv preprint | paper | local |
+| 2025 | [A Benchmark for Procedural Memory Retrieval in Language Agents](https://arxiv.org/abs/2511.21730) | arXiv preprint | paper | local |
+| 2025 | [$τ^2$-Bench: Evaluating Conversational Agents in a Dual-Control Environment](https://arxiv.org/abs/2506.07982) | arXiv preprint | paper | local |
+| 2024 | [WorkflowLLM: Enhancing Workflow Orchestration Capability of Large Language Models](https://arxiv.org/abs/2411.05451) | arXiv preprint | paper | local |
+| 2024 | [Process Modeling With Large Language Models](https://arxiv.org/abs/2403.07541) | arXiv preprint | paper | local |
+| 2024 | [ProcBench: Benchmark for Multi-Step Reasoning and Following Procedure](https://arxiv.org/abs/2410.03117) | arXiv preprint | paper | local |
+| 2024 | [PAGED: A Benchmark for Procedural Graphs Extraction from Documents](https://arxiv.org/abs/2408.03630) | ACL 2024 | paper | local |
+| 2024 | [Nissist: An Incident Mitigation Copilot based on Troubleshooting Guides](https://arxiv.org/abs/2402.17531) | arXiv preprint | paper | local |
+| 2024 | [KnowAgent: Knowledge-Augmented Planning for LLM-Based Agents](https://arxiv.org/abs/2403.03101) | arXiv preprint | paper | local |
+| 2024 | [Human Evaluation of Procedural Knowledge Graph Extraction from Text with Large Language Models](https://arxiv.org/abs/2412.03589) | arXiv preprint | paper | local |
+| 2024 | [GuardAgent: Safeguard LLM Agents by a Guard Agent via Knowledge-Enabled Reasoning](https://arxiv.org/abs/2406.09187) | arXiv preprint | paper | local |
+| 2024 | [Formal-LLM: Integrating Formal Language and Natural Language for Controllable LLM-based Agents](https://arxiv.org/abs/2402.00798) | arXiv preprint | paper | local |
+| 2024 | [FlowMind: Automatic Workflow Generation with LLMs](https://arxiv.org/abs/2404.13050) | arXiv preprint | paper | local |
+| 2024 | [FlowBench: Revisiting and Benchmarking Workflow-Guided Planning for LLM-based Agents](https://arxiv.org/abs/2406.14884) | Findings of EMNLP 2024 | paper | local |
+| 2024 | [ChatSOP: An SOP-Guided MCTS Planning Framework for Controllable LLM Dialogue Agents](https://arxiv.org/abs/2407.03884) | arXiv preprint | paper | local |
+| 2024 | [CaT-BENCH: Benchmarking Language Model Understanding of Causal and Temporal Dependencies in Plans](https://arxiv.org/abs/2406.15823) | arXiv preprint | paper | local |
+| 2024 | [Benchmarking Agentic Workflow Generation](https://arxiv.org/abs/2410.07869) | arXiv preprint | paper | local |
+| 2024 | [AutoGuide: Automated Generation and Selection of Context-Aware Guidelines for Large Language Model Agents](https://arxiv.org/abs/2403.08978) | arXiv preprint | paper | local |
+| 2024 | [AutoFlow: Automated Workflow Generation for Large Language Model Agents](https://arxiv.org/abs/2407.12821) | arXiv preprint | paper | local |
+| 2024 | [Agent Workflow Memory](https://arxiv.org/abs/2409.07429) | ICML 2025 | paper | local |
+| 2024 | [$τ$-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains](https://arxiv.org/abs/2406.12045) | arXiv preprint | paper | local |
+| 2023 | [Voyager: An Open-Ended Embodied Agent with Large Language Models](https://arxiv.org/abs/2305.16291) | TMLR 2024 | paper | local |
+| 2023 | [Tool Documentation Enables Zero-Shot Tool-Usage with Large Language Models](https://arxiv.org/abs/2308.00675) | arXiv preprint | paper | local |
+| 2023 | [Synapse: Trajectory-as-Exemplar Prompting with Memory for Computer Control](https://arxiv.org/abs/2306.07863) | ICLR 2024 | paper | local |
+| 2023 | [Prompting with Pseudo-Code Instructions](https://arxiv.org/abs/2305.11790) | arXiv preprint | paper | local |
+| 2023 | [ProAgent: From Robotic Process Automation to Agentic Process Automation](https://arxiv.org/abs/2311.10751) | arXiv preprint | paper | local |
+| 2023 | [NeMo Guardrails: A Toolkit for Controllable and Safe LLM Applications with Programmable Rails](https://arxiv.org/abs/2310.10501) | EMNLP 2023 System Demonstrations | paper | local |
+| 2023 | [ExpeL: LLM Agents Are Experiential Learners](https://arxiv.org/abs/2308.10144) | AAAI 2024 | paper | local |
+| 2022 | [PET: An Annotated Dataset for Process Extraction from Natural Language Text](https://arxiv.org/abs/2203.04860) | LREC 2022 | paper | local |
+| 2022 | [AutoTSG: Learning and Synthesis for Incident Troubleshooting](https://arxiv.org/abs/2205.13457) | arXiv preprint | paper | local |
+| 2020 | [Reasoning about Goals, Steps, and Temporal Ordering with WikiHow](https://arxiv.org/abs/2009.07690) | arXiv preprint | paper | local |
+
+## 03_rules_policies_regulations (107)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [eCFR Versioner API: content versions for 12 CFR 1026.18](https://www.ecfr.gov/api/versioner/v1/versions/title-12.json?part=1026&section=1026.18) | eCFR API | web | — |
+| 2026 | [XAI-LAW: A Logic Programming Tool for Modeling, Explaining, and Learning Legal Decisions](https://arxiv.org/abs/2601.03844) | ICLP 2025 (EPTCS 439) | paper | local |
+| 2026 | [Why Policy in Amazon Bedrock AgentCore chose Cedar for securing agentic workflows](https://aws.amazon.com/blogs/security/why-policy-in-amazon-bedrock-agentcore-chose-cedar-for-securing-agentic-workflows/) | AWS Security Blog | web | — |
+| 2026 | [What are Automated Reasoning checks in Amazon Bedrock Guardrails?](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-automated-reasoning-checks.html) | AWS documentation | web | — |
+| 2026 | [What Do Compliance Detectors Read? An Audit of Activation Probes and Guard Models](https://arxiv.org/abs/2608.16852) | arXiv preprint | paper | local |
+| 2026 | [ViHERMES: A Graph-Grounded Multihop Question Answering Benchmark and System for Vietnamese Healthcare Regulations](https://arxiv.org/abs/2602.07361) | ACIIDS 2026 | paper | local |
+| 2026 | [VEPA: Verified Evolving Formal Policy for Lifelong LLM Agent Guardrails](https://arxiv.org/abs/2610.12813) | arXiv preprint | paper | local |
+| 2026 | [Type-Checked Compliance: Deterministic Guardrails for Agentic Financial Systems Using Lean 4 Theorem Proving](https://arxiv.org/abs/2604.01483) | arXiv preprint | paper | local |
+| 2026 | [Think Before You Act: Decision Gate for LLM Agents](https://arxiv.org/abs/2610.38620) | arXiv preprint | paper | local |
+| 2026 | [The Verifier Tax: Horizon Dependent Safety Success Tradeoffs in Tool Using LLM Agents](https://arxiv.org/abs/2603.19328) | arXiv preprint | paper | local |
+| 2026 | [Structured Decomposition for Reliable LLM-Generated Access Control Policies](https://arxiv.org/abs/2609.24036) | arXiv preprint | paper | local |
+| 2026 | [StrucChunk: Structure-Aware Retrieval for Legal Document RAG](https://arxiv.org/abs/2610.26313) | arXiv preprint | paper | local |
+| 2026 | [Stop Means Stop: Measuring and Repairing the Enforcement Gap in Agent-Framework Control Primitives](https://arxiv.org/abs/2607.14166) | arXiv preprint | paper | local |
+| 2026 | [Scaling underwriting expertise with Rule AI](https://www.munichre.com/us-life/en/insights/future-of-risk/scaling-underwriting-expertise-with-rule-ai-.html) | Munich Re insights | web | — |
+| 2026 | [Runtime Compliance Verification for AI Agents](https://arxiv.org/abs/2606.19242) | arXiv preprint | paper | local |
+| 2026 | [RegoMender: A Multi-agent Framework for Automated Rego Policy Repair](https://arxiv.org/abs/2610.29456) | ASE 2026 | paper | local |
+| 2026 | [Radiology Guideline-derived Decision Graph for Efficient Clinical Decision Support](https://arxiv.org/abs/2610.40327) | arXiv preprint | paper | local |
+| 2026 | [REGREACT: Self-Correcting Multi-Agent Pipelines for Structured Regulatory Information Extraction](https://arxiv.org/abs/2604.12054) | EMNLP 2026 Findings | paper | local |
+| 2026 | [RAISE: Reinforcing Access Control Policy Synthesis in LLMs via Symbolic Evaluation](https://arxiv.org/abs/2609.33796) | arXiv preprint | paper | local |
+| 2026 | [Prose2Policy (P2P): A Practical LLM Pipeline for Translating Natural-Language Access Policies into Executable Rego](https://arxiv.org/abs/2603.15799) | arXiv preprint | paper | local |
+| 2026 | [PolicyGuard: From Organizational Policies to Neuro-SymbolicCompliance Review Engines](https://arxiv.org/abs/2606.32004) | arXiv preprint | paper | local |
+| 2026 | [Policy-as-logic for robust reasoning over rules](https://arxiv.org/abs/2608.11905) | arXiv preprint | paper | local |
+| 2026 | [Policy in Amazon Bedrock AgentCore: Control Agent Interactions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy.html) | AWS documentation | web | — |
+| 2026 | [Open Policy Agent documentation](https://www.openpolicyagent.org/docs/latest/) | OPA documentation | web | — |
+| 2026 | [OSCAL: the Open Security Controls Assessment Language](https://pages.nist.gov/OSCAL/) | NIST website | web | — |
+| 2026 | [ODRL Policy Comparison Through Normalisation](https://arxiv.org/abs/2603.12926) | ESWC 2026 | paper | local |
+| 2026 | [Neuro-Symbolic Compliance: Integrating LLMs and SMT Solvers for Automated Financial Legal Analysis](https://arxiv.org/abs/2601.06181) | ACM AIware 2026 | paper | local |
+| 2026 | [NeMo Guardrails documentation](https://docs.nvidia.com/nemo/guardrails/latest/index.html) | NVIDIA documentation | web | — |
+| 2026 | [More Reasoning Is Not Always Better: Executing Clinical Guidelines with LLMs and Rules](https://arxiv.org/abs/2610.15912) | arXiv preprint | paper | local |
+| 2026 | [LLM-Orchestrated Conformance Checking in Stroke Care Without Computer-Interpretable Guidelines](https://arxiv.org/abs/2606.09489) | arXiv preprint | paper | local |
+| 2026 | [LLM Agents Can Easily Tamper With Their Own Traces](https://arxiv.org/abs/2609.30266) | arXiv preprint | paper | local |
+| 2026 | [Jev-Guard: Fast Routing and Auditing Agent Actions over Editable Policy Trees](https://arxiv.org/abs/2610.18326) | arXiv preprint | paper | local |
+| 2026 | [Hybrid AI for Explainable and Accurate Conversational Agents in eGovernment](https://arxiv.org/abs/2608.01346) | AIDA2J workshop @ ICAIL 2026 | paper | local |
+| 2026 | [Guardrails AI (GitHub repository)](https://github.com/guardrails-ai/guardrails) | GitHub | web | — |
+| 2026 | [Governed Reasoning for Institutional AI](https://arxiv.org/abs/2604.10658) | arXiv preprint | paper | local |
+| 2026 | [GEMS-RAG: Graph-grounded Engineering Multimodal Standards Retrieval-Augmented Generation](https://arxiv.org/abs/2610.33277) | arXiv preprint | paper | local |
+| 2026 | [Frustratingly Easy Agentic RAG via Portable Skills: A Case Study in Customer Support](https://arxiv.org/abs/2610.14428) | EMNLP 2026 Industry Track | paper | local |
+| 2026 | [From Legal Text to Executable Decision Models: Evaluating Structured Representations for Legal Decision Model Generation](https://arxiv.org/abs/2604.17153) | ICAIL 2026 | paper | local |
+| 2026 | [FraudBench: Stress-Testing Policy-Grounded Banking Agents Against Adaptive Fraud](https://arxiv.org/abs/2608.18136) | arXiv preprint | paper | local |
+| 2026 | [Follow the Policy, Fail the Benchmark: Auditing and Revising Policy-Based Decision Benchmarks](https://arxiv.org/abs/2611.07042) | arXiv preprint | paper | local |
+| 2026 | [FinGuard: Detecting Financial Regulatory Non-Compliance in LLM Interactions](https://arxiv.org/abs/2605.29427) | arXiv preprint | paper | local |
+| 2026 | [Extracting ODRL Policies from Business Process Models: A Graph Traversal Approach to Compliance-by-Extraction](https://arxiv.org/abs/2608.02607) | OPAL 2026 workshop @ ESWC | paper | local |
+| 2026 | [DeonticBench: A Benchmark for Reasoning over Rules](https://arxiv.org/abs/2604.04443) | arXiv preprint | paper | local |
+| 2026 | [Deontic Policies for Runtime Governance of Agentic AI Systems](https://arxiv.org/abs/2606.19464) | IEEE ICWS 2026 | paper | local |
+| 2026 | [Deogen: Automatic Benchmark Generation for Reasoning over Policies](https://arxiv.org/abs/2610.38687) | arXiv preprint | paper | local |
+| 2026 | [Decision Model and Notation (DMN) specification](https://www.omg.org/spec/DMN) | OMG specification (DMN 1.6) | web | — |
+| 2026 | [Constitutional Classifiers++: Efficient Production-Grade Defenses against Universal Jailbreaks](https://arxiv.org/abs/2601.04603) | arXiv preprint | paper | local |
+| 2026 | [ComplianceNLP: Knowledge-Graph-Augmented RAG for Multi-Framework Regulatory Gap Detection](https://arxiv.org/abs/2604.23585) | ACL 2026 Industry Track | paper | local |
+| 2026 | [Clinical Quality Language (CQL) Specification v2.0.0](https://cql.hl7.org/) | HL7 specification (STU) | web | — |
+| 2026 | [ClinicBot: A Guideline-Grounded Clinical Chatbot with Prioritized Evidence RAG and Verifiable Citations](https://arxiv.org/abs/2605.00846) | ACM 2026 (demo) | paper | local |
+| 2026 | [Citation-Closure Retrieval and Per-Rule Attribution for Real-World Regulatory Compliance Question Answering](https://arxiv.org/abs/2605.29742) | EMNLP 2026 Findings | paper | local |
+| 2026 | [Catala: a programming language for the law (GitHub repository)](https://github.com/CatalaLang/catala) | GitHub | web | — |
+| 2026 | [CXBench: A Benchmark for Process-Compliant LLM Agents in Regulated Customer-Experience Workflows](https://arxiv.org/abs/2610.25954) | arXiv preprint | paper | local |
+| 2026 | [Benchmarking Legal RAG: The Promise and Limits of AI Statutory Surveys](https://arxiv.org/abs/2603.03300) | ACM CS&Law 2026 | paper | local |
+| 2026 | [Automatically Tightening Access Control Policies with Restricter](https://arxiv.org/abs/2601.14582) | TACAS 2026 | paper | local |
+| 2026 | [Automatic Conversion of NICE Guidelines to an Executable Computational Model Using Large Language Models](https://arxiv.org/abs/2608.30022) | Learning Health Systems 2026 | paper | local |
+| 2026 | [Automated Regulatory Compliance Question Answering in Financial Services with Domain-Adapted Retrieval-Augmented Generation](https://arxiv.org/abs/2609.30009) | arXiv preprint | paper | local |
+| 2026 | [Autoformalization of Agent Instructions into Policy-as-Code](https://arxiv.org/abs/2606.26649) | ICML 2026 AIWILD workshop | paper | local |
+| 2026 | [AutoCedar: An Agentic Framework for Verifier-Guided Access Control Policy Synthesis](https://arxiv.org/abs/2607.03656) | arXiv preprint | paper | local |
+| 2026 | [Auditable Agents](https://arxiv.org/abs/2604.05485) | ACM AI Summit 2026 (extended) | paper | local |
+| 2026 | [Asking For An Old Friend: Diagnosing and Mitigating Temporal Failure Modes in LLM-based Statutory Question Answering](https://arxiv.org/abs/2605.23497) | ICAIL 2026 | paper | local |
+| 2026 | [AgenTest: Mining Business Rules to Test LLM Agents for Business Logic Bugs](https://arxiv.org/abs/2610.28116) | arXiv preprint | paper | local |
+| 2026 | [ActGov: Governing LLM Agent Actions via Policy-Constrained Validation](https://arxiv.org/abs/2609.24446) | arXiv preprint | paper | local |
+| 2026 | [ARCCS: An Automated Regulatory Compliance Checking System](https://arxiv.org/abs/2610.01345) | EMNLP 2026 System Demonstrations | paper | local |
+| 2026 | [A Formally Grounded ODRL Evaluator: Implementation and Comparison](https://arxiv.org/abs/2607.15987) | arXiv preprint | paper | local |
+| 2025 | [Towards Robust Legal Reasoning: Harnessing Logical LLMs in Law](https://arxiv.org/abs/2502.17638) | arXiv preprint | paper | local |
+| 2025 | [Towards Enforcing Company Policy Adherence in Agentic Workflows](https://arxiv.org/abs/2507.16459) | EMNLP 2025 Industry Track | paper | local |
+| 2025 | [Toward Robust Legal Text Formalization into Defeasible Deontic Logic using LLMs](https://arxiv.org/abs/2506.08899) | arXiv preprint | paper | local |
+| 2025 | [ShieldAgent: Shielding Agents via Verifiable Safety Policy Reasoning](https://arxiv.org/abs/2503.22738) | arXiv preprint | paper | local |
+| 2025 | [Progent: Securing AI Agents with Privilege Control](https://arxiv.org/abs/2504.11703) | arXiv preprint | paper | local |
+| 2025 | [Policy-as-Prompt: Turning AI Governance Rules into Guardrails for AI Agents](https://arxiv.org/abs/2509.23994) | Regulatable ML Workshop @ NeurIPS 2025 | paper | local |
+| 2025 | [Minimize AI hallucinations and deliver up to 99% verification accuracy with Automated Reasoning checks: Now available](https://aws.amazon.com/blogs/aws/minimize-ai-hallucinations-and-deliver-up-to-99-verification-accuracy-with-automated-reasoning-checks-now-available/) | AWS News Blog | web | — |
+| 2025 | [Language Models and Logic Programs for Trustworthy Tax Reasoning](https://arxiv.org/abs/2508.21051) | AAAI 2026 | paper | local |
+| 2025 | [Grounded Answers from Multi-Passage Regulations: Learning-to-Rank for Regulatory RAG](https://aclanthology.org/2025.nllp-1.10/) | Natural Legal Language Processing Workshop (NLLP) 2025 | paper | local |
+| 2025 | [Enforcing Temporal Constraints for LLM Agents](https://arxiv.org/abs/2512.23738) | arXiv preprint | paper | local |
+| 2025 | [Effective Red-Teaming of Policy-Adherent Agents](https://arxiv.org/abs/2506.09600) | arXiv preprint | paper | local |
+| 2025 | [DMN-Guided Prompting: A Framework for Controlling LLM Behavior](https://arxiv.org/abs/2505.11701) | arXiv preprint | paper | local |
+| 2025 | [Constitutional Classifiers: Defending against Universal Jailbreaks across Thousands of Hours of Red Teaming](https://arxiv.org/abs/2501.18837) | arXiv preprint | paper | local |
+| 2025 | [Compliance-to-Code: Enhancing Financial Compliance Checking via Code Generation](https://arxiv.org/abs/2505.19804) | arXiv preprint | paper | local |
+| 2025 | [CliCARE: Grounding Large Language Models in Clinical Guidelines for Decision Support over Longitudinal Cancer Electronic Health Records](https://arxiv.org/abs/2507.22533) | AAAI 2026 | paper | local |
+| 2025 | [Analyzing and Internalizing Complex Policy Documents for LLM Agents](https://arxiv.org/abs/2510.11588) | arXiv preprint | paper | local |
+| 2025 | [An Ontology-Driven Graph RAG for Legal Norms: A Structural, Temporal, and Deterministic Approach](https://arxiv.org/abs/2505.00039) | JURIX 2025 | paper | local |
+| 2025 | [AgentODRL: A Large Language Model-based Multi-agent System for ODRL Generation](https://arxiv.org/abs/2512.00602) | AAAI 2026 | paper | local |
+| 2025 | [ARPaCCino: An Agentic-RAG for Policy as Code Compliance](https://arxiv.org/abs/2507.10584) | Springer LNCS 2025 | paper | local |
+| 2025 | [A Neurosymbolic Approach to Natural Language Formalization and Verification](https://arxiv.org/abs/2511.09008) | arXiv preprint | paper | local |
+| 2025 | [A Hybrid Approach to Information Retrieval and Answer Generation for Regulatory Texts](https://arxiv.org/abs/2502.16767) | RegNLP workshop @ COLING 2025 (RIRAG shared task) | paper | local |
+| 2024 | [ST-WebAgentBench: A Benchmark for Evaluating Safety and Trustworthiness in Web Agents](https://arxiv.org/abs/2410.06703) | ICLR 2026 | paper | local |
+| 2024 | [RuleArena: A Benchmark for Rule-Guided Reasoning with LLMs in Real-World Scenarios](https://arxiv.org/abs/2412.08972) | ACL 2025 | paper | local |
+| 2024 | [RIRAG: Regulatory Information Retrieval and Answer Generation](https://arxiv.org/abs/2409.05677) | arXiv preprint | paper | local |
+| 2024 | [PolicyLR: A Logic Representation For Privacy Policies](https://arxiv.org/abs/2408.14830) | arXiv preprint | paper | local |
+| 2024 | [Open Digital Rights Enforcement Framework (ODRE): from descriptive to enforceable policies](https://arxiv.org/abs/2409.17602) | arXiv preprint | paper | local |
+| 2024 | [MST-R: Multi-Stage Tuning for Retrieval Systems and Metric Evaluation](https://arxiv.org/abs/2412.10313) | RegNLP workshop @ COLING 2025 (RIRAG shared task) | paper | local |
+| 2024 | [LegalBench-RAG: A Benchmark for Retrieval-Augmented Generation in the Legal Domain](https://arxiv.org/abs/2408.10343) | arXiv preprint | paper | local |
+| 2024 | [Hallucination-Free? Assessing the Reliability of Leading AI Legal Research Tools](https://arxiv.org/abs/2405.20362) | arXiv preprint | paper | local |
+| 2024 | [Clinical Practice Guidelines (CPG-on-FHIR) Implementation Guide 2.0.0](https://hl7.org/fhir/uv/cpg/) | HL7 FHIR IG (STU2) | web | — |
+| 2024 | [Cedar: A New Language for Expressive, Fast, Safe, and Analyzable Authorization (Extended Version)](https://arxiv.org/abs/2403.04651) | arXiv preprint | paper | local |
+| 2024 | [CODE-ACCORD: A Corpus of building regulatory data for rule generation towards automatic compliance checking](https://arxiv.org/abs/2403.02231) | Scientific Data 2024 | paper | local |
+| 2024 | [CLERC: A Dataset for Legal Case Retrieval and Retrieval-Augmented Analysis Generation](https://arxiv.org/abs/2406.17186) | arXiv preprint | paper | local |
+| 2024 | [AUEB-Archimedes at RIRAG-2025: Is obligation concatenation really all you need?](https://arxiv.org/abs/2412.11567) | RegNLP workshop @ COLING 2025 (RIRAG shared task) | paper | local |
+| 2024 | [A Defeasible Deontic Calculus for Resolving Norm Conflicts](https://arxiv.org/abs/2407.04869) | arXiv preprint | paper | local |
+| 2024 | [1-800-SHARED-TASKS at RegNLP: Lexical Reranking of Semantic Retrieval (LeSeR) for Regulatory Question Answering](https://arxiv.org/abs/2412.06009) | RegNLP workshop @ COLING 2025 | paper | local |
+| 2021 | [LegalRuleML Core Specification Version 1.0](https://docs.oasis-open.org/legalruleml/legalruleml-core-spec/v1.0/legalruleml-core-spec-v1.0.html) | OASIS Standard | web | — |
+| 2021 | [ContractNLI: A Dataset for Document-level Natural Language Inference for Contracts](https://arxiv.org/abs/2110.01799) | Findings of EMNLP 2021 | paper | local |
+| 2021 | [Catala: A Programming Language for the Law](https://arxiv.org/abs/2103.03198) | ICFP 2021 (PACMPL) | paper | local |
+| 2019 | [Semantics of Business Vocabulary and Business Rules (SBVR) 1.5](https://www.omg.org/spec/SBVR) | OMG specification | web | — |
+| 2018 | [ODRL Information Model 2.2](https://www.w3.org/TR/odrl-model/) | W3C Recommendation | web | — |
+| 2018 | [Akoma Ntoso Version 1.0 Part 1: XML Vocabulary](https://docs.oasis-open.org/legaldocml/akn-core/v1.0/akn-core-v1.0-part1-vocabulary.html) | OASIS Standard | web | — |
+
+## 04_domain_knowledge_organization (80)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [WikiLoop: Jointly Learning to Build and Navigate Agent-Native Wikis with Downstream Feedback](https://arxiv.org/abs/2607.26604) | arXiv preprint | paper | local |
+| 2026 | [WFM: Wiki Foundation Model for Complex Agentic Reasoning](https://arxiv.org/abs/2609.18182) | arXiv preprint | paper | local |
+| 2026 | [UMLS Metathesaurus release statistics (2026AB)](https://www.nlm.nih.gov/research/umls/knowledge_sources/metathesaurus/release/statistics.html) | NLM website | web | — |
+| 2026 | [SciDef: Datasets and Tools for Automated Definition Extraction from Scientific Literature with LLMs](https://arxiv.org/abs/2602.05413) | arXiv preprint (CIKM 2026 submission) | paper | local |
+| 2026 | [Retrieval as Reasoning: Self-Evolving Agent-Native Retrieval via LLM-Wiki](https://arxiv.org/abs/2605.25480) | arXiv preprint | paper | local |
+| 2026 | [ReLTEx: Reliable LLM-based Taxonomy Expansion](https://arxiv.org/abs/2608.10970) | arXiv preprint | paper | local |
+| 2026 | [Memory as Metabolism: A Design for Companion Knowledge Systems](https://arxiv.org/abs/2604.12034) | arXiv preprint (Zenodo concept DOI) | paper | local |
+| 2026 | [LegalGraphRAG: Multi-Agent Graph Retrieval-Augmented Generation for Reliable Legal Reasoning](https://arxiv.org/abs/2605.28120) | ACL 2026 | paper | local |
+| 2026 | [LLMs Interpret, Embeddings Organize, Graphs Emerge: Agent-Driven Compilation of Scientific Knowledge](https://arxiv.org/abs/2608.29612) | arXiv preprint | paper | local |
+| 2026 | [LLM-Driven Ontology Construction for Enterprise Knowledge Graphs](https://arxiv.org/abs/2602.01276) | ICSC 2026 | paper | local |
+| 2026 | [LLM Wiki (idea file gist)](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) | GitHub Gist | web | — |
+| 2026 | [LARAG: Link-Aware Retrieval Strategy for RAG Systems in Hyperlinked Technical Documentation](https://arxiv.org/abs/2605.07517) | arXiv preprint | paper | local |
+| 2026 | [Knowledge Cards: Structured Knowledge for AI Systems](https://arxiv.org/abs/2608.26176) | arXiv preprint | paper | local |
+| 2026 | [Karpathy shares 'LLM Knowledge Base' architecture that bypasses RAG with an evolving markdown library maintained by AI](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an) | VentureBeat | web | — |
+| 2026 | [Injecting Structured Biomedical Knowledge into Language Models: Continual Pretraining vs. GraphRAG](https://arxiv.org/abs/2604.16422) | LREC 2026 | paper | local |
+| 2026 | [Hybrid Retrieval-Augmented Generation with Knowledge Graph Expansion, RRF Fusion, and Per-Chunk Grounded Evaluation for Enterprise Document Search](https://arxiv.org/abs/2609.01617) | arXiv preprint | paper | local |
+| 2026 | [Hierarchical Text Classification with LLM-Refined Taxonomies](https://arxiv.org/abs/2601.18375) | arXiv preprint | paper | local |
+| 2026 | [Corpus2Skill: Distilling Enterprise Knowledge into Navigable Agent Skills for QA and RAG](https://arxiv.org/abs/2604.14572) | EMNLP 2026 Findings | paper | local |
+| 2026 | [Context as Infrastructure: Knowledge Compilation for Retrieval in Agentic Systems with Harnesses](https://arxiv.org/abs/2610.41172) | arXiv preprint (InfiniFlow/RAGFlow) | paper | local |
+| 2026 | [CUICurate: A GraphRAG-based Framework for Automated Clinical Concept Curation for NLP applications](https://arxiv.org/abs/2602.17949) | JAMIA 2026 | paper | local |
+| 2026 | [Beyond Memory: A Templated Substrate for Heterogeneous Collaborative Knowledge Work with LLM Agents](https://arxiv.org/abs/2607.24759) | arXiv preprint | paper | local |
+| 2026 | [BEATS: Bootstrapping E-commerce Attribute Taxonomies for Search through Iterative Human-AI Collaboration](https://arxiv.org/abs/2606.04909) | SIGIR 2026 Industry Track | paper | local |
+| 2026 | [A Chain-of-Thought Approach to Semantic Query Categorization in e-Commerce Taxonomies](https://arxiv.org/abs/2601.00510) | SIGIR eCom 2025 Workshop | paper | local |
+| 2026 | ["Where is My Troubleshooting Procedure?": Studying the Potential of RAG in Assisting Failure Resolution of Large Cyber-Physical System](https://arxiv.org/abs/2601.08706) | ICSE 2026 SEIP | paper | local |
+| 2025 | [qmd: Query Markup Documents (on-device search for markdown)](https://github.com/tobi/qmd) | GitHub repository | web | — |
+| 2025 | [WikiAutoGen: Towards Multi-Modal Wikipedia-Style Article Generation](https://arxiv.org/abs/2503.19065) | ICCV 2025 | paper | local |
+| 2025 | [Transformer-Based Extraction of Statutory Definitions from the U.S. Code](https://arxiv.org/abs/2504.16353) | IEEE AIIoT 2025 | paper | local |
+| 2025 | [TaxoAdapt: Aligning LLM-Based Multidimensional Taxonomy Construction to Evolving Research Corpora](https://arxiv.org/abs/2506.10737) | ACL 2025 | paper | local |
+| 2025 | [Query Expansion in the Age of Pre-trained and Large Language Models: A Comprehensive Survey](https://arxiv.org/abs/2509.07794) | arXiv preprint (survey) | paper | local |
+| 2025 | [ProxAnn: Use-Oriented Evaluations of Topic Models and Document Clustering](https://arxiv.org/abs/2507.00828) | ACL 2025 | paper | local |
+| 2025 | [Ontology-Guided Query Expansion for Biomedical Document Retrieval using Large Language Models](https://arxiv.org/abs/2508.11784) | arXiv preprint | paper | local |
+| 2025 | [OmniThink: Expanding Knowledge Boundaries in Machine Writing through Thinking](https://arxiv.org/abs/2501.09751) | EMNLP 2025 | paper | local |
+| 2025 | [NodeRAG: Structuring Graph-based RAG with Heterogeneous Nodes](https://arxiv.org/abs/2504.11544) | arXiv preprint | paper | local |
+| 2025 | [Mind the Language Gap in Digital Humanities: LLM-Aided Translation of SKOS Thesauri](https://arxiv.org/abs/2507.19537) | arXiv preprint | paper | local |
+| 2025 | [LeanRAG: Knowledge-Graph-Based Generation with Semantic Aggregation and Hierarchical Retrieval](https://arxiv.org/abs/2508.10391) | AAAI 2026 | paper | local |
+| 2025 | [KET-RAG: A Cost-Efficient Multi-Granular Indexing Framework for Graph-RAG](https://arxiv.org/abs/2502.09304) | arXiv preprint | paper | local |
+| 2025 | [Incorporating Legal Structure in Retrieval-Augmented Generation: A Case Study on Copyright Fair Use](https://arxiv.org/abs/2505.02164) | arXiv preprint (ASAIL workshop submission) | paper | local |
+| 2025 | [How Significant Are the Real Performance Gains? An Unbiased Evaluation Framework for GraphRAG](https://arxiv.org/abs/2506.06331) | arXiv preprint | paper | local |
+| 2025 | [Google Launches Code Wiki](https://www.infoq.com/news/2025/11/google-code-wiki/) | InfoQ | web | — |
+| 2025 | [Enhancing Automatic Term Extraction with Large Language Models via Syntactic Retrieval](https://arxiv.org/abs/2506.21222) | arXiv preprint | paper | local |
+| 2025 | [Deterministic Legal Agents: A Canonical Primitive API for Auditable Reasoning over Temporal Knowledge Graphs](https://arxiv.org/abs/2510.06002) | arXiv preprint | paper | local |
+| 2025 | [DeepWiki: AI docs for any repo](https://cognition.com/blog/deepwiki) | Cognition blog | web | — |
+| 2025 | [DACE For Railway Acronym Disambiguation](https://arxiv.org/abs/2512.18357) | arXiv preprint (TextMine'26) | paper | local |
+| 2025 | [Crossing Domains without Labels: Distant Supervision for Term Extraction](https://arxiv.org/abs/2510.06838) | EMNLP 2025 Industry Track | paper | local |
+| 2025 | [Context-Aware Hierarchical Taxonomy Generation for Scientific Papers via LLM-Guided Multi-Aspect Clustering](https://arxiv.org/abs/2509.19125) | EMNLP 2025 | paper | local |
+| 2025 | [CodeWiki: Evaluating AI's Ability to Generate Holistic Documentation for Large-Scale Codebases](https://arxiv.org/abs/2510.24428) | ACL 2026 | paper | local |
+| 2025 | [ArchRAG: Attributed Community-based Hierarchical Retrieval-Augmented Generation](https://arxiv.org/abs/2502.09891) | AAAI 2026 | paper | local |
+| 2025 | [Ai2 Scholar QA: Organized Literature Synthesis with Attribution](https://arxiv.org/abs/2504.10861) | ACL 2025 System Demonstrations | paper | local |
+| 2024 | [microsoft/graphrag repository](https://github.com/microsoft/graphrag) | GitHub repository | web | — |
+| 2024 | [Why great enterprise search and generative AI requires a comprehensive knowledge graph](https://www.glean.com/blog/enterprise-ai-knowledge-graph) | Glean blog | web | — |
+| 2024 | [WIKIGENBENCH: Exploring Full-length Wikipedia Generation under Real-World Scenario](https://arxiv.org/abs/2402.18264) | COLING 2025 | paper | local |
+| 2024 | [TnT-LLM: Text Mining at Scale with Large Language Models](https://arxiv.org/abs/2403.12173) | arXiv preprint (Microsoft) | paper | local |
+| 2024 | [Taxonomy Tree Generation from Citation Graph](https://arxiv.org/abs/2410.03761) | arXiv preprint | paper | local |
+| 2024 | [TaxoLLaMA: WordNet-based Model for Solving Multiple Lexical Semantic Tasks](https://arxiv.org/abs/2403.09207) | ACL 2024 | paper | local |
+| 2024 | [OpenScholar: Synthesizing Scientific Literature with Retrieval-augmented LMs](https://arxiv.org/abs/2411.14199) | arXiv preprint (Ai2/UW) | paper | local |
+| 2024 | [ORKG ASK: a Neuro-symbolic Scholarly Search and Exploration System](https://arxiv.org/abs/2412.04977) | arXiv preprint (TIB) | paper | local |
+| 2024 | [OG-RAG: Ontology-Grounded Retrieval-Augmented Generation For Large Language Models](https://arxiv.org/abs/2412.15235) | arXiv preprint (Microsoft) | paper | local |
+| 2024 | [Medical Graph RAG: Towards Safe Medical Large Language Model via Graph Retrieval-Augmented Generation](https://arxiv.org/abs/2408.04187) | arXiv preprint | paper | local |
+| 2024 | [LazyGraphRAG: Setting a new standard for quality and cost](https://www.microsoft.com/en-us/research/blog/lazygraphrag-setting-a-new-standard-for-quality-and-cost/) | Microsoft Research Blog | web | — |
+| 2024 | [Large Language Models Offer an Alternative to the Traditional Approach of Topic Modelling](https://arxiv.org/abs/2403.16248) | LREC-COLING 2024 | paper | local |
+| 2024 | [Language agents achieve superhuman synthesis of scientific knowledge](https://arxiv.org/abs/2409.13740) | arXiv preprint (FutureHouse) | paper | local |
+| 2024 | [Knowledge-Aware Query Expansion with Large Language Models for Textual and Relational Retrieval](https://arxiv.org/abs/2410.13765) | NAACL 2025 | paper | local |
+| 2024 | [Knowledge Pyramid Construction for Multi-Level Retrieval-Augmented Generation](https://arxiv.org/abs/2407.21276) | arXiv preprint | paper | local |
+| 2024 | [Into the Unknown Unknowns: Engaged Human Learning through Participation in Language Model Agent Conversations](https://arxiv.org/abs/2408.15232) | EMNLP 2024 | paper | local |
+| 2024 | [HippoRAG: Neurobiologically Inspired Long-Term Memory for Large Language Models](https://arxiv.org/abs/2405.14831) | NeurIPS 2024 | paper | local |
+| 2024 | [Evaluating Large Language Models for Structured Science Summarization in the Open Research Knowledge Graph](https://arxiv.org/abs/2405.02105) | arXiv preprint (in review, MDPI Information) | paper | local |
+| 2024 | [Concept Induction: Analyzing Unstructured Text with High-Level Concepts Using LLooM](https://arxiv.org/abs/2404.12259) | CHI 2024 | paper | local |
+| 2024 | [Comparative Study of Domain Driven Terms Extraction Using Large Language Models](https://arxiv.org/abs/2404.02330) | arXiv preprint | paper | local |
+| 2024 | [Clio: Privacy-Preserving Insights into Real-World AI Use](https://arxiv.org/abs/2412.13678) | arXiv preprint (Anthropic) | paper | local |
+| 2024 | [Chain-of-Layer: Iteratively Prompting Large Language Models for Taxonomy Induction from Limited Examples](https://arxiv.org/abs/2402.07386) | CIKM 2024 | paper | local |
+| 2024 | [Assisting in Writing Wikipedia-like Articles From Scratch with Large Language Models](https://arxiv.org/abs/2402.14207) | NAACL 2024 | paper | local |
+| 2024 | [Are Large Language Models a Good Replacement of Taxonomies?](https://arxiv.org/abs/2406.11131) | VLDB 2024 | paper | local |
+| 2024 | [A Unified Taxonomy-Guided Instruction Tuning Framework for Entity Set Expansion and Taxonomy Expansion](https://arxiv.org/abs/2402.13405) | arXiv preprint | paper | local |
+| 2023 | [TopicGPT: A Prompt-based Topic Modeling Framework](https://arxiv.org/abs/2311.01449) | NAACL 2024 | paper | local |
+| 2023 | [The Semantic Scholar Open Data Platform](https://arxiv.org/abs/2301.10140) | arXiv preprint (living document) | paper | local |
+| 2023 | [Matching Table Metadata with Business Glossaries Using Large Language Models](https://arxiv.org/abs/2309.11506) | arXiv preprint (IBM Research) | paper | local |
+| 2023 | [GLADIS: A General and Large Acronym Disambiguation Benchmark](https://arxiv.org/abs/2302.01860) | EACL 2023 | paper | local |
+| 2022 | [BERTopic: Neural topic modeling with a class-based TF-IDF procedure](https://arxiv.org/abs/2203.05794) | arXiv preprint (2022) | paper | local |
+| 2009 | [SKOS Simple Knowledge Organization System Reference](https://www.w3.org/TR/skos-reference/) | W3C Recommendation | web | — |
+| 2003 | [Faceted metadata for image search and browsing (abstract page)](https://sciweavers.org/node/46167) | CHI 2003 | web | — |
+
+## 05_agentic_search_memory (106)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Why Does CLAUDE.md Keep Growing? Catastrophic Remembering in Agentic Coding](https://arxiv.org/abs/2608.11095) | arXiv preprint | paper | local |
+| 2026 | [When Deep Research Agents Stagnate: Enhancing Reasoning with Retrieval-Aware Agent Control](https://arxiv.org/abs/2608.15191) | arXiv preprint | paper | local |
+| 2026 | [What Open-Source Projects Tell Their Coding Agents: A Census of AGENTS.md and CLAUDE.md](https://arxiv.org/abs/2610.31715) | arXiv preprint | paper | local |
+| 2026 | [VDGR-RAG: Vectors, Directories, Graphs, and Reflection Are All You Need for Unified Reasoning over Hierarchical Enterprise Knowledge](https://arxiv.org/abs/2608.07994) | arXiv preprint | paper | local |
+| 2026 | [Tool-Schema Compression Enables Agentic RAG Under Constrained Context Budgets](https://arxiv.org/abs/2605.26165) | arXiv preprint | paper | local |
+| 2026 | [The Context Gathering Decision Process: A POMDP Framework for Agentic Search](https://arxiv.org/abs/2605.07042) | arXiv preprint | paper | local |
+| 2026 | [The Bottleneck Is Retrieval, Not Reading: Diagnosing Evidence-Based Generation with RAG for Long Context Question Answering](https://arxiv.org/abs/2610.26951) | arXiv preprint | paper | local |
+| 2026 | [The AI-memory benchmark everyone quotes forbids saying 'I don't know'](https://dev.to/gde03/the-ai-memory-benchmark-everyone-quotes-forbids-saying-i-dont-know-o1n) | DEV Community | web | — |
+| 2026 | [Structured Linked Data as a Memory Layer for Agent-Orchestrated Retrieval](https://arxiv.org/abs/2603.10700) | arXiv preprint | paper | local |
+| 2026 | [Stale Instruction Files Override the Code in Coding Agents: A One-Sentence Fix](https://arxiv.org/abs/2610.30571) | arXiv preprint | paper | local |
+| 2026 | [SkillJuror: Measuring How Agent Skill Organization Changes Runtime Behavior](https://arxiv.org/abs/2606.11543) | arXiv preprint | paper | local |
+| 2026 | [Rethinking Agentic Search with Pi-Serini: Is Lexical Retrieval Sufficient?](https://arxiv.org/abs/2605.10848) | arXiv preprint | paper | local |
+| 2026 | [Rerank Before You Reason: Analyzing Reranking Tradeoffs through Effective Token Cost in Deep Search Agents](https://arxiv.org/abs/2601.14224) | arXiv preprint | paper | local |
+| 2026 | [RepoNav: From Snippet Retrieval to File-Centered Repository Navigation for Code Agents](https://arxiv.org/abs/2609.08355) | arXiv preprint | paper | local |
+| 2026 | [Question's Gambit: The First Move Matters in Agentic Deep Search](https://arxiv.org/abs/2609.14412) | arXiv preprint | paper | local |
+| 2026 | [Q2D-Web: A Large-Scale Benchmark for Retrieval in Agentic RAG Systems](https://arxiv.org/abs/2609.08887) | arXiv preprint | paper | local |
+| 2026 | [Prompt caching (Claude API documentation)](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) | Claude Platform docs | web | — |
+| 2026 | [Organize then Retrieve: Hierarchical Memory Navigation for Efficient Agents](https://arxiv.org/abs/2606.11680) | arXiv preprint | paper | local |
+| 2026 | [Open-Source Reproduction and Explainability Analysis of Corrective Retrieval Augmented Generation](https://arxiv.org/abs/2603.16169) | arXiv preprint | paper | local |
+| 2026 | [Notion MCP: search and read tools](https://developers.notion.com/guides/mcp/tools-search) | Notion developer docs | web | — |
+| 2026 | [Model Context Protocol (MCP) Tool Descriptions Are Smelly! Towards Improving AI Agent Efficiency with Augmented MCP Tool Descriptions](https://arxiv.org/abs/2602.14878) | arXiv preprint | paper | local |
+| 2026 | [MemoryArena: Benchmarking Agent Memory in Interdependent Multi-Session Agentic Tasks](https://arxiv.org/abs/2602.16313) | arXiv preprint | paper | local |
+| 2026 | [Memory evaluation (Mem0 documentation)](https://docs.mem0.ai/core-concepts/memory-evaluation) | Mem0 docs | web | — |
+| 2026 | [MemDerive: A Diagnostic Benchmark for Agent Memory over Evolving Data](https://arxiv.org/abs/2610.25373) | arXiv preprint | paper | local |
+| 2026 | [Mem0 Research: memory algorithm benchmark results](https://mem0.ai/research-3) | Mem0 website | web | — |
+| 2026 | [Manifest-Assisted Retrieval in Artificial Intelligence Search: Evidence Gaps and a Security Evaluation](https://arxiv.org/abs/2610.38361) | arXiv preprint | paper | local |
+| 2026 | [LongMemEval-V2: Evaluating Long-Term Agent Memory Toward Experienced Colleagues](https://arxiv.org/abs/2605.12493) | arXiv preprint | paper | local |
+| 2026 | [Let Agents Design How They Search: Automatic Interface Optimization for Agentic Search](https://arxiv.org/abs/2610.29250) | arXiv preprint | paper | local |
+| 2026 | [Length Is Cheap, Competition Is Not: Attention Predicts Context Rot in Retrieval](https://arxiv.org/abs/2611.04169) | arXiv preprint | paper | local |
+| 2026 | [LCM: Lossless Context Management](https://arxiv.org/abs/2605.04050) | arXiv preprint | paper | local |
+| 2026 | [Knowledge Compounding: An Empirical Economic Analysis of Self-Evolving Knowledge Wikis under the Agentic ROI Framework](https://arxiv.org/abs/2604.11243) | arXiv preprint | paper | local |
+| 2026 | [KARL: Knowledge Agents via Reinforcement Learning](https://arxiv.org/abs/2603.05218) | arXiv preprint | paper | local |
+| 2026 | [Is Progressive Disclosure All You Need for Long-Context Agents?](https://arxiv.org/abs/2607.17598) | arXiv preprint | paper | local |
+| 2026 | [Is Grep All You Need? How Agent Harnesses Reshape Agentic Search](https://arxiv.org/abs/2605.15184) | arXiv preprint | paper | local |
+| 2026 | [Is Agentic RAG worth it? An experimental comparison of RAG approaches](https://arxiv.org/abs/2601.07711) | arXiv preprint | paper | local |
+| 2026 | [Introducing Context Repositories: Git-based Memory for Coding Agents](https://www.letta.com/blog/context-repositories) | Letta blog | web | — |
+| 2026 | [ITER: Interaction-Aware Retrieval for Agentic Search](https://arxiv.org/abs/2608.27912) | arXiv preprint | paper | local |
+| 2026 | [How to Train Your Deep Research Agent? Prompt, Reward, and Policy Optimization in Search-R1](https://arxiv.org/abs/2602.19526) | arXiv preprint | paper | local |
+| 2026 | [How Well Do Agentic Skills Work in the Wild: Benchmarking LLM Skill Usage in Realistic Settings](https://arxiv.org/abs/2604.04323) | arXiv preprint | paper | local |
+| 2026 | [How Claude remembers your project (CLAUDE.md and auto memory)](https://code.claude.com/docs/en/memory) | Claude Code documentation | web | — |
+| 2026 | [Harness engineering: leveraging Codex in an agent-first world](https://openai.com/index/harness-engineering/) | OpenAI blog | web | — |
+| 2026 | [GrepSeek: Training Search Agents for Direct Corpus Interaction](https://arxiv.org/abs/2605.29307) | arXiv preprint | paper | local |
+| 2026 | [EviMem: Evidence-Gap-Driven Iterative Retrieval for Long-Term Conversational Memory](https://arxiv.org/abs/2604.27695) | arXiv preprint | paper | local |
+| 2026 | [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/abs/2602.11988) | arXiv preprint | paper | local |
+| 2026 | [EnterpriseRAG: Benchmarking LLM Instruction Adherence and Robustness under Non-Ideal Enterprise Retrieval](https://arxiv.org/abs/2608.11584) | arXiv preprint | paper | local |
+| 2026 | [Dr-DCI: Scaling Direct Corpus Interaction via Dynamic Workspace Expansion](https://arxiv.org/abs/2606.14885) | arXiv preprint | paper | local |
+| 2026 | [Do Context Files Help Coding Agents? A Two-Agent Ablation Study on Real Repositories](https://arxiv.org/abs/2607.27250) | arXiv preprint | paper | local |
+| 2026 | [Do Coding Agents Follow AGENTS.md? The Effect of Policy Wording on Instruction Compliance](https://arxiv.org/abs/2611.04367) | arXiv preprint | paper | local |
+| 2026 | [Dissecting Agentic RAG: A Component Ablation for Multi-Hop QA with a Local 7B Model](https://arxiv.org/abs/2606.21553) | arXiv preprint | paper | local |
+| 2026 | [Diagnosing and Mitigating Context Rot in Long-horizon Search](https://arxiv.org/abs/2606.29718) | arXiv preprint | paper | local |
+| 2026 | [Developer Experience with AI Coding Agents: HTTP Behavioral Signatures in Documentation Portals](https://arxiv.org/abs/2604.02544) | arXiv preprint | paper | local |
+| 2026 | [Description-Code Inconsistency in Real-world MCP Servers: Measurement, Detection, and Security Implications](https://arxiv.org/abs/2606.04769) | arXiv preprint | paper | local |
+| 2026 | [Curating Always-Loaded Context for LLM Agents: A Capacitated Assortment Model with Censored Feedback](https://arxiv.org/abs/2610.11007) | arXiv preprint | paper | local |
+| 2026 | [Create and manage MCP servers (Glean)](https://docs.glean.com/administration/platform/mcp/create-mcp-servers) | Glean documentation | web | — |
+| 2026 | [CITECHOICE: A Causal Audit of How Document Presentation Redistributes Citation Credit in Agentic Search](https://arxiv.org/abs/2609.15164) | arXiv preprint | paper | local |
+| 2026 | [Beyond Semantic Similarity: Rethinking Retrieval for Agentic Search via Direct Corpus Interaction](https://arxiv.org/abs/2605.05242) | arXiv preprint | paper | local |
+| 2026 | [AgentIR: Reasoning-Aware Retrieval for Deep Research Agents](https://arxiv.org/abs/2603.04384) | arXiv preprint | paper | local |
+| 2026 | [AGENTS.md outperforms skills in our agent evals](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals) | Vercel blog | web | — |
+| 2026 | [A Survey of Agent Memory in the Second Half: Towards Self-Evolving and Long-Horizon Agents](https://arxiv.org/abs/2602.06052) | arXiv preprint | paper | local |
+| 2026 | [A New Role for Relevance: Guiding Corpus Interaction in Agentic Search](https://arxiv.org/abs/2607.24223) | arXiv preprint | paper | local |
+| 2025 | [Tool Preferences in Agentic LLMs are Unreliable](https://arxiv.org/abs/2505.18135) | arXiv preprint | paper | local |
+| 2025 | [Stronger Baselines for Retrieval-Augmented Generation with Long-Context Language Models](https://arxiv.org/abs/2506.03989) | arXiv preprint | paper | local |
+| 2025 | [SkillFlow: Scalable and Efficient Agent Skill Retrieval System](https://arxiv.org/abs/2504.06188) | arXiv preprint | paper | local |
+| 2025 | [Search-o1: Agentic Search-Enhanced Large Reasoning Models](https://arxiv.org/abs/2501.05366) | arXiv preprint | paper | local |
+| 2025 | [Search-R1: Training LLMs to Reason and Leverage Search Engines with Reinforcement Learning](https://arxiv.org/abs/2503.09516) | COLM 2025 | paper | local |
+| 2025 | [Scaling Long-Horizon LLM Agent via Context-Folding](https://arxiv.org/abs/2510.11967) | arXiv preprint | paper | local |
+| 2025 | [Recursive Language Models](https://arxiv.org/abs/2512.24601) | arXiv preprint | paper | local |
+| 2025 | [ReasoningBank: Scaling Agent Self-Evolving with Reasoning Memory](https://arxiv.org/abs/2509.25140) | arXiv preprint | paper | local |
+| 2025 | [ReSearch: Learning to Reason with Search for LLMs via Reinforcement Learning](https://arxiv.org/abs/2503.19470) | arXiv preprint | paper | local |
+| 2025 | [RAG-MCP: Mitigating Prompt Bloat in LLM Tool Selection via Retrieval-Augmented Generation](https://arxiv.org/abs/2505.03275) | arXiv preprint | paper | local |
+| 2025 | [R1-Searcher: Incentivizing the Search Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2503.05592) | arXiv preprint | paper | local |
+| 2025 | [NoLiMa: Long-Context Evaluation Beyond Literal Matching](https://arxiv.org/abs/2502.05167) | ICML 2025 | paper | local |
+| 2025 | [Memory OS of AI Agent](https://arxiv.org/abs/2506.06326) | arXiv preprint | paper | local |
+| 2025 | [MemOS: An Operating System for Memory-Augmented Generation (MAG) in Large Language Models](https://arxiv.org/abs/2505.22101) | arXiv preprint | paper | local |
+| 2025 | [Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory](https://arxiv.org/abs/2504.19413) | arXiv preprint | paper | local |
+| 2025 | [Managing context on the Claude Developer Platform (context editing and memory tool)](https://claude.com/blog/context-management) | Claude blog | web | — |
+| 2025 | [MIRIX: Multi-Agent Memory System for LLM-Based Agents](https://arxiv.org/abs/2507.07957) | arXiv preprint | paper | local |
+| 2025 | [Lies, Damn Lies, & Statistics: Is Mem0 Really SOTA in Agent Memory?](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) | Zep blog | web | — |
+| 2025 | [Introducing advanced tool use on the Claude Developer Platform](https://www.anthropic.com/engineering/advanced-tool-use) | Anthropic Engineering blog | web | — |
+| 2025 | [How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) | Anthropic Engineering blog | web | — |
+| 2025 | [Everything is Context: Agentic File System Abstraction for Context Engineering](https://arxiv.org/abs/2512.05470) | arXiv preprint | paper | local |
+| 2025 | [Evaluating Memory in LLM Agents via Incremental Multi-Turn Interactions](https://arxiv.org/abs/2507.05257) | arXiv preprint | paper | local |
+| 2025 | [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) | Anthropic Engineering blog | web | — |
+| 2025 | [Dynamic Cheatsheet: Test-Time Learning with Adaptive Memory](https://arxiv.org/abs/2504.07952) | arXiv preprint | paper | local |
+| 2025 | [DeepResearcher: Scaling Deep Research via Reinforcement Learning in Real-world Environments](https://arxiv.org/abs/2504.03160) | arXiv preprint | paper | local |
+| 2025 | [Context Rot: How Increasing Input Tokens Impacts LLM Performance](https://www.trychroma.com/research/context-rot) | Chroma Technical Report | web | — |
+| 2025 | [Context Engineering for Agents](https://www.langchain.com/blog/context-engineering-for-agents) | LangChain blog | web | — |
+| 2025 | [Context Engineering for AI Agents: Lessons from Building Manus](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus) | Manus blog | web | — |
+| 2025 | [BrowseComp-Plus: A More Fair and Transparent Evaluation Benchmark of Deep-Research Agent](https://arxiv.org/abs/2508.06600) | arXiv preprint | paper | local |
+| 2025 | [Benchmarking AI Agent Memory: Is a Filesystem All You Need?](https://www.letta.com/blog/benchmarking-ai-agent-memory) | Letta blog | web | — |
+| 2025 | [Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models](https://arxiv.org/abs/2510.04618) | arXiv preprint | paper | local |
+| 2025 | [Agent READMEs: An Empirical Study of Context Files for Agentic Coding](https://arxiv.org/abs/2511.12884) | arXiv preprint | paper | local |
+| 2025 | [AGENTS.md](https://agents.md/) | agents.md | web | — |
+| 2025 | [A-MEM: Agentic Memory for LLM Agents](https://arxiv.org/abs/2502.12110) | NeurIPS 2025 | paper | local |
+| 2025 | [A Simple Yet Strong Baseline for Long-Term Conversational Memory of LLM Agents](https://arxiv.org/abs/2511.17208) | arXiv preprint | paper | local |
+| 2024 | [The /llms.txt file](https://llmstxt.org/) | llmstxt.org | web | — |
+| 2024 | [LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory](https://arxiv.org/abs/2410.10813) | ICLR 2025 | paper | local |
+| 2024 | [Long Context vs. RAG for LLMs: An Evaluation and Revisits](https://arxiv.org/abs/2501.01880) | arXiv preprint | paper | local |
+| 2024 | [Evaluating Very Long-Term Conversational Memory of LLM Agents](https://arxiv.org/abs/2402.17753) | ACL 2024 | paper | local |
+| 2024 | [Don't Do RAG: When Cache-Augmented Generation is All You Need for Knowledge Tasks](https://arxiv.org/abs/2412.15605) | ACM Web Conference 2025 (companion) | paper | local |
+| 2024 | [Corrective Retrieval Augmented Generation](https://arxiv.org/abs/2401.15884) | arXiv preprint | paper | local |
+| 2023 | [Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection](https://arxiv.org/abs/2310.11511) | ICLR 2024 | paper | local |
+| 2023 | [Retrieval meets Long Context Large Language Models](https://arxiv.org/abs/2310.03025) | ICLR 2024 | paper | local |
+| 2023 | [MemGPT: Towards LLMs as Operating Systems](https://arxiv.org/abs/2310.08560) | arXiv preprint | paper | local |
+| 2023 | [Active Retrieval Augmented Generation](https://arxiv.org/abs/2305.06983) | EMNLP 2023 | paper | local |
+| 2022 | [Interleaving Retrieval with Chain-of-Thought Reasoning for Knowledge-Intensive Multi-Step Questions](https://arxiv.org/abs/2212.10509) | ACL 2023 | paper | local |
+
+## 06_kb_quality_lifecycle (115)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Where and Why Search-Augmented LLMs Fail When Reasoning over Rapidly Evolving Knowledge](https://arxiv.org/abs/2610.25323) | arXiv preprint | paper | local |
+| 2026 | [Verification (feature page)](https://www.getguru.com/features/verification) | Guru website | web | — |
+| 2026 | [Towards Secure Retrieval-Augmented Generation: A Comprehensive Review of Threats, Defenses and Benchmarks](https://arxiv.org/abs/2603.21654) | arXiv preprint | paper | local |
+| 2026 | [Sync your data with your Amazon Bedrock knowledge base](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-data-source-sync-ingest.html) | AWS Bedrock User Guide | web | — |
+| 2026 | [Stale-Document Poisoning: When Outdated Retrieval Overrides Correct Model Answers](https://arxiv.org/abs/2609.31342) | arXiv preprint | paper | local |
+| 2026 | [SoK: Privacy Risks and Mitigations in Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2601.03979) | arXiv preprint | paper | local |
+| 2026 | [SharePoint connector overview](https://docs.glean.com/connectors/native/sharepoint/about) | Glean documentation | web | — |
+| 2026 | [Security Filter Pattern - Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-security-trimming-for-azure-search) | Microsoft Learn | web | — |
+| 2026 | [SD-RAG: A Prompt-Injection-Resilient Framework for Selective Disclosure in Retrieval-Augmented Generation](https://arxiv.org/abs/2601.11199) | arXiv preprint | paper | local |
+| 2026 | [Reliability Stress Testing of RAG Retrieval under Query-Relevant Corpus Poisoning](https://arxiv.org/abs/2611.04264) | arXiv preprint | paper | local |
+| 2026 | [Reducing Redundancy in Retrieval-Augmented Generation through Chunk Filtering](https://arxiv.org/abs/2604.24334) | arXiv preprint | paper | local |
+| 2026 | [Ranking Is Not Deciding: Benchmark Shortcuts and Operating-Point Collapse in Query-Time RAG Poisoning Defenses](https://arxiv.org/abs/2610.33849) | arXiv preprint | paper | local |
+| 2026 | [ProGRank: Probe-Gradient Reranking to Defend Dense-Retriever RAG from Corpus Poisoning](https://arxiv.org/abs/2603.22934) | arXiv preprint | paper | local |
+| 2026 | [Presidio documentation](https://presidio.dataprivacystack.org/) | Presidio docs | web | — |
+| 2026 | [Policy-aware Vector Search: A Vision for Fine Grained Access Control in Vector Databases](https://arxiv.org/abs/2606.19803) | arXiv preprint | paper | local |
+| 2026 | [Knowledge Base Poisoning Attacks and Defense for Policy-Aware LLM-RAG Framework](https://arxiv.org/abs/2607.04379) | arXiv preprint | paper | local |
+| 2026 | [EvoTrustRAG: Evolution-Aware Conflict Attribution and Evidence Handling for Reliable Retrieval-Augmented Generation](https://arxiv.org/abs/2608.07933) | arXiv preprint | paper | local |
+| 2026 | [Does RAG Know When Retrieval Is Wrong? Diagnosing Context Compliance under Knowledge Conflict](https://arxiv.org/abs/2605.14473) | arXiv preprint | paper | local |
+| 2026 | [Document-Level Access Control - Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-document-level-access-overview) | Microsoft Learn | web | — |
+| 2026 | [Data, Privacy, and Security for Microsoft Copilot](https://learn.microsoft.com/en-us/copilot/microsoft-365/microsoft-365-copilot-privacy) | Microsoft Learn | web | — |
+| 2026 | [Coverage Under Contradiction: A Benchmark for Negation-Aware Retrieval](https://arxiv.org/abs/2610.37162) | arXiv preprint | paper | local |
+| 2026 | [Coverage Is Not Containment: A Fundamental Limit of Admission-Time Defenses Against Coordinated Poisoning of Vector Retrieval](https://arxiv.org/abs/2608.16044) | arXiv preprint | paper | local |
+| 2026 | [Connectors power Glean](https://docs.glean.com/connectors/connectors-power-glean) | Glean documentation | web | — |
+| 2026 | [ConflictRAG: Detecting and Resolving Knowledge Conflicts in Retrieval Augmented Generation](https://arxiv.org/abs/2605.17301) | arXiv preprint | paper | local |
+| 2025 | [Zero-RAG: Towards Retrieval-Augmented Generation with Zero Redundant Knowledge](https://arxiv.org/abs/2511.00505) | Frontiers of Computer Science 2026 | paper | local |
+| 2025 | [Worse than Zero-shot? A Fact-Checking Dataset for Evaluating the Robustness of RAG Against Misleading Retrievals](https://arxiv.org/abs/2502.16101) | arXiv preprint | paper | local |
+| 2025 | [VersionRAG: Version-Aware Retrieval-Augmented Generation for Evolving Documents](https://arxiv.org/abs/2510.08109) | arXiv preprint | paper | local |
+| 2025 | [TrustRAG: Enhancing Robustness and Trustworthiness in Retrieval-Augmented Generation](https://arxiv.org/abs/2501.00879) | arXiv preprint | paper | local |
+| 2025 | [Through the Stealth Lens: Attention-Aware Defenses Against Poisoning in RAG](https://arxiv.org/abs/2506.04390) | arXiv preprint | paper | local |
+| 2025 | [The RAG Triad](https://www.trulens.org/getting_started/core_concepts/rag_triad/) | TruLens documentation | web | — |
+| 2025 | [The Great Nugget Recall: Automating Fact Extraction and RAG Evaluation with Large Language Models](https://arxiv.org/abs/2504.15068) | arXiv preprint | paper | local |
+| 2025 | [Test data generation for RAG](https://docs.ragas.io/en/stable/concepts/test_data_generation/rag/) | Ragas documentation | web | — |
+| 2025 | [TempRetriever: Fusion-based Temporal Dense Passage Retrieval for Time-Sensitive Questions](https://arxiv.org/abs/2502.21024) | arXiv preprint | paper | local |
+| 2025 | [Safeguarding Privacy of Retrieval Data against Membership Inference Attacks: Is This Query Too Close to Home?](https://arxiv.org/abs/2505.22061) | Findings of EMNLP 2025 | paper | local |
+| 2025 | [SIGIR 2025 -- LiveRAG Challenge Report](https://arxiv.org/abs/2507.04942) | arXiv preprint (SIGIR 2025 LiveRAG report) | paper | local |
+| 2025 | [Riddle Me This! Stealthy Membership Inference for Retrieval-Augmented Generation](https://arxiv.org/abs/2502.00306) | arXiv preprint | paper | local |
+| 2025 | [Retrieval-Augmented Generation with Conflicting Evidence](https://arxiv.org/abs/2504.13079) | arXiv preprint | paper | local |
+| 2025 | [Retrieval Augmented Generation Evaluation in the Era of Large Language Models: A Comprehensive Survey](https://arxiv.org/abs/2504.14891) | arXiv preprint | paper | local |
+| 2025 | [Rethinking the Privacy of Text Embeddings: A Reproducibility Study of "Text Embeddings Reveal (Almost) As Much As Text"](https://arxiv.org/abs/2507.07700) | RecSys 2025 | paper | local |
+| 2025 | [RAGPart & RAGMask: Retrieval-Stage Defenses Against Corpus Poisoning in Retrieval-Augmented Generation](https://arxiv.org/abs/2512.24268) | arXiv preprint | paper | local |
+| 2025 | [LangChain indexing API: index() reference](https://reference.langchain.com/python/langchain-core/indexing/api/index) | LangChain reference documentation | web | — |
+| 2025 | [LLMs can be Fooled into Labelling a Document as Relevant (best café near me; this paper is perfectly relevant)](https://arxiv.org/abs/2501.17969) | SIGIR-AP 2024 | paper | local |
+| 2025 | [LLM08:2025 Vector and Embedding Weaknesses](https://genai.owasp.org/llmrisk/llm082025-vector-and-embedding-weaknesses/) | OWASP Top 10 for LLM Applications 2025 | web | — |
+| 2025 | [Ingestion Pipeline (document management and caching)](https://developers.llamaindex.ai/python/framework/module_guides/loading/ingestion_pipeline/) | LlamaIndex documentation | web | — |
+| 2025 | [HoH: A Dynamic Benchmark for Evaluating the Impact of Outdated Information on Retrieval-Augmented Generation](https://arxiv.org/abs/2503.04800) | arXiv preprint | paper | local |
+| 2025 | [Graphiti overview](https://help.getzep.com/graphiti/getting-started/overview) | Zep documentation | web | — |
+| 2025 | [Generating Diverse Q&A Benchmarks for RAG Evaluation with DataMorgana](https://arxiv.org/abs/2501.12789) | arXiv preprint | paper | local |
+| 2025 | [Enterprise AI Must Enforce Participant-Aware Access Control](https://arxiv.org/abs/2509.14608) | arXiv preprint | paper | local |
+| 2025 | [Contradictions in Context: Challenges for Retrieval-Augmented Generation in Healthcare](https://arxiv.org/abs/2511.06668) | arXiv preprint | paper | local |
+| 2025 | [Contradiction Detection in RAG Systems: Evaluating LLMs as Context Validators for Improved Information Consistency](https://arxiv.org/abs/2504.00180) | arXiv preprint | paper | local |
+| 2025 | [Conflicts in Texts: Data, Implications and Challenges](https://arxiv.org/abs/2504.19472) | arXiv preprint | paper | local |
+| 2025 | [A Question Answering Dataset for Temporal-Sensitive Retrieval-Augmented Generation](https://arxiv.org/abs/2508.12282) | arXiv preprint | paper | local |
+| 2024 | [WikiContradict: A Benchmark for Evaluating LLMs on Real-World Knowledge Conflicts from Wikipedia](https://arxiv.org/abs/2406.13805) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [Who's Who: Large Language Models Meet Knowledge Conflicts in Practice](https://arxiv.org/abs/2410.15737) | arXiv preprint | paper | local |
+| 2024 | [When Machine Unlearning Meets Retrieval-Augmented Generation (RAG): Keep Secret or Forget Knowledge?](https://arxiv.org/abs/2410.15267) | arXiv preprint | paper | local |
+| 2024 | [Verification Checklist](https://app.getguru.com/card/T9GMGbyc/Verification-Checklist) | Guru public card | web | — |
+| 2024 | [UMBRELA: UMbrela is the (Open-Source Reproduction of the) Bing RELevance Assessor](https://arxiv.org/abs/2406.06519) | arXiv preprint | paper | local |
+| 2024 | [The Good and The Bad: Exploring Privacy Issues in Retrieval-Augmented Generation (RAG)](https://arxiv.org/abs/2402.16893) | Findings of ACL 2024 | paper | local |
+| 2024 | [Sufficient Context: A New Lens on Retrieval Augmented Generation Systems](https://arxiv.org/abs/2411.06037) | ICLR 2025 | paper | local |
+| 2024 | [SparseCL: Sparse Contrastive Learning for Contradiction Retrieval](https://arxiv.org/abs/2406.10746) | arXiv preprint | paper | local |
+| 2024 | [Seven Failure Points When Engineering a Retrieval Augmented Generation System](https://arxiv.org/abs/2401.05856) | CAIN 2024 (ICSE workshop) | paper | local |
+| 2024 | [Self-Preference Bias in LLM-as-a-Judge](https://arxiv.org/abs/2410.21819) | arXiv preprint | paper | local |
+| 2024 | [Retrieval-Augmented Generation with Estimation of Source Reliability](https://arxiv.org/abs/2410.22954) | arXiv preprint | paper | local |
+| 2024 | [RAGProbe: An Automated Approach for Evaluating RAG Applications](https://arxiv.org/abs/2409.19019) | arXiv preprint | paper | local |
+| 2024 | [RAGChecker: A Fine-grained Framework for Diagnosing Retrieval-Augmented Generation](https://arxiv.org/abs/2408.08067) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [Privacy-Preserving Retrieval-Augmented Generation with Differential Privacy](https://arxiv.org/abs/2412.04697) | arXiv preprint | paper | local |
+| 2024 | [PoisonedRAG: Knowledge Corruption Attacks to Retrieval-Augmented Generation of Large Language Models](https://arxiv.org/abs/2402.07867) | USENIX Security 2025 | paper | local |
+| 2024 | [Phantom: General Backdoor Attacks on Retrieval Augmented Language Generation](https://arxiv.org/abs/2405.20485) | arXiv preprint | paper | local |
+| 2024 | [Not All Contexts Are Equal: Teaching LLMs Credibility-aware Generation](https://arxiv.org/abs/2404.06809) | arXiv preprint | paper | local |
+| 2024 | [Measuring and Enhancing Trustworthiness of LLMs in RAG through Grounded Attributions and Learning to Refuse](https://arxiv.org/abs/2409.11242) | ICLR 2025 | paper | local |
+| 2024 | [MRAG: A Modular Retrieval Framework for Time-Sensitive Question Answering](https://arxiv.org/abs/2412.15540) | arXiv preprint | paper | local |
+| 2024 | [Lynx: An Open Source Hallucination Evaluation Model](https://arxiv.org/abs/2407.08488) | arXiv preprint | paper | local |
+| 2024 | [Language-Agnostic Modeling of Source Reliability on Wikipedia](https://arxiv.org/abs/2410.18803) | ACM Transactions on the Web 2025 | paper | local |
+| 2024 | [Knowledge Conflicts for LLMs: A Survey](https://arxiv.org/abs/2403.08319) | EMNLP 2024 | paper | local |
+| 2024 | [It's About Time: Incorporating Temporality in Retrieval Augmented Language Models](https://arxiv.org/abs/2401.13222) | arXiv preprint | paper | local |
+| 2024 | [Is My Data in Your Retrieval Database? Membership Inference Attacks Against Retrieval Augmented Generation](https://arxiv.org/abs/2405.20446) | ICISSP 2025 | paper | local |
+| 2024 | [InspectorRAGet: An Introspection Platform for RAG Evaluation](https://arxiv.org/abs/2404.17347) | arXiv preprint | paper | local |
+| 2024 | [Initial Nugget Evaluation Results for the TREC 2024 RAG Track with the AutoNuggetizer Framework](https://arxiv.org/abs/2411.09607) | arXiv preprint (TREC 2024 RAG Track report) | paper | local |
+| 2024 | [Evaluation of Retrieval-Augmented Generation: A Survey](https://arxiv.org/abs/2405.07437) | arXiv preprint | paper | local |
+| 2024 | [Evaluating Retrieval Quality in Retrieval-Augmented Generation](https://arxiv.org/abs/2404.13781) | SIGIR 2024 | paper | local |
+| 2024 | [Don't Use LLMs to Make Relevance Judgments](https://arxiv.org/abs/2409.15133) | Information Retrieval Research Journal 2025 | paper | local |
+| 2024 | [CrAM: Credibility-Aware Attention Modification in LLMs for Combating Misinformation in RAG](https://arxiv.org/abs/2406.11497) | AAAI 2025 | paper | local |
+| 2024 | [ConflictBank: A Benchmark for Evaluating the Influence of Knowledge Conflicts in LLM](https://arxiv.org/abs/2408.12076) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [ClashEval: Quantifying the tug-of-war between an LLM's internal prior and external evidence](https://arxiv.org/abs/2404.10198) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [Certifiably Robust RAG against Retrieval Corruption](https://arxiv.org/abs/2405.15556) | arXiv preprint | paper | local |
+| 2024 | [Astute RAG: Overcoming Imperfect Retrieval Augmentation and Knowledge Conflicts for Large Language Models](https://arxiv.org/abs/2410.07176) | arXiv preprint | paper | local |
+| 2024 | [A Survey on LLM-as-a-Judge](https://arxiv.org/abs/2411.15594) | arXiv preprint | paper | local |
+| 2023 | [Text Embeddings Reveal (Almost) As Much As Text](https://arxiv.org/abs/2310.06816) | EMNLP 2023 | paper | local |
+| 2023 | [SemDeDup: Data-efficient learning at web-scale through semantic deduplication](https://arxiv.org/abs/2303.09540) | arXiv preprint | paper | local |
+| 2023 | [Ragas: Automated Evaluation of Retrieval Augmented Generation](https://arxiv.org/abs/2309.15217) | EACL 2024 (System Demonstrations) | paper | local |
+| 2023 | [RAGTruth: A Hallucination Corpus for Developing Trustworthy Retrieval-Augmented Language Models](https://arxiv.org/abs/2401.00396) | ACL 2024 | paper | local |
+| 2023 | [Prediction-Powered Inference](https://arxiv.org/abs/2301.09633) | Science 2023 | paper | local |
+| 2023 | [Poisoning Retrieval Corpora by Injecting Adversarial Passages](https://arxiv.org/abs/2310.19156) | EMNLP 2023 | paper | local |
+| 2023 | [Mitigating Temporal Misalignment by Discarding Outdated Facts](https://arxiv.org/abs/2305.14824) | Findings of EMNLP 2023 | paper | local |
+| 2023 | [Large language models can accurately predict searcher preferences](https://arxiv.org/abs/2309.10621) | SIGIR 2024 | paper | local |
+| 2023 | [Large Language Models are not Fair Evaluators](https://arxiv.org/abs/2305.17926) | ACL 2024 | paper | local |
+| 2023 | [FreshLLMs: Refreshing Large Language Models with Search Engine Augmentation](https://arxiv.org/abs/2310.03214) | Findings of ACL 2024 | paper | local |
+| 2023 | [Benchmarking Large Language Models in Retrieval-Augmented Generation](https://arxiv.org/abs/2309.01431) | AAAI 2024 | paper | local |
+| 2023 | [ARES: An Automated Evaluation Framework for Retrieval-Augmented Generation Systems](https://arxiv.org/abs/2311.09476) | NAACL 2024 | paper | local |
+| 2022 | [StreamingQA: A Benchmark for Adaptation to New Knowledge over Time in Question Answering Models](https://arxiv.org/abs/2205.11388) | ICML 2022 | paper | local |
+| 2022 | [RealTime QA: What's the Answer Right Now?](https://arxiv.org/abs/2207.13332) | NeurIPS 2023 Datasets and Benchmarks | paper | local |
+| 2021 | [Deduplicating Training Data Makes Language Models Better](https://arxiv.org/abs/2107.06499) | ACL 2022 | paper | local |
+| 2021 | [A Dataset for Answering Time-Sensitive Questions](https://arxiv.org/abs/2108.06314) | NeurIPS 2021 Datasets and Benchmarks | paper | local |
+| 2017 | [Introducing Verification](https://www.getguru.com/blog/introducing-verification) | Guru blog | web | — |
+| 2016 | [KCS v6 Technique 5.9: Knowledge Domain Analysis](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040/010/060) | KCS v6 Practices Guide | web | — |
+| 2016 | [KCS v6 Technique 5.5: Archiving Old Articles](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040/010/044) | KCS v6 Practices Guide | web | — |
+| 2016 | [KCS v6 Technique 5.1: KCS Article Structure](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040/010/020) | KCS v6 Practices Guide | web | — |
+| 2016 | [KCS v6 Technique 5.10: Content Health Indicators](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040/010/065) | KCS v6 Practices Guide | web | — |
+| 2016 | [KCS v6 Practices Guide: The Evolve Loop](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040) | KCS v6 Practices Guide | web | — |
+| 2016 | [KCS v6 Practice 5: Content Health](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/040/010) | KCS v6 Practices Guide | web | — |
+| 2015 | [SLiMFast: Guaranteed Results for Data Fusion and Source Reliability](https://arxiv.org/abs/1512.06474) | arXiv preprint (SIGMOD 2017 version) | paper | local |
+| 2007 | [Detecting Near-Duplicates for Web Crawling](https://research.google/pubs/detecting-near-duplicates-for-web-crawling/) | WWW 2007 | paper | local |
+| 2002 | [Similarity estimation techniques from rounding algorithms](https://www.cs.princeton.edu/courses/archive/spr04/cos598B/bib/CharikarEstim.pdf) | STOC 2002 | paper | local |
+| 1998 | [The use of MMR, diversity-based reranking for reordering documents and producing summaries](https://doi.org/10.1145/290941.291025) | SIGIR 1998 | paper | — |
+| 1997 | [On the resemblance and containment of documents](https://www.cs.princeton.edu/courses/archive/spring13/cos598C/broder97resemblance.pdf) | Compression and Complexity of Sequences (SEQUENCES) 1997 | paper | local |
+
+## 07_enterprise_knowledge_platforms (77)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Why your ITSM agents are closing tickets fast and teaching your AI nothing](https://www.servicenow.com/community/ceg-ai-coe-articles/why-your-itsm-agents-are-closing-tickets-fast-and-teaching-your/ta-p/3484316) | ServiceNow Community | web | — |
+| 2026 | [Why Salesforce Agentforce Contact Center just changed the automation scorecard](https://www.cxtoday.com/customer-engagement-journey-orchestration/salesforce-agentforce-contact-center/) | CX Today | web | — |
+| 2026 | [Use AI-powered suggestions to improve Fin](https://www.intercom.com/help/en/articles/11394959-use-ai-powered-suggestions-to-improve-fin) | Intercom Help Center | web | — |
+| 2026 | [Sierra AI pricing](https://www.cloudtalk.io/blog/sierra-ai-pricing/) | CloudTalk blog | web | — |
+| 2026 | [Semantic search with semantic_text](https://www.elastic.co/docs/solutions/search/semantic-search/semantic-search-semantic-text) | Elastic documentation | web | — |
+| 2026 | [Semantic indexing for Microsoft Copilot](https://learn.microsoft.com/en-us/microsoftsearch/semantic-index-for-copilot) | Microsoft Learn | web | — |
+| 2026 | [Secure & Governed Data Foundation for Microsoft Copilot - deployment blueprint](https://learn.microsoft.com/en-us/copilot/plan/secure-govern-copilot-foundational-deployment-guidance) | Microsoft Learn | web | — |
+| 2026 | [Search AI content extraction strategies](https://docs.kore.ai/xo/searchai/content-extraction/extraction/) | Kore.ai documentation | web | — |
+| 2026 | [Salesforce to acquire Fin AI (formerly Intercom) for $3.6 billion](https://www.trendingtopics.eu/salesforce-to-acquire-fin-ai-formerly-intercom-for-3-6-billion/) | trendingtopics.eu | web | — |
+| 2026 | [Onyx pricing](https://onyx.app/pricing) | onyx.app | web | — |
+| 2026 | [Onyx connectors](https://docs.onyx.app/overview/core_features/connectors) | Onyx documentation | web | — |
+| 2026 | [OneDrive connector: about](https://docs.glean.com/connectors/native/onedrive/about) | Glean documentation | web | — |
+| 2026 | [Notion AI connectors](https://www.notion.com/help/notion-ai-connectors) | Notion Help Center | web | — |
+| 2026 | [Microsoft Copilot deployments delayed over security concerns](https://infosecurity-magazine.com/news/microsoft-copilot-delayed-over) | Infosecurity Magazine | web | — |
+| 2026 | [Microsoft 365 Copilot connectors overview](https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/overview-copilot-connector) | Microsoft Learn | web | — |
+| 2026 | [Introduction to connectors and data stores (Gemini Enterprise)](https://docs.cloud.google.com/gemini/enterprise/docs/connectors/introduction-to-connectors-and-data-stores) | Google Cloud documentation | web | — |
+| 2026 | [Indexed search (Moveworks enterprise search)](https://help.moveworks.com/ai-assistant/enterprise-search/indexed-search) | Moveworks Help | web | — |
+| 2026 | [Hybrid reasoning with Agentforce Builder and Agent Script](https://architect.salesforce.com/docs/architect/fundamentals/guide/hybrid-reasoning-agentforce-builder-agent-script) | architect.salesforce.com | web | — |
+| 2026 | [How to improve Fin's resolution rate](https://intercom.com/help/en/articles/9790492-how-to-improve-fin-s-resolution-rate) | Intercom Help Center | web | — |
+| 2026 | [How content is verified in Guru](https://help.getguru.com/docs/verifying-and-unverifying-cards) | Guru Help Center | web | — |
+| 2026 | [How content chunking works for knowledge bases](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-chunking.html) | AWS documentation | web | — |
+| 2026 | [How Teamwork Graph connector permissions are kept in sync](https://support.atlassian.com/organization-administration/docs/how-connector-permissions-are-kept-in-sync/) | Atlassian Support | web | — |
+| 2026 | [How Rovo credits work](https://support.atlassian.com/organization-administration/docs/usage-limits-in-atlassian-intelligence/) | Atlassian Support | web | — |
+| 2026 | [How Confluent saves 15,000+ hours a month with Glean](https://www.glean.com/resources/customer-stories/confluent) | Glean customer stories | web | — |
+| 2026 | [How Amazon Bedrock knowledge bases work](https://docs.aws.amazon.com/bedrock/latest/userguide/kb-how-it-works.html) | AWS documentation | web | — |
+| 2026 | [Guru MCP server](https://www.getguru.com/features/mcp-server) | getguru.com | web | — |
+| 2026 | [Glean pricing blueprint](https://usagepricing.com/blueprint/glean) | usagepricing.com | web | — |
+| 2026 | [Glean Enterprise Flex pricing](https://docs.glean.com/glean-enterprise-flex-pricing) | Glean documentation | web | — |
+| 2026 | [Fin pricing](https://fin.ai/pricing) | fin.ai | web | — |
+| 2026 | [Fin Procedures explained](https://fin.ai/help/en/articles/13976187-fin-procedures-explained) | Fin Help Center | web | — |
+| 2026 | [Fin AI Agent reporting](https://www.intercom.com/help/en/articles/7837533-fin-ai-agent-reporting) | Intercom Help Center | web | — |
+| 2026 | [Elastic Agent Builder GA: build context-driven AI agents fast](https://techintelpro.com/news/ai/enterprise-ai/elastic-agent-builder-ga-build-context-driven-ai-agents-fast) | TechIntelPro | web | — |
+| 2026 | [Decagon Suggestions](https://decagon.ai/product/suggestions) | decagon.ai | web | — |
+| 2026 | [Building Agentic RAG: Connecting Data Cloud to Agentforce Studio (Part 2)](https://salesforcebreak.com/2026/10/22/agentic-rag-data-cloud-agentforce-studio/) | salesforcebreak.com | web | — |
+| 2026 | [Automated resolutions for AI agents](https://support.zendesk.com/hc/en-us/articles/5352026794010) | Zendesk Help Center | web | — |
+| 2026 | [Amazon Quick pricing](https://aws.amazon.com/quick/pricing) | AWS | web | — |
+| 2026 | [Amazon Q Business data source connector concepts](https://docs.aws.amazon.com/amazonq/latest/qbusiness-ug/connector-concepts.md) | AWS documentation | web | — |
+| 2026 | [Agentforce Data Library basics: upgrade AI with real-world data](https://trailhead.salesforce.com/content/learn/modules/agentforce-data-library-basics/upgrade-ai-with-real-world-data) | Trailhead | web | — |
+| 2026 | [Add content sources for Fin AI Agent](https://www.intercom.com/help/en/articles/7837514-add-content-sources-for-fin-ai-agent) | Intercom Help Center | web | — |
+| 2026 | [Ada launches Unified Reasoning Engine](https://www.destinationcrm.com/Articles/CRM-News/CRM-Across-the-Wire/Ada-Launches-Unified-Reasoning-Engine-173555.aspx) | DestinationCRM | web | — |
+| 2026 | [About Glean Protect and Protect+](https://docs.glean.com/administration/protect/overview) | Glean documentation | web | — |
+| 2026 | [AI agents (legacy features and retirement)](https://support.zendesk.com/hc/en-us/articles/6970583409690) | Zendesk Help Center | web | — |
+| 2026 | [66 percent of enterprises delay Microsoft Copilot](https://www.coreview.com/news/66-percent-of-enterprises-delay-microsoft-copilot) | CoreView | web | — |
+| 2025 | [Zero-click AI vulnerability exposes Microsoft 365 Copilot data without user interaction](https://thehackernews.com/2025/06/zero-click-ai-vulnerability-exposes.html) | The Hacker News | web | — |
+| 2025 | [What happened to Dashworks AI](https://vantagepoint.io/blog/hs/what-happened-to-dashworks-ai) | vantagepoint.io | web | — |
+| 2025 | [WeightWatchers customer story](https://sierra.ai/de/customers/weightwatchers) | sierra.ai | web | — |
+| 2025 | [ServiceNow completes acquisition of Moveworks](https://newsroom.servicenow.com/press-releases/details/2025/ServiceNow-completes-acquisition-of-Moveworks/default.aspx) | ServiceNow Newsroom | web | — |
+| 2025 | [Salesforce used AI to cut support load by 5% but the real win was teaching bots to say I'm sorry](https://venturebeat.com/ai/salesforce-used-ai-to-cut-support-load-by-5-but-the-real-win-was-teaching-bots-to-say-im-sorry/) | VentureBeat | web | — |
+| 2025 | [Salesforce revamps Agentforce pricing with Flex Credits: what you need to know](https://www.constellationr.com/insights/news/salesforce-revamps-agentforce-pricing-flex-credits-what-you-need-know) | Constellation Research | web | — |
+| 2025 | [Over 40% of agentic AI projects will be scrapped by 2027, Gartner says](https://www.thestar.com.my/tech/tech-news/2025/06/25/over-40-of-agentic-ai-projects-will-be-scrapped-by-2027-gartner-says) | The Star | web | — |
+| 2025 | [Microsoft launches cheaper Microsoft 365 Copilot Business AI add-on](https://office-watch.com/2025/microsoft-365-copilot-business-ai-add-on/) | Office Watch | web | — |
+| 2025 | [Microsoft 365 Copilot Experiment: cross-government findings report](https://www.gov.uk/government/publications/microsoft-365-copilot-experiment-cross-government-findings-report/microsoft-365-copilot-experiment-cross-government-findings-report-html) | GOV.UK | web | — |
+| 2025 | [Meet Agent Studio](https://sierra.ai/blog/meet-agent-studio) | Sierra blog | web | — |
+| 2025 | [Klarna dials back its AI customer service strategy, now it's hiring humans again](https://www.maginative.com/article/klarna-dials-back-its-ai-customer-service-strategy-now-its-hiring-humans-again/) | Maginative | web | — |
+| 2025 | [How Agentforce handles support requests on Salesforce Help](https://www.salesforce.com/blog/support-requests-agentforce/) | Salesforce blog | web | — |
+| 2025 | [Google launches Gemini Enterprise, the front door for workplace AI](https://www.techzine.eu/news/applications/135293/google-launches-gemini-enterprise-the-front-door-for-workplace-ai) | Techzine | web | — |
+| 2025 | [Glean's knowledge graph: the agentic engine](https://www.glean.com/blog/knowledge-graph-agentic-engine) | Glean blog | web | — |
+| 2025 | [Glean secures LLM search. Who stops oversharing?](https://www.knostic.ai/blog/glean-data-security) | Knostic blog | web | — |
+| 2025 | [Fuel your AI with a knowledge base built in days, not months](https://www.zendesk.com/blog/zendesk-insights/innovation/fuel-your-ai-with-a-knowledge-base-built-in-days-not-months/) | Zendesk blog | web | — |
+| 2025 | [From pilot to playbook: lessons from the first year as Agentforce customer zero](https://www.salesforce.com/news/stories/first-year-agentforce-customer-zero/) | Salesforce Newsroom | web | — |
+| 2025 | [From SOPs to Agent Operating Procedures](https://decagon.ai/blog/from-sops-to-agent-operating-procedures) | Decagon blog | web | — |
+| 2025 | [Elastic launches Agent Builder to build AI agents faster](https://www.techzine.eu/news/devops/135723/elastic-launches-agent-builder-to-build-ai-agents-faster) | Techzine | web | — |
+| 2025 | [Dashworks is joining forces with HubSpot](https://www.dashworks.ai/blog/dashworks-is-joining-forces-with-hubspot) | Dashworks blog | web | — |
+| 2025 | [DBT trial finds Copilot saves staff time but doesn't improve productivity](https://www.civilserviceworld.com/news/article/dbt-trial-finds-copilot-saves-staff-time-but-doesnt-improve-productivity) | Civil Service World | web | — |
+| 2025 | [Coveo and Microsoft Copilot: grounding with Passage Retrieval](https://www.coveo.com/blog/ms-copilot-coveo/) | Coveo blog | web | — |
+| 2025 | [Consumption-based pricing for SharePoint agents](https://techcommunity.microsoft.com/blog/SPBlog/consumption-based-pricing-for-sharepoint-agents/4389591) | Microsoft Tech Community | web | — |
+| 2025 | [Authorizing access to data with RAG implementations](https://aws.amazon.com/blogs/security/authorizing-access-to-data-with-rag-implementations) | AWS Security Blog | web | — |
+| 2025 | [Atlassian Rovo pricing shifts amid AI adoption struggles](https://techtarget.com/searchitoperations/news/366622263/Atlassian-Rovo-pricing-shifts-amid-AI-adoption-struggles) | TechTarget | web | — |
+| 2025 | [A contact center chatbot invents company policies, now customers want out](https://www.cxtoday.com/contact-center/a-contact-center-chatbot-invents-company-policies-now-customers-want-out/) | CX Today | web | — |
+| 2024 | [The Total Economic Impact of Glean](https://tei.forrester.com/go/Glean/workAIplatform/docs/TheTEIofGlean.pdf) | Forrester | web | local |
+| 2024 | [NYC's AI chatbot tells businesses to break the law](https://themarkup.org/news/2024/03/29/nycs-ai-chatbot-tells-businesses-to-break-the-law) | The Markup | web | — |
+| 2024 | [KB generation (Now Assist)](https://www.servicenow.com/docs/r/x7YYxCVARboMBfN2zKAZsA/_CSz4yfJG8Svh8O92KusJg) | ServiceNow documentation | web | — |
+| 2024 | [Introducing Moveworks Enterprise Search](https://moveworks.com/us/en/resources/blog/introducing-enterprise-search) | Moveworks blog | web | — |
+| 2024 | [Install and configure Knowledge Generation for Now Assist for ITSM](https://www.servicenow.com/community/itsm-articles/install-and-configure-knowledge-generation-for-now-assist-for/ta-p/2949753) | ServiceNow Community | web | — |
+| 2024 | [Access control for vector stores using metadata filtering with Amazon Bedrock Knowledge Bases](https://aws.amazon.com/blogs/machine-learning/access-control-for-vector-stores-using-metadata-filtering-with-knowledge-bases-for-amazon-bedrock) | AWS Machine Learning Blog | web | — |
+| 2024 | [AI gone wild: airline has to honor a refund policy its chatbot fabricated](https://manatt.com/insights/newsletters/advertising-law/ai-gone-wild-airline-has-to-honor-a-refund-policy) | Manatt Advertising Law newsletter | web | — |
+| 2024 | [85% of customer service leaders to explore GenAI solutions by 2025: Gartner survey](https://www.cdomagazine.tech/aiml/85-of-customer-service-leaders-to-explore-genai-solutions-by-2025-gartner-survey) | CDO Magazine | web | — |
+
+## 08_open_source_kb_stacks (101)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [unstructured-ingest repository](https://github.com/Unstructured-IO/unstructured-ingest) | GitHub | web | — |
+| 2026 | [txtai repository](https://github.com/neuml/txtai) | GitHub | web | — |
+| 2026 | [oikb repository](https://github.com/open-webui/oikb) | GitHub | web | — |
+| 2026 | [Weaviate docs: Hybrid search](https://docs.weaviate.io/weaviate/search/hybrid) | Weaviate documentation | web | — |
+| 2026 | [Weaviate LICENSE](https://github.com/weaviate/weaviate/blob/main/LICENSE) | GitHub | web | — |
+| 2026 | [Vespa repository](https://github.com/vespa-engine/vespa) | GitHub | web | — |
+| 2026 | [Vespa hybrid search tutorial](https://docs.vespa.ai/en/learn/tutorials/hybrid-search.html) | Vespa documentation | web | — |
+| 2026 | [Verba repository (archived)](https://github.com/weaviate/Verba) | GitHub | web | — |
+| 2026 | [Typesense repository](https://github.com/typesense/typesense) | GitHub | web | — |
+| 2026 | [Typesense docs: Semantic search](https://typesense.org/docs/guide/semantic-search.html) | Typesense documentation | web | — |
+| 2026 | [Two years of vector search at Notion: 10x scale, 1/10th cost](https://www.notion.com/blog/two-years-of-vector-search-at-notion) | Notion Tech Blog | web | — |
+| 2026 | [Tantivy repository](https://github.com/quickwit-oss/tantivy) | GitHub | web | — |
+| 2026 | [SurfSense repository](https://github.com/MODSetter/SurfSense) | GitHub | web | — |
+| 2026 | [Stripe docs: Agents and AI on Stripe](https://docs.stripe.com/building-with-llms) | Stripe documentation | web | — |
+| 2026 | [Ragas repository](https://github.com/explodinggradients/ragas) | GitHub | web | — |
+| 2026 | [RAGFlow repository](https://github.com/infiniflow/ragflow) | GitHub | web | — |
+| 2026 | [RAGFlow docs: Retrieval testing](https://github.com/infiniflow/ragflow/blob/main/docs/guides/dataset/retrieval_testing.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Resource sharing and permissions](https://github.com/infiniflow/ragflow/blob/main/docs/guides/team/resource_sharing/resource_sharing_and_permissions.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Metadata management](https://github.com/infiniflow/ragflow/blob/main/docs/guides/dataset/metadata_management.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Link and sync a data source](https://github.com/infiniflow/ragflow/blob/main/docs/guides/data_source/add_to_knowledge_base_and_sync.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Knowledge compilation built-in templates](https://github.com/infiniflow/ragflow/blob/main/docs/guides/knowledge_compilation/built_in_templates_and_dedicated_configuration.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Dataset configuration](https://github.com/infiniflow/ragflow/blob/main/docs/guides/dataset/configuration.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [RAGFlow docs: Data source categories and selection](https://github.com/infiniflow/ragflow/blob/main/docs/guides/data_source/data_source_categories_and_selection.md) | GitHub (RAGFlow docs) | web | — |
+| 2026 | [Quivr repository (Quivr 2)](https://github.com/QuivrHQ/quivr) | GitHub | web | — |
+| 2026 | [Quickwit repository](https://github.com/quickwit-oss/quickwit) | GitHub | web | — |
+| 2026 | [Qdrant repository](https://github.com/qdrant/qdrant) | GitHub | web | — |
+| 2026 | [Qdrant docs: Hybrid and multi-stage queries](https://qdrant.tech/documentation/concepts/hybrid-queries/) | Qdrant documentation | web | — |
+| 2026 | [Propagating SharePoint Document Permissions to AI Search and RAG Pipelines](https://devblogs.microsoft.com/ise/?p=16628) | Microsoft ISE Developer Blog | web | — |
+| 2026 | [PrivateGPT repository](https://github.com/zylon-ai/private-gpt) | GitHub | web | — |
+| 2026 | [Permission-aware RAG across SharePoint, Confluence and Google Drive](https://wavect.io/blog/rag-permissions-sharepoint-confluence-drive/) | Wavect blog | web | — |
+| 2026 | [ParadeDB repository](https://github.com/paradedb/paradedb) | GitHub | web | — |
+| 2026 | [ParadeDB docs: How Hybrid Search Works (pg_search 0.25.3 mirror)](https://api.pgxn.org/src/pg_search/pg_search-0.25.3/docs/documentation/hybrid/overview.mdx) | PGXN | web | — |
+| 2026 | [OpenSearch repository](https://github.com/opensearch-project/OpenSearch) | GitHub | web | — |
+| 2026 | [OpenSearch docs: Score ranker processor](https://github.com/opensearch-project/documentation-website/blob/main/_search-plugins/search-pipelines/score-ranker-processor.md) | GitHub (documentation-website) | web | — |
+| 2026 | [OpenSearch docs: Hybrid query](https://github.com/opensearch-project/documentation-website/blob/main/_query-dsl/compound/hybrid.md) | GitHub (documentation-website) | web | — |
+| 2026 | [Open WebUI repository](https://github.com/open-webui/open-webui) | GitHub | web | — |
+| 2026 | [Open WebUI docs: RAG](https://github.com/open-webui/docs/blob/main/docs/features/chat-conversations/rag/index.md) | GitHub (open-webui/docs) | web | — |
+| 2026 | [Open WebUI docs: Knowledge Bases](https://github.com/open-webui/docs/blob/main/docs/features/workspace/knowledge.mdx) | GitHub (open-webui/docs) | web | — |
+| 2026 | [Onyx repository and LICENSE](https://github.com/onyx-dot-app/onyx) | GitHub | web | — |
+| 2026 | [Onyx docs: Connectors overview (sync, pruning, permission sync)](https://docs.onyx.app/admins/connectors/overview) | Onyx documentation | web | — |
+| 2026 | [Morphik Core repository and LICENSE](https://github.com/morphik-org/morphik-core) | GitHub | web | — |
+| 2026 | [Milvus repository](https://github.com/milvus-io/milvus) | GitHub | web | — |
+| 2026 | [Milvus docs: Full text search](https://milvus.io/docs/full-text-search.md) | Milvus documentation | web | — |
+| 2026 | [MemoryOS repository](https://github.com/BAI-LAB/MemoryOS) | GitHub | web | — |
+| 2026 | [Mem0 repository](https://github.com/mem0ai/mem0) | GitHub | web | — |
+| 2026 | [Meilisearch docs: Getting started with AI-powered search](https://www.meilisearch.com/docs/learn/ai_powered_search/getting_started_with_ai_search) | Meilisearch documentation | web | — |
+| 2026 | [Meilisearch LICENSE](https://github.com/meilisearch/meilisearch/blob/main/LICENSE) | GitHub | web | — |
+| 2026 | [LlamaCloud Index getting started (deprecated v1)](https://developers.llamaindex.ai/python/cloud/llamacloud/getting_started) | LlamaIndex developer docs | web | — |
+| 2026 | [LightRAG repository](https://github.com/HKUDS/LightRAG) | GitHub | web | — |
+| 2026 | [Letta repository](https://github.com/letta-ai/letta) | GitHub | web | — |
+| 2026 | [Langfuse repository](https://github.com/langfuse/langfuse) | GitHub | web | — |
+| 2026 | [LanceDB repository](https://github.com/lancedb/lancedb) | GitHub | web | — |
+| 2026 | [LanceDB docs: Hybrid search](https://docs.lancedb.com/search/hybrid-search) | LanceDB documentation | web | — |
+| 2026 | [Kotaemon repository and LICENSE](https://github.com/Cinnamon/kotaemon) | GitHub | web | — |
+| 2026 | [Khoj repository](https://github.com/khoj-ai/khoj) | GitHub | web | — |
+| 2026 | [Haystack docs: Retrievers](https://docs.haystack.deepset.ai/docs/retrievers) | Haystack documentation | web | — |
+| 2026 | [Graphiti repository](https://github.com/getzep/graphiti) | GitHub | web | — |
+| 2026 | [EnterpriseRAG-Bench: A RAG Benchmark for Company Internal Knowledge](https://arxiv.org/abs/2605.05253) | arXiv | paper | local |
+| 2026 | [EnterpriseRAG-Bench repository](https://github.com/onyx-dot-app/EnterpriseRAG-Bench) | GitHub | web | — |
+| 2026 | [Engineering VP Josh Clemm on how we use knowledge graphs, MCP, and DSPy in Dash](https://dropbox.tech/machine-learning/vp-josh-clemm-knowledge-graphs-mcp-and-dspy-dash) | Dropbox Tech Blog | web | — |
+| 2026 | [Elasticsearch docs: Retrievers](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/retrievers) | Elastic documentation | web | — |
+| 2026 | [Elasticsearch LICENSE.txt](https://github.com/elastic/elasticsearch/blob/main/LICENSE.txt) | GitHub | web | — |
+| 2026 | [Elastic docs: Leverage document-level security from connectors](https://www.elastic.co/docs/reference/search-connectors/es-dls-e2e-guide) | Elastic documentation | web | — |
+| 2026 | [Elastic connectors repository](https://github.com/elastic/connectors) | GitHub | web | — |
+| 2026 | [Dify repository](https://github.com/langgenius/dify) | GitHub | web | — |
+| 2026 | [Dify docs: Test and tune retrieval](https://github.com/langgenius/dify-docs/blob/main/en/cloud/use-dify/knowledge-base/test-and-tune.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Retrieval settings (agent KB)](https://github.com/langgenius/dify-docs/blob/main/en/cloud/use-dify/knowledge-base/retrieval-settings.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Metadata](https://github.com/langgenius/dify-docs/blob/main/en/self-host/use-dify/knowledge/metadata.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Knowledge pipeline orchestration](https://github.com/langgenius/dify-docs/blob/main/en/self-host/use-dify/knowledge/knowledge-pipeline/knowledge-pipeline-orchestration.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Index method and retrieval settings](https://github.com/langgenius/dify-docs/blob/main/en/self-host/use-dify/knowledge/create-knowledge/setting-indexing-methods.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: External Knowledge API](https://github.com/langgenius/dify-docs/blob/main/en/self-host/use-dify/knowledge/external-knowledge-api.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Configure the chunk settings](https://github.com/langgenius/dify-docs/blob/main/en/self-host/use-dify/knowledge/create-knowledge/chunking-and-cleaning-text.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Dify docs: Agent Knowledge Base overview](https://github.com/langgenius/dify-docs/blob/main/en/cloud/use-dify/knowledge-base/overview.mdx) | GitHub (dify-docs) | web | — |
+| 2026 | [Diataxis documentation framework](https://diataxis.fr/) | diataxis.fr | web | — |
+| 2026 | [DeepEval repository](https://github.com/confident-ai/deepeval) | GitHub | web | — |
+| 2026 | [Cognee repository](https://github.com/topoteretes/cognee) | GitHub | web | — |
+| 2026 | [Arize Phoenix repository](https://github.com/Arize-ai/phoenix) | GitHub | web | — |
+| 2026 | [AnythingLLM repository](https://github.com/Mintplex-Labs/anything-llm) | GitHub | web | — |
+| 2026 | [Airbyte repository](https://github.com/airbytehq/airbyte) | GitHub | web | — |
+| 2026 | [AiKA getting started (Spotify Portal docs)](https://backstage.spotify.com/docs/portal/core-features-and-plugins/aika/getting-started) | Spotify Portal for Backstage docs | web | — |
+| 2025 | [SpellVault's evolution: Beyond LLM apps, towards the agentic future](https://engineering.grab.com/spellvault-evolution-beyond-llm) | Grab Tech Blog | web | — |
+| 2025 | [Retrieval Augmented Generation (RAG) for GitLab](https://handbook.gitlab.com/handbook/engineering/architecture/design-documents/gitlab_rag/) | GitLab Handbook | web | — |
+| 2025 | [R2R Python README](https://github.com/SciPhi-AI/R2R/blob/main/py/README.md) | GitHub | web | — |
+| 2025 | [Optimizing the Interface Between Knowledge Graphs and LLMs for Complex Reasoning](https://arxiv.org/abs/2505.24478) | arXiv | paper | local |
+| 2025 | [LLM-Friendly Knowledge Representation for Customer Support](https://arxiv.org/abs/2510.10331) | arXiv (COLING 2025 Industry) | paper | local |
+| 2025 | [Klarna is hiring customer service agents after AI couldn't cut it on calls](https://www.entrepreneur.com/business-news/klarna-ceo-reverses-course-by-hiring-more-humans-not-ai/491396) | Entrepreneur | web | — |
+| 2025 | [Hybrid Search in PostgreSQL: The Missing Manual](https://paradedb.com/blog/hybrid-search-in-postgresql-the-missing-manual) | ParadeDB blog | web | — |
+| 2025 | [How Dash uses context engineering for smarter AI](https://dropbox.tech/machine-learning/how-dash-uses-context-engineering-for-smarter-ai) | Dropbox Tech Blog | web | — |
+| 2025 | [Enhanced Agentic-RAG: What If Chatbots Could Deliver Near-Human Precision?](https://www.uber.com/en-GB/blog/enhanced-agentic-rag/) | Uber Engineering Blog | web | — |
+| 2025 | [Building production-ready agentic systems: Lessons from Shopify Sidekick](https://shopify.engineering/building-production-ready-agentic-systems) | Shopify Engineering | web | — |
+| 2024 | [T-RAG: Lessons from the LLM Trenches](https://arxiv.org/abs/2402.07483) | arXiv | paper | local |
+| 2024 | [Retrieval-Augmented Generation with Knowledge Graphs for Customer Service Question Answering](https://arxiv.org/abs/2404.17723) | arXiv (SIGIR 2024) | paper | local |
+| 2024 | [Observations on Building RAG Systems for Technical Documents](https://arxiv.org/abs/2404.00657) | arXiv (ICLR 2024 Tiny Papers) | paper | local |
+| 2024 | [LLM-based Dasher support automation with RAG and quality controls (DoorDash)](https://www.zenml.io/llmops-database/llm-based-dasher-support-automation-with-rag-and-quality-controls) | ZenML LLMOps Database | web | — |
+| 2024 | [KAG: Boosting LLMs in Professional Domains via Knowledge Augmented Generation](https://arxiv.org/abs/2409.13731) | arXiv | paper | local |
+| 2024 | [Genie: Uber's Gen AI On-Call Copilot](https://www.uber.com/blog/genie-ubers-gen-ai-on-call-copilot/) | Uber Engineering Blog | web | — |
+| 2024 | [GenAI for customer support, Part 4: Tuning RAG search for relevance](https://www.elastic.co/search-labs/blog/elser-rag-search-for-relevance) | Elastic Search Labs | web | — |
+| 2024 | [FACTS About Building Retrieval Augmented Generation-based Chatbots](https://arxiv.org/abs/2407.07858) | arXiv | paper | local |
+| 2023 | [Building an AI-powered help desk with RAG and model evaluation (Vimeo)](https://www.zenml.io/llmops-database/building-an-ai-powered-help-desk-with-rag-and-model-evaluation) | ZenML LLMOps Database | web | — |
+| 2015 | [DITA 1.3 Technical Content: Information types](https://docs.oasis-open.org/dita/dita/v1.3/os/part2-tech-content/archSpec/technicalContent/dita-technicalContent-InformationTypes.html) | OASIS DITA 1.3 specification | web | — |
+| 2009 | [SKOS Simple Knowledge Organization System Primer](https://www.w3.org/TR/skos-primer/) | W3C Working Group Note | web | — |
