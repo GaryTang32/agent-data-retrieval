@@ -1,3 +1,4 @@
 # Downloaded research PDFs are kept local only (licenses often forbid redistribution).
 # The catalog (papers/README.md, papers/manifest.csv) is committed; rebuild PDFs with scripts/download_papers.py
 papers/**/*.pdf
+papers/**/*.part

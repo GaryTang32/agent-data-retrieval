@@ -26,10 +26,12 @@ import csv
 import json
 import re
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -140,6 +142,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("papers"))
     ap.add_argument("--dry-run", action="store_true", help="build the catalog without downloading")
     ap.add_argument("--retries", type=int, default=3)
+    ap.add_argument("--workers", type=int, default=8, help="concurrent downloads (start rate per host is still limited)")
     args = ap.parse_args()
 
     entries = load_entries(args.notes_dir)
@@ -158,44 +161,68 @@ def main() -> int:
         unique[key] = {**e, "arxiv_id": arxiv_id, "resolved_pdf_url": pdf_url, "key": key, "also_in": set()}
 
     args.out.mkdir(parents=True, exist_ok=True)
-    rows = []
-    last_host_time: dict[str, float] = {}
     todo = [u for u in unique.values() if u["resolved_pdf_url"]]
     print(f"{len(entries)} manifest lines -> {len(unique)} unique sources, {len(todo)} with a PDF link")
 
-    for i, u in enumerate(unique.values(), 1):
-        status, local = "no_pdf_link", ""
+    # Plan destinations, then download concurrently. Request *starts* are
+    # rate-limited per host (arXiv: one every 3 s), but transfers may overlap,
+    # which matters when per-connection bandwidth is the bottleneck.
+    limiter_lock = threading.Lock()
+    next_start: dict[str, float] = {}
+    print_lock = threading.Lock()
+    done_count = [0]
+
+    def wait_turn(host: str) -> None:
+        delay = ARXIV_DELAY_S if "arxiv.org" in host else OTHER_DELAY_S
+        with limiter_lock:
+            now = time.time()
+            start = max(now, next_start.get(host, 0.0))
+            next_start[host] = start + delay
+        if start > now:
+            time.sleep(start - now)
+
+    def process(u: dict) -> None:
+        u["status"], u["local"] = "no_pdf_link", ""
         url = u["resolved_pdf_url"]
-        if url:
-            topic_dir = args.out / slugify(str(u["topic"]), 60)
-            name_id = u["arxiv_id"] or slugify(str(u.get("title") or "paper"), 40)
-            fname = f"{u.get('year') or 'nd'}_{first_author_surname(u.get('authors'))}_{slugify(str(u.get('title') or ''), 60)}"
-            if u["arxiv_id"]:
-                fname += f"_{name_id}"
-            dest = topic_dir / f"{fname}.pdf"
-            local = str(dest)
-            if dest.exists() and dest.stat().st_size > 1000:
-                status = "downloaded"
-            elif args.dry_run:
-                status = "pending"
+        if not url:
+            return
+        topic_dir = args.out / slugify(str(u["topic"]), 60)
+        fname = f"{u.get('year') or 'nd'}_{first_author_surname(u.get('authors'))}_{slugify(str(u.get('title') or ''), 60)}"
+        if u["arxiv_id"]:
+            fname += f"_{u['arxiv_id']}"
+        dest = topic_dir / f"{fname}.pdf"
+        u["local"] = str(dest)
+        if dest.exists() and dest.stat().st_size > 1000:
+            u["status"] = "downloaded"
+        elif args.dry_run:
+            u["status"] = "pending"
+        else:
+            host = urlparse(url).netloc
+            data, status = None, "error"
+            for attempt in range(args.retries):
+                wait_turn(host)
+                data, status = fetch(url)
+                if data is not None or not status.startswith(("error", "http_429", "http_5")):
+                    break
+                time.sleep(5 * (2 ** attempt))
+            u["status"] = status
+            if data is not None:
+                topic_dir.mkdir(parents=True, exist_ok=True)
+                tmp = dest.with_suffix(".part")
+                tmp.write_bytes(data)
+                tmp.replace(dest)
             else:
-                host = urlparse(url).netloc
-                delay = ARXIV_DELAY_S if "arxiv.org" in host else OTHER_DELAY_S
-                for attempt in range(args.retries):
-                    wait = last_host_time.get(host, 0) + delay - time.time()
-                    if wait > 0:
-                        time.sleep(wait)
-                    data, status = fetch(url)
-                    last_host_time[host] = time.time()
-                    if data is not None or not status.startswith(("error", "http_429", "http_5")):
-                        break
-                    time.sleep(delay * (2 ** (attempt + 1)))
-                if data is not None:
-                    topic_dir.mkdir(parents=True, exist_ok=True)
-                    dest.write_bytes(data)
-                else:
-                    local = ""
-            print(f"[{i}/{len(unique)}] {status:<14} {str(u.get('title') or '')[:80]}", flush=True)
+                u["local"] = ""
+        with print_lock:
+            done_count[0] += 1
+            print(f"[{done_count[0]}/{len(todo)}] {u['status']:<14} {str(u.get('title') or '')[:80]}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        list(pool.map(process, unique.values()))
+
+    rows = []
+    for u in unique.values():
+        status, local, url = u["status"], u["local"], u["resolved_pdf_url"]
         rows.append({
             "topic": u["topic"],
             "also_in": ";".join(sorted(u["also_in"] - {u["topic"]})),
