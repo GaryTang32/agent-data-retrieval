@@ -1,6 +1,6 @@
 # Research source library
 
-Catalog of every unique source cited in `research_notes/Deterministic retrieval data conversion`: 967 sources (666 papers, 301 web/docs), 656 PDFs downloaded locally.
+Catalog of every unique source cited in 1 research folder(s): 967 sources (666 papers, 301 web/docs), 656 PDFs downloaded locally.
 
 PDFs are **not committed** (they are git-ignored) because many licenses do not allow public
 redistribution. Rebuild the local library on any machine with:
@@ -10,6 +10,8 @@ python3 scripts/download_papers.py "research_notes/Deterministic retrieval data 
 ```
 
 Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv`.
+
+# Deterministic retrieval data conversion (967)
 
 ## 01_surveys_foundations (83)
 
@@ -203,7 +205,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2019 | [LayoutLM: Pre-training of Text and Layout for Document Image Understanding](https://arxiv.org/abs/1912.13318) | KDD 2020 | paper | local |
 | 2019 | [Image-based table recognition: data, model, and evaluation](https://arxiv.org/abs/1911.10683) | ECCV 2020 | paper | local |
 | 2019 | [FUNSD: A Dataset for Form Understanding in Noisy Scanned Documents](https://arxiv.org/abs/1905.13538) | ICDAR-OST 2019 | paper | local |
-| 2019 | [CORD: A Consolidated Receipt Dataset for Post-OCR Parsing](https://github.com/clovaai/cord) | NeurIPS 2019 Document Intelligence Workshop | paper | http_403 |
+| 2019 | [CORD: A Consolidated Receipt Dataset for Post-OCR Parsing](https://github.com/clovaai/cord) | NeurIPS 2019 Document Intelligence Workshop | paper | pending |
 
 ## 03_llm_information_extraction (93)
 
@@ -747,7 +749,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2024 | [Performance of two large language models for data extraction in evidence synthesis](https://pubmed.ncbi.nlm.nih.gov/38895747/) | Research Synthesis Methods 15(5):818-824 | paper | — |
 | 2024 | [OpenChemIE: An Information Extraction Toolkit For Chemistry Literature](https://arxiv.org/abs/2404.01462) | Journal of Chemical Information and Modeling 2024 | paper | local |
 | 2024 | [Data extraction from polymer literature using large language models](https://doi.org/10.1038/s43246-024-00708-9) | Communications Materials | paper | local |
-| 2024 | [Data extraction for evidence synthesis using a large language model: A proof-of-concept study](https://doi.org/10.1002/jrsm.1710) | Research Synthesis Methods 15(4):576-589 | paper | http_403 |
+| 2024 | [Data extraction for evidence synthesis using a large language model: A proof-of-concept study](https://doi.org/10.1002/jrsm.1710) | Research Synthesis Methods 15(4):576-589 | paper | pending |
 | 2024 | [ChartAssisstant: A Universal Chart Multimodal Language Model via Chart-to-Table Pre-training and Multitask Instruction Tuning](https://arxiv.org/abs/2401.02384) | arXiv preprint | paper | local |
 | 2024 | [Can large language models replace humans in the systematic review process? Evaluating GPT-4's efficacy in screening and extracting data from peer-reviewed and grey literature in multiple languages](https://arxiv.org/abs/2310.17526) | Research Synthesis Methods 2024 | paper | local |
 | 2024 | [AutoScraper: A Progressive Understanding Web Agent for Web Scraper Generation](https://arxiv.org/abs/2404.12753) | arXiv preprint | paper | local |
@@ -796,7 +798,7 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2018 | [CERES: Distantly Supervised Relation Extraction from the Semi-Structured Web](https://arxiv.org/abs/1804.04635) | PVLDB 2018 | paper | local |
 | 2018 | [Auto-generated materials database of Curie and Néel temperatures via semi-supervised relationship extraction](https://doi.org/10.1038/sdata.2018.111) | Scientific Data 5:180111 | paper | local |
 | 2017 | [Drain: An Online Log Parsing Approach with Fixed Depth Tree](https://doi.org/10.1109/ICWS.2017.13) | IEEE ICWS 2017 | paper | local |
-| 2016 | [ChemDataExtractor: A Toolkit for Automated Extraction of Chemical Information from the Scientific Literature](https://doi.org/10.1021/acs.jcim.6b00207) | Journal of Chemical Information and Modeling 56:1894-1904 | paper | http_429 |
+| 2016 | [ChemDataExtractor: A Toolkit for Automated Extraction of Chemical Information from the Scientific Literature](https://doi.org/10.1021/acs.jcim.6b00207) | Journal of Chemical Information and Modeling 56:1894-1904 | paper | pending |
 | 2016 | [A Large Public Corpus of Web Tables containing Time and Context Metadata](https://doi.org/10.1145/2872518.2889386) | WWW 2016 Companion | paper | local |
 | 2011 | [Structured Web Data Extraction Dataset (SWDE) - Academic Torrents record](https://academictorrents.com/details/411576c7e80787e4b40452360f5f24acba9b5159) | Academic Torrents | web | — |
 | 2011 | [From One Tree to a Forest: a Unified Solution for Structured Web Data Extraction](https://doi.org/10.1145/2009916.2010020) | SIGIR 2011 | paper | — |

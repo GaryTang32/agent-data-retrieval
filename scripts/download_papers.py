@@ -15,7 +15,9 @@ the local paper library on any machine.
 
 Usage:
     python3 scripts/download_papers.py "research_notes/Deterministic retrieval data conversion"
-    python3 scripts/download_papers.py <notes_dir> --out papers --dry-run
+    python3 scripts/download_papers.py <notes_dir> [<notes_dir> ...] --out papers --dry-run
+
+Pass several notes folders to build one combined catalog (grouped by research).
 
 The script is resumable: files already present (and valid PDFs) are skipped.
 """
@@ -98,9 +100,10 @@ def dedupe_key(entry: dict, arxiv_id: str | None, pdf_url: str | None) -> str:
     return f"url:{str(entry.get('url') or entry.get('title') or '').strip().lower()}"
 
 
-def load_entries(notes_dir: Path) -> list[dict]:
+def load_entries(notes_dirs: list[Path]) -> list[dict]:
     entries: list[dict] = []
-    for path in sorted(notes_dir.glob("*.sources.jsonl")):
+    paths = [(d, p) for d in notes_dirs for p in sorted(d.glob("*.sources.jsonl"))]
+    for notes_dir, path in paths:
         topic_default = path.name.replace(".sources.jsonl", "")
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             line = line.strip()
@@ -113,6 +116,7 @@ def load_entries(notes_dir: Path) -> list[dict]:
                 continue
             obj.setdefault("topic", topic_default)
             obj["_manifest"] = path.name
+            obj["_research"] = notes_dir.name
             entries.append(obj)
     return entries
 
@@ -138,7 +142,7 @@ def fetch(url: str) -> tuple[bytes | None, str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("notes_dir", type=Path)
+    ap.add_argument("notes_dir", type=Path, nargs="+")
     ap.add_argument("--out", type=Path, default=Path("papers"))
     ap.add_argument("--dry-run", action="store_true", help="build the catalog without downloading")
     ap.add_argument("--retries", type=int, default=3)
@@ -147,7 +151,7 @@ def main() -> int:
 
     entries = load_entries(args.notes_dir)
     if not entries:
-        print(f"no *.sources.jsonl files found in {args.notes_dir}", file=sys.stderr)
+        print(f"no *.sources.jsonl files found in {[str(d) for d in args.notes_dir]}", file=sys.stderr)
         return 1
 
     unique: dict[str, dict] = {}
@@ -224,6 +228,7 @@ def main() -> int:
     for u in unique.values():
         status, local, url = u["status"], u["local"], u["resolved_pdf_url"]
         rows.append({
+            "research": u["_research"],
             "topic": u["topic"],
             "also_in": ";".join(sorted(u["also_in"] - {u["topic"]})),
             "type": u.get("type") or "",
@@ -258,30 +263,35 @@ def md_escape(text: str) -> str:
     return str(text).replace("|", "\\|").replace("\n", " ")
 
 
-def write_readme(out: Path, rows: list[dict], notes_dir: Path) -> None:
+def write_readme(out: Path, rows: list[dict], notes_dirs: list[Path]) -> None:
     n_papers = sum(1 for r in rows if r["type"] == "paper")
     n_pdf = sum(1 for r in rows if r["status"] == "downloaded")
     lines = [
         "# Research source library",
         "",
-        f"Catalog of every unique source cited in `{notes_dir}`: {len(rows)} sources "
+        f"Catalog of every unique source cited in {len(notes_dirs)} research folder(s): {len(rows)} sources "
         f"({n_papers} papers, {len(rows) - n_papers} web/docs), {n_pdf} PDFs downloaded locally.",
         "",
         "PDFs are **not committed** (they are git-ignored) because many licenses do not allow public",
         "redistribution. Rebuild the local library on any machine with:",
         "",
         "```bash",
-        f'python3 scripts/download_papers.py "{notes_dir}"',
+        "python3 scripts/download_papers.py " + " ".join(f'"{d}"' for d in notes_dirs),
         "```",
         "",
         "Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv`.",
         "",
     ]
-    by_topic: dict[str, list[dict]] = {}
+    by_key: dict[tuple[str, str], list[dict]] = {}
     for r in rows:
-        by_topic.setdefault(r["topic"], []).append(r)
-    for topic in sorted(by_topic):
-        items = sorted(by_topic[topic], key=lambda r: (str(r["year"]), r["title"]), reverse=True)
+        by_key.setdefault((r["research"], r["topic"]), []).append(r)
+    current_research = None
+    for research, topic in sorted(by_key):
+        if research != current_research:
+            n = sum(len(v) for (res, _), v in by_key.items() if res == research)
+            lines += [f"# {research} ({n})", ""]
+            current_research = research
+        items = sorted(by_key[(research, topic)], key=lambda r: (str(r["year"]), r["title"]), reverse=True)
         lines += [f"## {topic} ({len(items)})", "", "| Year | Title | Venue | Type | PDF |", "|---|---|---|---|---|"]
         for r in items:
             link = r["url"] or r["pdf_url"]
