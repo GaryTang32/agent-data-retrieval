@@ -1,12 +1,12 @@
 # Research source library
 
-Catalog of every unique source cited in 2 research folder(s): 1791 sources (1219 papers, 572 web/docs), 1210 PDFs downloaded locally.
+Catalog of every unique source cited in 4 research folder(s): 2570 sources (1791 papers, 779 web/docs), 1667 PDFs downloaded locally.
 
 PDFs are **not committed** (they are git-ignored) because many licenses do not allow public
 redistribution. Rebuild the local library on any machine with:
 
 ```bash
-python3 scripts/download_papers.py "research_notes/Deterministic retrieval data conversion" "research_notes/Searchable agent knowledge base construction"
+python3 scripts/download_papers.py "research_notes/Deterministic retrieval data conversion" "research_notes/Searchable agent knowledge base construction" "research_notes/How AI research agents retrieve information" "research_notes/Information theory of agent retrieval"
 ```
 
 Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv`.
@@ -1044,6 +1044,839 @@ Full metadata (authors, DOI, license, relevance, local path) is in `manifest.csv
 | 2024 | [LLM-powered data classification for data entities at scale](https://engineering.grab.com/llm-powered-data-classification) | Grab Engineering Blog | web | — |
 | 2023 | [LLMs Accelerate Annotation for Medical Information Extraction](https://arxiv.org/abs/2312.02296) | arXiv | paper | local |
 | 2023 | [DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines](https://arxiv.org/abs/2310.03714) | arXiv (ICLR 2024) | paper | local |
+
+# How AI research agents retrieve information (379)
+
+## 01_web_search_infrastructure (81)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [chore(provider/xai): deprecate searchParameters (live search)](https://github.com/vercel/ai/pull/15713) | GitHub vercel/ai | web | — |
+| 2026 | [Why Perplexity Chose Vespa for AI Search](https://vespa.ai/case-studies/why-perplexity-chose-vespa-for-ai-search/) | Vespa.ai case study | web | — |
+| 2026 | [What Search Engine Does Claude Use? Anthropic Names Three](https://tofubofu.com/blog/what-search-engine-does-claude-use) | tofubofu.com | web | — |
+| 2026 | [Web search tool guide (Responses API)](https://developers.openai.com/api/docs/guides/tools-web-search) | OpenAI API docs | web | — |
+| 2026 | [Web search tool (Claude API docs)](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Claude Platform docs | web | — |
+| 2026 | [Waiting for dawn in search: Search index, Google rulings and impact on Kagi](https://blog.kagi.com/waiting-dawn-search) | Kagi Blog | web | — |
+| 2026 | [Use Web Search (Kimi platform)](https://platform.kimi.ai/docs/guide/use-web-search) | Kimi platform docs | web | — |
+| 2026 | [Tavily API Credits](https://docs.tavily.com/documentation/api-credits) | Tavily docs | web | — |
+| 2026 | [Search and Fetch API guide](https://api-docs.deepseek.com/guides/search/) | DeepSeek API docs | web | — |
+| 2026 | [Search Tools (web_search, x_search)](https://docs.x.ai/docs/guides/tools/search-tools) | xAI docs | web | — |
+| 2026 | [SPTAG: Space Partition Tree And Graph](https://github.com/microsoft/SPTAG) | GitHub | web | — |
+| 2026 | [Perplexity API Pricing](https://docs.perplexity.ai/getting-started/pricing) | Perplexity docs | web | — |
+| 2026 | [Overview of OpenAI Crawlers](https://developers.openai.com/api/docs/bots) | OpenAI API docs | web | — |
+| 2026 | [Microsoft Open Sources Industry Leading Embedding Model (Harrier)](https://blogs.bing.com/search/April-2026/Microsoft-Open-Sources-Industry-Leading-Embedding-Model) | Bing Search Blog | web | — |
+| 2026 | [Meta Web Crawlers](https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/) | Meta for Developers | web | — |
+| 2026 | [How Search organizes information](https://www.google.com/search/howsearchworks/how-search-works/organizing-information/) | Google Search: How Search Works | web | — |
+| 2026 | [Grounding with Google Search (Gemini API)](https://aistudio.google.com/docs/google-search) | Google AI Studio docs | web | — |
+| 2026 | [Firecrawl Search](https://docs.firecrawl.dev/features/search) | Firecrawl docs | web | — |
+| 2026 | [Exa Pricing](https://exa.ai/pricing) | Exa | web | — |
+| 2026 | [Enable and use web search (Claude Help Center)](https://support.claude.com/en/articles/10684626-enable-and-use-web-search) | Claude Help Center | web | — |
+| 2026 | [Does ChatGPT have its own search index? What OpenAI documents, and what others have observed](https://liamvi.com/blog/does-chatgpt-have-its-own-search-index) | liamvi.com | web | — |
+| 2026 | [Does Anthropic crawl the web and how can site owners block the crawler?](https://support.claude.com/en/articles/8896518-does-anthropic-crawl-the-web) | Claude Help Center | web | — |
+| 2026 | [DeepSeek lanza Search API y Fetch API para agentes y RAG](https://dev.to/lu1tr0n/deepseek-lanza-search-api-y-fetch-api-para-agentes-y-rag-2laj) | DEV Community | web | — |
+| 2026 | [Data, privacy, and security for web search in Microsoft Copilot and Microsoft Copilot Chat](https://learn.microsoft.com/en-us/microsoft-365/copilot/manage-public-web-access) | Microsoft Learn | web | — |
+| 2026 | [Custom Search JSON API overview](https://developers.google.com/custom-search/v1/overview) | Google for Developers | web | — |
+| 2026 | [Codex config basics: web search modes](https://learn.chatgpt.com/docs/config-file/config-basic.md) | OpenAI Codex docs | web | — |
+| 2026 | [ChatGPT's Search Index Serves Small Sites Too, Data Shows](https://www.searchenginejournal.com/chatgpts-search-index-serves-small-sites-too-data-shows/585388/) | Search Engine Journal | web | — |
+| 2026 | [ChatGPT built its own search index](https://peec.ai/blog/chatgpt-built-its-own-search-index) | Peec AI blog | web | — |
+| 2026 | [ChatGPT Search Architecture (reverse-engineering)](https://think.resoneo.com/chatgpt/) | think.resoneo.com | web | — |
+| 2026 | [Brave Search API](https://brave.com/search/api/) | Brave | web | — |
+| 2026 | [August 2026 Crawl Archive Now Available](https://commoncrawl.org/blog/august-2026-crawl-archive-now-available) | Common Crawl Blog | web | — |
+| 2026 | [Announcing Microsoft Web IQ](https://blogs.bing.com/search/June-2026/Announcing-Microsoft-Web-IQ) | Bing Search Blog | web | — |
+| 2026 | [API Pricing](https://developers.openai.com/api/docs/pricing) | OpenAI API docs | web | — |
+| 2026 | [A guide to Google Search ranking systems](https://developers.google.com/search/docs/appearance/ranking-systems-guide) | Google Search Central | web | — |
+| 2025 | [Why are embeddings so cheap?](https://www.tensoreconomics.com/p/why-are-embeddings-so-cheap) | Tensor Economics | web | — |
+| 2025 | [What sets Brave Search API apart](https://brave.com/search/api/guides/what-sets-brave-search-api-apart/) | Brave | web | — |
+| 2025 | [The crawl-to-click gap: Cloudflare data on AI bots, training, and referrals](https://blog.cloudflare.com/crawlers-click-ai-bots-training/) | Cloudflare Blog | web | — |
+| 2025 | [Perplexity is using stealth, undeclared crawlers to evade website no-crawl directives](https://blog.cloudflare.com/perplexity-is-using-stealth-undeclared-crawlers-to-evade-website-no-crawl-directives/) | Cloudflare Blog | web | — |
+| 2025 | [Perplexity builds AI Search at scale on Vespa.ai](https://blog.vespa.ai/perplexity-builds-ai-search-at-scale-on-vespa-ai/) | Vespa Blog | web | — |
+| 2025 | [Parallel Search API benchmark / MCP](https://parallel.ai/blog/search-api-benchmark) | Parallel blog | web | — |
+| 2025 | [Microsoft ends Bing Search APIs on August 11; alternative costs 40-483% more](https://ppc.land/microsoft-ends-bing-search-apis-on-august-11-alternative-costs-40-483-more/) | PPC Land | web | — |
+| 2025 | [Introducing the Perplexity Search API](https://www.perplexity.ai/hub/blog/introducing-the-perplexity-search-api) | Perplexity Hub | web | — |
+| 2025 | [Introducing pay per crawl](https://blog.cloudflare.com/introducing-pay-per-crawl/) | Cloudflare Blog | web | — |
+| 2025 | [How We're Building the Next Generation of Search](https://exa.ai/blog/how-to-build-nextgen-search) | Exa Blog | web | — |
+| 2025 | [Google Sues SerpApi for 'Parasitic' Scraping and Circumvention of Protection Measures](https://ipwatchdog.com/2025/12/26/google-sues-serpapi-parasitic-scraping-circumvention-protection-measures/) | IPWatchdog | web | — |
+| 2025 | [Google Search Remedy: Data-Sharing Creates Opportunities for Rivals](https://capstonedc.com/insights/google-search-remedy-data-sharing-creates-opportunities-for-rivals/) | Capstone DC | web | — |
+| 2025 | [Google Must Share Its Search Index, But Can Keep Chrome and Android](https://www.deeplearning.ai/the-batch/google-must-share-its-search-index-but-can-keep-chrome-and-android) | The Batch | web | — |
+| 2025 | [Exa API 2.0](https://exa.ai/blog/exa-api-2-0) | Exa Blog | web | — |
+| 2025 | [Deep research System Card](https://cdn.openai.com/deep-research-system-card.pdf) | OpenAI | web | local |
+| 2025 | [Court Issues Remedies Ruling in United States v. Google Search Case](https://www.hugheshubbard.com/news/court-issues-remedies-ruling-in-united-states-v-google-search-case) | Hughes Hubbard | web | — |
+| 2025 | [Bing Search APIs Retiring on August 11, 2025](https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement) | Microsoft Learn Lifecycle | web | — |
+| 2025 | [Architecting and evaluating an AI-first Search API](https://www.perplexity.ai/hub/blog/architecting-and-evaluating-an-ai-first-search-api) | Perplexity Hub | web | — |
+| 2025 | [Antitrust Trial Reveals Google Rejected OpenAI Partnership](https://www.pymnts.com/news/2025/antitrust-trial-reveals-google-rejected-openai-partnership/) | PYMNTS | web | — |
+| 2025 | [Anthropic use Brave (web search evidence)](https://simonwillison.net/2025/Mar/21/anthropic-used-brave/) | simonwillison.net | web | — |
+| 2025 | [Anthropic appears to be using Brave to power web searches for its Claude chatbot](https://techcrunch.com/2025/03/21/anthropic-appears-to-be-using-brave-to-power-web-searches-for-its-claude-chatbot/) | TechCrunch | web | — |
+| 2024 | [The FineWeb Datasets: Decanting the Web for the Finest Text Data at Scale](https://arxiv.org/abs/2406.17557) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [RedPajama: an Open Dataset for Training Large Language Models](https://arxiv.org/abs/2411.12372) | NeurIPS 2024 Datasets and Benchmarks | paper | local |
+| 2024 | [MS MARCO Web Search: a Large-scale Information-rich Web Dataset with Millions of Real Click Labels](https://arxiv.org/abs/2405.07526) | WWW 2024 | paper | local |
+| 2024 | [How we built a web-scale vector database](https://exa.ai/blog/building-web-scale-vector-db) | Exa Blog | web | — |
+| 2024 | [AI In Production: A Deep Dive Into The Costs Of Multimodal Embedding Search Over 3 Billion Images](https://blog.gdeltproject.org/ai-in-production-a-deep-dive-into-the-costs-of-multimodal-embedding-search-over-3-billion-images/) | GDELT Blog | web | — |
+| 2023 | [How Many Pages Is Google's Search Index Size?](https://zyppy.com/seo/google-index-size/) | Zyppy | web | — |
+| 2022 | [Text Embeddings by Weakly-Supervised Contrastive Pre-training (E5)](https://arxiv.org/abs/2212.03533) | arXiv | paper | local |
+| 2022 | [Matryoshka Representation Learning](https://arxiv.org/abs/2205.13147) | NeurIPS 2022 | paper | local |
+| 2022 | [ClueWeb22: 10 Billion Web Documents with Visual and Semantic Information](https://arxiv.org/abs/2211.15848) | SIGIR 2022 | paper | local |
+| 2021 | [WebGPT: Browser-assisted question-answering with human feedback](https://arxiv.org/abs/2112.09332) | arXiv | paper | local |
+| 2021 | [SPANN: Highly-efficient Billion-scale Approximate Nearest Neighbor Search](https://arxiv.org/abs/2111.08566) | NeurIPS 2021 | paper | local |
+| 2021 | [FreshDiskANN: A Fast and Accurate Graph-Based ANN Index for Streaming Similarity Search](https://arxiv.org/abs/2105.09613) | arXiv | paper | local |
+| 2020 | [Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401) | NeurIPS 2020 | paper | local |
+| 2020 | [Pretrained Transformers for Text Ranking: BERT and Beyond](https://arxiv.org/abs/2010.06467) | Synthesis Lectures on HLT | paper | local |
+| 2020 | [Embedding-based Retrieval in Facebook Search](https://arxiv.org/abs/2006.11632) | KDD 2020 | paper | local |
+| 2020 | [Dense Passage Retrieval for Open-Domain Question Answering](https://arxiv.org/abs/2004.04906) | EMNLP 2020 | paper | local |
+| 2019 | [Understanding searches better than ever before (BERT in Search)](https://blog.google/products/search/search-language-understanding-bert/) | Google Blog | web | — |
+| 2019 | [Microsoft open-sources Bing vector search algorithm](https://www.theregister.com/2019/05/15/bing_algorithm_github/) | The Register | web | — |
+| 2019 | [DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node](https://proceedings.neurips.cc/paper_files/paper/2019/file/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Paper.pdf) | NeurIPS 2019 | paper | local |
+| 2019 | [Bing delivers its largest improvement in search experience using Azure GPUs](https://azure.microsoft.com/en-us/blog/bing-delivers-its-largest-improvement-in-search-experience-using-azure-gpus/) | Azure Blog | web | — |
+| 2018 | [Google Begins Using Neural Matching to Understand Synonyms, Impacting 30% of Queries](https://www.searchenginejournal.com/google-begins-using-neural-matching-to-understand-synonyms-impacting-30-of-queries/271035/) | Search Engine Journal | web | — |
+| 2010 | [Our new search index: Caffeine](https://developers.google.com/search/blog/2010/06/our-new-search-index-caffeine) | Google Search Central Blog | web | — |
+| 2010 | [Large-scale Incremental Processing Using Distributed Transactions and Notifications (Percolator)](https://www.usenix.org/legacy/event/osdi10/tech/full_papers/Peng.pdf) | OSDI 2010 | paper | local |
+| 2009 | [Challenges in Building Large-Scale Information Retrieval Systems (WSDM 2009 keynote)](https://static.googleusercontent.com/media/research.google.com/en//people/jeff/WSDM09-keynote.pdf) | WSDM 2009 | paper | local |
+| 2003 | [Web Search for a Planet: The Google Cluster Architecture](https://static.googleusercontent.com/media/research.google.com/en//archive/googlecluster-ieee.pdf) | IEEE Micro | paper | local |
+| 1998 | [The Anatomy of a Large-Scale Hypertextual Web Search Engine](http://snap.stanford.edu/class/cs224w-readings/Brin98Anatomy.pdf) | Computer Networks and ISDN Systems (WWW7) | paper | local |
+
+## 02_deep_research_agents (83)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [WANDR: A Benchmark for Wide and Deep Research](https://arxiv.org/abs/2608.14747) | arXiv | paper | local |
+| 2026 | [Self-Consistency of Entity Sets and Citations in a Deep Research System under Repeated Prompting](https://arxiv.org/abs/2610.26421) | arXiv | paper | local |
+| 2026 | [Search-Time Contamination in Deep Research Agents: Measuring Performance Inflation in Public Benchmark Evaluation](https://arxiv.org/abs/2606.05241) | arXiv | paper | local |
+| 2026 | [Search Shapes Conclusions: Auditing Evidence Selection Bias in Deep Research Agents](https://arxiv.org/abs/2609.39026) | arXiv | paper | local |
+| 2026 | [Reflective Prompt Optimization of a Deep-Research Agent: A Topic-Disjoint, Multi-Seed Protocol for Measuring Transferable Gains and Prompt-Level Overfitting](https://arxiv.org/abs/2610.12601) | arXiv | paper | local |
+| 2026 | [Quantifying Claim Smoothing by LLM Research Agents](https://arxiv.org/abs/2610.35793) | arXiv | paper | local |
+| 2026 | [OpenResearcher: A Fully Open Pipeline for Long-Horizon Deep Research Trajectory Synthesis](https://arxiv.org/abs/2603.20278) | arXiv | paper | local |
+| 2026 | [MiroFlow: Towards High-Performance and Robust Open-Source Agent Framework for General Deep Research Tasks](https://arxiv.org/abs/2602.22808) | arXiv | paper | local |
+| 2026 | [LongCat-DeepResearch Technical Report](https://arxiv.org/abs/2609.36071) | arXiv | paper | local |
+| 2026 | [Kimi K2.5: Visual Agentic Intelligence (blog)](https://www.kimi.com/blog/kimi-k2-5) | kimi.com | web | — |
+| 2026 | [Kimi K2.5: Visual Agentic Intelligence](https://arxiv.org/abs/2602.02276) | arXiv | paper | local |
+| 2026 | [Introducing multi-model intelligence in Researcher](https://techcommunity.microsoft.com/blog/Microsoft365CopilotBlog/introducing-multi-model-intelligence-in-researcher/4506011) | Microsoft Tech Community | web | — |
+| 2026 | [Introducing Claude Opus 4.6](https://www.anthropic.com/news/claude-opus-4-6) | Anthropic | web | — |
+| 2026 | [Improved web search with dynamic filtering](https://claude.com/blog/improved-web-search-with-dynamic-filtering) | Claude blog | web | — |
+| 2026 | [How Specific Do I Need to Be? Effects of User Query Underspecification on Deep Research Agents](https://arxiv.org/abs/2610.39413) | arXiv | paper | local |
+| 2026 | [Google's new AI agent will run 160 searches while you sleep](https://edtechinnovationhub.com/news/googles-new-ai-agent-will-run-160-searches-while-you-sleep-and-hand-you-the-report-by-morning) | EdTech Innovation Hub | web | — |
+| 2026 | [Glasseek: A Transparent Recipe for Training and Trustworthy Evaluation of DeepSearch Agents](https://arxiv.org/abs/2610.16998) | arXiv | paper | local |
+| 2026 | [Gemini Deep Research overview](https://gemini.google/overview/deep-research/) | gemini.google | web | — |
+| 2026 | [Gemini Deep Research (API docs)](https://aistudio.google.com/docs/deep-research) | Google AI Studio / Gemini API docs | web | — |
+| 2026 | [GPT Researcher](https://github.com/assafelovic/gpt-researcher) | GitHub | web | — |
+| 2026 | [Dr.Credit: Rubric-Grounded Process Credit Assignment for Deep Research Agents](https://arxiv.org/abs/2609.34296) | arXiv | paper | local |
+| 2026 | [DeepRewind: Predicting and Repairing Premature Commitments in Deep Research Agents](https://arxiv.org/abs/2609.36344) | arXiv | paper | local |
+| 2026 | [DeepResearch Bench repository](https://github.com/Ayanami0730/deep_research_bench) | GitHub | web | — |
+| 2026 | [Deep Research, Shallow Evaluation: A Case Study in Meta-Evaluation for Long-Form QA Benchmarks](https://arxiv.org/abs/2603.06942) | arXiv | paper | local |
+| 2026 | [Decomposition Buys Integrity, Not Yield](https://arxiv.org/abs/2609.17464) | arXiv | paper | local |
+| 2026 | [DRACO: a Cross-Domain Benchmark for Deep Research Accuracy, Completeness, and Objectivity](https://arxiv.org/abs/2602.11685) | arXiv | paper | local |
+| 2026 | [DRACO leaderboard](https://leaderboard.steel.dev/leaderboards/draco/) | leaderboard.steel.dev | web | — |
+| 2026 | [Codex config basics (web_search modes)](https://learn.chatgpt.com/docs/config-file/config-basic) | OpenAI Codex docs | web | — |
+| 2026 | [Cited but Not Verified: Parsing and Evaluating Source Attribution in LLM Deep Research Agents](https://arxiv.org/abs/2605.06635) | arXiv | paper | local |
+| 2026 | [ChatGPT Deep Research](https://en.wikipedia.org/wiki/ChatGPT_Deep_Research) | Wikipedia | web | — |
+| 2026 | [CORE: Coarse-to-Fine Search with Context Management for Deep Research](https://arxiv.org/abs/2611.07859) | arXiv | paper | local |
+| 2026 | [BrowseComp Leaderboard & Scores (November 2026)](https://benchlm.ai/benchmarks/browsecomp) | benchlm.ai | web | — |
+| 2026 | [Benchmarking and Error Analysis of Deep Search and Deep Research LLM Agents](https://arxiv.org/abs/2610.29346) | arXiv | paper | local |
+| 2026 | [ArcticSwarm: Deferring Early Consensus in Long-Horizon Multi-Agent Research](https://arxiv.org/abs/2609.01870) | arXiv | paper | local |
+| 2026 | [A-MapReduce: Executing Wide Search via Agentic MapReduce](https://arxiv.org/abs/2602.01331) | arXiv | paper | local |
+| 2025 | [node-DeepResearch](https://github.com/jina-ai/node-DeepResearch) | GitHub | web | — |
+| 2025 | [WideSearch: Benchmarking Agentic Broad Info-Seeking](https://arxiv.org/abs/2508.07999) | arXiv | paper | local |
+| 2025 | [WebWeaver: Structuring Web-Scale Evidence with Dynamic Outlines for Open-Ended Deep Research](https://arxiv.org/abs/2509.13312) | arXiv | paper | local |
+| 2025 | [WebThinker: Empowering Large Reasoning Models with Deep Research Capability](https://arxiv.org/abs/2504.21776) | arXiv | paper | local |
+| 2025 | [WebShaper: Agentically Data Synthesizing via Information-Seeking Formalization](https://arxiv.org/abs/2507.15061) | arXiv | paper | local |
+| 2025 | [WebSailor: Navigating Super-human Reasoning for Web Agent](https://arxiv.org/abs/2507.02592) | arXiv | paper | local |
+| 2025 | [WebSailor-V2: Bridging the Chasm to Proprietary Agents via Synthetic Data and Scalable Reinforcement Learning](https://arxiv.org/abs/2509.13305) | arXiv | paper | local |
+| 2025 | [WebResearcher: Unleashing unbounded reasoning capability in Long-Horizon Agents](https://arxiv.org/abs/2509.13309) | arXiv | paper | local |
+| 2025 | [WebExplorer: Explore and Evolve for Training Long-Horizon Web Agents](https://arxiv.org/abs/2509.06501) | arXiv | paper | local |
+| 2025 | [WebDancer: Towards Autonomous Information Seeking Agency](https://arxiv.org/abs/2505.22648) | arXiv | paper | local |
+| 2025 | [Training Data podcast: OpenAI's Deep Research team on why end-to-end training is the future of AI agents](https://sequoiacap.com/podcast/training-data-deep-research) | Sequoia Capital | web | — |
+| 2025 | [Tongyi DeepResearch: A New Era of Open-Source AI Researchers](https://tongyi-agent.github.io/blog/introducing-tongyi-deep-research/) | Tongyi Agent blog | web | — |
+| 2025 | [Tongyi DeepResearch Technical Report](https://arxiv.org/abs/2510.24701) | arXiv | paper | local |
+| 2025 | [StepSearch: Igniting LLMs Search Ability via Step-Wise Proximal Policy Optimization](https://arxiv.org/abs/2505.15107) | arXiv | paper | local |
+| 2025 | [Step-DeepResearch Technical Report](https://arxiv.org/abs/2512.20491) | arXiv | paper | local |
+| 2025 | [Scaling Agents via Continual Pre-training](https://arxiv.org/abs/2509.13310) | arXiv | paper | local |
+| 2025 | [STORM / Co-STORM repository](https://github.com/stanford-oval/storm) | GitHub | web | — |
+| 2025 | [SFR-DeepResearch: Towards Effective Reinforcement Learning for Autonomously Reasoning Single Agents](https://arxiv.org/abs/2509.06283) | arXiv | paper | local |
+| 2025 | [Researcher agent in Microsoft 365 Copilot](https://techcommunity.microsoft.com/blog/microsoft365copilotblog/researcher-agent-in-microsoft-365-copilot/4397186) | Microsoft Tech Community | web | — |
+| 2025 | [ResearchRubrics: A Benchmark of Prompts and Rubrics For Evaluating Deep Research Agents](https://arxiv.org/abs/2511.07685) | arXiv | paper | local |
+| 2025 | [ReSum: Unlocking Long-Horizon Search Intelligence via Context Summarization](https://arxiv.org/abs/2509.13313) | arXiv | paper | local |
+| 2025 | [Open-source DeepResearch: Freeing our search agents](https://huggingface.co/blog/open-deep-research) | Hugging Face blog | web | — |
+| 2025 | [Open Deep Research](https://www.langchain.com/blog/open-deep-research) | LangChain blog | web | — |
+| 2025 | [MiroThinker: Pushing the Performance Boundaries of Open-Source Research Agents via Model, Context, and Interactive Scaling](https://arxiv.org/abs/2511.11793) | arXiv | paper | local |
+| 2025 | [Mind2Web 2: Evaluating Agentic Search with Agent-as-a-Judge](https://arxiv.org/abs/2506.21506) | arXiv | paper | local |
+| 2025 | [Kimi-Researcher: End-to-End RL Training for Emerging Agentic Capabilities](https://moonshotai.github.io/Kimi-Researcher/) | Moonshot AI (GitHub Pages) | web | — |
+| 2025 | [Introduction to the Deep Research API (cookbook notebook)](https://raw.githubusercontent.com/openai/openai-cookbook/main/examples/deep_research_api/introduction_to_deep_research_api.ipynb) | OpenAI Cookbook (GitHub) | web | — |
+| 2025 | [Introducing Wide Research](https://manus.im/blog/introducing-wide-research) | Manus blog | web | — |
+| 2025 | [Introducing Perplexity Deep Research](https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research) | Perplexity Hub | web | — |
+| 2025 | [Humanity's Last Exam](https://arxiv.org/abs/2501.14249) | arXiv | paper | local |
+| 2025 | [Grok 3 Beta: The Age of Reasoning Agents](https://x.ai/news/grok-3) | xAI | web | — |
+| 2025 | [DeepResearchGym: A Free, Transparent, and Reproducible Evaluation Sandbox for Deep Research](https://arxiv.org/abs/2505.19253) | arXiv | paper | local |
+| 2025 | [DeepResearch Bench: A Comprehensive Benchmark for Deep Research Agents](https://arxiv.org/abs/2506.11763) | arXiv | paper | local |
+| 2025 | [DeepDive: Advancing Deep Search Agents with Knowledge Graphs and Multi-Turn RL](https://arxiv.org/abs/2509.10446) | arXiv | paper | local |
+| 2025 | [Deep research in the API, webhooks, and web search with o3](https://community.openai.com/t/deep-research-in-the-api-webhooks-and-web-search-with-o3/1299919) | OpenAI Developer Community | web | — |
+| 2025 | [Deep Research System Card](https://cdn.openai.com/deep-research-system-card.pdf) | OpenAI | web | — |
+| 2025 | [Deep Research Bench: Evaluating AI Web Research Agents](https://arxiv.org/abs/2506.06287) | arXiv | paper | local |
+| 2025 | [DR Tulu: Reinforcement Learning with Evolving Rubrics for Deep Research](https://arxiv.org/abs/2511.19399) | arXiv | paper | local |
+| 2025 | [Claude takes research to new places (Research launch)](https://claude.com/blog/research) | Claude blog | web | — |
+| 2025 | [ChatGPT agent System Card](https://cdn.openai.com/pdf/839e66fc-602c-48bf-81d3-b21eacc3459d/chatgpt_agent_system_card.pdf) | OpenAI | web | — |
+| 2025 | [Build with Gemini Deep Research](https://blog.google/technology/developers/deep-research-agent-gemini-api/) | Google Blog | web | — |
+| 2025 | [BrowseComp: A Simple Yet Challenging Benchmark for Browsing Agents](https://arxiv.org/abs/2504.12516) | arXiv | paper | local |
+| 2025 | [BrowseComp-ZH: Benchmarking Web Browsing Ability of Large Language Models in Chinese](https://arxiv.org/abs/2504.19314) | arXiv | paper | local |
+| 2025 | [Beyond Ten Turns: Unlocking Long-Horizon Agentic Search with Large-Scale Asynchronous RL](https://arxiv.org/abs/2508.07976) | arXiv | paper | local |
+| 2025 | [Atom-Searcher: Enhancing Agentic Deep Research via Fine-Grained Atomic Thought Reward](https://arxiv.org/abs/2508.12800) | arXiv | paper | local |
+| 2025 | [AI News: ChatGPT agent can now act on your behalf using its own virtual computer](https://www.ainews.com/p/chatgpt-agent-can-now-act-on-your-behalf-using-its-own-virtual-computer) | ainews.com | web | — |
+| 2024 | [Breakout Agents: Perplexity Pro Search](https://www.langchain.com/breakoutagents/perplexity) | LangChain | web | — |
+| 2023 | [GAIA: a benchmark for General AI Assistants](https://arxiv.org/abs/2311.12983) | arXiv | paper | local |
+
+## 03_coding_agent_retrieval (77)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [openai/codex (Codex CLI source)](https://github.com/openai/codex) | GitHub | web | — |
+| 2026 | [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | GitHub | web | — |
+| 2026 | [aider/repomap.py](https://github.com/Aider-AI/aider/blob/main/aider/repomap.py) | GitHub | web | — |
+| 2026 | [Zed docs: Tools](https://zed.dev/docs/ai/tools) | Zed docs | web | — |
+| 2026 | [What do you think about Cursor removing the codebase indexing settings?](https://forum.cursor.com/t/what-do-you-think-about-cursor-removing-the-codebase-indexing-settings/165899) | forum.cursor.com | web | — |
+| 2026 | [Unrolling the Codex agent loop (mirror)](https://bittide.aicompass.dev/article/3400a5f3-b6cb-46f5-81ee-6d53ec65a81e?locale=en) | aicompass mirror | web | — |
+| 2026 | [Unrolling the Codex agent loop](https://openai.com/index/unrolling-the-codex-agent-loop) | OpenAI blog | web | — |
+| 2026 | [Toward an Evidence-Based Template for Agent Instruction Files: An Empirical Study of Adoption, Consistency, and Maintenance](https://arxiv.org/abs/2611.02383) | arXiv preprint | paper | local |
+| 2026 | [Tools reference](https://code.claude.com/docs/en/tools-reference) | Claude Code docs | web | — |
+| 2026 | [The Physical Cost of Context: Quality-Constrained Resource Accounting for Coding Agents](https://arxiv.org/abs/2610.34763) | arXiv preprint | paper | local |
+| 2026 | [Subagents](https://code.claude.com/docs/en/sub-agents) | Claude Code docs | web | — |
+| 2026 | [Securely indexing large codebases](https://cursor.com/blog/secure-codebase-indexing) | cursor.com blog | web | — |
+| 2026 | [SWE-Explore: Benchmarking How Coding Agents Explore Repositories](https://arxiv.org/abs/2606.07297) | arXiv preprint | paper | local |
+| 2026 | [Repository map](https://aider.chat/docs/repomap.html) | aider.chat docs | web | — |
+| 2026 | [Neurosymbolic Repo-level Code Localization](https://arxiv.org/abs/2604.16021) | arXiv preprint | paper | local |
+| 2026 | [Learning Adaptive Parallel Execution for Efficient Code Localization](https://arxiv.org/abs/2601.19568) | arXiv preprint | paper | local |
+| 2026 | [Index a repository](https://docs.devin.ai/onboard-devin/index-repo) | Devin docs | web | — |
+| 2026 | [How to add documents? (forum thread)](https://forum.cursor.com/t/how-to-add-documnets/170530) | forum.cursor.com | web | — |
+| 2026 | [How Do Small Coding Agents Use Code Graphs and Embeddings?](https://arxiv.org/abs/2610.33958) | arXiv preprint | paper | local |
+| 2026 | [How Copilot understands your workspace](https://code.visualstudio.com/docs/agents/reference/workspace-context) | VS Code docs | web | — |
+| 2026 | [How Claude Code works](https://code.claude.com/docs/en/how-claude-code-works) | Claude Code docs | web | — |
+| 2026 | [Getting started with Air Context](https://www.jetbrains.com/help/jetbrains-console/getting-started-with-jetbrains-context.html) | JetBrains Help | web | — |
+| 2026 | [Fast regex search: indexing text for agent tools](https://cursor.com/blog/fast-regex-search) | cursor.com blog | web | — |
+| 2026 | [Fast Context](https://docs.devin.ai/desktop/context-awareness/fast-context) | Devin docs | web | — |
+| 2026 | [ExecRetrieval: Measuring the Functional-Correctness Gap in Code-Embedding Retrieval](https://arxiv.org/abs/2609.01865) | arXiv preprint | paper | local |
+| 2026 | [Does a Language Server Save Tokens for Coding Agents? A Measurement Methodology and Preliminary Study](https://arxiv.org/abs/2608.13568) | arXiv preprint | paper | local |
+| 2026 | [Deep Agentic Search for Repository-Level Code Question Answering: An Empirical Study](https://arxiv.org/abs/2608.01507) | arXiv preprint | paper | local |
+| 2026 | [Custom instructions with AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md.md) | OpenAI Codex docs | web | — |
+| 2026 | [Cursor docs: Search (Instant Grep)](https://cursor.com/docs/context/codebase-indexing) | Cursor docs | web | — |
+| 2026 | [Copilot coding agent works faster with semantic code search](https://github.blog/changelog/2026-03-17-copilot-coding-agent-works-faster-with-semantic-code-search/) | GitHub changelog | web | — |
+| 2026 | [Context7](https://github.com/upstash/context7) | GitHub | web | — |
+| 2026 | [Context awareness overview](https://docs.devin.ai/desktop/context-awareness/overview) | Devin docs | web | — |
+| 2026 | [Context Rot in AI-Assisted Software Development: Repurposing Documentation Consistency for AI Configuration Artifacts](https://arxiv.org/abs/2606.09090) | arXiv preprint | paper | local |
+| 2026 | [Context Engine MCP now live](https://www.augmentcode.com/blog/context-engine-mcp-now-live) | Augment blog | web | — |
+| 2026 | [Composer 2 Technical Report](https://arxiv.org/abs/2603.24477) | arXiv preprint | paper | local |
+| 2026 | [Coding Agents are Effective Long-Context Processors](https://arxiv.org/abs/2603.20432) | arXiv preprint | paper | local |
+| 2026 | [Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP](https://arxiv.org/abs/2603.27277) | arXiv preprint | paper | local |
+| 2026 | [CodeScout: An Effective Recipe for Reinforcement Learning of Code Search Agents](https://arxiv.org/abs/2603.17829) | arXiv preprint | paper | local |
+| 2026 | [CodeNib: A Multi-View Data System for Serving Repository Context to Coding Agents](https://arxiv.org/abs/2607.25431) | arXiv preprint | paper | local |
+| 2026 | [CodeGrep: An RL-Trained Retrieval Agent for LLM Coding Agents](https://arxiv.org/abs/2608.05886) | arXiv preprint | paper | local |
+| 2026 | [Code Understanding is a Bottleneck for Coding Agents](https://arxiv.org/abs/2610.10610) | arXiv preprint | paper | local |
+| 2026 | [Code Isn't Memory: A Structural Codebase Index Inside a Coding Agent](https://arxiv.org/abs/2606.22417) | arXiv preprint | paper | local |
+| 2026 | [Chronos Enables Code Agents to Reason over Software Evolution](https://arxiv.org/abs/2610.11578) | arXiv preprint | paper | local |
+| 2026 | [CORE-Bench: A Comprehensive Benchmark for Code Retrieval in the Era of Agentic Coding](https://arxiv.org/abs/2606.11864) | arXiv preprint | paper | local |
+| 2026 | [Amp docs: Tools](https://ampcode.com/docs/tools) | ampcode.com | web | — |
+| 2026 | [Agent internet access (Codex Cloud)](https://learn.chatgpt.com/docs/cloud/internet-access) | OpenAI Codex docs | web | — |
+| 2026 | [About Copilot coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) | GitHub Docs | web | — |
+| 2025 | [Why I'm Against Claude Code's Grep-Only Retrieval](https://zilliz.com/blog/why-im-against-claude-codes-grep-only-retrieval-it-just-burns-too-many-tokens) | Zilliz blog | web | — |
+| 2025 | [Why I stopped using RAG for coding agents](https://jxnl.co/writing/2025/09/11/why-i-stopped-using-rag-for-coding-agents-and-you-should-too/) | jxnl.co | web | — |
+| 2025 | [Why Cline Doesn't Index Your Codebase](https://cline.bot/blog/why-cline-doesnt-index-your-codebase-and-why-thats-a-good-thing) | cline.bot blog | web | — |
+| 2025 | [The Librarian](https://ampcode.com/news/librarian) | ampcode.com | web | — |
+| 2025 | [SweRank: Software Issue Localization with Code Ranking](https://arxiv.org/abs/2505.07849) | arXiv preprint | paper | local |
+| 2025 | [OpenAI Launches Codex Software Engineering Agent](https://infoq.com/news/2025/05/openai-codex) | InfoQ | web | — |
+| 2025 | [LocAgent: Graph-Guided LLM Agents for Code Localization](https://arxiv.org/abs/2503.09089) | arXiv preprint | paper | local |
+| 2025 | [Introducing SWE-grep and SWE-grep-mini](https://cognition.com/blog/swe-grep) | cognition.com blog | web | — |
+| 2025 | [Instant semantic code search indexing now generally available for GitHub Copilot](https://github.blog/changelog/2025-03-12-instant-semantic-code-search-indexing-now-generally-available-for-github-copilot/) | GitHub changelog | web | — |
+| 2025 | [Improving agent with semantic search](https://cursor.com/blog/semsearch) | cursor.com blog | web | — |
+| 2025 | [Improving Code Localization with Repository Memory](https://arxiv.org/abs/2510.01003) | arXiv preprint | paper | local |
+| 2025 | [HN comment on Claude 3.7 Sonnet and Claude Code thread](https://news.ycombinator.com/item?id=43164253) | Hacker News | web | — |
+| 2025 | [GitHub Copilot gets smarter at finding your code: Inside our new embedding model](https://github.blog/news-insights/product-news/copilot-new-embedding-model-vs-code/) | GitHub blog | web | — |
+| 2025 | [Cody FAQ: embeddings](https://7.2.sourcegraph.com/cody/faq) | Sourcegraph docs | web | — |
+| 2025 | [Claude Researcher Explains How Agentic Search Performed Better Than RAG For Code Generation](https://officechai.com/ai/claude-researcher-explains-how-agentic-search-performed-better-than-rag-for-code-generation/) | OfficeChai | web | — |
+| 2025 | [Building agents with the Claude Agent SDK](https://claude.com/resources/articles/building-agents-with-the-claude-agent-sdk) | claude.com | web | — |
+| 2025 | [A real-time index for your codebase: secure, personal, scalable](https://www.augmentcode.com/blog/a-real-time-index-for-your-codebase-secure-personal-scalable) | Augment blog | web | — |
+| 2024 | [voyage-code-3](https://blog.voyageai.com/2024/12/04/voyage-code-3/) | Voyage AI blog | web | — |
+| 2024 | [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/abs/2405.15793) | arXiv preprint | paper | local |
+| 2024 | [OpenHands: An Open Platform for AI Software Developers as Generalist Agents](https://arxiv.org/abs/2407.16741) | arXiv preprint | paper | local |
+| 2024 | [How Cody understands your codebase](https://testwww.sourcegraph.com/blog/how-cody-understands-your-codebase) | Sourcegraph blog | web | — |
+| 2024 | [CodexGraph: Bridging Large Language Models and Code Repositories via Code Graph Databases](https://arxiv.org/abs/2408.03910) | arXiv preprint | paper | local |
+| 2024 | [CodeRAG-Bench: Can Retrieval Augment Code Generation?](https://arxiv.org/abs/2406.14497) | arXiv preprint | paper | local |
+| 2024 | [CoRNStack: High-Quality Contrastive Data for Better Code Retrieval and Reranking](https://arxiv.org/abs/2412.01007) | arXiv preprint | paper | local |
+| 2024 | [CoIR: A Comprehensive Benchmark for Code Information Retrieval Models](https://arxiv.org/abs/2407.02883) | arXiv preprint | paper | local |
+| 2024 | [AutoCodeRover: Autonomous Program Improvement](https://arxiv.org/abs/2404.05427) | arXiv preprint | paper | local |
+| 2024 | [Agentless: Demystifying LLM-based Software Engineering Agents](https://arxiv.org/abs/2407.01489) | arXiv preprint | paper | local |
+| 2023 | [SWE-bench: Can Language Models Resolve Real-World GitHub Issues?](https://arxiv.org/abs/2310.06770) | arXiv preprint | paper | local |
+| 2023 | [RepoCoder: Repository-Level Code Completion Through Iterative Retrieval and Generation](https://arxiv.org/abs/2303.12570) | arXiv preprint | paper | local |
+| 2023 | [Building a better repository map with tree sitter](https://aider.chat/2023/10/22/repomap.html) | aider.chat blog | web | — |
+
+## 04_reading_synthesis_citation (66)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [mozilla/readability](https://github.com/mozilla/readability) | GitHub | web | — |
+| 2026 | [Who is the Agent to Blame? Localizing Faithfulness and Citation Mistakes in Agentic Deep Research](https://arxiv.org/abs/2608.24306) | arXiv | paper | local |
+| 2026 | [Web search (Codex)](https://learn.chatgpt.com/docs/web-search) | ChatGPT/Codex docs | web | — |
+| 2026 | [Web fetch tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool) | Claude Platform Docs | web | — |
+| 2026 | [Unraveling the Ai2 Asta Scholarly Research Assistant Citation System](https://arxiv.org/abs/2606.08301) | arXiv | paper | local |
+| 2026 | [URL context](https://aistudio.google.com/docs/url-context) | Gemini API Docs | web | — |
+| 2026 | [Redesigning and Auditing Deep Research Writing for Faithful Reports](https://arxiv.org/abs/2608.28643) | arXiv | paper | local |
+| 2026 | [Reader API](https://jina.ai/reader/) | jina.ai | web | — |
+| 2026 | [Phantom References: Hallucinated Citations That Survive Peer Review at Top-Tier Conferences](https://arxiv.org/abs/2607.00738) | arXiv | paper | local |
+| 2026 | [Perplexity API docs (search context / response sources)](https://docs.perplexity.ai/guides/search-context-size-guide) | Perplexity Docs | web | — |
+| 2026 | [PDF support](https://platform.claude.com/docs/en/build-with-claude/pdf-support) | Claude Platform Docs | web | — |
+| 2026 | [Long context](https://aistudio.google.com/docs/long-context) | Gemini API Docs | web | — |
+| 2026 | [LLM hallucinations in the wild: Large-scale evidence from non-existent citations](https://arxiv.org/abs/2605.07723) | arXiv | paper | local |
+| 2026 | [HalluCitation Matters: Revealing the Impact of Hallucinated References with 300 Hallucinated Papers in ACL Conferences](https://arxiv.org/abs/2601.18724) | arXiv | paper | local |
+| 2026 | [Fit Markdown](https://docs.crawl4ai.com/core/fit-markdown/) | docs.crawl4ai.com | web | — |
+| 2026 | [Firecrawl documentation: Introduction](https://docs.firecrawl.dev/introduction) | docs.firecrawl.dev | web | — |
+| 2026 | [File inputs: PDF files](https://developers.openai.com/api/docs/guides/pdf-files) | OpenAI API Docs | web | — |
+| 2026 | [Evaluation](https://trafilatura.readthedocs.io/en/latest/evaluation.html) | trafilatura.readthedocs.io | web | — |
+| 2026 | [Evaluating Stochasticity in Deep Research Agents](https://arxiv.org/abs/2602.23271) | arXiv | paper | local |
+| 2026 | [Do You Need a Frontier Model as a Citation Verifier? Benchmarking Rubric LLMs for Deep-Research Source Attribution](https://arxiv.org/abs/2607.08700) | arXiv | paper | local |
+| 2026 | [Detecting and Correcting Reference Hallucinations in Commercial LLMs and Deep Research Agents](https://arxiv.org/abs/2604.03173) | arXiv | paper | local |
+| 2026 | [Deep-Research Agents Can Be Poisoned via User-Generated Content](https://arxiv.org/abs/2605.24245) | arXiv | paper | local |
+| 2026 | [DRNOISE: Benchmarking Deep Research Agents in Misleading Evidence Environments](https://arxiv.org/abs/2607.17291) | arXiv | paper | local |
+| 2026 | [Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing) | Claude Platform Docs | web | — |
+| 2026 | [Configuration reference (Codex)](https://learn.chatgpt.com/docs/config-file/config-reference) | ChatGPT/Codex docs | web | — |
+| 2026 | [Compaction](https://developers.openai.com/api/docs/guides/compaction) | OpenAI API Docs | web | — |
+| 2026 | [Citations](https://platform.claude.com/docs/en/build-with-claude/citations) | Claude Platform Docs | web | — |
+| 2025 | [WASP: Benchmarking Web Agent Security Against Prompt Injection Attacks](https://arxiv.org/abs/2504.18575) | arXiv | paper | local |
+| 2025 | [Snippet Selection and URL Ranking in DeepSearch/DeepResearch](https://jina.ai/news/snippet-selection-and-url-ranking-in-deepsearch-deepresearch/) | Jina AI blog | web | — |
+| 2025 | [ReportBench: Evaluating Deep Research Agents via Academic Survey Tasks](https://arxiv.org/abs/2508.15804) | arXiv | paper | local |
+| 2025 | [ReaderLM-v2: Small Language Model for HTML to Markdown and JSON](https://arxiv.org/abs/2503.01151) | arXiv | paper | local |
+| 2025 | [OpenAI unveils ChatGPT agent that gives ChatGPT its own computer](https://venturebeat.com/ai/openai-unveils-chatgpt-agent-that-gives-chatgpt-its-own-computer-to-autonomously-use-your-email-and-web-apps-download-and-create-files-for-you) | VentureBeat | web | — |
+| 2025 | [OpenAI admits prompt injection may never be fully solved, casting doubt on the agentic AI vision](https://the-decoder.com/openai-admits-prompt-injection-may-never-be-fully-solved-casting-doubt-on-the-agentic-ai-vision/) | The Decoder | web | — |
+| 2025 | [Mitigating the risk of prompt injections in browser use](https://www.anthropic.com/research/prompt-injection-defenses) | Anthropic Research | web | — |
+| 2025 | [MEM1: Learning to Synergize Memory and Reasoning for Efficient Long-Horizon Agents](https://arxiv.org/abs/2506.15841) | arXiv | paper | local |
+| 2025 | [Defeating Prompt Injections by Design](https://arxiv.org/abs/2503.18813) | arXiv | paper | local |
+| 2025 | [DeepTRACE: Auditing Deep Research AI Systems for Tracking Reliability Across Citations and Evidence](https://arxiv.org/abs/2509.04499) | arXiv | paper | local |
+| 2025 | [Deep Research Agents: A Systematic Examination And Roadmap](https://arxiv.org/abs/2506.18096) | arXiv | paper | local |
+| 2025 | [CiteFix: Enhancing RAG Accuracy Through Post-Processing Citation Correction](https://arxiv.org/abs/2504.15629) | arXiv | paper | local |
+| 2025 | [Agentic Browser Security: Indirect Prompt Injection in Perplexity Comet](https://brave.com/blog/comet-prompt-injection/) | Brave blog | web | — |
+| 2025 | [AgentFold: Long-Horizon Web Agents with Proactive Context Management](https://arxiv.org/abs/2510.24699) | arXiv | paper | local |
+| 2025 | [AI's systemic distortion of news is consistent across languages and territories (News Integrity in AI Assistants)](https://www.ebu.ch/news/2025/10/ai-s-systemic-distortion-of-news-is-consistent-across-languages-and-territories-international-study-by-public-service-broadcaste) | EBU | web | — |
+| 2025 | [AI Search Has A Citation Problem](https://www.cjr.org/tow_center/we-compared-eight-ai-search-engines-theyre-all-bad-at-citing-news.php) | Columbia Journalism Review | web | — |
+| 2025 | [ACON: Optimizing Context Compression for Long-horizon LLM Agents](https://arxiv.org/abs/2510.00615) | arXiv | paper | local |
+| 2024 | [RULER: What's the Real Context Size of Your Long-Context Language Models?](https://arxiv.org/abs/2404.06654) | COLM 2024 / arXiv | paper | local |
+| 2024 | [LongCite: Enabling LLMs to Generate Fine-grained Citations in Long-context QA](https://arxiv.org/abs/2409.02897) | arXiv | paper | local |
+| 2024 | [Long-form factuality in large language models](https://arxiv.org/abs/2403.18802) | arXiv | paper | local |
+| 2024 | [InjecAgent: Benchmarking Indirect Prompt Injections in Tool-Integrated Large Language Model Agents](https://arxiv.org/abs/2403.02691) | Findings of ACL 2024 / arXiv | paper | local |
+| 2024 | [How well do LLMs cite relevant medical references? An evaluation framework and analyses](https://arxiv.org/abs/2402.02008) | arXiv | paper | local |
+| 2024 | [How ChatGPT Search (Mis)represents Publisher Content](https://www.cjr.org/tow_center/how-chatgpt-misrepresents-publisher-content.php) | Columbia Journalism Review | web | — |
+| 2024 | [Hallucination Rates and Reference Accuracy of ChatGPT and Bard for Systematic Reviews: Comparative Analysis](https://www.jmir.org/2024/1/e53164) | Journal of Medical Internet Research 26:e53164 | paper | not_pdf |
+| 2024 | [Defending Against Indirect Prompt Injection Attacks With Spotlighting](https://arxiv.org/abs/2403.14720) | arXiv | paper | local |
+| 2024 | [AttributionBench: How Hard is Automatic Attribution Evaluation?](https://arxiv.org/abs/2402.15089) | Findings of ACL 2024 / arXiv | paper | local |
+| 2024 | [AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks and Defenses for LLM Agents](https://arxiv.org/abs/2406.13352) | NeurIPS 2024 D&B / arXiv | paper | local |
+| 2024 | [A Human-Inspired Reading Agent with Gist Memory of Very Long Contexts](https://arxiv.org/abs/2402.09727) | ICML 2024 / arXiv | paper | local |
+| 2023 | [WebGLM: Towards An Efficient Web-Enhanced Question Answering System with Human Preferences](https://arxiv.org/abs/2306.07906) | KDD 2023 / arXiv | paper | local |
+| 2023 | [Walking Down the Memory Maze: Beyond Context Limit through Interactive Reading](https://arxiv.org/abs/2310.05029) | arXiv | paper | local |
+| 2023 | [Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection](https://arxiv.org/abs/2302.12173) | AISec 2023 / arXiv | paper | local |
+| 2023 | [Fabrication and errors in the bibliographic citations generated by ChatGPT](https://www.nature.com/articles/s41598-023-41032-5.pdf) | Scientific Reports 13:14045 | paper | local |
+| 2023 | [Evaluating Verifiability in Generative Search Engines](https://arxiv.org/abs/2304.09848) | Findings of EMNLP 2023 / arXiv | paper | local |
+| 2023 | [Do Language Models Know When They're Hallucinating References?](https://arxiv.org/abs/2305.18248) | Findings of EACL 2024 / arXiv | paper | local |
+| 2023 | [Automatic Evaluation of Attribution by Large Language Models](https://arxiv.org/abs/2305.06311) | Findings of EMNLP 2023 / arXiv | paper | local |
+| 2023 | [An Empirical Comparison of Web Content Extraction Algorithms](https://dblp.org/rec/conf/sigir/BevendorffGK023.html) | SIGIR 2023 | paper | — |
+| 2023 | [Adaptive Chameleon or Stubborn Sloth: Revealing the Behavior of Large Language Models in Knowledge Conflicts](https://arxiv.org/abs/2305.13300) | ICLR 2024 / arXiv | paper | local |
+| 2022 | [Teaching language models to support answers with verified quotes](https://arxiv.org/abs/2203.11147) | arXiv | paper | local |
+| 2022 | [RARR: Researching and Revising What Language Models Say, Using Language Models](https://arxiv.org/abs/2210.08726) | ACL 2023 / arXiv | paper | local |
+
+## 05_search_quality_signals (72)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Whose Facts Win? LLM Source Preferences under Knowledge Conflicts](https://arxiv.org/abs/2601.03746) | arXiv preprint (2026) | paper | local |
+| 2026 | [When Optimization Becomes Manipulation: Defending Generative Search against Malicious Generative Engine Optimization](https://arxiv.org/abs/2609.02964) | arXiv preprint (2026) | paper | local |
+| 2026 | [What Drives AI Citations? Content, Retrieval and Model Knowledge in Generative Engine Optimization (GEO)](https://arxiv.org/abs/2610.15033) | arXiv preprint (2026) | paper | local |
+| 2026 | [What Do Chinese-Language Generative Search Engines Cite and Surface? A Large-Scale Empirical Study](https://arxiv.org/abs/2607.15771) | arXiv preprint (2026) | paper | local |
+| 2026 | [Synthetic Sources?: Auditing Generative Search Engine Citations for Evidence of AI-Generated Sources](https://arxiv.org/abs/2605.23684) | arXiv preprint (2026) | paper | local |
+| 2026 | [Source-Aware Reranking for Retrieval-Augmented Generation: A Reliability Prior Approach](https://arxiv.org/abs/2607.22584) | arXiv preprint (2026) | paper | local |
+| 2026 | [Retrieved but Not Read: Understanding Why Search-Augmented LLMs Fail to Use Available Evidence](https://arxiv.org/abs/2610.21731) | arXiv preprint (2026) | paper | local |
+| 2026 | [Optimizing Visibility in Generative Engines: A Critical Survey of Generative Engine Optimization (2023-2026)](https://arxiv.org/abs/2607.14035) | arXiv preprint (2026) | paper | local |
+| 2026 | [Measuring Google AI Overviews: Activation, Source Quality, Claim Fidelity, and Publisher Impact](https://arxiv.org/abs/2605.14021) | arXiv preprint (2026) | paper | local |
+| 2026 | [Investigating Click Behaviors On Google Search Result Pages That Produce an AI Overview](https://arxiv.org/abs/2608.04831) | arXiv preprint (2026, Pew Research authors) | paper | local |
+| 2026 | [Impact of AI Search Summaries on Website Traffic: Evidence from Google AI Overviews and Wikipedia](https://arxiv.org/abs/2602.18455) | arXiv preprint (2026) | paper | local |
+| 2026 | [How Generative AI Disrupts Search: An Empirical Study of Google Search, Gemini, and AI Overviews](https://arxiv.org/abs/2604.27790) | arXiv preprint (2026) | paper | local |
+| 2026 | [From Public Posts to AI-Search Citations: Measuring the Fragility of AI Search](https://arxiv.org/abs/2610.11932) | arXiv preprint (2026) | paper | local |
+| 2026 | [Don't Measure Once: Measuring Visibility in AI Search (GEO)](https://arxiv.org/abs/2604.07585) | arXiv preprint (2026) | paper | local |
+| 2026 | [Does the Citation Matter? Quality, Grounding, and Physician-Rubric Accuracy of Google's AI Overviews for Medical Information](https://arxiv.org/abs/2610.39339) | arXiv preprint (2026) | paper | local |
+| 2026 | [Do GEO Gains Survive the Live Web? Evaluating In-the-Wild Visibility Gains of Generative Engine Optimization via LIVE-GEO](https://arxiv.org/abs/2611.01126) | arXiv preprint (2026) | paper | local |
+| 2026 | [Counter-GEO-Bench: Evaluating Defenses Against Information-Distorting Generative Engine Optimization](https://arxiv.org/abs/2609.02316) | arXiv preprint (2026) | paper | local |
+| 2026 | [Authority Signals in AI Cited Health Sources: A Framework for Evaluating Source Credibility in ChatGPT Responses](https://arxiv.org/abs/2601.17109) | arXiv preprint (2026) | paper | local |
+| 2025 | [What Generative Search Engines Like and How to Optimize Web Content Cooperatively](https://arxiv.org/abs/2510.11438) | arXiv preprint | paper | local |
+| 2025 | [Top 10 Most Cited Domains by AI Assistants](https://ahrefs.com/blog/top-10-most-cited-domains-ai-assistants) | Ahrefs blog | web | — |
+| 2025 | [TURA: Tool-Augmented Unified Retrieval Agent for AI Search](https://arxiv.org/abs/2508.04604) | arXiv preprint (Baidu) | paper | local |
+| 2025 | [Rank1: Test-Time Compute for Reranking in Information Retrieval](https://arxiv.org/abs/2502.18418) | arXiv preprint | paper | local |
+| 2025 | [Poisoning Attacks on LLMs Require a Near-constant Number of Poison Samples](https://arxiv.org/abs/2510.07192) | arXiv preprint | paper | local |
+| 2025 | [Nearly half of AI-generated answers contain an error, finds EBU-BBC report](https://www.journalism.co.uk/nearly-half-of-ai-generated-answers-contain-an-error-ebu-bbc-report/) | Journalism.co.uk | web | — |
+| 2025 | [Most cited domains in AI search](https://www.semrush.com/blog/most-cited-domains-ai/) | Semrush blog | web | — |
+| 2025 | [Google monopoly ruling remedy (remedies decision coverage)](https://www.seroundtable.com/google-monopoly-ruling-remedy-40041.html) | Search Engine Roundtable | web | — |
+| 2025 | [Generative Engine Optimization: How to Dominate AI Search](https://arxiv.org/abs/2509.08919) | arXiv preprint | paper | local |
+| 2025 | [Do Large Language Models Favor Recent Content? A Study on Recency Bias in LLM-Based Reranking](https://arxiv.org/abs/2509.11353) | arXiv preprint | paper | local |
+| 2025 | [DeepRetrieval: Hacking Real Search Engines and Retrievers with Large Language Models via Reinforcement Learning](https://arxiv.org/abs/2503.00223) | arXiv preprint | paper | local |
+| 2025 | [Auditing Google's AI Overviews and Featured Snippets: A Case Study on Baby Care and Pregnancy](https://arxiv.org/abs/2511.12920) | arXiv preprint | paper | local |
+| 2025 | [AI in Search: Going beyond information to intelligence](https://blog.google/products/search/google-search-ai-mode-update/) | The Keyword (Google blog) | web | — |
+| 2025 | [AI features and your website](https://developers.google.com/search/docs/appearance/ai-features) | Google for Developers | web | — |
+| 2024 | [What web creators should know about our March 2024 core update and new spam policies](https://developers.google.com/search/blog/2024/03/core-update-spam-policies) | Google Search Central blog | web | — |
+| 2024 | [What Evidence Do Language Models Find Convincing?](https://arxiv.org/abs/2402.11782) | ACL 2024 (arXiv) | paper | local |
+| 2024 | [Spiral of Silence: How is Large Language Model Killing Information Retrieval? -- A Case Study on Open Domain Question Answering](https://arxiv.org/abs/2404.10496) | ACL 2024 (arXiv) | paper | local |
+| 2024 | [Ranking Manipulation for Conversational Search Engines](https://arxiv.org/abs/2406.03589) | arXiv preprint | paper | local |
+| 2024 | [RaFe: Ranking Feedback Improves Query Rewriting for RAG](https://arxiv.org/abs/2405.14431) | arXiv preprint | paper | local |
+| 2024 | [RAG-Fusion: a New Take on Retrieval-Augmented Generation](https://arxiv.org/abs/2402.03367) | arXiv preprint | paper | local |
+| 2024 | [PAT-Questions: A Self-Updating Benchmark for Present-Anchored Temporal Question-Answering](https://arxiv.org/abs/2402.11034) | arXiv preprint | paper | local |
+| 2024 | [New ways we are tackling spammy, low-quality content on Search](https://blog.google/products/search/google-search-update-march-2024/) | The Keyword (Google blog) | web | — |
+| 2024 | [Memorandum Opinion, United States v. Google LLC, No. 1:20-cv-03010 (D.D.C. Aug. 5, 2024)](https://storage.courtlistener.com/recap/gov.uscourts.dcd.223205/gov.uscourts.dcd.223205.1033.0_3.pdf) | CourtListener RECAP | web | — |
+| 2024 | [Manipulating Large Language Models to Increase Product Visibility](https://arxiv.org/abs/2404.07981) | arXiv preprint | paper | local |
+| 2024 | [Is Google Getting Worse? A Longitudinal Investigation of SEO Spam in Search Engines](https://gwern.net/doc/technology/google/2024-bevendorff.pdf) | ECIR 2024 (LNCS 14610) | paper | local |
+| 2024 | [Generating Media Background Checks for Automated Source Critical Reasoning](https://arxiv.org/abs/2409.00781) | arXiv preprint | paper | local |
+| 2024 | [Evaluating Robustness of Generative Search Engine on Adversarial Factual Questions](https://arxiv.org/abs/2403.12077) | arXiv preprint | paper | local |
+| 2024 | [ChatGPT Search Vulnerable to Manipulation via Hidden Text (AI incident record)](https://oecd.ai/en/incidents/2024-12-24-656f) | OECD.AI AI Incidents Monitor | web | — |
+| 2024 | [An Anonymous Source Shared Thousands of Leaked Google Search API Documents with Me; Everyone in SEO Should See Them](https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/) | SparkToro blog | web | — |
+| 2024 | [Adversarial Search Engine Optimization for Large Language Models](https://arxiv.org/abs/2406.18382) | arXiv preprint | paper | local |
+| 2024 | [2024 Google Search documentation leak](https://en.wikipedia.org/wiki/2024_Google_Search_documentation_leak) | Wikipedia | web | — |
+| 2023 | [When do Generative Query and Document Expansions Fail? A Comprehensive Study Across Methods, Retrievers, and Datasets](https://arxiv.org/abs/2309.08541) | EACL Findings 2024 (arXiv) | paper | local |
+| 2023 | [RankZephyr: Effective and Robust Zero-Shot Listwise Reranking is a Breeze!](https://arxiv.org/abs/2312.02724) | arXiv preprint | paper | local |
+| 2023 | [RankVicuna: Zero-Shot Listwise Document Reranking with Open-Source Large Language Models](https://arxiv.org/abs/2309.15088) | arXiv preprint | paper | local |
+| 2023 | [Query2doc: Query Expansion with Large Language Models](https://arxiv.org/abs/2303.07678) | EMNLP 2023 (arXiv) | paper | local |
+| 2023 | [Query Rewriting for Retrieval-Augmented Large Language Models](https://arxiv.org/abs/2305.14283) | EMNLP 2023 (arXiv) | paper | local |
+| 2023 | [Query Expansion by Prompting Large Language Models](https://arxiv.org/abs/2305.03653) | arXiv preprint (Google Research) | paper | local |
+| 2023 | [Poisoning Web-Scale Training Datasets is Practical](https://arxiv.org/abs/2302.10149) | IEEE S&P 2024 (arXiv) | paper | local |
+| 2023 | [Neural Retrievers are Biased Towards LLM-Generated Content](https://arxiv.org/abs/2310.20501) | KDD 2024 (arXiv) | paper | local |
+| 2023 | [Large Language Models are Effective Text Rankers with Pairwise Ranking Prompting](https://arxiv.org/abs/2306.17563) | arXiv preprint (Google Research) | paper | local |
+| 2023 | [Large Language Model based Long-tail Query Rewriting in Taobao Search](https://arxiv.org/abs/2311.03758) | arXiv preprint (Alibaba) | paper | local |
+| 2023 | [Is ChatGPT Good at Search? Investigating Large Language Models as Re-Ranking Agents](https://arxiv.org/abs/2304.09542) | EMNLP 2023 (arXiv) | paper | local |
+| 2023 | [GEO: Generative Engine Optimization](https://arxiv.org/abs/2311.09735) | KDD 2024 (arXiv) | paper | local |
+| 2023 | [Found in the Middle: Permutation Self-Consistency Improves Listwise Ranking in Large Language Models](https://arxiv.org/abs/2310.07712) | arXiv preprint | paper | local |
+| 2023 | [A Survey of Large Language Models Attribution](https://arxiv.org/abs/2311.03731) | arXiv preprint | paper | local |
+| 2023 | [A Setwise Approach for Effective and Highly Efficient Zero-shot Ranking with Large Language Models](https://arxiv.org/abs/2310.09497) | SIGIR 2024 (arXiv) | paper | local |
+| 2022 | [Our latest update to the quality rater guidelines: E-A-T gets an extra E for Experience](https://developers.google.com/search/blog/2022/12/google-raters-guidelines-e-e-a-t) | Google Search Central blog | web | — |
+| 2022 | [Measuring and Narrowing the Compositionality Gap in Language Models](https://arxiv.org/abs/2210.03350) | EMNLP Findings 2023 (arXiv) | paper | local |
+| 2019 | [Passage Re-ranking with BERT](https://arxiv.org/abs/1901.04085) | arXiv preprint | paper | local |
+| 2011 | [Google's New Algorithm Update Impacts 35% Of Searches](https://techcrunch.com/2011/11/03/googles-new-algorithm-update-impacts-35-of-searches/amp/) | TechCrunch | web | — |
+| 2010 | [From RankNet to LambdaRank to LambdaMART: An Overview](https://www.microsoft.com/en-us/research/publication/from-ranknet-to-lambdarank-to-lambdamart-an-overview/) | Microsoft Research Technical Report MSR-TR-2010-82 | paper | — |
+| 2008 | [Enterprise Information Retrieval: A Survey](https://scitepress.org/PublishedPapers/2008/16742/16742.pdf) | SciTePress (ICEIS/WEBIST proceedings) | paper | local |
+| 2003 | [Searching the Workplace Web](https://mccurley.org/papers/www2003/p641-mccurley.html) | WWW 2003 | paper | local |
+| 1999 | [Authoritative Sources in a Hyperlinked Environment](https://www.di.ens.fr/~busic/mar/ref/auth.pdf) | Journal of the ACM 46(5) | paper | local |
+
+# Information theory of agent retrieval (400)
+
+## 01_information_theory_foundations (69)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Searchable agent knowledge base construction (internal prior report)](/home/user/agent-data-retrieval/reports/Searchable%20agent%20knowledge%20base%20construction.md) | Internal report (this repository) | web | — |
+| 2026 | [Johnson–Lindenstrauss lemma](https://en.wikipedia.org/wiki/Johnson%E2%80%93Lindenstrauss_lemma) | Wikipedia | web | — |
+| 2026 | [Hash function transition (Git documentation)](https://git-scm.com/docs/hash-function-transition) | git-scm.com | web | — |
+| 2025 | [Human-inspired Episodic Memory for Infinite Context LLMs](https://arxiv.org/abs/2407.09450) | ICLR 2025 | paper | local |
+| 2025 | [A Rate-Distortion Framework for Summarization](https://arxiv.org/abs/2501.13100) | arXiv | paper | local |
+| 2024 | [RaBitQ: Quantizing High-Dimensional Vectors with a Theoretical Error Bound for Approximate Nearest Neighbor Search](https://arxiv.org/abs/2405.12497) | SIGMOD 2024 | paper | local |
+| 2024 | [Language Modeling Is Compression](https://arxiv.org/abs/2309.10668) | ICLR 2024 | paper | local |
+| 2024 | [Information Theory: From Coding to Learning (book draft, Aug 2024)](https://people.lids.mit.edu/yp/homepage/data/itbook-export.pdf) | Cambridge University Press (draft PDF) | paper | local |
+| 2024 | [Fundamental Limits of Prompt Compression: A Rate-Distortion Framework for Black-Box Language Models](https://arxiv.org/abs/2407.15504) | NeurIPS 2024 | paper | local |
+| 2024 | [Compression Represents Intelligence Linearly](https://arxiv.org/abs/2404.09937) | COLM 2024 | paper | local |
+| 2024 | [An Information Bottleneck Perspective for Effective Noise Filtering on Retrieval-Augmented Generation](https://arxiv.org/abs/2406.01549) | ACL 2024 | paper | local |
+| 2023 | [RECOMP: Improving Retrieval-Augmented LMs with Compression and Selective Augmentation](https://arxiv.org/abs/2310.04408) | ICLR 2024 | paper | local |
+| 2023 | [LongLLMLingua: Accelerating and Enhancing LLMs in Long Context Scenarios via Prompt Compression](https://arxiv.org/abs/2310.06839) | ACL 2024 | paper | local |
+| 2023 | [LLMLingua: Compressing Prompts for Accelerated Inference of Large Language Models](https://arxiv.org/abs/2310.05736) | EMNLP 2023 | paper | local |
+| 2023 | [Compressing Context to Enhance Inference Efficiency of Large Language Models](https://arxiv.org/abs/2310.06201) | EMNLP 2023 | paper | local |
+| 2023 | [A Graduate Course in Applied Cryptography (v0.6)](https://toc.cryptobook.us/) | Online textbook | web | local |
+| 2022 | [Integrity Constraints Revisited: From Exact to Approximate Implication](https://arxiv.org/abs/1812.09987) | Logical Methods in Computer Science 18(1) | paper | local |
+| 2021 | [The Curse of Dense Low-Dimensional Information Retrieval for Large Index Sizes](https://arxiv.org/abs/2012.14210) | ACL 2021 | paper | local |
+| 2021 | [Sparse, Dense, and Attentional Representations for Text Retrieval](https://arxiv.org/abs/2005.00181) | TACL 9 | paper | local |
+| 2020 | [What is Normal, What is Strange, and What is Missing in a Knowledge Graph: Unified Characterization via Inductive Summarization](https://arxiv.org/abs/2003.10412) | WWW 2020 | paper | local |
+| 2020 | [Mining Approximate Acyclic Schemes from Relations](https://arxiv.org/abs/1911.12933) | SIGMOD 2020 | paper | local |
+| 2020 | [Interpretable multiclass classification by MDL-based rule lists](https://arxiv.org/abs/1905.00328) | Information Sciences 512 | paper | local |
+| 2020 | [Formal Limitations on the Measurement of Mutual Information](https://arxiv.org/abs/1811.04251) | AISTATS 2020 | paper | local |
+| 2020 | [A Theory of Usable Information Under Computational Constraints](https://arxiv.org/abs/2002.10689) | ICLR 2020 | paper | local |
+| 2019 | [On Variational Bounds of Mutual Information](https://arxiv.org/abs/1905.06922) | ICML 2019 | paper | local |
+| 2019 | [Caveats for information bottleneck in deterministic scenarios](https://arxiv.org/abs/1808.07593) | ICLR 2019 | paper | local |
+| 2019 | [BottleSum: Unsupervised and Self-supervised Sentence Summarization using the Information Bottleneck Principle](https://arxiv.org/abs/1909.07405) | EMNLP 2019 | paper | local |
+| 2019 | [An Introduction to Kolmogorov Complexity and Its Applications (4th ed.)](https://doi.org/10.1007/978-3-030-11298-1) | Springer Texts in Computer Science | paper | — |
+| 2019 | [A Simple Theoretical Model of Importance for Summarization](https://aclanthology.org/P19-1101/) | ACL 2019 | paper | local |
+| 2018 | [Representation Learning with Contrastive Predictive Coding](https://arxiv.org/abs/1807.03748) | arXiv | paper | local |
+| 2017 | [The First Collision for Full SHA-1](https://shattered.io/) | CRYPTO 2017 | paper | local |
+| 2017 | [Optimality of the Johnson-Lindenstrauss Lemma](https://arxiv.org/abs/1609.02094) | FOCS 2017 | paper | local |
+| 2017 | [Discovering Reliable Approximate Functional Dependencies](https://arxiv.org/abs/1705.09391) | KDD 2017 | paper | local |
+| 2017 | [Deep Variational Information Bottleneck](https://arxiv.org/abs/1612.00410) | ICLR 2017 | paper | local |
+| 2015 | [Strong data-processing inequalities for channels and Bayesian networks](https://arxiv.org/abs/1508.06025) | arXiv (in Convexity and Concentration, IMA vol.) | paper | local |
+| 2014 | [VoG: Summarizing and Understanding Large Graphs](https://arxiv.org/abs/1406.3411) | SDM 2014 | paper | local |
+| 2012 | [Random Projections (lecture notes, Algorithms in Data Mining)](https://edoliberty.com/classnotes/datamining2012/pdfs/05_random_projections.pdf) | Lecture notes | web | local |
+| 2011 | [Product Quantization for Nearest Neighbor Search](https://inria.hal.science/inria-00514462) | IEEE TPAMI 33(1) | paper | local |
+| 2011 | [Krimp: mining itemsets that compress](https://doi.org/10.1007/s10618-010-0202-x) | Data Mining and Knowledge Discovery 23 | paper | local |
+| 2010 | [Learning and generalization with the information bottleneck](https://doi.org/10.1016/j.tcs.2010.04.006) | Theoretical Computer Science 411 | paper | local |
+| 2010 | [An information-theoretic analysis of worst-case redundancy in database design](https://doi.org/10.1145/1670243.1670248) | ACM Transactions on Database Systems 35(1) | paper | — |
+| 2008 | [On the false-positive rate of Bloom filters](https://cglab.ca/~morin/publications/ds/bloom-submitted.pdf) | Information Processing Letters (preprint) | paper | local |
+| 2006 | [On redundancy vs dependency preservation in normalization: an information-theoretic study of 3NF](https://doi.org/10.1145/1142351.1142369) | PODS 2006 | paper | — |
+| 2006 | [Elements of Information Theory (2nd ed.)](https://doi.org/10.1002/047174882X) | Wiley | paper | — |
+| 2005 | [Clustering by compression](https://arxiv.org/abs/cs/0312044) | IEEE Transactions on Information Theory 51(4) | paper | local |
+| 2005 | [An information-theoretic approach to normal forms for relational and XML data](https://doi.org/10.1145/1059513.1059519) | Journal of the ACM 52(2) | paper | local |
+| 2004 | [Network Applications of Bloom Filters: A Survey](https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf) | Internet Mathematics 1(4) | paper | local |
+| 2004 | [Kolmogorov's Structure Functions and Model Selection](https://arxiv.org/abs/cs/0204037) | IEEE Transactions on Information Theory 50(12) | paper | local |
+| 2004 | [A tutorial introduction to the minimum description length principle](https://arxiv.org/abs/math/0406077) | Advances in MDL (MIT Press 2005), arXiv | paper | local |
+| 2003 | [Database-friendly random projections: Johnson-Lindenstrauss with binary coins](https://doi.org/10.1016/S0022-0000%2803%2900025-4) | Journal of Computer and System Sciences 66(4) | paper | — |
+| 2003 | [An elementary proof of a theorem of Johnson and Lindenstrauss](https://doi.org/10.1002/rsa.10073) | Random Structures & Algorithms 22(1) | paper | — |
+| 2002 | [Entropy Rate Constancy in Text](https://aclanthology.org/P02-1026/) | ACL 2002 | paper | local |
+| 2002 | [A linear lower bound on the unbounded error probabilistic communication complexity](https://doi.org/10.1016/S0022-0000%2802%2900019-3) | Journal of Computer and System Sciences 65(4) | paper | — |
+| 2001 | [A low-bandwidth network file system](https://doi.org/10.1145/502034.502052) | SOSP 2001 | paper | local |
+| 2001 | [A Statistical Model for Domain-Independent Text Segmentation](https://aclanthology.org/P01-1064/) | ACL 2001 | paper | local |
+| 2000 | [Min-Wise Independent Permutations](https://doi.org/10.1006/jcss.1999.1690) | Journal of Computer and System Sciences 60(3) | paper | — |
+| 2000 | [Information dependencies](https://doi.org/10.1145/335168.336059) | PODS 2000 | paper | — |
+| 1999 | [The information bottleneck method](https://arxiv.org/abs/physics/0004057) | Allerton Conference 1999 (arXiv 2000) | paper | local |
+| 1998 | [Information Distance](https://arxiv.org/abs/1006.3520) | IEEE Transactions on Information Theory 44(4) | paper | local |
+| 1997 | [TextTiling: Segmenting Text into Multi-paragraph Subtopic Passages](https://aclanthology.org/J97-1003/) | Computational Linguistics 23(1) | paper | local |
+| 1995 | [Improved approximation algorithms for maximum cut and satisfiability problems using semidefinite programming](https://doi.org/10.1145/227683.227684) | Journal of the ACM 42(6) | paper | — |
+| 1995 | [Generalizing Case Frames Using a Thesaurus and the MDL Principle](https://arxiv.org/abs/cmp-lg/9507011) | RANLP 1995 (journal version Computational Linguistics 1998) | paper | local |
+| 1988 | [A Digital Signature Based on a Conventional Encryption Function](https://doi.org/10.1007/3-540-48184-2_32) | CRYPTO '87, LNCS 293 | paper | — |
+| 1985 | [Geometrical realization of set systems and probabilistic communication complexity](https://doi.org/10.1109/SFCS.1985.30) | FOCS 1985 | paper | — |
+| 1978 | [Modeling by shortest data description](https://doi.org/10.1016/0005-1098%2878%2990005-5) | Automatica 14(5) | paper | — |
+| 1970 | [Space/time trade-offs in hash coding with allowable errors](https://doi.org/10.1145/362686.362692) | Communications of the ACM 13(7) | paper | — |
+| 1968 | [Three approaches to the quantitative definition of information](https://doi.org/10.1080/00207166808803030) | International Journal of Computer Mathematics (transl. of 1965 Problemy Peredachi Informatsii) | paper | — |
+| 1951 | [On Information and Sufficiency](https://doi.org/10.1214/aoms/1177729694) | Annals of Mathematical Statistics | paper | — |
+| 1948 | [A Mathematical Theory of Communication](https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf) | Bell System Technical Journal | paper | local |
+
+## 02_ir_theory (65)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [What Limits Does Quantization Place on Dense Top-k Retrieval? A Theoretical Study](https://arxiv.org/abs/2606.11780) | arXiv | paper | local |
+| 2026 | [Scaling Laws for Embedding Dimension in Information Retrieval](https://arxiv.org/abs/2602.05062) | arXiv | paper | local |
+| 2026 | [Quantifying and Expanding the Theoretical Capacity of Late-Interaction Retrieval Models](https://arxiv.org/abs/2607.05803) | arXiv | paper | local |
+| 2026 | [On Worst-Case Guarantees for Graph-Based Nearest-Neighbor Search](https://arxiv.org/abs/2610.38133) | arXiv | paper | local |
+| 2026 | [Insider Knowledge: How Much Can RAG Systems Gain from Evaluation Secrets?](https://arxiv.org/abs/2601.13227) | arXiv | paper | local |
+| 2025 | [Variations in Relevance Judgments and the Shelf Life of Test Collections](https://arxiv.org/abs/2502.20937) | SIGIR 2025 | paper | local |
+| 2025 | [LLM-based Query Expansion Fails for Unfamiliar and Ambiguous Queries](https://arxiv.org/abs/2505.12694) | arXiv / SIGIR 2025 | paper | local |
+| 2025 | [Improved Differentially Private Algorithms for Rank Aggregation](https://arxiv.org/abs/2511.11319) | arXiv | paper | local |
+| 2025 | [Does Generative Retrieval Overcome the Limitations of Dense Retrieval?](https://arxiv.org/abs/2509.22116) | arXiv | paper | local |
+| 2025 | [Distance Adaptive Beam Search for Provably Accurate Graph-Based Nearest Neighbor Search](https://arxiv.org/abs/2505.15636) | arXiv | paper | local |
+| 2024 | [Stochastic RAG: End-to-End Retrieval-Augmented Generation through Expected Utility Maximization](https://arxiv.org/abs/2405.02816) | SIGIR 2024 | paper | local |
+| 2024 | [Probabilistic Routing for Graph-Based Approximate Nearest Neighbor Search](https://arxiv.org/abs/2402.11354) | ICML 2024 | paper | local |
+| 2024 | [LLM-based relevance assessment still can't replace human relevance assessment](https://arxiv.org/abs/2412.17156) | arXiv | paper | local |
+| 2024 | [Foundations of Vector Retrieval](https://arxiv.org/abs/2401.09350) | Springer monograph / arXiv | paper | local |
+| 2023 | [Worst-case Performance of Popular Approximate Nearest Neighbor Search Implementations: Guarantees and Limitations](https://arxiv.org/abs/2310.19126) | NeurIPS 2023 | paper | local |
+| 2023 | [Perspectives on Large Language Models for Relevance Judgment](https://arxiv.org/abs/2304.09161) | ICTIR 2023 | paper | local |
+| 2023 | [An Analysis of Fusion Functions for Hybrid Retrieval](https://arxiv.org/abs/2210.11934) | ACM Transactions on Information Systems | paper | local |
+| 2023 | [A Theoretical Analysis Of Nearest Neighbor Search On Approximate Near Neighbor Graph](https://arxiv.org/abs/2303.06210) | arXiv | paper | local |
+| 2021 | [Wacky Weights in Learned Sparse Representations and the Revenge of Score-at-a-Time Query Evaluation](https://arxiv.org/abs/2110.11540) | arXiv | paper | local |
+| 2021 | [Towards Meaningful Statements in IR Evaluation. Mapping Evaluation Measures to Interval Scales](https://arxiv.org/abs/2101.02668) | arXiv / IEEE Access 2021 | paper | local |
+| 2021 | [Techniques for Inverted Index Compression](https://arxiv.org/abs/1908.10598) | ACM Computing Surveys 53(6) | paper | local |
+| 2020 | [Diagnosing BERT with Retrieval Heuristics](https://arxiv.org/abs/2201.04458) | ECIR 2020 | paper | local |
+| 2019 | [The Neural Hype and Comparisons Against Weak Baselines](https://doi.org/10.1145/3308774.3308781) | ACM SIGIR Forum 52(2) | paper | — |
+| 2019 | [Statistical Significance Testing in Information Retrieval: An Empirical Analysis of Type I, Type II and Type III Errors](https://arxiv.org/abs/1905.11096) | SIGIR 2019 | paper | local |
+| 2019 | [Graph-based Nearest Neighbor Search: From Practice to Theory](https://arxiv.org/abs/1907.00845) | ICML 2020 | paper | local |
+| 2018 | [Hardness of Approximate Nearest Neighbor Search](https://arxiv.org/abs/1803.00904) | STOC 2018 | paper | local |
+| 2018 | [Fairness of Exposure in Rankings](https://arxiv.org/abs/1802.07281) | KDD 2018 | paper | local |
+| 2018 | [An Axiomatic Analysis of Diversity Evaluation Metrics: Introducing the Rank-Biased Utility Metric](https://arxiv.org/abs/1805.02334) | SIGIR 2018 | paper | local |
+| 2018 | [A Formal Account of Effectiveness Evaluation and Ranking Fusion](https://arxiv.org/abs/1807.04317) | ICTIR 2018 | paper | local |
+| 2017 | [Fast Approximate Nearest Neighbor Search With The Navigating Spreading-out Graph](https://arxiv.org/abs/1707.00143) | PVLDB 2019 | paper | local |
+| 2015 | [Sign rank versus VC dimension](https://arxiv.org/abs/1503.07648) | COLT 2016 / arXiv | paper | local |
+| 2015 | [Practical and Optimal LSH for Angular Distance](https://arxiv.org/abs/1509.02897) | NeurIPS 2015 | paper | local |
+| 2015 | [Optimal Data-Dependent Hashing for Approximate Near Neighbors](https://arxiv.org/abs/1501.01062) | STOC 2015 | paper | local |
+| 2013 | [Seven Numeric Properties of Effectiveness Metrics](https://doi.org/10.1007/978-3-642-45068-6_1) | AIRS 2013 (LNCS 8281) | paper | — |
+| 2013 | [A Theoretical Analysis of NDCG Type Ranking Measures](https://arxiv.org/abs/1304.6480) | COLT 2013 | paper | local |
+| 2012 | [Quasi-Succinct Indices](https://arxiv.org/abs/1206.4300) | WSDM 2013 | paper | local |
+| 2012 | [Approximate Nearest Neighbor: Towards Removing the Curse of Dimensionality](https://doi.org/10.4086/toc.2012.v008a014) | Theory of Computing 8 | paper | http_503 |
+| 2011 | [Lower-bounding term frequency normalization](https://doi.org/10.1145/2063576.2063584) | CIKM 2011 | paper | — |
+| 2009 | [The Probabilistic Relevance Framework: BM25 and Beyond](https://doi.org/10.1561/1500000019) | Foundations and Trends in Information Retrieval 3(4) | paper | local |
+| 2009 | [Reducing the risk of query expansion via robust constrained optimization](https://doi.org/10.1145/1645953.1646059) | CIKM 2009 | paper | local |
+| 2009 | [Reciprocal rank fusion outperforms Condorcet and individual rank learning methods](https://doi.org/10.1145/1571941.1572114) | SIGIR 2009 | paper | local |
+| 2009 | [Portfolio theory of information retrieval](https://doi.org/10.1145/1571941.1571963) | SIGIR 2009 | paper | local |
+| 2009 | [Optimal lower bounds for locality sensitive hashing (except when q is tiny)](https://arxiv.org/abs/0912.0250) | ITCS 2011 / ACM TOCT | paper | local |
+| 2009 | [Expected reciprocal rank for graded relevance](https://doi.org/10.1145/1645953.1646033) | CIKM 2009 | paper | — |
+| 2009 | [Diversifying search results](https://doi.org/10.1145/1498759.1498766) | WSDM 2009 | paper | local |
+| 2008 | [Novelty and diversity in information retrieval evaluation](https://doi.org/10.1145/1390334.1390446) | SIGIR 2008 | paper | local |
+| 2007 | [Bias and the limits of pooling for large collections](https://doi.org/10.1007/s10791-007-9032-x) | Information Retrieval 10 | paper | local |
+| 2007 | [A comparison of statistical significance tests for information retrieval evaluation](https://doi.org/10.1145/1321440.1321528) | CIKM 2007 | paper | local |
+| 2006 | [Less is more: probabilistic models for retrieving fewer relevant documents](https://doi.org/10.1145/1148170.1148245) | SIGIR 2006 | paper | local |
+| 2006 | [Inverted files for text search engines](https://doi.org/10.1145/1132956.1132959) | ACM Computing Surveys 38(2) | paper | — |
+| 2004 | [A study of smoothing methods for language models applied to information retrieval](https://doi.org/10.1145/984321.984322) | ACM Transactions on Information Systems 22(2) | paper | local |
+| 2004 | [A formal study of information retrieval heuristics](https://doi.org/10.1145/1008992.1009004) | SIGIR 2004 | paper | local |
+| 2003 | [Probabilistic Relevance Models Based on Document and Query Generation](https://doi.org/10.1007/978-94-017-0171-6_1) | Language Modeling for Information Retrieval (Springer) | paper | — |
+| 2002 | [Probabilistic models of information retrieval based on measuring the divergence from randomness](https://doi.org/10.1145/582415.582416) | ACM Transactions on Information Systems 20(4) | paper | local |
+| 2002 | [Condorcet fusion for improved retrieval](https://doi.org/10.1145/584792.584881) | CIKM 2002 | paper | — |
+| 2001 | [Relevance-based language models](https://doi.org/10.1145/383952.383972) | SIGIR 2001 | paper | local |
+| 2001 | [Rank aggregation methods for the Web](https://doi.org/10.1145/371920.372165) | WWW 2001 | paper | — |
+| 2000 | [Variations in relevance judgments and the measurement of retrieval effectiveness](https://doi.org/10.1016/S0306-4573(00)00010-8) | Information Processing & Management 36(5) | paper | — |
+| 1999 | [When Is "Nearest Neighbor" Meaningful?](https://doi.org/10.1007/3-540-49257-7_15) | ICDT 1999 | paper | local |
+| 1998 | [How reliable are the results of large-scale information retrieval experiments?](https://doi.org/10.1145/290941.291014) | SIGIR 1998 | paper | — |
+| 1997 | [Analyses of multiple evidence combination](https://doi.org/10.1145/278459.258587) | SIGIR 1997 | paper | local |
+| 1992 | [When is the probability ranking principle suboptimal?](https://doi.org/10.1002/(SICI)1097-4571(199201)43:1%3C1::AID-ASI1%3E3.0.CO;2-5) | Journal of the American Society for Information Science 43(1) | paper | — |
+| 1977 | [The Probability Ranking Principle in IR](https://doi.org/10.1108/eb026647) | Journal of Documentation 33(4) | paper | — |
+| 1974 | [Efficient Storage and Retrieval by Content and Address of Static Files](https://doi.org/10.1145/321812.321820) | Journal of the ACM 21(2) | paper | — |
+|  | [Rocchio algorithm](https://en.wikipedia.org/wiki/Rocchio_algorithm) | Wikipedia | web | — |
+
+## 03_information_science (72)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [To Search or Not to Search: Aligning the Decision Boundary of Deep Search Agents via Causal Intervention](https://arxiv.org/abs/2602.03304) | WWW 2026; arXiv | paper | local |
+| 2026 | [SCOUT: Active Information Foraging for Long-Text Understanding with Decoupled Epistemic States](https://arxiv.org/abs/2605.04496) | arXiv | paper | local |
+| 2026 | [PatchScout: Thematic Web Data Collection via Information Foraging](https://arxiv.org/abs/2611.00169) | arXiv | paper | local |
+| 2026 | [Over-Searching in Search-Augmented Large Language Models](https://arxiv.org/abs/2601.05503) | arXiv | paper | local |
+| 2026 | [Information Farming: From Berry Picking to Berry Growing](https://arxiv.org/abs/2601.12544) | CHIIR 2026 (perspectives); arXiv | paper | local |
+| 2026 | [AI Search Citations: How Much Do They Really Change Week to Week?](https://www.brightedge.com/resources/weekly-ai-search-insights/ai-search-citations-week-to-week-changes) | BrightEdge Weekly AI Search Insights | web | — |
+| 2025 | [Source Coverage and Citation Bias in LLM-based vs. Traditional Search Engines](https://arxiv.org/html/2512.09483) | arXiv | paper | local |
+| 2025 | [Scent of Knowledge: Optimizing Search-Enhanced Reasoning with Information Foraging](https://arxiv.org/html/2505.09316) | NeurIPS 2025 (spotlight); arXiv | paper | local |
+| 2024 | [Supporting Business Document Workflows via Collection-Centric Information Foraging with Large Language Models](https://arxiv.org/abs/2405.01501) | arXiv | paper | local |
+| 2024 | [Revisiting Human Information Foraging: Adaptations for LLM-based Chatbots](https://arxiv.org/abs/2406.04452) | arXiv | paper | local |
+| 2023 | [Framing Relevance for Safety-Critical Autonomous Systems](https://arxiv.org/abs/2307.14355) | arXiv | paper | local |
+| 2022 | [When Not to Trust Language Models: Investigating Effectiveness of Parametric and Non-Parametric Memories](https://arxiv.org/abs/2212.10511) | ACL 2023; arXiv | paper | local |
+| 2022 | [Large Language Models Struggle to Learn Long-Tail Knowledge](https://arxiv.org/abs/2211.08411) | ICML 2023; arXiv | paper | local |
+| 2019 | [The language of information need: Differentiating conscious and formalized information needs](https://strathprints.strath.ac.uk/65478) | Information Processing & Management 56(1):77-90 | paper | — |
+| 2019 | [Asking Clarifying Questions in Open-Domain Information-Seeking Conversations](https://arxiv.org/abs/1907.06554) | SIGIR 2019 | paper | local |
+| 2018 | [Information Scent, Searching and Stopping: Modelling SERP Level Stopping Behaviour](https://strathprints.strath.ac.uk/62856) | ECIR 2018 | paper | — |
+| 2017 | [IFLA Library Reference Model: A Conceptual Model for Bibliographic Information](https://repository.ifla.org/handle/123456789/42?mode=full) | IFLA | paper | — |
+| 2017 | [Colon Classification (CC)](https://isko.org/cyclo/colon_classification) | Knowledge Organization 44(4):291-307; ISKO Encyclopedia of Knowledge Organization | web | — |
+| 2015 | [Searching and Stopping: An Analysis of Stopping Rules and Strategies](https://core.ac.uk/download/42366798.pdf) | CIKM 2015 | paper | http_403 |
+| 2015 | [An Analysis of Theories of Search and Search Behavior](https://eprints.gla.ac.uk/110908) | ICTIR 2015 | paper | — |
+| 2014 | [Zipf's word frequency law in natural language: A critical review and future directions](https://pmc.ncbi.nlm.nih.gov/articles/PMC4176592/) | Psychonomic Bulletin & Review 21(5):1112-1130 | paper | — |
+| 2013 | [Facet analysis](https://isko.org/cyclo/facet_analysis) | ISKO Encyclopedia of Knowledge Organization (preprint of IP&M article) | web | — |
+| 2010 | [Zipf's Law Leads to Heaps' Law: Analyzing Their Relation in Finite-Size Systems](https://arxiv.org/abs/1002.3861) | PLoS ONE 5:e14139 | paper | local |
+| 2009 | [The knowledge pyramid: a critique of the DIKW hierarchy](https://zenodo.org/record/904809) | Journal of Information Science 35(2):131-142 | paper | local |
+| 2007 | [The wisdom hierarchy: representations of the DIKW hierarchy](https://doi.org/10.1177/0165551506070706) | Journal of Information Science 33(2):163-180 | paper | — |
+| 2007 | [SNIF-ACT: A Cognitive Model of User Navigation on the World Wide Web](https://research.google.com/pubs/archive/25938.pdf) | Human-Computer Interaction 22(4):355-412 | paper | local |
+| 2007 | [Relevance: A review of the literature and a framework for thinking on the notion in information science. Part II: nature and manifestations of relevance](https://doi.org/10.1002/asi.20682) | JASIST 58(13):1915-1933 | paper | — |
+| 2007 | [Heads and tails: studies of web search with common and rare queries](https://erichorvitz.com/heads_and_tails_SIGIR.pdf) | SIGIR 2007 (poster) | paper | local |
+| 2007 | [Discretionary task interleaving: heuristics for time allocation in cognitive foraging](https://purehost.bath.ac.uk/ws/files/444452/Payne,_Duggan_&_Neth,_07.pdf) | Journal of Experimental Psychology: General 136(3):370-388 | paper | local |
+| 2006 | [Exploratory search: from finding to understanding](https://ils.unc.edu/courses/2018_fall/inls509_001/Reading/Marchionini06.pdf) | Communications of the ACM 49(4):41-46 | paper | http_404 |
+| 2006 | [Conceptualizing Knowledge Creation: A Critique of Nonaka's Theory](https://eprints.kingston.ac.uk/339) | Journal of Management Studies 43(7):1415-1436 | paper | — |
+| 2005 | [What have we got to lose? The effect of controlled vocabulary on keyword searching results](https://distantreader.org/stacks/journals/crl/crl-15726.pdf) | College & Research Libraries 66(3):212-230 | paper | local |
+| 2005 | [The Structure of Collaborative Tagging Systems](https://arxiv.org/abs/cs/0508082) | Journal of Information Science 32(2) 2006; arXiv | paper | local |
+| 2005 | [Power Laws in the Information Production Process: Lotkaian Informetrics](https://shop.elsevier.com/books/power-laws-in-the-information-production-process/egghe/978-0-12-088753-8) | Elsevier/Academic Press (book) | paper | — |
+| 2005 | [FRBR: Functional Requirements for Bibliographic Records (factfile)](https://www.ukoln.ac.uk/bib-man/factfile/cataloguing-rules/frbr/index.html) | UKOLN Bibliographic Management Factfile | web | — |
+| 2005 | [Bradford's Law of Scattering: Ambiguities in the Concept of 'Subject'](https://doi.org/10.1007/11495222_9) | CoLIS 2005, LNCS 3507:96-106 | paper | — |
+| 2003 | [The concept of relevance in IR](https://doi.org/10.1002/asi.10286) | JASIST 54(10):913-925 | paper | — |
+| 2003 | [The concept of a work in WorldCat: an application of FRBR](https://www.oclc.org/content/dam/research/publications/library/2003/lavoie_frbr.pdf) | Library Collections, Acquisitions, and Technical Services 27(1):45-59 | paper | local |
+| 2003 | [Faceted metadata for image search and browsing](https://courses.cs.washington.edu/courses/cse454/13wi/papers/yee-chi03.pdf) | CHI 2003 | paper | not_pdf |
+| 2002 | [Speculations on browsing, directed searching, and linking in relation to the Bradford Distribution](https://www.pages.gseis.ucla.edu/faculty/bates/articles/SearchingBradford.pdf) | CoLIS4 proceedings (Libraries Unlimited) | paper | local |
+| 2002 | [Data quality assessment](https://doi.org/10.1145/505248.506010) | Communications of the ACM 45(4):211-218 | paper | — |
+| 1999 | [Models in information behaviour research](http://informationr.net/tdw/publ/papers/1999JDoc.html) | Journal of Documentation 55(3):249-270 | paper | — |
+| 1999 | [Information foraging](https://doi.org/10.1037/0033-295X.106.4.643) | Psychological Review 106(4):643-675 | paper | — |
+| 1999 | [Emergence of scaling in random networks](https://arxiv.org/abs/cond-mat/9910332) | Science 286:509-512 | paper | local |
+| 1997 | [Relevance: The whole history](https://doi.org/10.1002/(SICI)1097-4571(199709)48:9<810::AID-ASI6>3.0.CO;2-U) | JASIS 48(9):810-832 | paper | — |
+| 1996 | [Beyond Accuracy: What Data Quality Means to Data Consumers](https://web.mit.edu/tdqm/www/tdqmpub/beyondaccuracy_files/beyondaccuracy.html) | Journal of Management Information Systems 12(4):5-33 | paper | — |
+| 1995 | [Information Foraging in Information Access Environments](https://www.chi1995.chistatic.hosting.acm.org/proceedings/papers/ppp_bdy.htm) | CHI 1995 | paper | — |
+| 1994 | [Visions of Xanadu: Paul Otlet (1868-1944) and Hypertext](https://monoskop.org/images/f/f8/Rayward_W_Boyd_1998_Visions_of_Xanadu_Paul_Otlet_1968-1944_and_Hypertext.pdf) | JASIS 45(4):235-250 | paper | local |
+| 1994 | [A Dynamic Theory of Organizational Knowledge Creation](https://www.uky.edu/~gmswan3/EDC608/Nonaka_1994.pdf) | Organization Science 5(1):14-37 | paper | error:URLError |
+| 1991 | [Organizational Learning and Communities-of-Practice: Toward a Unified View of Working, Learning, and Innovation](https://econpapers.repec.org/RePEc:inm:ororsc:v:2:y:1991:i:1:p:40-57) | Organization Science 2(1):40-57 | paper | — |
+| 1991 | [Inside the search process: Information seeking from the user's perspective](https://doi.org/10.1002/(SICI)1097-4571(199106)42:5<361::AID-ASI6>3.0.CO;2-#) | Journal of the American Society for Information Science 42(5):361-371 | paper | — |
+| 1991 | [Information as thing](https://people.ischool.berkeley.edu/~buckland/thing.html) | JASIS 42(5):351-360 | paper | — |
+| 1989 | [The design of browsing and berrypicking techniques for the online search interface](https://pages.gseis.ucla.edu/faculty/bates/berrypicking.html) | Online Review 13(5):407-424 | paper | — |
+| 1989 | [A behavioural approach to information retrieval system design](https://doi.org/10.1108/eb026843) | Journal of Documentation 45(3):171-212 | paper | — |
+| 1987 | [The vocabulary problem in human-system communication](https://doi.org/10.1145/32206.32212) | Communications of the ACM 30(11):964-971 | paper | — |
+| 1986 | [An empirical examination of Lotka's law](https://doi.org/10.1002/asi.4630370105) | JASIS 37(1):26-33 | paper | — |
+| 1982 | [ASK for information retrieval: Part I. Background and theory](https://doi.org/10.1108/eb026722) | Journal of Documentation 38(2):61-71 | paper | — |
+| 1976 | [Optimal foraging, the marginal value theorem](https://doi.org/10.1016/0040-5809(76)90040-X) | Theoretical Population Biology 9(2):129-136 | paper | — |
+| 1976 | [A general theory of bibliometric and other cumulative advantage processes](https://garfield.library.upenn.edu/price/pricetheory1976.pdf) | JASIS 27(5):292-306 | paper | local |
+| 1973 | [Situational relevance](https://doi.org/10.1016/0020-0271(73)90096-X) | Information Storage and Retrieval 9(8):457-471 | paper | — |
+| 1971 | [A definition of relevance for information retrieval](https://doi.org/10.1016/0020-0271(71)90024-6) | Information Storage and Retrieval 7(1):19-37 | paper | — |
+| 1968 | [Question-negotiation and information seeking in libraries](https://doi.org/10.5860/crl_29_03_178) | College & Research Libraries 29(3):178-194 | paper | — |
+|  | [The Marginal Value Theorem (lecture notes, Bio 608)](https://darwin.uky.edu/~sargent/Bio608/MVT.htm) | University of Kentucky course notes | web | — |
+|  | [KCS v6 Practices Guide: The Double Loop Process](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/030/030) | KCS v6 Practices Guide | web | — |
+|  | [KCS v6 Practices Guide: Introduction / benefits](https://library.serviceinnovation.org/KCS/KCS_v6/KCS_v6_Practices_Guide/020/010) | KCS v6 Practices Guide | web | — |
+|  | [Information Search Process (ISP) model page](https://wp.comminfo.rutgers.edu/ckuhlthau/information-search-process/) | Rutgers SC&I (author website) | web | — |
+|  | [ISO/IEC 25012: Data Quality Model (arc42 quality model page)](https://quality.arc42.org/standards/iso-iec-25012) | quality.arc42.org | web | — |
+|  | [ISO/IEC 25012 Data Quality Model (overview)](https://iso25000.com/en/iso-25000-standards/iso-25012) | iso25000.com | web | — |
+|  | [ISO 25964 - the international standard for thesauri and interoperability with other vocabularies](https://niso.org/schemas/iso25964) | NISO | web | — |
+|  | [IFLA Library Reference Model (LRMoo resources page)](https://cidoc-crm.org/lrmoo/Resources/ifla-library-reference-model) | cidoc-crm.org | web | — |
+|  | [Heaps' law](https://en.wikipedia.org/wiki/Heaps%27_law) | Wikipedia | web | — |
+|  | [Chris Argyris: theories of action, double-loop learning and organizational learning](https://infed.org/dir/chris-argyris-theories-of-action-double-loop-learning-and-organizational-learning/) | infed.org | web | — |
+
+## 04_decision_statistical_theory (113)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Pandora's AI Model Routing Box: Efficient Allocation with Costly Value Estimation](https://arxiv.org/abs/2608.20316) | arXiv preprint | paper | local |
+| 2026 | [Online Pandora's Box for Contextual LLM Cascading](https://arxiv.org/abs/2606.07392) | arXiv preprint | paper | local |
+| 2026 | [Evaluating Confidence-Gated Retrieval with Matched Trajectory Replay](https://arxiv.org/abs/2608.26846) | arXiv preprint | paper | local |
+| 2026 | [Entropic Claim Resolution: Uncertainty-Driven Evidence Selection for RAG](https://arxiv.org/abs/2603.28444) | arXiv preprint | paper | local |
+| 2025 | [QueryBandits for Hallucination Mitigation: Exploiting Semantic Features for No-Regret Rewriting](https://arxiv.org/abs/2508.16697) | arXiv preprint | paper | local |
+| 2025 | [Query Decomposition for RAG: Balancing Exploration-Exploitation](https://arxiv.org/abs/2510.18633) | arXiv preprint | paper | local |
+| 2025 | [Optimal Stopping vs Best-of-$N$ for Inference Time Optimization](https://arxiv.org/abs/2510.01394) | arXiv preprint | paper | local |
+| 2025 | [Correlated Errors in Large Language Models](https://arxiv.org/abs/2506.07962) | ICML 2025 | paper | local |
+| 2024 | [Stratified Prediction-Powered Inference for Hybrid Language Model Evaluation](https://arxiv.org/abs/2406.04291) | arXiv preprint | paper | local |
+| 2024 | [Prediction-Powered Ranking of Large Language Models](https://arxiv.org/abs/2402.17826) | NeurIPS 2024 | paper | local |
+| 2024 | [Mitigating LLM Hallucinations via Conformal Abstention](https://arxiv.org/abs/2405.01563) | arXiv preprint | paper | local |
+| 2024 | [MBA-RAG: a Bandit Approach for Adaptive Retrieval-Augmented Generation through Question Complexity](https://arxiv.org/abs/2412.01572) | arXiv preprint | paper | local |
+| 2024 | [Large language model validity via enhanced conformal prediction methods](https://arxiv.org/abs/2406.09714) | NeurIPS 2024 | paper | local |
+| 2024 | [Large Language Monkeys: Scaling Inference Compute with Repeated Sampling](https://arxiv.org/abs/2407.21787) | arXiv preprint | paper | local |
+| 2024 | [Conformal Alignment: Knowing When to Trust Foundation Models with Guarantees](https://arxiv.org/abs/2405.10301) | arXiv preprint | paper | local |
+| 2024 | [C-RAG: Certified Generation Risks for Retrieval-Augmented Language Models](https://arxiv.org/abs/2402.03181) | ICML 2024 | paper | local |
+| 2024 | [AutoEval Done Right: Using Synthetic Data for Model Evaluation](https://arxiv.org/abs/2403.07008) | arXiv preprint | paper | local |
+| 2024 | [Are More LLM Calls All You Need? Towards Scaling Laws of Compound Inference Systems](https://arxiv.org/abs/2403.02419) | NeurIPS 2024 | paper | local |
+| 2024 | [Adapting to Non-Stationary Environments: Multi-Armed Bandit Enhanced Retrieval-Augmented Generation on Knowledge Graphs](https://arxiv.org/abs/2412.07618) | arXiv preprint | paper | local |
+| 2023 | [TRAQ: Trustworthy Retrieval Augmented Question Answering via Conformal Prediction](https://arxiv.org/abs/2307.04642) | NAACL 2024 | paper | local |
+| 2023 | [PPI++: Efficient Prediction-Powered Inference](https://arxiv.org/abs/2311.01453) | arXiv preprint | paper | local |
+| 2022 | [Selection by Prediction with Conformal p-values](https://arxiv.org/abs/2210.01408) | JRSS-B 2023 | paper | local |
+| 2022 | [Four Algorithms for Correlation Clustering: A Survey](https://arxiv.org/abs/2208.12636) | arXiv preprint | paper | local |
+| 2022 | [Conformal prediction beyond exchangeability](https://arxiv.org/abs/2202.13415) | Annals of Statistics 2023 | paper | local |
+| 2021 | [Learn then Test: Calibrating Predictive Algorithms to Achieve Risk Control](https://arxiv.org/abs/2110.01052) | arXiv preprint | paper | local |
+| 2021 | [Distribution-Free, Risk-Controlling Prediction Sets](https://arxiv.org/abs/2101.02703) | Journal of the ACM 2021 | paper | local |
+| 2021 | [Adaptive Conformal Inference Under Distribution Shift](https://arxiv.org/abs/2106.00170) | NeurIPS 2021 | paper | local |
+| 2019 | [Using a Probabilistic Model to Assist Merging of Large-Scale Administrative Records](https://doi.org/10.1017/S0003055418000783) | American Political Science Review | paper | — |
+| 2019 | [The limits of distribution-free conditional predictive inference](https://arxiv.org/abs/1903.04684) | Information and Inference 2021 | paper | local |
+| 2019 | [Conformal Prediction Under Covariate Shift](https://arxiv.org/abs/1904.06019) | NeurIPS 2019 | paper | local |
+| 2017 | [On Calibration of Modern Neural Networks](https://arxiv.org/abs/1706.04599) | ICML 2017 | paper | local |
+| 2017 | [Consistent Query Answering for Self-Join-Free Conjunctive Queries Under Primary Key Constraints](https://doi.org/10.1145/3068334) | ACM Transactions on Database Systems | paper | — |
+| 2017 | [A formal semantics of SQL queries, its validation, and applications](https://doi.org/10.14778/3151113.3151116) | PVLDB | paper | — |
+| 2016 | [Distribution-Free Predictive Inference For Regression](https://arxiv.org/abs/1604.04173) | JASA 2018 | paper | local |
+| 2016 | [Bayesian Estimation of Bipartite Matchings for Record Linkage](https://arxiv.org/abs/1601.06630) | JASA 2017 | paper | local |
+| 2015 | [Novel Decompositions of Proper Scoring Rules for Classification: Score Adjustment as Precursor to Calibration](https://doi.org/10.1007/978-3-319-23528-8_5) | ECML PKDD 2015 (LNCS) | paper | — |
+| 2015 | [A more general Pandora's rule?](https://arxiv.org/abs/1509.09095) | arXiv preprint | paper | local |
+| 2014 | [Submodular Function Maximization](https://las.inf.ethz.ch/files/krause12survey.pdf) | Tractability: Practical Approaches to Hard Problems (Cambridge University Press) | paper | local |
+| 2014 | [Spectral Methods meet EM: A Provably Optimal Algorithm for Crowdsourcing](https://arxiv.org/abs/1406.3824) | JMLR 2016 | paper | local |
+| 2014 | [Learning to Optimize via Information-Directed Sampling](https://arxiv.org/abs/1403.5556) | Operations Research 2018 | paper | local |
+| 2013 | [lil' UCB : An Optimal Exploration Algorithm for Multi-Armed Bandits](https://arxiv.org/abs/1312.7308) | COLT 2014 | paper | local |
+| 2013 | [Learning to Optimize Via Posterior Sampling](https://arxiv.org/abs/1301.2609) | Mathematics of Operations Research 2014 | paper | local |
+| 2013 | [Independent Opinions? On the Causal Foundations of Belief Formation and Jury Theorems](https://doi.org/10.1093/mind/fzt074) | Mind | paper | — |
+| 2013 | [A Bayesian Approach to Graphical Record Linkage and De-duplication](https://arxiv.org/abs/1312.4645) | JASA 2016 | paper | local |
+| 2012 | [The dichotomy of probabilistic inference for unions of conjunctive queries](https://doi.org/10.1145/2395116.2395119) | Journal of the ACM | paper | — |
+| 2012 | [Serializable Snapshot Isolation in PostgreSQL](https://arxiv.org/abs/1208.4179) | PVLDB 2012 | paper | local |
+| 2012 | [Regret Analysis of Stochastic and Nonstochastic Multi-armed Bandit Problems](https://arxiv.org/abs/1204.5721) | Foundations and Trends in Machine Learning 2012 | paper | local |
+| 2012 | [Near-optimal Nonmyopic Value of Information in Graphical Models](https://arxiv.org/abs/1207.1394) | UAI 2005 | paper | local |
+| 2011 | [Provenance for aggregate queries](https://doi.org/10.1145/1989284.1989302) | PODS 2011 | paper | — |
+| 2011 | [Budget-Optimal Task Allocation for Reliable Crowdsourcing Systems](https://arxiv.org/abs/1110.3564) | Operations Research 2014 | paper | local |
+| 2011 | [Analysis of Thompson Sampling for the multi-armed bandit problem](https://arxiv.org/abs/1111.1797) | COLT 2012 | paper | local |
+| 2011 | [A Class of Submodular Functions for Document Summarization](https://aclanthology.org/P11-1052/) | ACL 2011 | paper | local |
+| 2010 | [Adaptive Submodularity: Theory and Applications in Active Learning and Stochastic Optimization](https://arxiv.org/abs/1003.3967) | JAIR 2011 | paper | local |
+| 2008 | [Serializable isolation for snapshot databases](https://doi.org/10.1145/1376616.1376690) | SIGMOD 2008 | paper | — |
+| 2008 | [Learning diverse rankings with multi-armed bandits](https://doi.org/10.1145/1390156.1390255) | ICML 2008 | paper | — |
+| 2008 | [Aggregating inconsistent information](https://doi.org/10.1145/1411509.1411513) | Journal of the ACM | paper | — |
+| 2007 | [Strictly Proper Scoring Rules, Prediction, and Estimation](https://doi.org/10.1198/016214506000001437) | Journal of the American Statistical Association | paper | local |
+| 2007 | [Cost-effective outbreak detection in networks](https://doi.org/10.1145/1281192.1281239) | KDD 2007 | paper | — |
+| 2006 | [Overview of Record Linkage and Current Research Directions](https://www.census.gov/content/dam/Census/library/working-papers/2006/adrm/rrs2006-02.pdf) | U.S. Census Bureau Research Report Series Statistics #2006-2 | paper | local |
+| 2005 | [Making snapshot isolation serializable](https://doi.org/10.1145/1071610.1071615) | ACM Transactions on Database Systems | paper | — |
+| 2005 | [Algorithmic Learning in a Random World](https://doi.org/10.1007/b106715) | Springer (book) | paper | — |
+| 2004 | [Correlation Clustering](https://doi.org/10.1023/B:MACH.0000033116.57574.95) | Machine Learning | paper | — |
+| 2004 | [A read-only transaction anomaly under snapshot isolation](https://doi.org/10.1145/1031570.1031573) | ACM SIGMOD Record | paper | — |
+| 2004 | [A note on maximizing a submodular set function subject to a knapsack constraint](https://doi.org/10.1016/S0167-6377(03)00062-2) | Operations Research Letters | paper | — |
+| 2002 | [Inductive Confidence Machines for Regression](https://doi.org/10.1007/3-540-36755-1_29) | ECML 2002 (LNCS) | paper | — |
+| 2002 | [Finite-time Analysis of the Multiarmed Bandit Problem](https://doi.org/10.1023/A:1013689704352) | Machine Learning | paper | local |
+| 2000 | [Generalized isolation level definitions](https://doi.org/10.1109/ICDE.2000.839388) | ICDE 2000 | paper | — |
+| 1999 | [The budgeted maximum coverage problem](https://doi.org/10.1016/S0020-0190(99)00031-9) | Information Processing Letters | paper | — |
+| 1999 | [Consistent query answers in inconsistent databases](https://doi.org/10.1145/303976.303983) | PODS 1999 | paper | — |
+| 1998 | [Asymptotic calibration](https://doi.org/10.1093/biomet/85.2.379) | Biometrika | paper | — |
+| 1998 | [A threshold of ln n for approximating set cover](https://doi.org/10.1145/285055.285059) | Journal of the ACM | paper | — |
+| 1995 | [A Method for Calibrating False-Match Rates in Record Linkage](https://doi.org/10.1080/01621459.1995.10476563) | Journal of the American Statistical Association | paper | — |
+| 1992 | [The Condorcet Jury Theorem, Free Speech, and Correlated Votes](https://doi.org/10.2307/2111584) | American Journal of Political Science | paper | — |
+| 1992 | [On the Gittins Index for Multiarmed Bandits](https://doi.org/10.1214/aoap/1177005588) | The Annals of Applied Probability | paper | — |
+| 1990 | [String Comparator Metrics and Enhanced Decision Rules in the Fellegi-Sunter Model of Record Linkage](https://www.stat.cmu.edu/NCRN/PUBLIC/RLClassFiles/HW/Winkler1990.pdf) | Proceedings of the Section on Survey Research Methods, American Statistical Association | paper | local |
+| 1989 | [Who Solved the Secretary Problem?](https://doi.org/10.1214/ss/1177012493) | Statistical Science | paper | — |
+| 1989 | [OR Forum - What's Happened in Search Theory Since the 1975 Lanchester Prize?](https://doi.org/10.1287/opre.37.3.501) | Operations Research | paper | — |
+| 1989 | [Majority Systems and the Condorcet Jury Theorem](https://doi.org/10.2307/2348873) | The Statistician | paper | — |
+| 1989 | [Discussion: The Total Evidence Theorem for Probability Kinematics](https://doi.org/10.1086/289490) | Philosophy of Science | paper | local |
+| 1985 | [Optimal Sequential Search: A Bayesian Approach](https://doi.org/10.1214/aos/1176349665) | The Annals of Statistics | paper | — |
+| 1985 | [Asymptotically efficient adaptive allocation rules](https://doi.org/10.1016/0196-8858(85)90002-8) | Advances in Applied Mathematics | paper | — |
+| 1984 | [Incomplete Information in Relational Databases](https://doi.org/10.1145/1634.1886) | Journal of the ACM | paper | — |
+| 1983 | [Thirteen theorems in search of the truth](https://doi.org/10.1007/BF00125672) | Theory and Decision | paper | — |
+| 1983 | [The Comparison and Evaluation of Forecasters](https://doi.org/10.2307/2987588) | The Statistician | paper | — |
+| 1982 | [The Well-Calibrated Bayesian](https://doi.org/10.1080/01621459.1982.10477856) | Journal of the American Statistical Association | paper | — |
+| 1982 | [Optimal Decision Rules in Uncertain Dichotomous Choice Situations](https://doi.org/10.2307/2526438) | International Economic Review | paper | — |
+| 1979 | [The serializability of concurrent database updates](https://doi.org/10.1145/322154.322158) | Journal of the ACM | paper | — |
+| 1979 | [Optimal Search for the Best Alternative](https://doi.org/10.2307/1910412) | Econometrica | paper | — |
+| 1979 | [Maximum Likelihood Estimation of Observer Error-Rates Using the EM Algorithm](https://doi.org/10.2307/2346806) | Journal of the Royal Statistical Society Series C | paper | — |
+| 1979 | [Bandit Processes and Dynamic Allocation Indices](https://doi.org/10.1111/j.2517-6161.1979.tb01068.x) | Journal of the Royal Statistical Society Series B | paper | — |
+| 1978 | [An analysis of approximations for maximizing submodular set functions - I](https://doi.org/10.1007/BF01588971) | Mathematical Programming | paper | — |
+| 1977 | [Maximum Likelihood from Incomplete Data via the EM Algorithm](https://doi.org/10.1111/j.2517-6161.1977.tb01600.x) | Journal of the Royal Statistical Society Series B | paper | — |
+| 1973 | [A New Vector Partition of the Probability Score](https://doi.org/10.1175/1520-0450(1973)012<0595:ANVPOT>2.0.CO;2) | Journal of Applied Meteorology | paper | — |
+| 1971 | [Elicitation of Personal Probabilities and Expectations](https://doi.org/10.1080/01621459.1971.10482346) | Journal of the American Statistical Association | paper | — |
+| 1970 | [On optimum recognition error and reject tradeoff](https://doi.org/10.1109/TIT.1970.1054406) | IEEE Transactions on Information Theory | paper | — |
+| 1969 | [A Theory for Record Linkage](https://doi.org/10.1080/01621459.1969.10501049) | Journal of the American Statistical Association | paper | — |
+| 1967 | [On the Principle of Total Evidence](https://doi.org/10.1093/bjps/17.4.319) | The British Journal for the Philosophy of Science | paper | — |
+| 1966 | [Information Value Theory](https://doi.org/10.1109/TSSC.1966.300074) | IEEE Transactions on Systems Science and Cybernetics | paper | — |
+| 1965 | [On optimal stopping rules for S_n/n](https://doi.org/10.1215/ijm/1256068146) | Illinois Journal of Mathematics | paper | — |
+| 1963 | [Probability Inequalities for Sums of Bounded Random Variables](https://doi.org/10.1080/01621459.1963.10500830) | Journal of the American Statistical Association | paper | — |
+| 1963 | [On optimal stopping rules](https://doi.org/10.1007/BF00535296) | Zeitschrift fur Wahrscheinlichkeitstheorie und Verwandte Gebiete | paper | — |
+| 1950 | [Verification of Forecasts Expressed in Terms of Probability](https://doi.org/10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2) | Monthly Weather Review | paper | — |
+| 1948 | [Optimum Character of the Sequential Probability Ratio Test](https://doi.org/10.1214/aoms/1177730197) | The Annals of Mathematical Statistics | paper | — |
+| 1933 | [On the problem of the most efficient tests of statistical hypotheses](https://doi.org/10.1098/rsta.1933.0009) | Philosophical Transactions of the Royal Society A | paper | — |
+| 1933 | [On the Likelihood that One Unknown Probability Exceeds Another in View of the Evidence of Two Samples](https://doi.org/10.2307/2332286) | Biometrika | paper | — |
+|  | [Reliability (Apache Iceberg documentation)](https://iceberg.apache.org/docs/latest/reliability/) | Apache Iceberg docs | web | — |
+|  | [Optimal Stopping and Applications, Chapter 5: Monotone Stopping Rule Problems](https://www.math.ucla.edu/~tom/Stopping/sr5.pdf) | UCLA online textbook | web | local |
+|  | [Optimal Stopping and Applications, Chapter 4: Applications](https://www.math.ucla.edu/~tom/Stopping/sr4.pdf) | UCLA online textbook | web | local |
+|  | [Optimal Stopping and Applications, Chapter 3: The Existence of Optimal Stopping Rules](https://www.math.ucla.edu/~tom/Stopping/sr3.pdf) | UCLA online textbook | web | local |
+|  | [Optimal Stopping and Applications, Chapter 2: Finite Horizon Problems](https://www.math.ucla.edu/~tom/Stopping/sr2.pdf) | UCLA online textbook | web | local |
+|  | [Optimal Stopping and Applications, Chapter 1: Stopping Rule Problems](https://www.math.ucla.edu/~tom/Stopping/sr1.pdf) | UCLA online textbook | web | local |
+|  | [Jury Theorems](https://plato.stanford.edu/entries/jury-theorems/) | Stanford Encyclopedia of Philosophy | web | — |
+|  | [Bayesian search theory](https://en.wikipedia.org/wiki/Bayesian_search_theory) | Wikipedia | web | — |
+
+## 05_llm_capacity_rag_theory (81)
+
+| Year | Title | Venue | Type | PDF |
+|---|---|---|---|---|
+| 2026 | [Pairwise summation](https://en.wikipedia.org/wiki/Pairwise_summation) | Wikipedia | web | — |
+| 2026 | [Don't Pick a Winner: Knowledge Conflicts Need a Prior, Not a Rule](https://arxiv.org/abs/2610.36169) | arXiv preprint | paper | local |
+| 2026 | [A Theory of Time-Sensitive Language Generation: Sparse Hallucination Beats Mode Collapse](https://arxiv.org/abs/2605.11302) | arXiv preprint | paper | local |
+| 2025 | [Why language models hallucinate](https://openai.com/index/why-language-models-hallucinate/) | OpenAI blog | web | — |
+| 2025 | [Why Language Models Hallucinate](https://arxiv.org/abs/2509.04664) | arXiv preprint (OpenAI/Georgia Tech) | paper | local |
+| 2025 | [The Illusion of Diminishing Returns: Measuring Long Horizon Execution in LLMs](https://arxiv.org/abs/2509.09677) | ICLR 2026 | paper | local |
+| 2025 | [Taming Knowledge Conflicts in Language Models](https://arxiv.org/abs/2503.10996) | ICML 2025 | paper | local |
+| 2025 | [Scalable-Softmax Is Superior for Attention](https://arxiv.org/abs/2501.19399) | arXiv preprint | paper | local |
+| 2025 | [Revisiting RAG Ensemble: A Theoretical and Mechanistic Analysis of Multi-RAG System Collaboration](https://arxiv.org/abs/2508.13828) | arXiv preprint | paper | local |
+| 2025 | [Retrieval-Augmented Generation as Noisy In-Context Learning: A Unified Theory and Risk Bounds](https://arxiv.org/abs/2506.03100) | arXiv preprint (under review) | paper | local |
+| 2025 | [On the Fundamental Impossibility of Hallucination Control in Large Language Models](https://arxiv.org/abs/2506.06382) | arXiv preprint | paper | local |
+| 2025 | [On the Emergence of Position Bias in Transformers](https://arxiv.org/abs/2502.01951) | ICML 2025 | paper | local |
+| 2025 | [How much do language models memorize?](https://arxiv.org/abs/2505.24832) | arXiv preprint | paper | local |
+| 2025 | [How do language models learn facts? Dynamics, curricula and hallucinations](https://arxiv.org/abs/2503.21676) | COLM 2025 | paper | local |
+| 2025 | [Hallucinations are inevitable but can be made statistically negligible](https://arxiv.org/abs/2502.12187) | arXiv preprint | paper | local |
+| 2025 | [Hallucination is Inevitable for LLMs with the Open World Assumption](https://arxiv.org/abs/2510.05116) | arXiv preprint | paper | local |
+| 2025 | [Hallucination as a Computational Boundary: A Hierarchy of Inevitability and the Oracle Escape](https://arxiv.org/abs/2508.07334) | arXiv preprint | paper | local |
+| 2025 | [(Im)possibility of Automated Hallucination Detection in Large Language Models](https://arxiv.org/abs/2504.17004) | arXiv preprint | paper | local |
+| 2024 | [Understanding Factual Recall in Transformers via Associative Memories](https://arxiv.org/abs/2412.06538) | ICLR 2025 | paper | local |
+| 2024 | [Transformers need glasses! Information over-squashing in language tasks](https://arxiv.org/abs/2406.04267) | arXiv preprint (NeurIPS 2024) | paper | local |
+| 2024 | [The pitfalls of next-token prediction](https://arxiv.org/abs/2403.06963) | ICML 2024 | paper | local |
+| 2024 | [The Power of Noise: Redefining Retrieval for RAG Systems](https://arxiv.org/abs/2401.14887) | SIGIR 2024 | paper | local |
+| 2024 | [The Good, The Bad, and The Greedy: Evaluation of LLMs Should Not Ignore Non-Determinism](https://arxiv.org/abs/2407.10457) | arXiv preprint | paper | local |
+| 2024 | [Softmax is not Enough (for Sharp Size Generalisation)](https://arxiv.org/abs/2410.01104) | ICML 2025 | paper | local |
+| 2024 | [Scaling Laws for Fact Memorization of Large Language Models](https://arxiv.org/abs/2406.15720) | arXiv preprint | paper | local |
+| 2024 | [Same Task, More Tokens: the Impact of Input Length on the Reasoning Performance of Large Language Models](https://arxiv.org/abs/2402.14848) | ACL 2024 | paper | local |
+| 2024 | [Retrieval Head Mechanistically Explains Long-Context Factuality](https://arxiv.org/abs/2404.15574) | ICLR 2025 | paper | local |
+| 2024 | [Physics of Language Models: Part 3.3, Knowledge Capacity Scaling Laws](https://arxiv.org/abs/2404.05405) | ICLR 2025 | paper | local |
+| 2024 | [On the Self-Verification Limitations of Large Language Models on Reasoning and Planning Tasks](https://arxiv.org/abs/2402.08115) | arXiv preprint | paper | local |
+| 2024 | [On the Optimal Memorization Capacity of Transformers](https://arxiv.org/abs/2409.17677) | ICLR 2025 | paper | local |
+| 2024 | [On the Limits of Language Generation: Trade-Offs Between Hallucination and Mode Collapse](https://arxiv.org/abs/2411.09642) | STOC 2025 | paper | local |
+| 2024 | [On Limitations of the Transformer Architecture](https://arxiv.org/abs/2402.08164) | arXiv preprint (COLM 2024) | paper | local |
+| 2024 | [Mind the Gap: Examining the Self-Improvement Capabilities of Large Language Models](https://arxiv.org/abs/2412.02674) | ICLR 2025 | paper | local |
+| 2024 | [Language Generation in the Limit](https://arxiv.org/abs/2404.06757) | NeurIPS 2024 | paper | local |
+| 2024 | [LLMs Will Always Hallucinate, and We Need to Live With This](https://arxiv.org/abs/2409.05746) | arXiv preprint | paper | local |
+| 2024 | [Hallucination is Inevitable: An Innate Limitation of Large Language Models](https://arxiv.org/abs/2401.11817) | arXiv preprint | paper | local |
+| 2024 | [Found in the Middle: Calibrating Positional Attention Bias Improves Long Context Utilization](https://arxiv.org/abs/2406.16008) | Findings of ACL 2024 | paper | local |
+| 2024 | [Does Fine-Tuning LLMs on New Knowledge Encourage Hallucinations?](https://arxiv.org/abs/2405.05904) | EMNLP 2024 | paper | local |
+| 2024 | [Chain of Thought Empowers Transformers to Solve Inherently Serial Problems](https://arxiv.org/abs/2402.12875) | ICLR 2024 | paper | local |
+| 2024 | [A Theory for Token-Level Harmonization in Retrieval-Augmented Generation](https://arxiv.org/abs/2406.00944) | ICLR 2025 | paper | local |
+| 2024 | [A Statistical Framework for Data-dependent Retrieval-Augmented Models](https://arxiv.org/abs/2408.15399) | arXiv preprint | paper | local |
+| 2023 | [Why do Nearest Neighbor Language Models Work?](https://arxiv.org/abs/2301.02828) | ICML 2023 | paper | local |
+| 2023 | [What and How does In-Context Learning Learn? Bayesian Model Averaging, Parameterization, and Generalization](https://arxiv.org/abs/2305.19420) | arXiv preprint | paper | local |
+| 2023 | [Transformers as Statisticians: Provable In-Context Learning with In-Context Algorithm Selection](https://arxiv.org/abs/2306.04637) | NeurIPS 2023 | paper | local |
+| 2023 | [Towards Revealing the Mystery behind Chain of Thought: A Theoretical Perspective](https://arxiv.org/abs/2305.15408) | NeurIPS 2023 | paper | local |
+| 2023 | [The Reversal Curse: LLMs trained on "A is B" fail to learn "B is A"](https://arxiv.org/abs/2309.12288) | ICLR 2024 | paper | local |
+| 2023 | [The Learnability of In-Context Learning](https://arxiv.org/abs/2303.07895) | arXiv preprint (NeurIPS 2023) | paper | local |
+| 2023 | [The Expressive Power of Transformers with Chain of Thought](https://arxiv.org/abs/2310.07923) | ICLR 2024 | paper | local |
+| 2023 | [Scaling Laws for Associative Memories](https://arxiv.org/abs/2310.02984) | arXiv preprint (ICLR 2024) | paper | local |
+| 2023 | [Representational Strengths and Limitations of Transformers](https://arxiv.org/abs/2306.02896) | NeurIPS 2023 | paper | local |
+| 2023 | [Physics of Language Models: Part 3.2, Knowledge Manipulation](https://arxiv.org/abs/2309.14402) | ICLR 2025 | paper | local |
+| 2023 | [Physics of Language Models: Part 3.1, Knowledge Storage and Extraction](https://arxiv.org/abs/2309.14316) | ICML 2024 | paper | local |
+| 2023 | [Memorization Capacity of Multi-Head Attention in Transformers](https://arxiv.org/abs/2306.02010) | ICLR 2024 | paper | local |
+| 2023 | [Large Language Models Can Be Easily Distracted by Irrelevant Context](https://arxiv.org/abs/2302.00093) | ICML 2023 | paper | local |
+| 2023 | [In-Context Retrieval-Augmented Language Models](https://arxiv.org/abs/2302.00083) | TACL 2023 | paper | local |
+| 2023 | [Head-to-Tail: How Knowledgeable are Large Language Models (LLMs)? A.K.A. Will LLMs Replace Knowledge Graphs?](https://arxiv.org/abs/2308.10168) | NAACL 2024 | paper | local |
+| 2023 | [Faith and Fate: Limits of Transformers on Compositionality](https://arxiv.org/abs/2305.18654) | NeurIPS 2023 | paper | local |
+| 2023 | [Efficient Streaming Language Models with Attention Sinks](https://arxiv.org/abs/2309.17453) | ICLR 2024 | paper | local |
+| 2023 | [Calibrated Language Models Must Hallucinate](https://arxiv.org/abs/2311.14648) | STOC 2024 | paper | local |
+| 2023 | [Birth of a Transformer: A Memory Viewpoint](https://arxiv.org/abs/2306.00802) | NeurIPS 2023 | paper | local |
+| 2022 | [Why Exposure Bias Matters: An Imitation Learning Perspective of Error Accumulation in Language Generation](https://arxiv.org/abs/2204.01171) | Findings of ACL 2022 | paper | local |
+| 2022 | [What learning algorithm is in-context learning? Investigations with linear models](https://arxiv.org/abs/2211.15661) | ICLR 2023 | paper | local |
+| 2022 | [What Can Transformers Learn In-Context? A Case Study of Simple Function Classes](https://arxiv.org/abs/2208.01066) | NeurIPS 2022 | paper | local |
+| 2022 | [Transformers learn in-context by gradient descent](https://arxiv.org/abs/2212.07677) | ICML 2023 | paper | local |
+| 2022 | [Sub-Task Decomposition Enables Learning in Sequence to Sequence Tasks](https://arxiv.org/abs/2204.02892) | ICLR 2023 | paper | local |
+| 2022 | [In-context Learning and Induction Heads](https://arxiv.org/abs/2209.11895) | Transformer Circuits Thread / arXiv | paper | local |
+| 2022 | [Atlas: Few-shot Learning with Retrieval Augmented Language Models](https://arxiv.org/abs/2208.03299) | JMLR 2023 | paper | local |
+| 2021 | [Improving language models by retrieving from trillions of tokens](https://arxiv.org/abs/2112.04426) | ICML 2022 | paper | local |
+| 2021 | [Entity-Based Knowledge Conflicts in Question Answering](https://arxiv.org/abs/2109.05052) | EMNLP 2021 | paper | local |
+| 2021 | [An Explanation of In-context Learning as Implicit Bayesian Inference](https://arxiv.org/abs/2111.02080) | ICLR 2022 | paper | local |
+| 2020 | [Transformer Feed-Forward Layers Are Key-Value Memories](https://arxiv.org/abs/2012.14913) | EMNLP 2021 | paper | local |
+| 2020 | [REALM: Retrieval-Augmented Language Model Pre-Training](https://arxiv.org/abs/2002.08909) | ICML 2020 | paper | local |
+| 2020 | [How Much Knowledge Can You Pack Into the Parameters of a Language Model?](https://arxiv.org/abs/2002.08910) | EMNLP 2020 | paper | local |
+| 2019 | [Theoretical Limitations of Self-Attention in Neural Sequence Models](https://arxiv.org/abs/1906.06755) | TACL 2020 | paper | local |
+| 2019 | [Language Models as Knowledge Bases?](https://arxiv.org/abs/1909.01066) | EMNLP 2019 | paper | local |
+| 2019 | [Generalization through Memorization: Nearest Neighbor Language Models](https://arxiv.org/abs/1911.00172) | ICLR 2020 | paper | local |
+| 2017 | [Breaking the Softmax Bottleneck: A High-Rank RNN Language Model](https://arxiv.org/abs/1711.03953) | ICLR 2018 | paper | local |
+| 2010 | [A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning](https://arxiv.org/abs/1011.0686) | AISTATS 2011 | paper | local |
+| 1993 | [The Accuracy of Floating Point Summation](https://doi.org/10.1137/0914050) | SIAM Journal on Scientific Computing 14(4) | paper | — |
+| 1991 | [What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) | ACM Computing Surveys 23(1) | paper | — |
+| 1953 | [The Population Frequencies of Species and the Estimation of Population Parameters](https://doi.org/10.1093/biomet/40.3-4.237) | Biometrika 40(3-4):237-264 | paper | — |
 
 # Searchable agent knowledge base construction (824)
 
