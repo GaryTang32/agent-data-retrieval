@@ -1,0 +1,1538 @@
+<title>Agent Data Retrieval Brief</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap">
+<style>
+  /* Layout: light-only research brief, fluid to 1280px. Skim path = key points, summaries, stat tiles, tables, conclusion. */
+  :root {
+    color-scheme: light;
+    --bg: #FFFFFF;
+    --paper: #FFFFFF;
+    --surface: #EEF1F6;
+    --ink: #151A26;
+    --muted: #556074;
+    --soft: #6B7487;
+    --rule: #D8DDE6;
+    --rule-strong: #B4BCCA;
+    --accent: #2D4BC8;
+    --accent-tint: #E7EBFC;
+    --check: #0D7266;
+    --check-tint: #DFF1EC;
+    --warn: #B3261E;
+    --warn-tint: #F9E5E2;
+    --amber: #8A5A00;
+    --amber-tint: #FBEFD5;
+    --violet: #5B3FB0;
+    --violet-tint: #EEEAFA;
+    --stripe: #F7F8FB;
+    --dek: #2A3142;
+    --lead-ink: #3B4354;
+    --good-bg: #F2FAF7;
+    --bad-bg: #FDF5F4;
+    --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+    --part: var(--accent);
+    --part-tint: var(--accent-tint);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body);
+    font-size: clamp(15px, 14px + 0.2vw, 16.5px); line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  main { width: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: clamp(24px, 2.6vw, 34px); min-width: 0; }
+  section, header { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  p { margin: 0; max-width: 100ch; }
+  a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  strong { font-weight: 600; }
+  code { font-family: var(--font-mono); font-size: 0.86em; background: var(--surface); color: var(--ink); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+  .num, td, .stat, .counter { font-variant-numeric: lining-nums tabular-nums; }
+
+  /* Part colours: Findings blue, Results teal, To do amber, Sources violet */
+  [id^="fd"] { --part: var(--accent); --part-tint: var(--accent-tint); }
+  [id^="rs"] { --part: var(--check); --part-tint: var(--check-tint); }
+  [id^="td"] { --part: var(--amber); --part-tint: var(--amber-tint); }
+  [id^="sr"] { --part: var(--violet); --part-tint: var(--violet-tint); }
+
+  .eyebrow { font-family: var(--font-cond); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .hero { background: var(--accent-tint); border-top: 4px solid var(--accent); padding: 16px 22px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .hero .eyebrow { color: var(--accent); }
+  .hero-meta { margin: 2px 0 0; display: flex; flex-wrap: wrap; font-family: var(--font-cond); font-weight: 500; font-size: 0.84rem; color: var(--muted); }
+  .hero-meta span { overflow-wrap: anywhere; }
+  .hero-meta span + span::before { content: "·"; margin: 0 10px; color: var(--rule-strong); }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(2rem, 3.4vw, 2.75rem); line-height: 1.08; }
+  h2 { font-size: clamp(1.55rem, 2.4vw, 2rem); line-height: 1.15; }
+  h3 { font-size: clamp(1.2rem, 1.6vw, 1.4rem); line-height: 1.25; display: flex; gap: 10px; align-items: center; }
+  h3 .no { font-family: var(--font-mono); font-size: 0.82rem; font-weight: 500; color: var(--part); }
+  h4 { margin: 4px 0 0; font-family: var(--font-cond); font-weight: 600; font-size: 0.84rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  h4::before { content: ""; flex: none; width: 16px; height: 3px; border-radius: 1px; background: var(--part); }
+  .dek { font-family: var(--font-display); font-size: 1.16rem; line-height: 1.45; color: var(--dek); max-width: 100ch; }
+  .lead-in { color: var(--lead-ink); font-family: var(--font-display); font-style: italic; font-size: 1.08rem; line-height: 1.45; }
+  .meta { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .note { font-size: 0.82rem; color: var(--muted); }
+  ul.plain { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 5px; max-width: 90ch; }
+  ul.plain li::marker { color: var(--muted); }
+
+  .brief { background: var(--surface); border-left: 3px solid var(--accent); border-radius: 2px; padding: 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .brief .rec strong { color: var(--accent); }
+  .brief .k { font-family: var(--font-cond); font-weight: 600; font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  .brief .rec { font-size: 0.94rem; padding-top: 7px; border-top: 1px solid var(--rule-strong); }
+
+  details.glossary { background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: 7px 14px; }
+  details.glossary summary { cursor: pointer; font-family: var(--font-cond); font-weight: 600; font-size: 0.9rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  details.glossary dl { margin: 8px 0 0; display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 6px 18px; font-size: 0.92rem; }
+  details.glossary dt { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
+  details.glossary dd { margin: 0; color: var(--muted); }
+
+  .toc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+  .toc > div { padding: 10px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0; border-left: 1px solid var(--rule); border-top: 3px solid var(--part); }
+  .toc > div:first-child { border-left: 0; padding-left: 0; }
+  .toc > div:nth-child(2) { --part: var(--check); --part-tint: var(--check-tint); }
+  .toc > div:nth-child(3) { --part: var(--amber); --part-tint: var(--amber-tint); }
+  .toc > div:nth-child(4) { --part: var(--violet); --part-tint: var(--violet-tint); }
+  .toc .part { font-family: var(--font-cond); font-weight: 600; font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--part); }
+  .toc .ttl { font-family: var(--font-display); font-weight: 600; font-size: 1.24rem; line-height: 1.2; color: var(--ink); text-decoration: none; }
+  .toc .ttl:hover { color: var(--part); }
+  .toc .gist { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+  .toc ol { list-style: none; margin: 3px 0 0; padding: 6px 0 0; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 1px; font-size: 0.86rem; }
+  .toc li { display: flex; gap: 8px; min-width: 0; }
+  .toc li span { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); min-width: 2em; padding-top: 1px; }
+
+  .banner { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; row-gap: 2px; border-top: 4px solid var(--part); padding-top: 12px; }
+  .banner::before { content: attr(data-pn); grid-column: 1; grid-row: 1 / span 3; align-self: center; font-family: var(--font-display); font-weight: 600; font-size: clamp(2.6rem, 4.2vw, 3.6rem); line-height: 0.9; letter-spacing: -0.03em; color: var(--part); }
+  .banner > * { grid-column: 2; min-width: 0; }
+  .banner .tag { font-family: var(--font-cond); font-weight: 600; font-size: 0.82rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--part); }
+
+  .summary { margin: 0; background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; display: grid; grid-template-columns: minmax(130px, 160px) minmax(0, 1fr); }
+  .summary dt, .summary dd { margin: 0; padding: 7px 14px; border-bottom: 1px solid var(--rule); }
+  .summary dt { font-family: var(--font-cond); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--part); background: var(--part-tint); padding-top: 8px; }
+  .summary dd { font-size: 0.94rem; }
+  .summary dt:last-of-type, .summary dd:last-of-type { border-bottom: 0; }
+  .summary dd.bottom { font-family: var(--font-display); font-size: 1.08rem; font-weight: 600; color: var(--part); }
+
+  /* ---------- Diagram skin ---------- */
+  figure { margin: 0; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .diagram { overflow-x: auto; background: var(--paper); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 8px 0; }
+  svg.dg { display: block; width: 100%; height: auto; margin-inline: 0; }
+  figcaption { font-size: 0.8rem; color: var(--muted); line-height: 1.45; max-width: 110ch; }
+  .hint { display: none; font-style: italic; }
+  .bgp, .mk { fill: var(--paper); }
+  .nb { fill: var(--paper); stroke: var(--rule-strong); stroke-width: 1; }
+  .nb-check { fill: var(--check-tint); stroke: var(--check); stroke-width: 1; }
+  .nb-focal { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.2; }
+  .nb-amber { fill: var(--amber-tint); stroke: var(--amber); stroke-width: 1; }
+  .nb-dash { fill: var(--paper); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 5 4; }
+  .tg { fill: none; stroke: var(--rule-strong); stroke-width: 0.8; stroke-dasharray: 3 3; }
+  .tg-t { fill: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.08em; }
+  .n-name { fill: var(--ink); font-family: var(--font-body); font-size: 13px; font-weight: 600; }
+  .n-sub { fill: var(--muted); font-family: var(--font-mono); font-size: 10.5px; }
+  .n-body { fill: var(--ink); font-family: var(--font-body); font-size: 12.5px; }
+  .lane-t { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; }
+  .a-lab { fill: var(--soft); font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; letter-spacing: 0.06em; }
+  .a-lab-acc { fill: var(--accent); font-family: var(--font-mono); font-size: 9.5px; font-weight: 500; letter-spacing: 0.06em; }
+  .t-acc { fill: var(--accent); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+  .ar { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+  .ar-acc { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+  .ar-dash { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .rule-line { stroke: var(--rule); stroke-width: 1; }
+  .hd { fill: var(--muted); } .hd-acc { fill: var(--accent); }
+  .base-l { stroke: var(--rule-strong); stroke-width: 1; }
+  .bar-mut { fill: var(--muted); fill-opacity: 0.38; }
+  .bar-vio { fill: var(--violet); }
+  .val { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .stats.six { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; background: color-mix(in srgb, var(--part-tint) 65%, white); border-left: 3px solid var(--part); padding: 8px 12px; border-radius: 2px; }
+  .num { font-family: var(--font-display); font-size: 1.7rem; font-weight: 600; color: var(--part); font-variant-numeric: lining-nums tabular-nums; line-height: 1.1; overflow-wrap: anywhere; }
+  .lbl { font-size: 0.8rem; color: var(--muted); line-height: 1.35; }
+  .stat .str { align-self: flex-start; margin-top: 2px; }
+
+  /* Tabs */
+  .tabs { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .tablist { display: flex; flex-wrap: wrap; gap: 2px 6px; border-bottom: 1px solid var(--rule); }
+  .tablist button { min-height: 38px; padding: 6px 10px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: 600 0.95rem/1.2 var(--font-cond); cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .tablist button span { font-family: var(--font-mono); font-size: 0.76rem; }
+  .tablist button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--part); }
+  .tablist button:hover { color: var(--ink); }
+  .tablist button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .tabpanel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .tabpanel:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* Evidence labels */
+  .str { font-family: var(--font-mono); font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; margin-right: 6px; line-height: 1.5; }
+  .str-strong { background: var(--check-tint); color: var(--check); }
+  .str-outcome { background: var(--accent-tint); color: var(--accent); }
+  .str-qual { background: var(--amber-tint); color: var(--amber); }
+  .str-none { background: var(--warn-tint); color: var(--warn); }
+  .str-na { background: var(--surface); color: var(--muted); }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center; font-size: 0.84rem; color: var(--muted); }
+  .pills .str { margin-right: 2px; }
+  .pills span.d { margin-right: 12px; }
+
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 0.86rem; }
+  th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th { font-family: var(--font-cond); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper); font-weight: 600; background: var(--ink); }
+  tbody th { font-weight: 600; }
+  tbody tr:nth-child(even) > * { background: var(--stripe); }
+  tr:last-child td, tr:last-child th { border-bottom: 0; }
+  td .str { margin-bottom: 2px; }
+  .sub { display: block; font-weight: 400; font-size: 0.82rem; color: var(--muted); }
+  .lvl { font-family: var(--font-mono); font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; margin-bottom: 4px; }
+  .lvl-low { background: var(--check-tint); color: var(--check); }
+  .lvl-med { background: var(--amber-tint); color: var(--amber); }
+  .lvl-high { background: var(--warn-tint); color: var(--warn); }
+  td.n { white-space: nowrap; font-family: var(--font-mono); font-size: 0.8rem; }
+
+  /* Two-column comparisons */
+  .duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .duo > div { border: 1px solid var(--rule); border-radius: 4px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .duo .k { font-family: var(--font-cond); font-weight: 600; font-size: 0.86rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .duo .good { border-top: 3px solid var(--check); background: var(--good-bg); }
+  .duo .bad { border-top: 3px solid var(--warn); background: var(--bad-bg); }
+  .duo .good .k { color: var(--check); }
+  .duo .bad .k { color: var(--warn); }
+  .duo ul.plain { font-size: 0.9rem; list-style: none; padding-left: 0; }
+  .duo ul.plain li { position: relative; padding-left: 1.4em; }
+  .duo ul.plain li::before { position: absolute; left: 0; top: 0; font-weight: 700; }
+  .duo .good li::before { content: "✓"; color: var(--check); }
+  .duo .bad li::before { content: "✗"; color: var(--warn); }
+  .duo .ev { display: block; font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); }
+
+  .message { display: flex; flex-direction: column; gap: 10px; }
+  .lead { font-family: var(--font-display); font-style: italic; font-weight: 500; font-size: clamp(1.3rem, 2vw, 1.6rem); line-height: 1.28; padding-left: 14px; border-left: 4px solid var(--part); max-width: 60ch; margin: 0; }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .tiles.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tiles > div { background: color-mix(in srgb, var(--part-tint) 38%, white); border: 1px solid var(--rule); border-radius: 4px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; border-top: 3px solid var(--part); }
+  .tiles .tk { font-family: var(--font-cond); font-weight: 600; font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--part); }
+  .tiles strong { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; line-height: 1.25; }
+  .tiles p { font-size: 0.88rem; color: var(--muted); }
+  .implication { font-size: 0.94rem; background: var(--part-tint); border-radius: 2px; padding: 8px 12px; }
+  .implication strong { color: var(--part); font-family: var(--font-cond); font-size: 0.84rem; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .cards > div { background: color-mix(in srgb, var(--part-tint) 38%, white); border: 1px solid var(--rule); border-radius: 4px; padding: 9px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; border-top: 2px solid var(--part); }
+  .cards strong { font-family: var(--font-cond); font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+  .cards p { font-size: 0.86rem; color: var(--muted); }
+  .cards .qa { font-size: 0.82rem; color: var(--ink); }
+  .cards .qa b { font-family: var(--font-cond); font-weight: 600; font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--part); margin-right: 4px; }
+
+  /* Ordered to-do list */
+  ol.todo { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; counter-reset: todo; }
+  ol.todo > li { counter-increment: todo; position: relative; background: var(--paper); border: 1px solid var(--rule); border-left: 3px solid var(--part); border-radius: 2px; padding: 9px 12px 9px 46px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  ol.todo > li::before { content: counter(todo, decimal-leading-zero); position: absolute; left: 12px; top: 9px; font-family: var(--font-mono); font-size: 0.86rem; font-weight: 500; color: var(--part); }
+  ol.todo strong { font-family: var(--font-display); font-size: 1.06rem; line-height: 1.3; }
+  ol.todo p { font-size: 0.88rem; color: var(--muted); }
+  ol.todo .meta { font-size: 0.74rem; }
+
+  /* Command block */
+  .cmd { margin: 0; background: var(--ink); color: var(--paper); border-radius: 4px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; }
+  .cmd code { background: none; color: inherit; padding: 0; font-size: inherit; overflow-wrap: normal; white-space: pre; user-select: all; -webkit-user-select: all; }
+  .cmd:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .endnote { border-top: 2px solid var(--ink); padding-top: 10px; }
+  .endnote > p:not(.note) { font-family: var(--font-display); font-size: 1.12rem; line-height: 1.5; }
+  .endnote h2 { display: flex; align-items: center; gap: 10px; }
+  .refs a { font-weight: 500; }
+  .refs-group { display: flex; flex-direction: column; gap: 4px; }
+  .refs { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 5px; font-size: 0.86rem; }
+  .refs li { overflow-wrap: anywhere; }
+  .refs .src { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); }
+  .refs .desc { display: block; color: var(--muted); font-size: 0.82rem; }
+  #references { --part: var(--muted); --part-tint: var(--surface); }
+
+  /* ---------- Icons, side panel, reading progress ---------- */
+  html { scroll-behavior: smooth; }
+  [id] { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
+  .ic { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.14em; }
+  .hic { width: 30px; height: 30px; padding: 6px; border-radius: 7px; background: var(--part-tint); color: var(--part); }
+  .readbar { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; height: 3px; z-index: 50; pointer-events: none; }
+  .readbar span { display: block; height: 100%; width: 0; background: var(--now, var(--accent)); transition: width 120ms linear; }
+  .layout { display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 32px; max-width: 1540px; margin: 0 auto; align-items: start; }
+  .sidenav { position: sticky; top: env(safe-area-inset-top, 0px); max-height: calc(100vh - env(safe-area-inset-top, 0px)); overflow-y: auto; padding: 0 12px 24px 0; border-right: 1px solid var(--rule); font-size: 0.84rem; scrollbar-width: thin; }
+  .sn-top { position: sticky; top: 0; z-index: 1; background: var(--paper); display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
+  .sn-title { font-family: var(--font-display); font-weight: 600; font-size: 1.12rem; line-height: 1.2; color: var(--ink); text-decoration: none; }
+  .sn-now { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; background: var(--surface); border-left: 3px solid var(--now, var(--accent)); border-radius: 2px; min-width: 0; }
+  .sn-now-k { font-family: var(--font-cond); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .sn-cur-part { font-family: var(--font-cond); font-weight: 600; font-size: 0.8rem; color: var(--now, var(--accent)); }
+  .sn-cur-part:empty { display: none; }
+  .sn-current { font-weight: 600; color: var(--ink); line-height: 1.3; }
+  .sn-progress { height: 4px; background: var(--surface); border-radius: 2px; overflow: hidden; }
+  .sn-progress span { display: block; height: 100%; width: 0; background: var(--now, var(--accent)); transition: width 120ms linear; }
+  .sn-list, .sn-list ol { list-style: none; margin: 0; padding: 0; }
+  .sn-list { display: flex; flex-direction: column; gap: 4px; }
+  .sn-list a { text-decoration: none; }
+  .sn-part > a { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; color: var(--ink); font-family: var(--font-cond); font-weight: 600; font-size: 0.93rem; }
+  .sn-part > a b { font-family: var(--font-mono); font-weight: 500; font-size: 0.74rem; color: var(--part); margin-right: 2px; }
+  .sn-ic { width: 24px; height: 24px; padding: 4px; border-radius: 6px; background: var(--part-tint); color: var(--part); }
+  .sn-part ol { margin: 2px 0 4px 17px; padding-left: 9px; border-left: 2px solid var(--part-tint); display: flex; flex-direction: column; gap: 1px; }
+  .sn-part ol a { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 3px; color: var(--muted); line-height: 1.3; }
+  .sn-part ol a .ic { width: 14px; height: 14px; color: var(--part); }
+  .sn-part ol a i { font-style: normal; font-family: var(--font-mono); font-size: 0.72rem; color: var(--part); margin-right: 2px; }
+  .sn-list a:hover { background: var(--surface); color: var(--ink); }
+  .sn-list a.is-active { background: var(--part-tint); color: var(--part); }
+  .sn-part ol a.is-active { font-weight: 600; box-shadow: inset 2px 0 0 var(--part); }
+  .sn-part.is-active > a { color: var(--part); }
+  .sn-p0 { --part: var(--ink); --part-tint: var(--surface); }
+  .sn-p1 { --part: var(--accent); --part-tint: var(--accent-tint); }
+  .sn-p2 { --part: var(--check); --part-tint: var(--check-tint); }
+  .sn-p3 { --part: var(--amber); --part-tint: var(--amber-tint); }
+  .sn-p4 { --part: var(--violet); --part-tint: var(--violet-tint); }
+  .sn-p5 { --part: var(--muted); --part-tint: var(--surface); }
+  .sn-sep { height: 1px; background: var(--rule); margin: 4px 0; }
+
+  /* ---------- Colour accents ---------- */
+  .banner { background: linear-gradient(90deg, var(--part-tint) 0%, rgba(255, 255, 255, 0) 72%); padding: 12px 14px; }
+  .banner .tag, .toc .part, .brief .k { display: inline-flex; align-items: center; gap: 6px; }
+  .banner .tag .ic, .toc .part .ic, .brief .k .ic { width: 16px; height: 16px; }
+  .implication .ic { color: var(--part); margin-right: 6px; }
+  details.glossary summary .ic { color: var(--accent); margin-right: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  }
+
+  /* Side panel stays on the left at every width: narrower below 1280px, icon rail below 760px */
+  @media (max-width: 1279px) {
+    .layout { grid-template-columns: 196px minmax(0, 1fr); gap: 20px; }
+    .sidenav { font-size: 0.8rem; padding-right: 8px; }
+    .sn-part > a { font-size: 0.88rem; }
+  }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 46px minmax(0, 1fr); gap: 10px; }
+    .sidenav { padding-right: 6px; }
+    .sn-title, .sn-now { display: none; }
+    .sn-top { padding: 8px 0 6px; }
+    .sn-list a > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .sn-part > a, .sn-part ol a { justify-content: center; padding: 4px 2px; }
+    .sn-part ol { margin: 2px 0 4px; padding-left: 0; border-left: 0; }
+    .sn-part ol a .ic { width: 16px; height: 16px; }
+  }
+  @media print { .sidenav, .readbar { display: none !important; } .layout { display: block; } .diagram { overflow-x: visible; } svg.dg { min-width: 0 !important; } .tabpanel[hidden] { display: flex !important; } }
+
+  @media (max-width: 1100px) {
+    .toc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .toc > div:nth-child(3) { border-left: 0; padding-left: 0; }
+    .stats.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tiles.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 900px) {
+    .cards, .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .duo, ol.todo { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .stats, .stats.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .summary { grid-template-columns: 1fr; }
+    .summary dt { border-bottom: 0; padding-bottom: 2px; }
+    details.glossary dl { grid-template-columns: 1fr; gap: 2px; }
+    details.glossary dd { margin-bottom: 8px; }
+  }
+  @media (max-width: 640px) {
+    .toc { grid-template-columns: 1fr; }
+    .toc > div { border-left: 0; padding-left: 0; }
+    .hint { display: inline; }
+    .hero { padding: 14px 14px 12px; }
+    .banner { column-gap: 12px; padding: 10px 10px; }
+  }
+  @media (max-width: 480px) {
+    body { padding-block: 32px 64px; }
+    .cards, .tiles, .tiles.four { grid-template-columns: 1fr; }
+    .num { font-size: 1.45rem; }
+  }
+</style>
+
+<svg class="sprite" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></symbol>
+  <symbol id="i-audit" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/><path d="M7.8 10.6l2 2 3.6-3.8"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7.5 15v3M12 10v8M16.5 6v12"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4L17 12H5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/><path d="M4 17h2M18 17h2M12 9v1.5"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v16M7.5 20h9"/><path d="M5 7h14"/><path d="M5 7l-3 6.5a3 3 0 0 0 6 0z"/><path d="M19 7l-3 6.5a3 3 0 0 0 6 0z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="18.5" r="2.5"/><circle cx="18" cy="5.5" r="2.5"/><path d="M8.5 18.5H16a3.25 3.25 0 0 0 0-6.5H8a3.25 3.25 0 0 1 0-6.5h7.5"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5"/><path d="M12 17.3v0.2"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></symbol>
+  <symbol id="i-brief" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12.5h18"/></symbol>
+  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h0.01M3.5 12h0.01M3.5 18h0.01"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13"/><path d="M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></symbol>
+</svg>
+<div class="readbar" aria-hidden="true"><span></span></div>
+<div class="layout">
+<nav class="sidenav" id="sidenav" aria-label="Sections">
+  <div class="sn-top">
+    <a class="sn-title" href="#top">Agent Data Retrieval Brief</a>
+    <div class="sn-now"><span class="sn-now-k">Now reading</span><span class="sn-cur-part"></span><span class="sn-current">Overview</span></div>
+    <div class="sn-progress" aria-hidden="true"><span></span></div>
+  </div>
+  <ol class="sn-list" id="sn-list">
+    <li class="sn-part sn-p0" data-name="Overview"><a href="#top"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-home"/></svg><span>Overview</span></a></li>
+    <li class="sn-part sn-p1" data-name="01 Latest findings"><a href="#fd"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-bulb"/></svg><span><b>01</b> Latest findings</span></a>
+      <ol>
+        <li><a href="#fd-bottom"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg><span><i>1.1</i> The bottom line</span></a></li>
+        <li><a href="#fd-arch"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg><span><i>1.2</i> Architecture</span></a></li>
+        <li><a href="#fd-agents"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span><i>1.3</i> Rent vs compile</span></a></li>
+        <li><a href="#fd-theory"><svg class="ic" aria-hidden="true"><use href="#i-scale"/></svg><span><i>1.4</i> What theory says</span></a></li>
+        <li><a href="#fd-disagree"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span><i>1.5</i> Reconciled disagreements</span></a></li>
+      </ol>
+    </li>
+    <li class="sn-part sn-p2" data-name="02 Results"><a href="#rs"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-chart"/></svg><span><b>02</b> Results</span></a>
+      <ol>
+        <li><a href="#rs-head"><svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg><span><i>2.1</i> Headline numbers</span></a></li>
+        <li><a href="#rs-layers"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg><span><i>2.2</i> Evidence by layer</span></a></li>
+        <li><a href="#rs-price"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg><span><i>2.3</i> Enterprise pricing</span></a></li>
+        <li><a href="#rs-market"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><i>2.4</i> Licences and gaps</span></a></li>
+        <li><a href="#rs-works"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span><i>2.5</i> What works, what fails</span></a></li>
+      </ol>
+    </li>
+    <li class="sn-part sn-p3" data-name="03 To do"><a href="#td"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-flag"/></svg><span><b>03</b> To do</span></a>
+      <ol>
+        <li><a href="#td-next"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span><i>3.1</i> Immediate next steps</span></a></li>
+        <li><a href="#td-road"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span><i>3.2</i> Build roadmap</span></a></li>
+        <li><a href="#td-exp"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg><span><i>3.3</i> Open experiments</span></a></li>
+        <li><a href="#td-defaults"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span><i>3.4</i> Defaults and anti-defaults</span></a></li>
+      </ol>
+    </li>
+    <li class="sn-part sn-p4" data-name="04 Sources"><a href="#sr"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-book"/></svg><span><b>04</b> Sources and reports</span></a>
+      <ol>
+        <li><a href="#sr-reports"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg><span><i>4.1</i> Where to read more</span></a></li>
+        <li><a href="#sr-counts"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg><span><i>4.2</i> Source library</span></a></li>
+        <li><a href="#sr-rebuild"><svg class="ic" aria-hidden="true"><use href="#i-terminal"/></svg><span><i>4.3</i> Rebuild the PDFs</span></a></li>
+      </ol>
+    </li>
+    <li class="sn-sep" aria-hidden="true"></li>
+    <li class="sn-part sn-p1" data-name="Conclusion"><a href="#conclusion"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-check"/></svg><span>Conclusion</span></a></li>
+    <li class="sn-part sn-p5" data-name="References"><a href="#references"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-book"/></svg><span>References</span></a></li>
+  </ol>
+</nav>
+<main>
+  <!-- =================== HEADER =================== -->
+  <header id="top">
+    <div class="hero">
+      <p class="eyebrow">Research brief · November 2026</p>
+      <h1>Agent Data Retrieval Brief</h1>
+      <p class="dek">Latest findings, results and to-dos for an open-source toolkit that compiles unstructured documents and tools into an agent-retrievable data lake, with graph and schema engineering.</p>
+      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Research complete · no code yet</span><span>Status as of November 2026</span></p>
+    </div>
+    <div class="brief">
+      <span class="k"><svg class="ic" aria-hidden="true"><use href="#i-brief"/></svg>Key points</span>
+      <ul class="plain">
+        <li><strong>Compile once, serve every agent exactly.</strong> The toolkit should be an open <em>agent context compiler</em>: three stores (raw evidence, a typed snapshot-pinned database, searchable knowledge units plus tool records) on one spine of stable IDs, source spans, ACLs and validity fields, reached through tiered tools over MCP.</li>
+        <li><strong>Structure moved outcomes more than models did.</strong> A 4 KB semantic document added 17–23 points; typed field definitions mattered more than the model family; parameterized tools scored 0.939 vs 0.666 for raw SQL on 3B–8B models.</li>
+        <li><strong>Mainstream agents rent an index and read.</strong> Independent audits find only 39–77% of their cited claims supported and citation overlap below 0.02 Jaccard across identical runs, so the toolkit should be the exact, citable backend they call, not a rival search loop.</li>
+        <li><strong>Theorems certify the store, not the ranker.</strong> Keeping raw evidence, pinning snapshots and version-keyed calibration rest on published results; fusion weights, chunk sizes and loop budgets must be tuned on each team's golden set. Nine earlier defaults were corrected.</li>
+        <li><strong>Status.</strong> Five reports, a combined summary and two methods catalogs are done; about 2,567 distinct sources are catalogued. No toolkit code exists and all seven roadmap phases are not started.</li>
+      </ul>
+      <p class="rec"><strong>Recommendation:</strong> start with Phase 0 (golden set, flat hybrid baseline, repeated-run harness), then write record spec v0.1, and aim the first public result at the unpublished experiment: one research agent over raw documents vs the compiled lake (<a href="#td">Part 3</a>).</p>
+    </div>
+
+    <div class="stats six" aria-label="Project status">
+      <div class="stat"><span class="num">5 + 1</span><span class="lbl">Detailed reports plus the combined summary</span></div>
+      <div class="stat"><span class="num">~2,567</span><span class="lbl">Distinct sources (2,570 manifest rows)</span></div>
+      <div class="stat"><span class="num">1,667</span><span class="lbl">PDFs kept locally, not in git</span></div>
+      <div class="stat"><span class="num">933</span><span class="lbl">Methods catalogued (471 + 462)</span></div>
+      <div class="stat"><span class="num">14</span><span class="lbl">Open experiments (known unknowns)</span></div>
+      <div class="stat"><span class="num">0 of 7</span><span class="lbl">Roadmap phases started; no code yet</span></div>
+    </div>
+
+    <figure>
+      <div class="diagram">
+        <svg class="dg" viewBox="0 0 960 488" style="min-width:960px;max-width:1100px" role="img" aria-labelledby="ov-title ov-desc">
+          <title id="ov-title">Unified architecture: three stores on one spine</title>
+          <desc id="ov-desc">Sources are registered into Store 1, an immutable raw-evidence store. A compile step, the only place an LLM runs, fills Store 2, a typed snapshot-pinned database, Store 3, searchable knowledge units, and tool records. All three share a spine of stable IDs, source spans, ACLs and validity fields. Regenerable views and indexes feed four agent access tiers over MCP and a CLI. Agent clients such as Codex, Claude Code, Cursor and deep research products call these tools; their mutating calls pass an out-of-process enforcement gate. Lifecycle jobs keep the stores honest.</desc>
+          <defs>
+            <marker id="ov-a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" class="hd"/></marker>
+            <marker id="ov-acc" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" class="hd-acc"/></marker>
+          </defs>
+          <rect width="960" height="488" class="bgp"/>
+          <text x="24" y="24" class="lane-t">SOURCES</text>
+          <text x="204" y="24" class="lane-t">STORE 1</text>
+          <text x="476" y="24" class="lane-t">STORES 2–3 · TOOLS</text>
+          <text x="700" y="24" class="lane-t">SERVE</text>
+
+          <!-- Spine container -->
+          <rect x="188" y="34" width="476" height="272" rx="8" class="tg"/>
+          <text x="426" y="298" text-anchor="middle" class="tg-t">SHARED SPINE · STABLE IDS · SOURCE SPANS · ACLS · VALIDITY + VERSION</text>
+
+          <!-- Arrows: sources to store 1 -->
+          <path d="M156 168 H202" class="ar" marker-end="url(#ov-a)"/>
+          <!-- Compile fan-out -->
+          <path d="M364 168 H432" class="ar-acc"/>
+          <path d="M432 168 V84 H474" class="ar-acc" marker-end="url(#ov-acc)"/>
+          <path d="M432 168 H474" class="ar-acc" marker-end="url(#ov-acc)"/>
+          <path d="M432 168 V252 H474" class="ar-acc" marker-end="url(#ov-acc)"/>
+          <rect x="374" y="150" width="48" height="12" rx="2" class="mk"/><text x="398" y="159" text-anchor="middle" class="a-lab-acc">COMPILE</text>
+          <rect x="371" y="175" width="52" height="12" rx="2" class="mk"/><text x="397" y="184" text-anchor="middle" class="a-lab">LLM ONCE</text>
+          <!-- Collector to views -->
+          <path d="M648 84 H676 M648 168 H676 M648 252 H676 M676 84 V252" class="ar"/>
+          <path d="M676 84 H698" class="ar" marker-end="url(#ov-a)"/>
+          <!-- Views to access, access to clients, clients to gate -->
+          <path d="M818 120 V138" class="ar" marker-end="url(#ov-a)"/>
+          <path d="M818 288 V322" class="ar" marker-end="url(#ov-a)"/>
+          <text x="826" y="309" class="a-lab">ROWS + SPANS</text>
+          <path d="M818 388 V414" class="ar" marker-end="url(#ov-a)"/>
+          <text x="826" y="405" class="a-lab">MUTATING CALLS</text>
+          <!-- Lifecycle to stores -->
+          <path d="M426 332 V308" class="ar-dash" marker-end="url(#ov-a)"/>
+          <text x="434" y="323" class="a-lab">KEEPS STORES HONEST</text>
+
+          <!-- Sources -->
+          <rect x="24" y="108" width="132" height="120" rx="6" class="nb-dash"/>
+          <text x="38" y="134" class="n-name">Sources</text>
+          <text x="38" y="154" class="n-sub">files · email</text>
+          <text x="38" y="170" class="n-sub">SaaS · databases</text>
+          <text x="38" y="186" class="n-sub">MCP / OpenAPI</text>
+          <text x="38" y="202" class="n-sub">web (optional)</text>
+
+          <!-- Store 1 -->
+          <rect x="204" y="108" width="160" height="120" rx="6" class="nb"/>
+          <text x="218" y="134" class="n-name">Raw evidence</text>
+          <text x="218" y="154" class="n-sub">Store 1 · immutable</text>
+          <text x="218" y="170" class="n-sub">sha256 content IDs</text>
+          <text x="218" y="186" class="n-sub">document tree</text>
+          <text x="218" y="202" class="n-sub">page · bbox · span</text>
+
+          <!-- Stores 2, 3, tools -->
+          <rect x="476" y="48" width="172" height="72" rx="6" class="nb-focal"/>
+          <text x="490" y="70" class="n-name">Typed database</text>
+          <text x="490" y="88" class="n-sub">Store 2 · snapshots</text>
+          <text x="490" y="104" class="n-sub">field values + spans</text>
+          <rect x="476" y="132" width="172" height="72" rx="6" class="nb-check"/>
+          <text x="490" y="154" class="n-name">Knowledge units</text>
+          <text x="490" y="172" class="n-sub">Store 3 · searchable</text>
+          <text x="490" y="188" class="n-sub">rules · SOPs · pages</text>
+          <rect x="476" y="216" width="172" height="72" rx="6" class="nb"/>
+          <text x="490" y="238" class="n-name">Tool records</text>
+          <text x="490" y="256" class="n-sub">schemas · side effects</text>
+          <text x="490" y="272" class="n-sub">same ACLs + lineage</text>
+
+          <!-- Views -->
+          <rect x="700" y="48" width="236" height="72" rx="6" class="nb"/>
+          <text x="714" y="70" class="n-name">Views + indexes</text>
+          <text x="714" y="88" class="n-sub">BM25F · dense · regex</text>
+          <text x="714" y="104" class="n-sub">graph · file tree · per snapshot</text>
+
+          <!-- Access tiers -->
+          <rect x="700" y="140" width="236" height="148" rx="6" class="nb-focal"/>
+          <text x="714" y="162" class="n-name">Agent access tiers</text>
+          <text x="714" y="186" class="t-acc">T1</text><text x="740" y="186" class="n-body">Parameterized tools</text>
+          <text x="714" y="208" class="t-acc">T2</text><text x="740" y="208" class="n-body">Guarded read-only SQL</text>
+          <text x="714" y="230" class="t-acc">T3</text><text x="740" y="230" class="n-body">Hybrid search · read · grep</text>
+          <text x="714" y="252" class="t-acc">T4</text><text x="740" y="252" class="n-body">Labelled raw fallback</text>
+          <text x="714" y="276" class="n-sub">MCP · CLI · file tree</text>
+
+          <!-- Clients -->
+          <rect x="700" y="324" width="236" height="64" rx="6" class="nb-dash"/>
+          <text x="714" y="346" class="n-name">Agent clients</text>
+          <text x="714" y="364" class="n-sub">Codex · Claude Code · Cursor</text>
+          <text x="714" y="380" class="n-sub">deep research · custom</text>
+
+          <!-- Gate -->
+          <rect x="700" y="416" width="236" height="56" rx="6" class="nb-amber"/>
+          <text x="714" y="438" class="n-name">Enforcement gate</text>
+          <text x="714" y="458" class="n-sub">allow · deny + rule · escalate</text>
+
+          <!-- Lifecycle -->
+          <rect x="188" y="332" width="476" height="68" rx="6" class="nb"/>
+          <text x="202" y="354" class="n-name">Lifecycle jobs</text>
+          <text x="202" y="372" class="n-sub">content sync · permission sync (fail closed)</text>
+          <text x="202" y="388" class="n-sub">write-time gates · lint · gap mining · shadow re-extraction</text>
+
+          <!-- Legend -->
+          <line x1="24" y1="424" x2="664" y2="424" class="rule-line"/>
+          <text x="24" y="452" class="lane-t">LEGEND</text>
+          <rect x="96" y="442" width="16" height="12" rx="2" class="nb-focal"/><text x="118" y="452" class="n-sub">exact, snapshot-pinned</text>
+          <rect x="284" y="442" width="16" height="12" rx="2" class="nb-check"/><text x="306" y="452" class="n-sub">ranked search</text>
+          <rect x="414" y="442" width="16" height="12" rx="2" class="nb-amber"/><text x="436" y="452" class="n-sub">out of process</text>
+          <rect x="546" y="442" width="16" height="12" rx="2" class="nb-dash"/><text x="568" y="452" class="n-sub">external</text>
+        </svg>
+      </div>
+      <figcaption><span class="hint">Swipe to see the full diagram. </span>The LLM runs once, at compile time. Everything agents read is a regenerable view tied to one snapshot; rules that gate actions are enforced outside the agent. Adapted from the summary's architecture figure.</figcaption>
+    </figure>
+
+    <details class="glossary">
+      <summary><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Key terms</summary>
+      <dl>
+        <dt>Agent context compiler</dt><dd>The proposed toolkit: it turns documents, data and tool catalogs into stores agents query, instead of being a parser, vector database or chat app.</dd>
+        <dt>Spine</dt><dd>The fields every store shares: stable IDs, source spans, access-control lists (ACLs) and validity/version fields.</dd>
+        <dt>Snapshot pinning</dt><dd>Publishing the database as immutable, tagged snapshots (Iceberg or DuckLake) so the same query returns identical rows.</dd>
+        <dt>Knowledge unit</dt><dd>A typed searchable record: concept, topic page, rule card, procedure, article/FAQ or table record, inside one shared envelope.</dd>
+        <dt>Rule card</dt><dd>A unit holding a rule's modality, conditions, thresholds, exceptions and dates, plus optional executable bindings (Cedar, Rego, DMN or ASP).</dd>
+        <dt>Span grounding</dt><dd>Storing each extracted value with the document span it came from, and re-slicing that span in code to check the quote.</dd>
+        <dt>MCP</dt><dd>Model Context Protocol, the tool interface agents use; the 2026-07-28 spec is stateless-first with explicit handles.</dd>
+        <dt>BM25F</dt><dd>Lexical ranking that weights fields (title, breadcrumb, identifiers, body) before term saturation.</dd>
+        <dt>RRF</dt><dd>Reciprocal rank fusion, a common way to merge ranked lists; the theory report finds no optimality result for its k=60 default.</dd>
+        <dt>Conformal risk control</dt><dd>A statistical method to set auto-accept thresholds with a stated error guarantee; valid only for the extractor version it was calibrated on.</dd>
+        <dt>Golden set</dt><dd>A vetted set of questions, documents and expected answers used to tune and gate every change.</dd>
+        <dt>pass^k</dt><dd>The share of tasks an agent passes on all k repeated attempts; a reliability measure.</dd>
+        <dt>Data processing inequality</dt><dd>The theorem that no processing step (chunker, extractor, summarizer) can add information about the source.</dd>
+        <dt>[P] / [S] / [I]</dt><dd>Theory labels: published theorem, the theory report's own sketch, and inferred mapping from a theorem to a toolkit method.</dd>
+      </dl>
+    </details>
+
+    <nav class="toc" aria-label="Contents">
+      <div>
+        <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg>Part 1 · Findings</span>
+        <a class="ttl" href="#fd">Latest findings</a>
+        <span class="gist">Architecture, positioning against research agents, what theory proves</span>
+        <ol>
+          <li><span>1.1</span><a href="#fd-bottom">The bottom line</a></li>
+          <li><span>1.2</span><a href="#fd-arch">Architecture and what goes where</a></li>
+          <li><span>1.3</span><a href="#fd-agents">Rent the index vs compile once</a></li>
+          <li><span>1.4</span><a href="#fd-theory">Proofs, bounds and nine corrections</a></li>
+          <li><span>1.5</span><a href="#fd-disagree">Reconciled disagreements</a></li>
+        </ol>
+      </div>
+      <div>
+        <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Part 2 · Results</span>
+        <a class="ttl" href="#rs">Results</a>
+        <span class="gist">Key numbers by layer, each with its evidence label</span>
+        <ol>
+          <li><span>2.1</span><a href="#rs-head">Headline numbers</a></li>
+          <li><span>2.2</span><a href="#rs-layers">Evidence by layer</a></li>
+          <li><span>2.3</span><a href="#rs-price">Enterprise pricing</a></li>
+          <li><span>2.4</span><a href="#rs-market">Licences, churn and open gaps</a></li>
+          <li><span>2.5</span><a href="#rs-works">What works and what fails</a></li>
+        </ol>
+      </div>
+      <div>
+        <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · To do</span>
+        <a class="ttl" href="#td">To do</a>
+        <span class="gist">Next steps, seven gated phases, 14 experiments</span>
+        <ol>
+          <li><span>3.1</span><a href="#td-next">Immediate next steps</a></li>
+          <li><span>3.2</span><a href="#td-road">Build roadmap and exit criteria</a></li>
+          <li><span>3.3</span><a href="#td-exp">Open experiments</a></li>
+          <li><span>3.4</span><a href="#td-defaults">Defaults and defaults to avoid</a></li>
+        </ol>
+      </div>
+      <div>
+        <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Part 4 · Sources</span>
+        <a class="ttl" href="#sr">Sources and reports</a>
+        <span class="gist">Report map, source counts, PDF rebuild</span>
+        <ol>
+          <li><span>4.1</span><a href="#sr-reports">Where to read more</a></li>
+          <li><span>4.2</span><a href="#sr-counts">Source library by folder</a></li>
+          <li><span>4.3</span><a href="#sr-rebuild">Rebuild the PDF library</a></li>
+        </ol>
+      </div>
+    </nav>
+  </header>
+
+  <!-- =================== PART 1: FINDINGS =================== -->
+  <div class="banner" id="fd" data-pn="01">
+    <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg>Part 1 · Findings</span>
+    <h2>Latest findings</h2>
+    <div class="meta"><span>5 reports reconciled</span><span>Combined summary, Nov 2026</span><span>Most 2026 sources are unreviewed preprints</span></div>
+  </div>
+
+  <section id="fd-bottom" aria-labelledby="h-fd1">
+    <h3 id="h-fd1"><svg class="ic hic" aria-hidden="true"><use href="#i-file"/></svg><span class="no">1.1</span>The bottom line</h3>
+    <dl class="summary">
+      <dt>What to build</dt><dd>An open, Apache-2.0 agent context compiler: not a parser, vector database, graph database or chat app.</dd>
+      <dt>Shape</dt><dd>Three stores on one spine: immutable raw evidence; a typed, snapshot-pinned database filled once by an LLM at ingestion; and searchable typed knowledge units with tool records beside them.</dd>
+      <dt>Access</dt><dd>Tiered: parameterized tools and a semantic layer first, guarded read-only SQL/Cypher second, hybrid lexical-plus-dense search third, labelled raw-text fallback last. Gating rules run outside the agent.</dd>
+      <dt>Why</dt><dd>Models cannot supply determinism (accuracy varies up to 15% across "deterministic" runs); materialized extraction beat chunk RAG 50.9 vs 6.0 recall on intersections; stale or conflicting content, not weak retrieval, causes most policy failures.</dd>
+      <dt>Positioning</dt><dd>The exact, citable, permission-aware backend that Codex, Claude Code, Cursor and deep research products call, not a competitor to their search loop.</dd>
+      <dt>Open ground</dt><dd>Engine-neutral record format · versioned grounded extraction · cost-bounded incremental graphs · tools stored as data · end-to-end ACL sync · neutral evaluation harness.</dd>
+      <dt>Bottom line</dt><dd class="bottom">The durable asset is the versioned contract, not the model: extractors, embedders and vendors will be swapped within about two years.</dd>
+    </dl>
+  </section>
+
+  <section id="fd-arch" aria-labelledby="h-fd2">
+    <h3 id="h-fd2"><svg class="ic hic" aria-hidden="true"><use href="#i-layers"/></svg><span class="no">1.2</span>Architecture and what goes where</h3>
+    <p class="lead-in">Each earlier report designed one part. Together they divide the work by question type: exact questions go to the typed database, open questions to knowledge units, provenance to raw evidence.</p>
+    <div class="tiles four">
+      <div><span class="tk">Store 1</span><strong>Raw evidence</strong><p>Immutable, content-addressed: <code>doc_id = sha256(bytes)</code>, a DoclingDocument-compatible tree with page, bbox, char span, parser revision and confidence. Theory makes it non-negotiable.</p></div>
+      <div><span class="tk">Store 2</span><strong>Typed database</strong><p><code>FieldValue</code> rows with <code>(doc_id, page, char_start, char_end, spec_id)</code>, validation status and extractor fingerprint; entities, aliases, bitemporal statements; published as Iceberg or DuckLake snapshots.</p></div>
+      <div><span class="tk">Store 3</span><strong>Knowledge units</strong><p>One envelope (identity, provenance, applicability, governance, access, hashes) around concepts, topic pages, rule cards, procedures, articles and table records.</p></div>
+      <div><span class="tk">Beside them</span><strong>Tool records</strong><p>JSON schema, expanded description, examples, side effects, auth scope and "writes entity Y" edges under the same ACLs. No surveyed project stores tools next to documents.</p></div>
+    </div>
+
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist" aria-label="Architecture tables">
+        <button type="button" role="tab" id="tab-a1" aria-controls="panel-a1" aria-selected="true"><span>A1</span>What goes where</button>
+        <button type="button" role="tab" id="tab-a2" aria-controls="panel-a2" aria-selected="false"><span>A2</span>Access tiers</button>
+        <button type="button" role="tab" id="tab-a3" aria-controls="panel-a3" aria-selected="false"><span>A3</span>Compile pipeline</button>
+        <button type="button" role="tab" id="tab-a4" aria-controls="panel-a4" aria-selected="false"><span>A4</span>Lifecycle jobs</button>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-a1" aria-labelledby="tab-a1" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Question or knowledge type</th><th>Store</th><th>Access path</th><th>Determinism guarantee</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Count, group-by, "find all", multi-constraint filter, join</th><td>Typed DB</td><td>T1 tool or semantic layer → T2 guarded SQL</td><td>Byte-identical rows for same query, parameters and snapshot</td></tr>
+              <tr><th scope="row">Volatile facts (prices, statuses, balances)</th><td>Typed tables or live API, not indexed text</td><td>T1 tool</td><td>Exact per snapshot; live reads flagged</td></tr>
+              <tr><th scope="row">Multi-hop relational facts</th><td>Typed statement graph (closed predicates, bitemporal)</td><td>Typed graph tools → guarded Cypher; PPR for ranked association</td><td>Exact for typed predicates and <code>as_of</code>; PPR is ranked</td></tr>
+              <tr><th scope="row">Definition, acronym, synonym</th><td>Concept unit (SKOS)</td><td><code>define</code>, alias expansion</td><td>Deterministic lookup</td></tr>
+              <tr><th scope="row">Explanations, "how does X work", topics</th><td>Topic pages, articles</td><td><code>kb_search</code> → <code>kb_read</code></td><td>Retrieval reproducible per snapshot; generation varies</td></tr>
+              <tr><th scope="row">What a policy says, which clause applies</th><td>Rule cards with citation closure</td><td><code>kb_search</code> with hard <code>as_of</code>/jurisdiction/status filters; <code>check_rules</code></td><td>Filtering exact; interpretation by LLM with per-rule citations</td></tr>
+              <tr><th scope="row">Rule that gates an action, threshold, eligibility</th><td>Executable binding on the rule card</td><td>Out-of-process gate on mutating tools</td><td>Deterministic three-outcome verdict, logged</td></tr>
+              <tr><th scope="row">How to do a task (SOP, runbook)</th><td>Procedure unit</td><td><code>find_procedure</code> → <code>get_procedure(view)</code></td><td>Ranked retrieval; step state exact when a runtime enforces it</td></tr>
+              <tr><th scope="row">Table inside a document</th><td>Table record + typed rows</td><td>Search finds it; SQL filters it</td><td>Exact on rows</td></tr>
+              <tr><th scope="row">Related topics, themes, corpus summaries</th><td>Link graph, facet taxonomy, lazy community summaries</td><td><code>kb_related</code>, <code>browse</code></td><td>Ranked; summaries navigate, they do not answer</td></tr>
+              <tr><th scope="row">Which tool to call</th><td>Tool records</td><td><code>search_tools</code> → <code>load_tool</code></td><td>Ranked; ACL-filtered</td></tr>
+              <tr><th scope="row">"Where did this come from"</th><td>Raw evidence + provenance polynomial</td><td><code>read(span)</code></td><td>Exact re-slice against content hash</td></tr>
+              <tr><th scope="row">Out-of-schema question</th><td>Raw evidence</td><td>T4 labelled fallback</td><td>Approximate; logged for promotion</td></tr>
+              <tr><th scope="row">Open-world, external or recent facts</th><td>Public web</td><td><code>search_backend</code> (cached, indexed or live)</td><td>Untrusted, labelled; spotlighted</td></tr>
+              <tr><th scope="row">Agent-learned lessons</th><td>Proposed units</td><td><code>kb_propose</code></td><td>Not served by default until reviewed</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-a2" aria-labelledby="tab-a2" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Tier</th><th>Tools</th><th>Determinism guarantee</th><th>Evidence</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">T1 Parameterized tools and semantic layer</th><td>Verified queries as tools, metric × dimension × filter, <code>facts_about(entity, as_of)</code></td><td>Same arguments and snapshot give identical rows; declines out-of-scope questions</td><td><span class="str str-strong">Independent</span>Tool pack 0.939 vs 0.666 raw SQL on 3B–8B models (Bogliolo) <span class="str str-qual">Vendor</span>semantic layer "fails by declining" (dbt)</td></tr>
+              <tr><th scope="row">T2 Guarded SQL and graph</th><td>Read-only SQL with schema injection, dry-run and repair; typed graph tools before guarded Cypher</td><td>Generation non-deterministic; accepted query stored and re-executed</td><td><span class="str str-outcome">Benchmarks</span>BIRD 83.40 vs BEAVER 10.8%; CypherBench 61.6%</td></tr>
+              <tr><th scope="row">T3 Hybrid search over units</th><td><code>kb_search</code>, <code>kb_read(range)</code>, <code>kb_grep</code>, <code>kb_related</code>, <code>define</code>, <code>find_procedure</code>, <code>check_rules</code>, <code>search_tools</code></td><td>Retrieval reproducible per snapshot with frozen statistics and a primary-key tiebreak</td><td><span class="str str-qual">Vendor</span>Five consolidated tools beat many connector tools (Glean, Dropbox)</td></tr>
+              <tr><th scope="row">T4 Labelled fallback</th><td>BM25 and exact kNN over raw text; cached web via <code>search_backend</code></td><td>Labelled approximate; logged and promoted into schema if it recurs</td><td><span class="str str-na">Unlabelled</span>Router + fallback 0.298 vs 0.268 routing alone; agentic loop 0.240 at ~7× tokens (DualGraph)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Every call resolves principals from the MCP auth token, applies ACL pre-filters, returns snapshot-pinned handles with a total <code>ORDER BY</code> and primary-key tiebreak, and delivers results inline: file delivery dropped one grep harness from 93.1 to 55.2.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-a3" aria-labelledby="tab-a3" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Stage</th><th>What happens</th><th>Frozen artifact</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">1 Register</th><td>Content-hash bytes; record URI, MIME, connector, ACL (SHA-256, not SHA-1)</td><td><code>doc_id = sha256(bytes)</code></td></tr>
+              <tr><th scope="row">2 Parse</th><td>Per-page router: text-layer fast path, compact VLM for scans, frontier repair only for charts and multi-page tables</td><td>Versioned IR keyed by doc hash + parser version</td></tr>
+              <tr><th scope="row">3 Classify and locate</th><td>Page and document classes; extract only relevant pages (page retrieval added 16.8–24 points in industrial KYC)</td><td>Page labels</td></tr>
+              <tr><th scope="row">4 Schema contract</th><td>Sample → LLM proposes → human edits → freeze; LinkML generates Pydantic/JSON Schema, SHACL, PG-schema, DDL</td><td>Versioned contract plus alias tables</td></tr>
+              <tr><th scope="row">5 Extract</th><td>Cheapest adequate method per field: native structure → rules or code → span encoders → constrained LLM, evidence first</td><td>Raw responses cached by fingerprint</td></tr>
+              <tr><th scope="row">6 Ground and validate</th><td>Re-slice each span; pinned NLI checker; type, arithmetic and reference rules</td><td>Validation results as data</td></tr>
+              <tr><th scope="row">7 Route to review</th><td>Disagreement between structurally different calls + version-keyed conformal threshold; humans see failing fields only</td><td>Versioned overrides</td></tr>
+              <tr><th scope="row">8 Resolve</th><td>Exact keys → probabilistic matching → LLM choice among blocked candidates → KB lookup; fixed-pivot clustering</td><td>Entity IDs, alias map</td></tr>
+              <tr><th scope="row">9 Compile units</th><td>Rule cards with citation closure, procedure IR, concepts, evidence-first pages; judge-and-repair</td><td>Units with <code>status</code></td></tr>
+              <tr><th scope="row">10 Publish</th><td>Branch, regression gates (gold-set negative flips, query-suite exact match), merge, tag; Merkle-root snapshot ID</td><td>Snapshot tag</td></tr>
+              <tr><th scope="row">11 Build views</th><td>Chunks, indexes, file tree, link graph, semantic layer, all from the snapshot</td><td>View version tied to snapshot</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Every stage emits a frozen artifact keyed by its inputs, so rebuilding from cache costs zero model calls.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-a4" aria-labelledby="tab-a4" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Job</th><th>Cadence</th><th>Output</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Content sync</th><td>Webhooks; delta ~30 min; weekly full reconciliation</td><td>New, changed and deleted sources; hash-skipped no-ops</td></tr>
+              <tr><th scope="row">Permission sync</th><td>Separate job, ~hourly plus change feeds; fail closed past a freshness threshold</td><td>Metadata-only ACL patches; ACL-lag metric</td></tr>
+              <tr><th scope="row">Write-time gates</th><td>Every new or changed unit</td><td>SHA-256 + MinHash dedup, version chains, PII and hidden-text scan, validity fields, contradiction check, quarantine of external text</td></tr>
+              <tr><th scope="row">Compile and review</th><td>After ingest</td><td>Units and extractions with confidence and ambiguity flags into review queues</td></tr>
+              <tr><th scope="row">Shadow re-extraction</th><td>On any model, prompt, schema or parser change</td><td>Field-level diff on a branch; merge only below a negative-flip threshold; recalibrate conformal thresholds</td></tr>
+              <tr><th scope="row">Lint</th><td>Nightly</td><td>Expired <code>review_due</code>, orphan concepts, dangling links, duplicates, contradictions, stale golden questions</td></tr>
+              <tr><th scope="row">Gap mining and promotion</th><td>Weekly</td><td>Insufficient-context clusters; recurring fallback questions promoted into schema fields</td></tr>
+              <tr><th scope="row">Index health</th><td>Every build</td><td>ANN recall@k vs exact kNN; vocabulary growth; eval gates</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Enforcement:</strong> retrieval cannot deliver compliance. The gate reads the same rule records the knowledge base serves and returns allow, deny with rule text and missing facts, or "insufficient facts, escalate"; every decision is logged with rule ID and version.</p>
+  </section>
+
+  <section id="fd-agents" aria-labelledby="h-fd3">
+    <h3 id="h-fd3"><svg class="ic hic" aria-hidden="true"><use href="#i-route"/></svg><span class="no">1.3</span>Research agents rent the index; the toolkit compiles once</h3>
+    <p class="lead-in">No mainstream assistant embeds the web locally. Coding agents moved from embedding indexes to grep; web research products fan out keyword queries to a hosted index and spend inference reading.</p>
+    <div class="stats">
+      <div class="stat"><span class="num">39–77%</span><span class="lbl">Cited claims supported by their source, though links are valid more than 94% of the time</span><span class="str str-strong">Independent</span></div>
+      <div class="stat"><span class="num">&lt;0.02</span><span class="lbl">Jaccard overlap of citation sets across identical runs</span><span class="str str-strong">Independent</span></div>
+      <div class="stat"><span class="num">+12.5% / +0.3%</span><span class="lbl">Cursor semantic search: offline accuracy vs online code retention</span><span class="str str-qual">Vendor</span></div>
+      <div class="stat"><span class="num">30–50%</span><span class="lbl">More iterations Microsoft's Researcher needed for equal coverage on enterprise queries</span><span class="str str-qual">Vendor</span></div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Dimension</th><th>Rent the index, then read (web research agents)</th><th>Compile once (this toolkit)</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Where cost is paid</th><td>Query time: 10–160+ searches, $1–7 and minutes per deep task</td><td>Ingestion: parsing, extraction, review; queries near-free</td></tr>
+          <tr><th scope="row">Exactness</th><td>Probabilistic; poor enumeration (0.363 soft F1 on WANDR)</td><td>Exact predicates on snapshots for operator questions</td></tr>
+          <tr><th scope="row">Provenance</th><td>URL plus span; pages rot and syndicate</td><td>Immutable span IDs re-sliceable by code</td></tr>
+          <tr><th scope="row">Permissions</th><td>Public web, domain allow/block lists</td><td>ACL pre-filters on every row</td></tr>
+          <tr><th scope="row">Determinism</th><td>Citation Jaccard &lt;0.02 across runs</td><td>Identical repeat answers via snapshot pinning</td></tr>
+          <tr><th scope="row">Ranking signals</th><td>Links, clicks and spam systems inherited free</td><td>Must be manufactured: references, usage logs, owners, verification, validity</td></tr>
+          <tr><th scope="row">Best question</th><td>Open-world discovery of external or recent facts</td><td>"How many" (typed DB) and "what applies here" (knowledge units)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="duo">
+      <div class="good">
+        <span class="k">How mainstream agents retrieve</span>
+        <ul class="plain">
+          <li>Codex: OpenAI-maintained web index in cached mode; <code>rg</code> for code; BM25 only over tool metadata; <code>AGENTS.md</code> capped at 32 KiB<span class="ev">openai/codex; Codex docs</span></li>
+          <li>Claude Code: glob, grep and read with a read-only Explore subagent; a Voyage RAG prototype was dropped<span class="ev">"internal benchmarks also, but mostly vibes"</span></li>
+          <li>Cursor: stopped computing embeddings; commit-anchored regex index<span class="ev">Cursor blog and forum</span></li>
+          <li>Deep research: plan, fan out short keyword queries, select, fetch, iterate, cite<span class="ev">Gemini Deep Research ~80 queries, ~250k tokens, $1–3</span></li>
+          <li>Token usage alone explains 80% of BrowseComp variance<span class="ev">Anthropic tests (vendor)</span></li>
+        </ul>
+      </div>
+      <div class="bad">
+        <span class="k">Where grep-only and rented indexes fall short</span>
+        <ul class="plain">
+          <li>Concept questions with no seed identifier<span class="ev">Vector-index agent 65.2% vs 46.2% for a grep-delegating planner</span></li>
+          <li>Weaker models<span class="ev">Graph and embedding tools +17–21 points at 1.7–4B, only +4–5 at 32B</span></li>
+          <li>Incremental index repair<span class="ev">Reproduced a full rebuild on only 13 of 24 changes (CodeNib)</span></li>
+          <li>Poisoning<span class="ev">One plausible false document caused 66–88-point accuracy drops (DRNOISE)</span></li>
+          <li>Intranets lack link graphs and click logs<span class="ev">~10% of IBM's intranet formed a strongly connected core</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Positioning:</strong> treat these agents as clients. Serve the five loop primitives (search with snippets, open by ID, find in document, notes, cite by span), a snapshot-tied regex index, a small generated file-tree index, filterable authority and currency, and evidence-returning hand-offs. Route counting to deterministic queries and say so in tool descriptions.</p>
+  </section>
+
+  <section id="fd-theory" aria-labelledby="h-fd4">
+    <h3 id="h-fd4"><svg class="ic hic" aria-hidden="true"><use href="#i-scale"/></svg><span class="no">1.4</span>What the theory proves, bounds and corrects</h3>
+    <p class="lead-in">Rows about what to store and how to gate it rest mostly on published theorems the toolkit can make true by construction. Rows about how to rank and how much to read rest on bounds and empirical laws.</p>
+    <div class="tiles">
+      <div><span class="tk">Theorems</span><strong>Certify the store</strong><p>Keep raw evidence (data processing inequality); external typed store for long-tail facts (monofact and B-bit bounds); normalized schema; frozen extractions and total ordering; provenance polynomials; SHA-256 and MinHash; conformal review; certain answers for conflicts; filter, never down-rank, superseded content.</p></div>
+      <div><span class="tk">Bounds and empirical laws</span><strong>Guide the access layer</strong><p>Keep the lexical channel; BM25F; summaries as navigation only; query-time compression; short loops with verifiers first; small index plus <code>read(range)</code>; structure-led chunking; Zipf and Heaps refitted per corpus.</p></div>
+      <div><span class="tk">Nothing</span><strong>Tune or measure</strong><p>RRF with k=60; 256–512-token chunk size; MMR; one-level progressive disclosure; SECI-style tacit-knowledge capture. Empirical defaults only.</p></div>
+    </div>
+    <h4>The nine corrections</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:900px">
+        <thead><tr><th>#</th><th>Earlier claim or default</th><th>Verdict (our reading)</th><th>Correction</th><th>Recommendation now</th></tr></thead>
+        <tbody>
+          <tr><td class="n">1</td><th scope="row">LIMIT "proved" single-vector embedders cannot represent top-k sets</th><td><span class="str str-qual">Overstated</span></td><td>Bound binds only under a margin or finite precision; otherwise ~2k dimensions suffice</td><td>Keep the lexical channel for empirical reasons (BM25 93.6 on LIMIT); grow dimension and precision with corpus size in quantized stores</td></tr>
+          <tr><td class="n">2</td><th scope="row">Rank context by relevance (PRP)</th><td><span class="str str-qual">Conditional</span></td><td>PRP is optimal only for additive metrics; context assembly is a set problem</td><td>PRP for the first stage; budget-aware greedy coverage for the final context</td></tr>
+          <tr><td class="n">3</td><th scope="row">RRF k=60 as fusion default</th><td><span class="str str-none">No theorem</span></td><td>No optimality result; tuned convex combination is normalization-robust</td><td>Tuned linear fusion once a golden set exists; RRF only when unlabelled; run Lee's overlap test before adding a channel</td></tr>
+          <tr><td class="n">4</td><th scope="row">Cross-call agreement and self-consistency as validation</th><td><span class="str str-none">Can mislead</span></td><td>Correlated votes converge confidently to the wrong value; accuracy can be non-monotone in calls</td><td>Structurally different calls; disagreement as a calibrated routing score; measure per-field error correlation ρ</td></tr>
+          <tr><td class="n">5</td><th scope="row">One split-conformal threshold per field type</th><td><span class="str str-qual">Conditional</span></td><td>Guarantees are marginal and void after any extractor change</td><td>Key calibration to the extractor fingerprint; conformal risk control or FDR-controlled selection</td></tr>
+          <tr><td class="n">6</td><th scope="row">Pairwise matcher decisions as cluster IDs</th><td><span class="str str-qual">Pairwise only</span></td><td>Fellegi–Sunter optimality is pairwise; correlation clustering is NP-hard and pivot-dependent</td><td>Global clustering with a fixed pivot order; cutoffs from labelled pairs</td></tr>
+          <tr><td class="n">7</td><th scope="row">Trust HNSW defaults</th><td><span class="str str-none">No guarantee</span></td><td>Graph indexes have no worst-case recall guarantee</td><td>ANN recall@k vs exact kNN as a build-time SLO; exact kNN below a benchmarked candidate count</td></tr>
+          <tr><td class="n">8</td><th scope="row">Score golden sets by accuracy</th><td><span class="str str-none">Biased</span></td><td>Binary grading makes abstention never optimal</td><td>Abstention penalty t/(1−t); report accuracy, error and abstention separately</td></tr>
+          <tr><td class="n">9</td><th scope="row">Bloom filters as "already seen" dedup</th><td><span class="str str-none">Unsafe</span></td><td>A false positive silently drops a new document (~0.82% at 10 bits/item, k=7)</td><td>Bloom filters only as negative pre-filters; SHA-256 equality decides</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Verdict pills summarise each correction in our words; corrections and recommendations are from the summary. Nearly all theorem-to-method links are the theory report's inferred mappings [I]. Three refinements are also adopted: "temperature 0" is low-variance, not deterministic; a rate-based stopping rule replaces the fixed "two or three rounds"; facets filter only when exclusive and exhaustive.</p>
+  </section>
+
+  <section id="fd-disagree" aria-labelledby="h-fd5">
+    <h3 id="h-fd5"><svg class="ic hic" aria-hidden="true"><use href="#i-sliders"/></svg><span class="no">1.5</span>Where the reports disagreed, and the adopted view</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Topic</th><th>Adopted view</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Default chunking</th><td>Structure-led, heading-first chunking; size is a tuned parameter</td><td>Domain studies closest to policies and SOPs favour it; theory derives no optimum for 256–512</td></tr>
+          <tr><th scope="row">LLM contextual enrichment</th><td>Breadcrumb prefix by default; contextual retrieval only if it beats the prefix</td><td>Free prefix matched LLM enrichment under strong retrievers (Mangla, preregistered)</td></tr>
+          <tr><th scope="row">Query router</th><td>Routing by tool surface plus a cheapest-first cascade; a classifier is a hint, not a gate</td><td>Pre-retrieval routers cannot predict needs that appear after searching; fixed hybrid beat rule-based adaptive routing</td></tr>
+          <tr><th scope="row">Role of graphs</th><td>Canonical typed, bitemporal node and edge tables in the lake; PPR and communities optional</td><td>Compiled graphs were accuracy-neutral under a strong harness</td></tr>
+          <tr><th scope="row">Storage and search backend</th><td>Open table formats (DuckLake on one node, Iceberg at scale) with Lance; search engine is a replaceable view</td><td>Postgres full-text is not true BM25, so BM25F must be checked per engine</td></tr>
+          <tr><th scope="row">Embeddings vs grep</th><td>Lexical and grep first-class; dense as a validated view over the same snapshot</td><td>Embeddings still help concept questions and weaker models</td></tr>
+          <tr><th scope="row">Semantic-layer study label</th><td>Treat arXiv 2604.25149 as vendor-affiliated</td><td>Direction agrees with AtScale and dbt (both vendor-run); effect size uncertain</td></tr>
+          <tr><th scope="row">Extraction drift</th><td>One pipeline measurement (26.5%) exists; no systematic study</td><td>Stays a known unknown</td></tr>
+          <tr><th scope="row">Fusion, LIMIT, voting, rounds, conformal</th><td>The theory report's narrower statements win</td><td>They state the assumptions earlier claims omitted</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- =================== PART 2: RESULTS =================== -->
+  <div class="banner" id="rs" data-pn="02">
+    <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Part 2 · Results</span>
+    <h2>Results: the decisive evidence</h2>
+    <div class="meta"><span>Labels follow the source reports</span><span>Cross-paper comparisons are not head-to-head unless stated</span></div>
+  </div>
+
+  <section id="rs-head" aria-labelledby="h-rs1">
+    <h3 id="h-rs1"><svg class="ic hic" aria-hidden="true"><use href="#i-gauge"/></svg><span class="no">2.1</span>Headline numbers</h3>
+    <div class="pills" aria-label="Evidence label legend">
+      <span class="str str-strong">Independent</span><span class="d">measured by a party that did not build the winner</span>
+      <span class="str str-outcome">Author</span><span class="d">method's own paper, study or benchmark authors</span>
+      <span class="str str-qual">Vendor</span><span class="d">seller or deployer, unaudited</span>
+      <span class="str str-none">Disputed</span><span class="d">disputed, mixed, single study or estimate</span>
+      <span class="str str-na">Unlabelled</span><span class="d">no label given in the summary</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="num">up to 15%</span><span class="lbl">Accuracy variation across runs under "deterministic" settings (Atil et al.)</span><span class="str str-na">Unlabelled</span></div>
+      <div class="stat"><span class="num">50.9 vs 6.0</span><span class="lbl">Recall on intersection queries: extraction-then-SQL vs chunk RAG (QO-Bench)</span><span class="str str-na">Unlabelled</span></div>
+      <div class="stat"><span class="num">0.939 vs 0.666</span><span class="lbl">Parameterized tool pack vs raw SQL on 3B–8B models (Bogliolo)</span><span class="str str-strong">Independent</span></div>
+      <div class="stat"><span class="num">+17–23</span><span class="lbl">Points from a 4 KB semantic document (arXiv 2604.25149)</span><span class="str str-none">Disputed</span></div>
+      <div class="stat"><span class="num">~40%</span><span class="lbl">pass^1 for frontier agents even when handed the right policy documents (Sierra)</span><span class="str str-na">Unlabelled</span></div>
+      <div class="stat"><span class="num">0.227 → 0.500</span><span class="lbl">pass^10 with compiled pre-call guards, vs 0.273 for policy in the prompt (ToolGuard)</span><span class="str str-na">Unlabelled</span></div>
+      <div class="stat"><span class="num">89 → 73</span><span class="lbl">Llama-3.1-70B accuracy after one stale passage (HoH)</span><span class="str str-outcome">Benchmark authors</span></div>
+      <div class="stat"><span class="num">26.5%</span><span class="lbl">Of 2,064 re-extracted values changed across model versions, in one pipeline</span><span class="str str-none">Single pipeline</span></div>
+    </div>
+  </section>
+
+  <section id="rs-layers" aria-labelledby="h-rs2">
+    <h3 id="h-rs2"><svg class="ic hic" aria-hidden="true"><use href="#i-grid"/></svg><span class="no">2.2</span>Evidence by layer</h3>
+    <p class="lead-in">Pick a layer. Each row keeps the source report's label; the named source is in brackets.</p>
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist" aria-label="Evidence layers">
+        <button type="button" role="tab" id="tab-l1" aria-controls="panel-l1" aria-selected="true"><span>L1</span>Parsing</button>
+        <button type="button" role="tab" id="tab-l2" aria-controls="panel-l2" aria-selected="false"><span>L2</span>Extraction</button>
+        <button type="button" role="tab" id="tab-l3" aria-controls="panel-l3" aria-selected="false"><span>L3</span>Typed DB vs RAG</button>
+        <button type="button" role="tab" id="tab-l4" aria-controls="panel-l4" aria-selected="false"><span>L4</span>Graphs</button>
+        <button type="button" role="tab" id="tab-l5" aria-controls="panel-l5" aria-selected="false"><span>L5</span>Indexing</button>
+        <button type="button" role="tab" id="tab-l6" aria-controls="panel-l6" aria-selected="false"><span>L6</span>Retrieval</button>
+        <button type="button" role="tab" id="tab-l7" aria-controls="panel-l7" aria-selected="false"><span>L7</span>Agent loops</button>
+        <button type="button" role="tab" id="tab-l8" aria-controls="panel-l8" aria-selected="false"><span>L8</span>Rules and SOPs</button>
+        <button type="button" role="tab" id="tab-l9" aria-controls="panel-l9" aria-selected="false"><span>L9</span>Quality</button>
+        <button type="button" role="tab" id="tab-l10" aria-controls="panel-l10" aria-selected="false"><span>L10</span>Permissions</button>
+        <button type="button" role="tab" id="tab-l11" aria-controls="panel-l11" aria-selected="false"><span>L11</span>Citation audits</button>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l1" aria-labelledby="tab-l1" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Sub-10B document VLMs lead OmniDocBench v1.6</th><td>PaddleOCR-VL-1.6 96.34, MinerU2.5-Pro 95.75 vs Gemini 3 Pro 92.91, GPT-5.2 86.59, Marker 78.44</td><td><span class="str str-qual">Maintainer conflict</span></td></tr>
+              <tr><th scope="row">Text-layer structure models beat frontier LLMs on tables</th><td>TATR 0.980 vs Gemini 3.1 Pro 0.924 GriTS; frontier ahead only on multi-page tables (+0.354) [PubTables-v2]</td><td><span class="str str-outcome">Benchmark authors</span></td></tr>
+              <tr><th scope="row">Cost spread</th><td>POTATR ~$47 per million pages vs $15,000–36,680 for frontier; olmOCR-2 ~$178 per million on H100</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Enterprise failure modes</th><td>Most parsers below 6% on charts; single-pass VLMs below 10% on visual grounding; faithfulness tops out near 90% [ParseBench]</td><td><span class="str str-qual">LlamaIndex-authored</span></td></tr>
+              <tr><th scope="row">Robustness to skew</th><td>PP-StructureV3 table TEDS falls 79 → 25 while robust VLMs hold [Real5-OmniDocBench]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Images beat lossy Markdown for scans</th><td>Receipts 87.5% from images vs 46.5% via Markdown [Berghaus et al.]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Throughput favours routing</th><td>Marker no-OCR 23.7 pages/s, Docling 2.1, MinerU 0.54 on one B200</td><td><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Generative parsers fail silently</th><td>Nougat loops on 1.5% of pages; SmolDocling 958 parse failures</td><td><span class="str str-none">Mixed</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Result:</strong> parse once, freeze the output, keep bounding boxes and route by page. Markdown cannot be the stored truth.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l2" aria-labelledby="tab-l2" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Hard-domain extraction ceiling</th><td>F1 ≈0.85 on simple corpora, 0.51–0.66 on legal, finance and healthcare [UDA-Bench]; best relation F1 72.33 [Doc2DB-Bench]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Wide schemas collapse</th><td>51% valid JSON across 12,867 fields; 0% on a 369-field 10-K schema; structured-output modes lowered validity to 37%</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Long documents drop records</th><td>Value F1 87.9 short vs 27.9 over 50 pages [ExtractBench, LlamaIndex]</td><td><span class="str str-qual">Vendor-run</span></td></tr>
+              <tr><th scope="row">Grounding gates cut hallucination</th><td>SafePassage up to 85% fewer; DeBERTa checker beats a GPT-4.1 grader at ~1/2,000 cost</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Encoders never emit malformed spans</th><td>GLiNER zero malformed outputs vs up to 27% invalid for small generative models</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Synthesized code is cheapest</th><td>Evaporate-Code+ $39 vs $5,157 per 10,000 documents; least accurate on complex documents in UDA-Bench</td><td><span class="str str-outcome">Author</span><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Absence needs its own value</th><td>94.1% agreement on data points, 77.2% when information was not reported [Jensen et al.]</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Field specification beats model choice</th><td>Typed field definitions shaped quality "far more" than three frontier model families [EviStreams]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Model lifetimes are short</th><td>Median 538 days from publication to retirement</td><td><span class="str str-outcome">Study authors</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Result:</strong> constrained decoding guarantees syntax, not correctness. Order fields evidence, reasoning, value; give every field a null reason; never depend on re-running a model to reproduce the database.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l3" aria-labelledby="tab-l3" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Materialized extraction beats chunk RAG on set questions</th><td>50.9 vs 6.0 recall on intersections [QO-Bench]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Parameterized tools let small models match large ones</th><td>Tool pack 0.939 vs 0.666 raw SQL on 3B–8B models [Bogliolo]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Semantic layers add more than model swaps</th><td>+17–23 points from a 4 KB document; +20 to +31 across seven LLMs [AtScale]; 0% on "too many hops" questions [dbt]</td><td><span class="str str-none">Disputed</span><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Ontologies help most at runtime</th><td>GPT-4 16.7% on raw SQL → 54.2% over an ontology-mapped graph → 72.55% with query check and repair</td><td><span class="str str-na">As labelled in sources</span></td></tr>
+              <tr><th scope="row">Enterprise text-to-SQL is fragile</th><td>BEAVER 10.8%; gold errors in 52.8% of BIRD Mini-Dev and 62.8% of Spider 2.0-Snow</td><td><span class="str str-outcome">Leaderboards / re-annotation</span></td></tr>
+              <tr><th scope="row">Generated graph queries trail SQL</th><td>CypherBench 61.6%, under 20% below 10B; CypherGuard repair to 94.68%</td><td><span class="str str-outcome">Benchmark authors / author</span></td></tr>
+              <tr><th scope="row">Keys from profiling, not the LLM</th><td>Removing statistical key/FK inference costs 2.1–6.8 exact-match points [Schema Contracts]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">IDs from lookups, never recall</th><td>98/100 correct GO IDs via ontology grounding vs 3/100 by prompting [SPIRES]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">LLMs invent poor relations</th><td>Best non-taxonomic relation discovery F1 0.078 [LLMs4OL 2024]</td><td><span class="str str-strong">Independent challenge</span></td></tr>
+              <tr><th scope="row">Raw SQL tools are injectable</th><td>A read-only-wrapped reference Postgres MCP server accepted <code>COMMIT; DROP SCHEMA public CASCADE;</code></td><td><span class="str str-strong">Independent</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Result:</strong> determinism comes from persisting and re-executing accepted queries, never from regenerating them. Statistics decide structure; LLMs decide meaning.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l4" aria-labelledby="tab-l4" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Reranked vector RAG ties graphs on facts; graphs win reasoning</th><td>Fact 60.92 (vector + rerank) vs 60.14 (HippoRAG2); reasoning 53.38 HippoRAG2; summarization 64.40 MS-GraphRAG</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Token cost spans 1× to hundreds of ×</th><td>HippoRAG2 ~1,008 prompt tokens; MS-GraphRAG local 38,707, global 331,375; ~1.15× to ~377× vector RAG</td><td><span class="str str-strong">Independent</span><span class="str str-none">Inconsistency noted</span></td></tr>
+              <tr><th scope="row">Indexing cost is the top complaint</th><td>LightRAG &gt;757M tokens vs 62M naive RAG; LazyGraphRAG indexes at ~0.1% of GraphRAG</td><td><span class="str str-outcome">Preprint</span><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Published wins shrink under fair evaluation</th><td>LightRAG's 66.70% win rate fell to 39.06%</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Open predicates block exact queries</th><td>966 relation types for 981 edges [KGGen]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Closed vocabularies fix it</th><td>EDC 0.956 precision vs 0.724 for CESI; entity resolution removed ~40% of nodes and relations [DEG-RAG]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Compiled structures accuracy-neutral under a strong harness</th><td>Uncompiled BM25/grep 91.0% on FRAMES; wikis, RAPTOR and graphs cut query tokens 38%</td><td><span class="str str-qual">Vendor-run</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Result:</strong> graphs pay only for multi-hop and global questions, as portable typed node and edge tables with bitemporal edges and lazy communities. Engines must be replaceable (Kuzu was archived in October 2025).</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l5" aria-labelledby="tab-l5" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Structure-led chunks dominate legal retrieval</th><td>Character recall@8 48.18% vs 23.59%; chunking explains 73–88% of the gain [StrucChunk]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Hierarchical splitting beats curated Markdown</th><td>94.1% vs 91.3% (curated) and 86.2% (naive); 33-point gap on table questions</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Expensive chunkers rarely pay</th><td>Significance-tested up to 1M documents [Caspari et al.]; semantic chunks fragment to ~43 tokens</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Free prefix ≈ LLM enrichment under strong retrievers</th><td>Title-chain prefix +23.8% MRR@5; enrichment within equivalence margins [Mangla]</td><td><span class="str str-outcome">Study authors (preregistered)</span></td></tr>
+              <tr><th scope="row">Contextual retrieval</th><td>Top-20 failures −35%, −49% with BM25, −67% with rerank, ~$1.02 per M tokens</td><td><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Summary trees navigate, not answer</th><td>RAPTOR 48.8 F1 vs 57.0 plain dense; a zero-LLM heading tree tied the best flat baseline [NavTree]</td><td><span class="str str-strong">Independent</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Boundaries affect maintenance</th><td>After real edits, fixed-size re-embedded 57–68% of a document vs 38–56% recursive</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Visual pages need images or captions</th><td>ColPali 82.7 vs 54.3 BM25-over-OCR; captions + hybrid + rerank 83.9 at ~1/3 storage; ViDoRe v3 best 0.592 nDCG@5</td><td><span class="str str-outcome">Study / benchmark authors</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l6" aria-labelledby="tab-l6" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Dense vectors miss combinatorial top-k sets</th><td>Every embedder below 20 Recall@100 on LIMIT vs BM25 93.6; theorem holds only under margin or finite precision</td><td><span class="str str-outcome">LLM lab</span><span class="str str-none">Theory correction</span></td></tr>
+              <tr><th scope="row">Keyword queries break vectors</th><td>Vector 11.7 vs keyword 79.2 NDCG@3; hybrid + semantic rerank 43.8 → 60.1</td><td><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Linear fusion beats RRF when tuned</th><td>BM25 0.3210 &gt; small dense 0.3077; normalized linear 0.3423 &gt; RRF 0.3233 [Vespa]</td><td><span class="str str-qual">Vendor tutorial</span></td></tr>
+              <tr><th scope="row">Rerankers matter on hard queries but must be validated</th><td>BRIGHT 24.3 → ~46.8 nDCG@10 [DIVER]; an MS MARCO cross-encoder reduced precision on a scientific corpus [SciRet]</td><td><span class="str str-outcome">Author / study authors</span></td></tr>
+              <tr><th scope="row">Query expansion hurts strong retrievers</th><td>"Strong negative correlation" across 11 methods and 24 retrievers</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Thesaurus expansion helps jargon</th><td>Up to +22.1% NDCG@10 over sparse baselines [BMQExpander]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Tool retrieval is its own problem</th><td>All retrievers below 35% Completeness@10 on 43,215 tools [ToolRet]; Tool Search cut ~77K → 8.7K tokens and raised accuracy 49% → 74% [Anthropic]</td><td><span class="str str-strong">Independent</span><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Post-filtered ANN fails on selective filters</th><td>pgvector HNSW post-filtering returned about 4 rows for a 10%-selective filter</td><td><span class="str str-na">Unlabelled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l7" aria-labelledby="tab-l7" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Two rounds capture most loop gains</th><td>Two iterations captured 95% of five's gains in 5,000 questions</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Retriever and first move dominate</th><td>BrowseComp-Plus: GPT-5 55.9% with BM25, 70.1% with Qwen3 embedder; tuned BM25 83.1%; clue decomposition 90.5%</td><td><span class="str str-outcome">Benchmark authors / author</span></td></tr>
+              <tr><th scope="row">Agentic RAG is not free</th><td>~3.3× input tokens, up to 3.6× cost; "neither … universally superior"</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Harness and delivery matter as much as the retriever</th><td>Grep 93.1 vs ANN + rerank 83.6; same model 93.1 vs 76.7 across harnesses; file delivery 93.1 → 55.2</td><td><span class="str str-none">Small single study</span></td></tr>
+              <tr><th scope="row">Compiled markdown wiki matches production RAG</th><td>Guidance 99.2% vs 96.2%; evidence sufficiency 83.3% vs 59.8%; ~90 s vs 8–9 s per case [Airbnb]</td><td><span class="str str-qual">Vendor-run, single study</span></td></tr>
+              <tr><th scope="row">Small always-loaded index beats on-demand skills</th><td>8 KB index 100% vs 79% (invoked skill) and 53% (discretionary) [Vercel]</td><td><span class="str str-qual">Vendor-run</span></td></tr>
+              <tr><th scope="row">Deeper disclosure hurts</th><td>Two-level hierarchy dropped one harness 0.913 → 0.640</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Stale instruction files override truth</th><td>90.1% of choices followed a stale file; context files add &gt;20% cost without success gains</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Memory is a KB written by agents</th><td>BM25 60.5 vs Zep 37.5, MemGPT 34.3, Mem0 32.6 on accurate retrieval</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Hand-offs lose evidence</th><td>41.8% of delegated-search failures at the hand-off; 84.7% of report errors originated at the orchestrator</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Long context is a working set</th><td>A single rival value multiplied loss 9–110×</td><td><span class="str str-outcome">Study authors</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l8" aria-labelledby="tab-l8" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Retrieval cannot deliver compliance</th><td>Frontier agents ~40% pass^1 even when handed the right policy documents [Sierra]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Compiled pre-call guards beat policy-in-prompt</th><td>pass^10 0.227 → 0.500, vs 0.273 for the policy in the prompt [ToolGuard]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Gates inside the agent leak</th><td>Approval gates in agent frameworks leaked side effects in 215 of 1,200 live runs [Khan]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Models rarely abstain when facts are missing</th><td>Frontier models abstained correctly only 22–40% of the time [DeoGen]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Executable rules work where crisp; compile rates mislead</th><td>Policy-as-logic 0.61–1.00 vs ≤0.38 policy-in-prompt; NL-to-Rego 95.3% compile vs 50.3% strictly correct</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Outcome-only scoring hides violations</th><td>80.1% of outcome passes were false passes [CXBench]</td><td><span class="str str-outcome">Benchmark authors</span></td></tr>
+              <tr><th scope="row">Procedures need explicit structure</th><td>Exact-sequence match 0.656 → 0.333 short to long [ProcBench]; gateway/flow extraction under 0.5 F1 [PAGED]; procedure-as-unit +8.58 top-1</td><td><span class="str str-strong">Independent</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Curated skills help, self-written ones hurt</th><td>+16.6 points curated; self-generated 8.1–11.5 below no-skill; 26.1% of community skills vulnerable</td><td><span class="str str-strong">Independent</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l9" aria-labelledby="tab-l9" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Inference is not reproducible</th><td>80 distinct completions in 1,000 temperature-0 runs; KG extraction reruns overlapped at Jaccard 0.21–0.55</td><td><span class="str str-qual">Vendor research</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Query-time operators vary and cost</th><td>SemBench quality 0.59–0.73 with &gt;100× cost spread; persisted judgments let 3 of 8 queries run with zero LLM calls</td><td><span class="str str-strong">Independent</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Raw confidence is a poor gate</th><td>Verbalized calibration error 0.53–0.94; cross-call disagreement 99.1% accuracy at 80% coverage; conformal ≥90% coverage at 9–13% rejection</td><td><span class="str str-strong">Independent</span><span class="str str-none">Single author</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Arithmetic checks catch semantic errors</th><td>Sum gate confirmed 933 of 934 testable sums [TableVision]</td><td><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">One stale passage hurts</th><td>Llama-3.1-70B 89 → 73 [HoH]; outdated evidence flipped 17–91% of correct answers</td><td><span class="str str-outcome">Benchmark authors</span></td></tr>
+              <tr><th scope="row">Validity filters beat recency ranking</th><td>As-of extraction plus version filter 83.5–87.0% vs 24.35% unaided</td><td><span class="str str-outcome">Study authors</span></td></tr>
+              <tr><th scope="row">Content cleanup moves outcomes</th><td>Salesforce agent "I don't know" rate 30% → under 10% after dedup and cleanup</td><td><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Models believe wrong context</th><td>Adopted wrong retrieved content over a correct prior &gt;60% of the time [ClashEval]</td><td><span class="str str-outcome">Benchmark authors</span></td></tr>
+              <tr><th scope="row">Poisoning is a write-path problem</th><td>Five passages → 90–99% attack success; best ingest classifier 4.2% at 1% FPR vs 100% for a query-demand detector</td><td><span class="str str-strong">Independent</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Judges need calibration</th><td>Judge–human κ 0.02 → 0.61 vs human–human 0.69 [Shopify]; PPI on ~150–300 labels [ARES]</td><td><span class="str str-qual">Company</span><span class="str str-outcome">Author</span></td></tr>
+              <tr><th scope="row">Reprocessing is where costs run away</th><td>No checkpointing meant every run reprocessed every document [Xebia]</td><td><span class="str str-strong">Independent practitioner</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l10" aria-labelledby="tab-l10" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Number or statement</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Prompt defenses are probabilistic</th><td>Every retrieved chunk must be authorized for every principal, inside the engine</td><td><span class="str str-outcome">Microsoft Research position</span></td></tr>
+              <tr><th scope="row">ACLs projected per chunk; post-filtering is an anti-pattern</th><td>Azure and Microsoft ISE guidance</td><td><span class="str str-qual">Vendor guidance</span></td></tr>
+              <tr><th scope="row">Permission sync is the hard part</th><td>"Significantly harder than incremental sync of content"; Rovo hides results when sync is stale</td><td><span class="str str-qual">Practitioner / vendor</span></td></tr>
+              <tr><th scope="row">Leakage channels beyond ACLs</th><td>Membership inference in ~30 queries, under $0.02 per document; embedding inversion recovered 92% of 32-token inputs; EchoLeak CVSS 9.3</td><td><span class="str str-outcome">Author</span><span class="str str-strong">Vec2Text reproduced</span></td></tr>
+              <tr><th scope="row">Oversharing blocks deployments</th><td>66% delayed or cancelled Copilot over SharePoint exposure</td><td><span class="str str-qual">Vendor survey</span></td></tr>
+              <tr><th scope="row">Protocols cannot express document governance</th><td>MCP and A2A lack document-level governance</td><td><span class="str str-outcome">Author</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Principals belong as indexed columns on every chunk, vector, node, edge, table row and tool record. Grep over materialized files needs per-principal views, which no report solved.</p>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-l11" aria-labelledby="tab-l11" tabindex="0">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Finding</th><th>Key numbers</th><th>Label</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Cited claims often unsupported</th><td>Links valid &gt;94% of the time; cited claims supported only 39–77% [Cited but Not Verified]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Fact-checking degrades with scale</th><td>Citation fact-check accuracy drops ~42% as tool calls scale from 2 to 150</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Answers unstable across identical runs</th><td>Citation sets overlap below 0.02 Jaccard [Pykälä &amp; Kaski]</td><td><span class="str str-strong">Independent</span></td></tr>
+              <tr><th scope="row">Enumeration is weak</th><td>0.363 soft F1 on WANDR</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Poisoning works</th><td>One plausible false document caused 66–88-point accuracy drops [DRNOISE]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+              <tr><th scope="row">Enterprise corpora are harder than the web</th><td>Microsoft's Researcher needed 30–50% more iterations for equal coverage</td><td><span class="str str-qual">Vendor</span></td></tr>
+              <tr><th scope="row">Spotlighting external text works</th><td>Injection success cut from over 50% to under 2% [Hines et al.]</td><td><span class="str str-na">Unlabelled</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">"Independent" here follows the summary's description of these as independent audits of commercial research agents.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="rs-price" aria-labelledby="h-rs3">
+    <h3 id="h-rs3"><svg class="ic hic" aria-hidden="true"><use href="#i-db"/></svg><span class="no">2.3</span>Enterprise pricing</h3>
+    <p class="lead-in">List prices as published. Consumption pricing makes agentic search itself billable; a self-hosted lake with an MCP interface avoids that metering.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Price point</th><th>Range</th><th>Basis</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">OCR</th><td>$1–2 per 1,000 pages (Mistral, Textract, DI Read, Google)</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+          <tr><th scope="row">Layout parsing</th><td>$0.70 (Databricks simple) to $10 (Google, Azure) per 1,000 pages</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+          <tr><th scope="row">Schema extraction via API</th><td>$2.10–4.20 per 1,000 inputs (Databricks) to $40 (Reducto Deep Extract, BDA) and $70 (Textract Forms+Tables+Queries) per 1,000 pages</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+          <tr><th scope="row">Self-hosted specialists vs frontier parsing</th><td>~$47–178 vs $15,000–36,680 per million pages</td><td><span class="str str-outcome">Author</span></td></tr>
+          <tr><th scope="row">One million pages, end to end</th><td>Parsing $50–200 self-hosted or $1,500–10,000 via APIs; extraction ~$2,000–70,000; human review dominant at ~10–20% of fields</td><td><span class="str str-none">Report estimate, not measured</span></td></tr>
+          <tr><th scope="row">Knowledge assistants</th><td>~$20–50 per user per month plus metered credits (Glean, M365 $30, Gemini $21–30, Onyx $20)</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+          <tr><th scope="row">Per-outcome agents</th><td>Fin $0.99 per outcome; Agentforce Flex $0.10 per action; "resolution" defined differently by each vendor</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+          <tr><th scope="row">Web search for agents</th><td>$0.75–35 per 1,000 calls (Brave, Exa, Tavily $4–16; grounding with Bing $35)</td><td><span class="str str-qual">Vendor list price</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="rs-market" aria-labelledby="h-rs4">
+    <h3 id="h-rs4"><svg class="ic hic" aria-hidden="true"><use href="#i-alert"/></svg><span class="no">2.4</span>Platforms, licences, churn and open gaps</h3>
+    <p class="lead-in">Every major document platform splits conversion from retrieval and gets determinism only from materialized tables and verified queries. No vendor publishes run-to-run variance for its extraction functions.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Component</th><th>Licensing trap or churn</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">MinerU</th><td>Custom licence; commercial licence above 100M MAU or $20M monthly revenue; attribution for hosted services</td></tr>
+          <tr><th scope="row">Marker/Surya weights</th><td>Modified OpenRAIL-M above $5M revenue or funding; competitor clause; remote restriction</td></tr>
+          <tr><th scope="row">PyMuPDF; LayoutLMv3 weights</th><td>AGPL or commercial; non-commercial weights</td></tr>
+          <tr><th scope="row">Graph servers</th><td>Neo4j Community GPLv3 single-instance; Memgraph BSL 1.1; FalkorDB SSPLv1; Kuzu archived</td></tr>
+          <tr><th scope="row">Search engines</th><td>Elasticsearch AGPLv3/SSPL/ELv2; ParadeDB AGPL; Weaviate and Meilisearch enterprise carve-outs</td></tr>
+          <tr><th scope="row">RAG apps</th><td>Dify modified Apache with multi-tenant ban; Open WebUI custom; Onyx permission sync in paid EE</td></tr>
+          <tr><th scope="row">Connectors</th><td>Elastic connectors and Airbyte are ELv2: no permissive end-to-end source-ACL sync exists</td></tr>
+          <tr><th scope="row">Vendor churn</th><td>Glean bought Aryn and shut DocParse in five weeks; Salesforce agreed to buy Fin for ~$3.6B; Dashworks shut three months after HubSpot's purchase; Amazon Q Business closed to new customers</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4>Open gaps the toolkit can own</h4>
+    <div class="cards">
+      <div><strong>Engine-neutral record format</strong><p>Every engine keeps its own state; proprietary intermediate schemas are where lock-in sits.</p></div>
+      <div><strong>Versioned, grounded extraction</strong><p>No surveyed library treats an extraction run as a versioned, diffable entity.</p></div>
+      <div><strong>Cost-bounded incremental graphs</strong><p>Community restructuring drives update cost; LightRAG builds reach 757M tokens.</p></div>
+      <div><strong>Tools as data</strong><p>Tool registries (SCOUT, MCP gateways) sit apart from documents and entities.</p></div>
+      <div><strong>End-to-end ACL sync</strong><p>No permissive open implementation for Confluence, SharePoint, Drive and Slack.</p></div>
+      <div><strong>Neutral evaluation harness</strong><p>Every vendor benchmark ranks its author first.</p></div>
+    </div>
+    <p class="note">Two uncertainties shape the bet: demand for an open agent data format is inferred, not measured; hyperscalers bundling "good enough" pipelines are the main adoption risk, so exporters into their platforms are a survival feature.</p>
+  </section>
+
+  <section id="rs-works" aria-labelledby="h-rs5">
+    <h3 id="h-rs5"><svg class="ic hic" aria-hidden="true"><use href="#i-check"/></svg><span class="no">2.5</span>What works and what fails</h3>
+    <div class="duo">
+      <div class="good">
+        <span class="k">Works</span>
+        <ul class="plain">
+          <li>Extract once, then query exact predicates on snapshots<span class="ev">50.9 vs 6.0 recall on intersections (QO-Bench)</span></li>
+          <li>Parameterized tools and semantic layers before free SQL<span class="ev">0.939 vs 0.666 on 3B–8B models; +17–23 points from a 4 KB semantic document</span></li>
+          <li>Span grounding and deterministic validators<span class="ev">SafePassage up to 85% fewer hallucinations; sum gate 933 of 934</span></li>
+          <li>IDs from lookups, keys from profiling<span class="ev">98/100 vs 3/100 GO IDs (SPIRES)</span></li>
+          <li>Structure-led chunks with a free breadcrumb prefix<span class="ev">48.18% vs 23.59% recall@8 (StrucChunk)</span></li>
+          <li>Hard validity filters instead of recency ranking<span class="ev">83.5–87.0% vs 24.35% unaided</span></li>
+          <li>Compiled pre-call guards outside the agent<span class="ev">pass^10 0.227 → 0.500 (ToolGuard)</span></li>
+          <li>A small, always-loaded generated index<span class="ev">8 KB index 100% vs 79% invoked skill (Vercel, vendor-run)</span></li>
+        </ul>
+      </div>
+      <div class="bad">
+        <span class="k">Fails</span>
+        <ul class="plain">
+          <li>Relying on model determinism<span class="ev">Up to 15% accuracy variation; 80 completions in 1,000 temperature-0 runs</span></li>
+          <li>Wide single-pass schemas<span class="ev">0% valid on a 369-field 10-K schema</span></li>
+          <li>Free text-to-SQL as the main interface<span class="ev">BEAVER 10.8%; raw SQL MCP server accepted DROP SCHEMA</span></li>
+          <li>Vector-only retrieval<span class="ev">Below 20 Recall@100 on LIMIT vs BM25 93.6</span></li>
+          <li>Open-predicate graphs for exact queries<span class="ev">966 relation types for 981 edges (KGGen)</span></li>
+          <li>Policy in the prompt as the only control<span class="ev">~40% pass^1 with the right documents (Sierra)</span></li>
+          <li>Stale or self-written instructions and skills<span class="ev">90.1% stale obedience; self-generated skills 8.1–11.5 points below none</span></li>
+          <li>Results delivered as files, deep skill hierarchies<span class="ev">93.1 → 55.2; 0.913 → 0.640</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><strong>Pattern:</strong> the variables that moved outcomes most were structural, not model choice. The components have evidence; the assembly does not yet.</p>
+  </section>
+
+  <!-- =================== PART 3: TO DO =================== -->
+  <div class="banner" id="td" data-pn="03">
+    <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · To do</span>
+    <h2>To do: from research to a gated build</h2>
+    <div class="meta"><span>All phases not started</span><span>Build what is hard to retrofit first</span><span>Exit criteria are design targets, measurable in CI</span></div>
+  </div>
+
+  <section id="td-next" aria-labelledby="h-td1">
+    <h3 id="h-td1"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">3.1</span>Immediate next steps</h3>
+    <p class="lead-in">Repository housekeeping and first build steps, each drawn from the summary's roadmap and caveats. None has started.</p>
+    <ol class="todo">
+      <li><strong>Check for an existing unified-format effort</strong><p>Confirm whether a Linux Foundation or MCP effort already targets a unified document, graph and tool format. The summary says this check belongs at the start of the build.</p><span class="meta"><span>Before Phase 0</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Assemble the golden set</strong><p>A few hundred questions before any prompt work: factoid, count/filter, procedure lookup, policy applicability with as-of dates, overview, ID lookup and insufficient-evidence. Add golden documents with expected records and spans (≈50 expert-vetted per type).</p><span class="meta"><span>Phase 0</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Set up the evaluation harness</strong><p>Abstention-aware scoring (penalty t/(1−t)), a repeated-run harness, candidate pools from BM25, dense, alias and browse paths, and a judge from a different model family than any reranker; measure judge κ against humans.</p><span class="meta"><span>Phase 0</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Record the flat hybrid baseline</strong><p>Accuracy, error, abstention, tokens and dollars, with paired tests chosen. Every later layer must beat it.</p><span class="meta"><span>Phase 0 exit</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Write record spec v0.1</strong><p>The engine-neutral record format with conformance tests: DoclingDocument superset, SHA-256 source registry, envelope fields and <code>spec_id</code> lineage.</p><span class="meta"><span>Phase 1</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Reconcile the licence</strong><p>The summary recommends an Apache-2.0 toolkit; the repository's <code>LICENSE</code> file is currently MIT. Decide and align before the first code lands.</p><span class="meta"><span>Repo housekeeping</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Pin the permissive default stack and a model-licence manifest</strong><p>Docling (MIT) plus PaddleOCR-VL (Apache-2.0); Lance, DuckDB/DuckLake and Iceberg; MinerU and Marker only as opt-in plugins; record every downloaded weight revision.</p><span class="meta"><span>Phase 1</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Verify BM25F in the chosen search engine</strong><p>Postgres full-text is not true BM25 and ParadeDB adds BM25 under AGPL, so check the field-weighted lexical requirement per engine before committing.</p><span class="meta"><span>Phase 1</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Design the headline experiment</strong><p>One fixed corpus, one research agent, served once as raw documents and once as a compiled lake; repeated runs, nugget scoring, costs reported. Nobody has published it.</p><span class="meta"><span>After Phase 3</span><span class="str str-na">To do</span></span></li>
+    </ol>
+  </section>
+
+  <section id="td-road" aria-labelledby="h-td2">
+    <h3 id="h-td2"><svg class="ic hic" aria-hidden="true"><use href="#i-route"/></svg><span class="no">3.2</span>Build roadmap and exit criteria</h3>
+    <p class="lead-in">Seven gated phases reconcile the three earlier roadmaps: evaluation, then lineage, then permissions, then the two typed stores, then optional layers that must beat the baseline. Phases 3 and 4 can run in parallel.</p>
+    <div class="tbl-wrap">
+      <table style="min-width:980px">
+        <thead><tr><th>Phase</th><th>Scope</th><th>Exit criteria (all must pass)</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">0 Evaluation first</th><td>Golden sets of a few hundred mixed questions; golden documents with expected records and spans; candidate pools from several paths; cross-family judge; abstention-aware scoring; repeated-run harness</td><td>Flat hybrid baseline recorded with accuracy, error, abstention, tokens and dollars; paired tests chosen; judge κ against humans measured</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec v0.1 with conformance tests; DoclingDocument superset; SHA-256 registry; per-page parse router with ≥3 adapters; licence manifest; structure-led chunks with breadcrumb; BM25F + dense + reranker; MCP/CLI <code>search</code>/<code>read(range)</code>/<code>grep</code>; retrieval log</td><td>100% lossless round-trip of a 1,000-document corpus; ≥95% of born-digital elements carry page, bbox and char span; routed parse within 2 points of the best backend at ≤30% of all-VLM GPU time; a 1% edit re-embeds ≤2% of chunks; laptop install to 100 queryable PDFs in &lt;10 minutes; ANN recall@k above threshold</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>ACL principals on every row with fail-closed sync; envelope fields; version chains; hard validity, jurisdiction and status filters; SHA-256 + MinHash dedup; <code>ToolRecord</code> ingestion from MCP and OpenAPI; MCP 2026-07-28 server with snapshot handles and Tasks</td><td>Zero leaks across ≥500 adversarial cross-tenant probes; ACL revocation within one sync cycle; no superseded unit in default top-k; ≥80% tool-context reduction on ≥1,000 tool records with Completeness@10 ≥ BM25 baseline</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">3 Typed deterministic database</th><td>LinkML contracts; <code>ExtractionSpec</code> registry; grounded extraction with null reasons; QA ladder; fixed-pivot entity resolution; semantic layer, parameterized tools, guarded SQL; provenance polynomials</td><td>The four invariants: zero-call rebuild with byte-identical checksums; identical result sets on repeated runs; 100% of answer spans re-slice; merges blocked above a negative-flip threshold. Plus ≥95% of values grounded; every value traces to a <code>spec_id</code>; shadow-diff agreement published</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">4 Knowledge units and enforcement</th><td>SKOS concepts and <code>define</code>; rule cards with citation closure; procedure IR with SKILL.md and Mermaid renderers; executable bindings through review and tests; out-of-process gate with three outcomes</td><td>Rule-ID recall and procedure top-5 beat Phase 1; pass^k and process false-pass rate improve in simulation without collapsing task success; every gate decision logged</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">5 Graph and navigation layers</th><td>Closed-vocabulary bitemporal statement graph; typed graph tools before guarded Cypher; optional PPR; lazy communities under a token budget; markdown tree with ≤8–10 KB index; facet taxonomy</td><td>Each layer kept only if it beats Phases 1–4. GraphRAG-Bench: within 1 point of reranked vector RAG on facts, 2 of the best graph method on reasoning; graph-path tokens ≤1.5× vector RAG; build tokens ≤10% of MS-GraphRAG; a 1% update ≤3% of a full build; typed tools answer ≥90% of held-out graph questions</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">6 Closed loop, interop, governance</th><td>Lint, contradiction audits, gap mining, fallback-to-schema promotion, <code>kb_propose</code>; exposure-normalized usage signals behind an eval gate; spec v1.0; exporters (Iceberg REST, DataHub/OpenMetadata, Neo4j/AGE, Azure AI Search, Bedrock, Unity/Snowflake); public harness; foundation submission</td><td>Gap backlog shrinking; lossless round-trip of lineage, ACL and <code>spec_id</code> through ≥4 backends; published dollars-per-page at 10M pages; ≥2 independent organizations reproduce harness results; ≥10 non-founding committers</td><td><span class="str str-na">Not started</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Exit criteria are design targets drawn from the reports, not sourced findings.</p>
+  </section>
+
+  <section id="td-exp" aria-labelledby="h-td3">
+    <h3 id="h-td3"><svg class="ic hic" aria-hidden="true"><use href="#i-target"/></svg><span class="no">3.3</span>Open experiments (known unknowns)</h3>
+    <p class="lead-in">The components have evidence, but the assembly does not. Several of these can run on the toolkit's own logs.</p>
+    <div class="tbl-wrap">
+      <table style="min-width:960px">
+        <thead><tr><th>Priority</th><th>Unknown</th><th>Why it matters</th><th>Experiment</th><th>Runs in</th></tr></thead>
+        <tbody>
+          <tr><td><span class="lvl lvl-high">P1</span></td><th scope="row">Same agent over raw documents vs the structured lake</th><td>Tests the whole thesis; nobody has run it</td><td>Fixed corpus, one deep research agent, raw-doc MCP vs lake MCP, nugget scoring, repeated runs, cost and stability</td><td>After Phase 3</td></tr>
+          <tr><td><span class="lvl lvl-high">P1</span></td><th scope="row">End-to-end accuracy of an LLM-built database from heterogeneous documents</th><td>No public benchmark measures it</td><td>Golden question suite with exact-result scoring over a lake built from mixed sources</td><td>Phases 0 and 3</td></tr>
+          <tr><td><span class="lvl lvl-high">P1</span></td><th scope="row">Per-field error correlation ρ between extraction calls</th><td>Decides whether disagreement or voting helps</td><td>Two prompts and two providers on the same documents</td><td>Phase 3</td></tr>
+          <tr><td><span class="lvl lvl-med">P2</span></td><th scope="row">Extraction drift across model versions</th><td>One pipeline saw 26.5% change; no systematic study or vendor variance data</td><td>Shadow re-extraction under successive versions with batch-invariant serving; churn by field type</td><td>Phase 3</td></tr>
+          <tr><td><span class="lvl lvl-med">P2</span></td><th scope="row">Grep over materialized files under ACLs</th><td>Per-principal views are unsolved</td><td>Prototype per-principal file trees; leak probes</td><td>Phase 2</td></tr>
+          <tr><td><span class="lvl lvl-med">P2</span></td><th scope="row">Tool-record retrieval and poisoning</th><td>Colliding tools hurt more than noise; descriptions are an attack vector</td><td>ToolRet subsets plus poisoned-description drills</td><td>Phase 2</td></tr>
+          <tr><td><span class="lvl lvl-med">P2</span></td><th scope="row">Layered knowledge base vs flat hybrid baseline</th><td>No independent study shows the layered design winning on enterprise content</td><td>Phase 5 gates as a published ablation</td><td>Phase 5</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Monotonicity of search yield; rate-based vs fixed stopping</th><td>The stopping rule assumes non-increasing yield</td><td>Log per-round new-claim yield; A/B the rate rule against fixed budgets</td><td>Phase 1 retrieval log</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Zipf, Heaps and Bradford parameters of enterprise corpora</th><td>Long-tail cost estimates assume α≈1</td><td>Fit per corpus at ingest</td><td>Phase 1</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Graph incremental cost at scale</th><td>Graphs must stay bounded under updates</td><td>1%-update cost vs full build on a living corpus</td><td>Phase 5</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Contraction η of LLM summarizers</th><td>The case against deep summary trees is an unmeasured bound</td><td>QA-based distortion across summary depths</td><td>Phase 5</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Usage logs as ranking signals for agents</th><td>Click substitutes untested on private corpora; lock-in risk</td><td>Exposure-normalized signals with exploration slots behind an eval gate</td><td>Phase 6</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Demand for an open agent data format</th><td>Inferred, not measured</td><td>Track exporter adoption and spec conformance</td><td>Phase 6</td></tr>
+          <tr><td><span class="lvl lvl-low">P3</span></td><th scope="row">Theory gaps</th><td>No theorem for when RRF beats its best input; no worst-case theory for filtered graph ANN; no conformal guarantee for multi-field arithmetic; no temporal-validity RAG theory, among others</td><td>Publish measurements from the toolkit's logs</td><td>Ongoing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Priority and phase mapping are our proposal from the roadmap order: P1 tests the thesis or gates Phase 0–3 design; P2 feeds a phase exit criterion; P3 refines later layers. Unknowns, reasons and experiments are from the summary.</p>
+  </section>
+
+  <section id="td-defaults" aria-labelledby="h-td4">
+    <h3 id="h-td4"><svg class="ic hic" aria-hidden="true"><use href="#i-shield"/></svg><span class="no">3.4</span>Consolidated defaults and defaults to avoid</h3>
+    <div class="duo">
+      <div class="good">
+        <span class="k">Default</span>
+        <ul class="plain">
+          <li><strong>Truth:</strong> raw bytes and the canonical tree; chunks, records, pages, embeddings and file trees are regenerable views</li>
+          <li><strong>Parsing:</strong> Docling text-layer path for born-digital; PaddleOCR-VL for scans; images for invoices and receipts; frontier models only for multi-page tables and validation failures</li>
+          <li><strong>Extraction:</strong> native structure → synthesized code → encoders → constrained LLM with evidence-first fields; explicit null reasons</li>
+          <li><strong>Validation:</strong> deterministic checks first; span re-slice; disagreement as routing; version-keyed conformal risk control; humans on rejected fields only</li>
+          <li><strong>Identity and versioning:</strong> SHA-256 content IDs; Merkle-root snapshot IDs; full extractor fingerprint on every row; no floating model aliases; write-audit-publish branches</li>
+          <li><strong>Chunking and enrichment:</strong> heading-first, atomic tables/steps/FAQ pairs, size tuned, no overlap; breadcrumb prefix always; LLM context only if it wins</li>
+          <li><strong>Retrieval:</strong> BM25F + dense + domain-validated reranker; tuned linear fusion; hard pre-filters on ACL, status and validity; greedy coverage for final context</li>
+          <li><strong>Access and loop:</strong> small stable tool surface; parameterized tools first; inline paginated results; decompose first; rate-based stopping with a hard cap; abstain with a gap report</li>
+          <li><strong>Governance:</strong> filter superseded content; authority tiers; signed sources; quarantine and spotlight external text; immutable retrieval log</li>
+        </ul>
+      </div>
+      <div class="bad">
+        <span class="k">Avoid</span>
+        <ul class="plain">
+          <li>Markdown as stored truth; semantic, LLM or late chunking by default; chunk overlap<span class="ev">Loses boxes and provenance; independent studies favour structure</span></li>
+          <li>Query-time LLM operators as the system of record; "temperature 0 is deterministic"<span class="ev">Variance and cost on every query (SemBench)</span></li>
+          <li>Free text-to-SQL or text-to-Cypher as the primary interface; raw SQL MCP servers<span class="ev">BEAVER 10.8%; injection risk</span></li>
+          <li>RAPTOR or GraphRAG as the backbone; open-predicate graphs for exact queries<span class="ev">Independent losses; untyped edges</span></li>
+          <li>Propositions as the primary index; vector-only retrieval<span class="ev">LIMIT and keyword-query failures</span></li>
+          <li>RRF k=60 fixed; trusting HNSW defaults; post-filtered ANN on selective filters<span class="ev">Corrections 3 and 7; pgvector ~4 rows</span></li>
+          <li>Same-model self-consistency votes; one conformal threshold across versions; Bloom filters as dedup<span class="ev">Corrections 4, 5 and 9</span></li>
+          <li>Dozens of per-source tools; multi-level skill hierarchies; large always-loaded instruction files; results as files<span class="ev">0.913 → 0.640; 90.1% stale obedience; 93.1 → 55.2</span></li>
+          <li>Policy-in-prompt as the only control; gates inside the agent process<span class="ev">ToolGuard; 215 of 1,200 leaked side effects</span></li>
+          <li>Recency decay instead of validity filters; post-retrieval ACL filtering; nullable facets as filters<span class="ev">Stale-document flips; ACL anti-pattern</span></li>
+          <li>Auto-published model-written skills, rules or pages; fine-tuning facts into weights<span class="ev">SkillsBench; fine-tuned new facts raise hallucination</span></li>
+          <li>Plain-accuracy scoring; BM25-only gold pools; same-family judges<span class="ev">Correction 8; pooling bias and circularity</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== PART 4: SOURCES =================== -->
+  <div class="banner" id="sr" data-pn="04">
+    <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Part 4 · Sources</span>
+    <h2>Sources and reports</h2>
+    <div class="meta"><span>reports/</span><span>papers/manifest.csv</span><span>papers/README.md</span><span>scripts/download_papers.py</span></div>
+  </div>
+
+  <section id="sr-reports" aria-labelledby="h-sr1">
+    <h3 id="h-sr1"><svg class="ic hic" aria-hidden="true"><use href="#i-file"/></svg><span class="no">4.1</span>Where to read more</h3>
+    <p class="lead-in">All files sit in <code>reports/</code>. The summary is the entry point; each detailed report answers one part of the design.</p>
+    <div class="cards">
+      <div><strong>Agent data retrieval research summary.md</strong><p>"Compile Once, Serve Every Agent Exactly": the combined synthesis of all five reports and both catalogs.</p><p class="qa"><b>Answers</b>What to build, the unified architecture, the roadmap, defaults and open experiments.</p></div>
+      <div><strong>Agent ready data lake toolkit.md</strong><p>"Compile Documents, Graphs and Tools Into One Lake": a typed, versioned, permission-carrying intermediate representation on open formats.</p><p class="qa"><b>Answers</b>Bottom line, open gaps, record model, parsing, graphs, licensing. Predates the manifests.</p></div>
+      <div><strong>Deterministic retrieval data conversion.md</strong><p>"Freeze LLM Extractions, Then Query Them Exactly": run the LLM once at ingestion and publish snapshot-pinned tables.</p><p class="qa"><b>Answers</b>Extraction, schema, entity resolution, query interfaces, quality gates, enterprise IDP.</p></div>
+      <div><strong>Searchable agent knowledge base construction.md</strong><p>"Compile Knowledge Into Units Agents Can Search": typed knowledge units behind a small tool surface.</p><p class="qa"><b>Answers</b>Concepts, rule cards, SOPs, chunking, agent loops, file trees, lifecycle, KB platforms.</p></div>
+      <div><strong>How AI research agents retrieve information.md</strong><p>"Research Agents Rent the Index, Then Read": how Codex, Claude Code, Cursor and deep research products retrieve.</p><p class="qa"><b>Answers</b>Positioning, the seven-stage research pipeline, grep vs embeddings, ten design implications.</p></div>
+      <div><strong>Information theory of agent retrieval.md</strong><p>"Proofs Back the Evidence Store, Not the Ranker": maps every method to its formal status.</p><p class="qa"><b>Answers</b>Theory cross-walk, the nine corrections, 24 design changes, open theoretical gaps.</p></div>
+      <div><strong>Deterministic retrieval methods catalog.md</strong><p>471 methods with developer, developer type, first release, flow and one labelled key result.</p><p class="qa"><b>Answers</b>Who builds which layer; methods from LLM labs and big tech.</p></div>
+      <div><strong>Searchable agent knowledge base methods catalog.md</strong><p>462 methods for knowledge units, rules and procedures, in the same format.</p><p class="qa"><b>Answers</b>Method families at a glance; academic vs industry ownership.</p></div>
+    </div>
+  </section>
+
+  <section id="sr-counts" aria-labelledby="h-sr2">
+    <h3 id="h-sr2"><svg class="ic hic" aria-hidden="true"><use href="#i-chart"/></svg><span class="no">4.2</span>Source library by research folder</h3>
+    <div class="stats">
+      <div class="stat"><span class="num">2,570</span><span class="lbl">Rows in <code>papers/manifest.csv</code> across four research folders</span></div>
+      <div class="stat"><span class="num">~2,567</span><span class="lbl">Distinct sources after normalizing arXiv versions, DOIs and URLs</span></div>
+      <div class="stat"><span class="num">1,791 / 779</span><span class="lbl">Paper rows / web and docs rows</span></div>
+      <div class="stat"><span class="num">1,667</span><span class="lbl">PDFs downloaded, kept local only (git-ignored)</span></div>
+    </div>
+    <figure>
+      <div class="diagram">
+        <svg class="dg" viewBox="0 0 960 232" style="min-width:720px;max-width:1100px" role="img" aria-labelledby="sc-title sc-desc">
+          <title id="sc-title">Manifest rows and local PDFs by research folder</title>
+          <desc id="sc-desc">Deterministic retrieval data conversion: 967 rows, 657 PDFs. Searchable agent knowledge base construction: 824 rows, 553 PDFs. Information theory of agent retrieval: 400 rows, 257 PDFs. How AI research agents retrieve information: 379 rows, 200 PDFs.</desc>
+          <rect width="960" height="232" class="bgp"/>
+          <line x1="320" y1="22" x2="320" y2="190" class="base-l"/>
+          <text x="24" y="38" class="n-name">Deterministic conversion</text><text x="24" y="53" class="n-sub">13 note files</text>
+          <rect x="320" y="28" width="326.1" height="22" class="bar-vio"/><rect x="646.1" y="28" width="153.9" height="22" class="bar-mut"/>
+          <text x="808" y="44" class="val">967 · 657 PDFs</text>
+          <text x="24" y="82" class="n-name">Knowledge base</text><text x="24" y="97" class="n-sub">8 note files</text>
+          <rect x="320" y="72" width="274.5" height="22" class="bar-vio"/><rect x="594.5" y="72" width="134.5" height="22" class="bar-mut"/>
+          <text x="737" y="88" class="val">824 · 553 PDFs</text>
+          <text x="24" y="126" class="n-name">Information theory</text><text x="24" y="141" class="n-sub">5 note files</text>
+          <rect x="320" y="116" width="127.6" height="22" class="bar-vio"/><rect x="447.6" y="116" width="71.0" height="22" class="bar-mut"/>
+          <text x="527" y="132" class="val">400 · 257 PDFs</text>
+          <text x="24" y="170" class="n-name">Research agents</text><text x="24" y="185" class="n-sub">5 note files</text>
+          <rect x="320" y="160" width="99.3" height="22" class="bar-vio"/><rect x="419.3" y="160" width="88.8" height="22" class="bar-mut"/>
+          <text x="516" y="176" class="val">379 · 200 PDFs</text>
+          <line x1="24" y1="202" x2="936" y2="202" class="rule-line"/>
+          <text x="24" y="222" class="lane-t">LEGEND</text>
+          <rect x="96" y="212" width="16" height="12" rx="2" class="bar-vio"/><text x="118" y="222" class="n-sub">PDF kept locally</text>
+          <rect x="250" y="212" width="16" height="12" rx="2" class="bar-mut"/><text x="272" y="222" class="n-sub">no local PDF (no open link or fetch error)</text>
+        </svg>
+      </div>
+      <figcaption><span class="hint">Swipe to see the full chart. </span>Bars are to scale by manifest rows. The first report, <em>Agent ready data lake toolkit</em> (5 note files), predates the manifests: its sources are cited inline but not counted here.</figcaption>
+    </figure>
+    <div class="tbl-wrap">
+      <table style="min-width:640px">
+        <thead><tr><th>Research folder</th><th>Manifest rows</th><th>PDFs local</th><th>No PDF link</th><th>Fetch errors</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Deterministic retrieval data conversion</th><td>967</td><td>657</td><td>308</td><td>2</td></tr>
+          <tr><th scope="row">Searchable agent knowledge base construction</th><td>824</td><td>553</td><td>271</td><td>0</td></tr>
+          <tr><th scope="row">Information theory of agent retrieval</th><td>400</td><td>257</td><td>138</td><td>5</td></tr>
+          <tr><th scope="row">How AI research agents retrieve information</th><td>379</td><td>200</td><td>178</td><td>1</td></tr>
+          <tr><th scope="row">Total</th><td>2,570</td><td>1,667</td><td>895</td><td>8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Counts from the <code>status</code> column of <code>papers/manifest.csv</code>; fetch errors are HTTP 403/404/503, non-PDF responses and one URL error.</p>
+  </section>
+
+  <section id="sr-rebuild" aria-labelledby="h-sr3">
+    <h3 id="h-sr3"><svg class="ic hic" aria-hidden="true"><use href="#i-terminal"/></svg><span class="no">4.3</span>Rebuild the PDF library</h3>
+    <p>PDFs are not committed because many publisher and arXiv licences do not allow public redistribution. From the repository root, this rebuilds the local library and the combined catalog (<code>papers/manifest.csv</code> and <code>papers/README.md</code>). The script is resumable and skips valid PDFs already present; add <code>--dry-run</code> to preview.</p>
+    <pre class="cmd" tabindex="0" aria-label="Rebuild command"><code>python3 scripts/download_papers.py \
+  "research_notes/Deterministic retrieval data conversion" \
+  "research_notes/Searchable agent knowledge base construction" \
+  "research_notes/How AI research agents retrieve information" \
+  "research_notes/Information theory of agent retrieval"</code></pre>
+    <p class="note">The script reads every <code>*.sources.jsonl</code> file in each notes folder, de-duplicates by arXiv ID, DOI, then PDF URL, and writes PDFs into <code>papers/&lt;topic&gt;/</code>.</p>
+  </section>
+
+  <section class="endnote" id="conclusion" aria-labelledby="h-concl">
+    <h2 id="h-concl"><svg class="ic hic" aria-hidden="true"><use href="#i-check"/></svg>Conclusion</h2>
+    <p>The research moved the problem from models to contracts. A 4 KB semantic document mattered more than switching frontier models, typed field definitions more than the extractor, validity filters more than better rankers, and the harness as much as the retriever. Guarantees attach to what the toolkit can fix by construction: retained sources, pinned snapshots, fixed hashes and version-keyed calibration. Ranking and reading parameters must be earned on a golden set.</p>
+    <p>The toolkit wins by being the layer everyone else lacks: exact typed answers, re-sliceable citations, permission columns, currency metadata and a neutral way to prove them. Research is complete and no code exists yet. The next move is Phase 0, and the first public result should be the unpublished experiment: one agent, one corpus, raw documents vs a compiled lake. If the lake wins on completeness, faithfulness and stability at comparable cost, the thesis holds; if not, the phase gates say which layer to cut.</p>
+    <p class="note">Based on the combined research summary and the reports in <code>reports/</code>, status as of November 2026. Most 2026 sources are unreviewed arXiv preprints; labels follow the source reports; priorities and verdict pills are our reading.</p>
+  </section>
+
+  <section class="endnote" id="references" aria-labelledby="h-refs">
+    <h2 id="h-refs"><svg class="ic hic" aria-hidden="true"><use href="#i-book"/></svg>References</h2>
+    <div class="refs-group">
+      <h4>Thesis and determinism</h4>
+      <ol class="refs">
+        <li><a href="https://arxiv.org/abs/2408.04667">Non-Determinism of "Deterministic" LLM Settings</a> <span class="src">arXiv 2408.04667 · Atil et al.</span><span class="desc">Accuracy varies by up to 15% across runs under "deterministic" settings.</span></li>
+        <li><a href="https://arxiv.org/abs/2606.04646">QO-Bench</a> <span class="src">arXiv 2606.04646</span><span class="desc">Extraction-then-SQL vs chunk RAG: 50.9 vs 6.0 recall on intersections.</span></li>
+        <li><a href="https://arxiv.org/abs/2603.23533">Mangla</a> <span class="src">arXiv 2603.23533 · preregistered</span><span class="desc">A free breadcrumb prefix matches LLM enrichment under strong retrievers.</span></li>
+        <li><a href="https://arxiv.org/abs/2503.04800">HoH</a> <span class="src">arXiv 2503.04800</span><span class="desc">One stale passage drops Llama-3.1-70B from 89 to 73.</span></li>
+        <li><a href="https://arxiv.org/abs/2608.22063">Bogliolo</a> <span class="src">arXiv 2608.22063 · independent</span><span class="desc">Parameterized tool pack 0.939 vs 0.666 raw SQL on 3B–8B models.</span></li>
+      </ol>
+    </div>
+    <div class="refs-group">
+      <h4>Research agents</h4>
+      <ol class="refs">
+        <li><a href="https://arxiv.org/abs/2605.06635">Cited but Not Verified</a> <span class="src">arXiv 2605.06635</span><span class="desc">Only 39–77% of cited claims supported; fact-check accuracy drops ~42% from 2 to 150 tool calls.</span></li>
+        <li><a href="https://arxiv.org/abs/2610.26421">Pykälä &amp; Kaski</a> <span class="src">arXiv 2610.26421</span><span class="desc">Citation sets across identical runs overlap below 0.02 Jaccard.</span></li>
+        <li><a href="https://cursor.com/blog/semsearch">Cursor semantic search</a> <span class="src">Cursor blog</span><span class="desc">+12.5% offline accuracy, +0.3% online code retention.</span></li>
+        <li><a href="https://www.anthropic.com/engineering/multi-agent-research-system">Multi-agent research system</a> <span class="src">Anthropic engineering</span><span class="desc">Token usage explains 80% of BrowseComp performance variance.</span></li>
+        <li><a href="https://github.com/openai/codex">openai/codex</a> <span class="src">GitHub</span><span class="desc">Harness with <code>rg</code> code search and no embedding index.</span></li>
+      </ol>
+    </div>
+    <div class="refs-group">
+      <h4>Enforcement and access</h4>
+      <ol class="refs">
+        <li><a href="https://sierra.ai/blog/tau-knowledge">τ-Knowledge</a> <span class="src">Sierra</span><span class="desc">Frontier agents ~40% pass^1 even with the right policy documents.</span></li>
+        <li><a href="https://arxiv.org/abs/2507.16459">ToolGuard</a> <span class="src">arXiv 2507.16459</span><span class="desc">Compiled pre-call guards raise pass^10 from 0.227 to 0.500.</span></li>
+        <li><a href="https://arxiv.org/abs/2607.14166">Khan</a> <span class="src">arXiv 2607.14166</span><span class="desc">In-framework approval gates leaked side effects in 215 of 1,200 runs.</span></li>
+        <li><a href="https://blog.modelcontextprotocol.io/posts/2026-07-28/">MCP 2026-07-28</a> <span class="src">MCP blog</span><span class="desc">Stateless-first spec with handles, Multi Round-Trip Requests and Tasks.</span></li>
+        <li><a href="https://www.anthropic.com/engineering/advanced-tool-use">Advanced tool use</a> <span class="src">Anthropic engineering</span><span class="desc">Tool Search: ~77K → 8.7K tokens, accuracy 49% → 74%; ~85% less tool-definition context.</span></li>
+      </ol>
+    </div>
+    <div class="refs-group">
+      <h4>Theory</h4>
+      <ol class="refs">
+        <li><a href="https://people.lids.mit.edu/yp/homepage/data/itbook-export.pdf">Information Theory</a> <span class="src">Polyanskiy &amp; Wu</span><span class="desc">Data processing inequality and sufficiency: why raw evidence must stay.</span></li>
+        <li><a href="https://arxiv.org/abs/2311.14648">Kalai &amp; Vempala</a> <span class="src">arXiv 2311.14648</span><span class="desc">Monofact lower bound on closed-book hallucination.</span></li>
+        <li><a href="https://arxiv.org/abs/2606.11780">Okajima &amp; Yoshida</a> <span class="src">arXiv 2606.11780</span><span class="desc">The LIMIT bound holds only under margin or finite precision.</span></li>
+        <li><a href="https://arxiv.org/abs/2210.11934">Bruch et al.</a> <span class="src">arXiv 2210.11934</span><span class="desc">Tuned convex fusion is normalization-robust; no optimality for RRF.</span></li>
+        <li><a href="https://arxiv.org/abs/2509.04664">Kalai et al.</a> <span class="src">arXiv 2509.04664</span><span class="desc">Binary grading makes abstention never optimal.</span></li>
+      </ol>
+    </div>
+    <div class="refs-group">
+      <h4>Parsing, extraction and graphs</h4>
+      <ol class="refs">
+        <li><a href="https://github.com/opendatalab/OmniDocBench">OmniDocBench</a> <span class="src">GitHub · OpenDataLab</span><span class="desc">Sub-10B document VLMs lead v1.6 (maintainer conflict noted).</span></li>
+        <li><a href="https://arxiv.org/html/2512.10888v4">PubTables-v2</a> <span class="src">arXiv 2512.10888</span><span class="desc">Text-layer structure models beat frontier LLMs on single-page tables.</span></li>
+        <li><a href="https://arxiv.org/abs/2510.27119">UDA-Bench</a> <span class="src">arXiv 2510.27119</span><span class="desc">Extraction F1 0.51–0.66 on legal, finance and healthcare.</span></li>
+        <li><a href="https://arxiv.org/abs/2602.12247">ExtractBench</a> <span class="src">arXiv 2602.12247 · Contextual AI</span><span class="desc">51% valid JSON across 12,867 fields; 0% on a 369-field schema.</span></li>
+        <li><a href="https://arxiv.org/html/2506.05690">GraphRAG-Bench</a> <span class="src">arXiv 2506.05690</span><span class="desc">Reranked vector RAG ties graphs on facts; graphs win reasoning.</span></li>
+        <li><a href="https://arxiv.org/abs/2610.26313">StrucChunk</a> <span class="src">arXiv 2610.26313</span><span class="desc">Structure-led chunks: recall@8 48.18% vs 23.59%.</span></li>
+      </ol>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+  /* Tabs: arrow keys, Home and End move between tabs; without JS every panel stays visible */
+  (() => {
+    document.querySelectorAll('[data-tabs]').forEach((root) => {
+      const tabs = [...root.querySelectorAll('[role="tab"]')];
+      const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')));
+      const select = (index, focus) => {
+        tabs.forEach((tab, j) => {
+          const on = index === j;
+          tab.setAttribute('aria-selected', String(on));
+          tab.tabIndex = on ? 0 : -1;
+          if (panels[j]) panels[j].hidden = !on;
+        });
+        if (focus) tabs[index].focus();
+      };
+      tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => select(i, false));
+        tab.addEventListener('keydown', (event) => {
+          let next = null;
+          if (event.key === 'ArrowRight') next = (i + 1) % tabs.length;
+          if (event.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+          if (event.key === 'Home') next = 0;
+          if (event.key === 'End') next = tabs.length - 1;
+          if (next !== null) { event.preventDefault(); select(next, true); }
+        });
+      });
+      select(Number(root.dataset.default || 0), false);
+    });
+  })();
+</script>
+
+<script>
+  /* Side panel: highlights the section in view and shows reading progress */
+  (() => {
+    const nav = document.getElementById('sidenav');
+    if (!nav) return;
+    const list = nav.querySelector('.sn-list');
+    const links = [...list.querySelectorAll('a[href^="#"]')];
+    const pairs = links.map((a) => [a, document.getElementById(a.getAttribute('href').slice(1))]).filter((p) => p[1]);
+    links.forEach((a) => { a.title = a.textContent.replace(/\s+/g, ' ').trim(); });
+    const curPart = nav.querySelector('.sn-cur-part');
+    const current = nav.querySelector('.sn-current');
+    const fill = nav.querySelector('.sn-progress span');
+    const readbar = document.querySelector('.readbar span');
+    let activeLink = null;
+    let ticking = false;
+
+    const update = () => {
+      ticking = false;
+      const line = Math.min(160, window.innerHeight * 0.3);
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      let pick = pairs[0];
+      for (const p of pairs) {
+        if (p[1].getBoundingClientRect().top - line <= 0) pick = p; else break;
+      }
+      if (max > 0 && window.scrollY >= max - 2) pick = pairs[pairs.length - 1];
+      const pct = max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0;
+      if (fill) fill.style.width = pct + '%';
+      if (readbar) readbar.style.width = pct + '%';
+      if (!pick || pick[0] === activeLink) return;
+      if (activeLink) { activeLink.classList.remove('is-active'); activeLink.removeAttribute('aria-current'); }
+      activeLink = pick[0];
+      activeLink.classList.add('is-active');
+      activeLink.setAttribute('aria-current', 'location');
+      const partLi = activeLink.closest('.sn-part');
+      nav.querySelectorAll('.sn-part').forEach((p) => p.classList.toggle('is-active', p === partLi));
+      const isSub = activeLink.closest('ol') !== list;
+      if (curPart) curPart.textContent = isSub && partLi ? partLi.dataset.name : '';
+      if (current) current.textContent = activeLink.textContent.replace(/\s+/g, ' ').trim();
+      const colour = partLi ? getComputedStyle(partLi).getPropertyValue('--part').trim() : '';
+      if (colour) document.documentElement.style.setProperty('--now', colour);
+      if (nav.scrollHeight > nav.clientHeight + 4) {
+        const n = nav.getBoundingClientRect();
+        const r = activeLink.getBoundingClientRect();
+        if (r.top < n.top + 150 || r.bottom > n.bottom - 24) nav.scrollTop += r.top - n.top - n.height / 2;
+      }
+    };
+
+    window.addEventListener('scroll', () => {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  })();
+</script>
