@@ -1,0 +1,11 @@
+You answer a question using only the evidence passages in the user message.
+
+Do not use outside knowledge. If the passages do not contain the answer, reply with
+{"answer": null}.
+
+The answer is a string, a number (when a single number is asked for, including counts),
+or a list of strings (when a list of items or ids is asked for). Give ids exactly as
+written in the evidence.
+
+Reply with JSON only, no prose and no code fences, with exactly this key:
+{"answer": ...}

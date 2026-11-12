@@ -1,0 +1,71 @@
+{
+  "calls": 11,
+  "concurrency": 4,
+  "corpus": "gov",
+  "fingerprint": "fe978fc9c5ee87b300444934f7eee83288df0ee18af70a1e8a21fd6faf17119a",
+  "finished": "2026-11-12T01:21:38.713441+00:00",
+  "generator": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-sonnet-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_sonnet",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-sonnet-5-5"
+    ]
+  },
+  "golden": "golden/gov/v0.1/items.jsonl",
+  "golden_sha256": "67a06ff6f41f7ab7106079d0cff7b94c20892439dbb36c5e4e67a704c3aea3e8",
+  "judge": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-opus-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_opus",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-opus-5-5"
+    ]
+  },
+  "max_calls": null,
+  "max_dollars": null,
+  "n_items": 242,
+  "n_rows": 242,
+  "price_table_as_of": {
+    "claude-opus-5-5": "2026-11-09",
+    "claude-sonnet-5-5": "2026-11-09"
+  },
+  "prompt_hashes": {
+    "answer": "291ed9cc8d09274d0cfcce9f29ba16f7f61b33eac2eb10c9f0f9f082457d2943",
+    "judge": "fc9ac3a40405d5fbdacdb950026fae35cb79c4fbcfe7737020a95e8508c3d7f2",
+    "query_gen": "249b0449466325d45b4c05813b8fbff7bf108070bb816feaf72cffc88d5997c6"
+  },
+  "repeats": 1,
+  "retrieval": {
+    "channel_k": 100,
+    "fusion": "rrf",
+    "linear_w": null,
+    "rrf_k": 60,
+    "top_n": 10
+  },
+  "run_id": "gov-baseline-rrf-test-20261112T012113",
+  "same_family_judge": true,
+  "seed": 20261108,
+  "served_model_mismatch": false,
+  "snapshot": "2ad8a136abbc0ae6f25f0570d74bc2a185fc3b99795054dfe59dddab5a26b532",
+  "spent_usd": 0.0,
+  "split": "test",
+  "started": "2026-11-12T01:21:13.317710+00:00",
+  "status": "complete",
+  "stub": false,
+  "system": "baseline-rrf",
+  "t_values": [
+    0.5,
+    0.75,
+    0.9
+  ],
+  "w": null
+}

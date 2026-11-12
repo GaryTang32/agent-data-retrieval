@@ -1,0 +1,13 @@
+{
+  "claude-sonnet-5-5": {
+    "input_per_mtok": 3.0,
+    "output_per_mtok": 15.0,
+    "as_of": "2026-11-08",
+    "note": "verify before recording baseline"
+  },
+  "claude_code:*": {
+    "billing": "subscription",
+    "as_of": "2026-11-09",
+    "note": "headless claude -p, billed to the Claude subscription: costs $0 against --max-dollars; the CLI's notional total_cost_usd is recorded per row as notional_cost_usd"
+  }
+}

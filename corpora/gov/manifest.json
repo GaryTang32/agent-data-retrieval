@@ -1,0 +1,1627 @@
+{
+  "corpus": "gov",
+  "documents": [
+    {
+      "bytes": 584620,
+      "doc_id": "bd0ff700f7b7c43ac4714a5e6409524e32fae0f03c2556b89ede3b06c63de095",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-117/2024-06-27.xml",
+      "source_version": "2024-06-27",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2024-06-27/title-33.xml?part=117"
+    },
+    {
+      "bytes": 587408,
+      "doc_id": "b47fd19e2eb4d79e466568fbf31b01135138e1735555745011f149d10bc996f2",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-117/2025-06-27.xml",
+      "source_version": "2025-06-27",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2025-06-27/title-33.xml?part=117"
+    },
+    {
+      "bytes": 552653,
+      "doc_id": "63a7caea6546054b21f6dc593d158830ca3faab7735c5cbbbd74edc037bce5d8",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-117/2026-06-26.xml",
+      "source_version": "2026-06-26",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2026-06-26/title-33.xml?part=117"
+    },
+    {
+      "bytes": 1726284,
+      "doc_id": "83c7d210dbac999053023f975e80762a488c4da0fca5d63459e4f2d129143739",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-165/2024-06-27.xml",
+      "source_version": "2024-06-27",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2024-06-27/title-33.xml?part=165"
+    },
+    {
+      "bytes": 1735740,
+      "doc_id": "d86ab7e8a66d48c1400bf7f02f81d7933993ee22f87137ffec09ec3b3252d7ba",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-165/2025-06-30.xml",
+      "source_version": "2025-06-30",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2025-06-30/title-33.xml?part=165"
+    },
+    {
+      "bytes": 1782331,
+      "doc_id": "c2d16832b92a773c66a3576e4a52a9a65999af6622788421c8343543ff4d4987",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-33/part-165/2026-06-30.xml",
+      "source_version": "2026-06-30",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2026-06-30/title-33.xml?part=165"
+    },
+    {
+      "bytes": 1737956,
+      "doc_id": "79ac330506c90d6568c588595c606860060b43f051e119e11be44674ab3e4cde",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-47/part-73/2024-06-13.xml",
+      "source_version": "2024-06-13",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2024-06-13/title-47.xml?part=73"
+    },
+    {
+      "bytes": 1748329,
+      "doc_id": "3e9903e60f3dc25055922cbbef0e93c9827d97347ca79815e451cfbd93c4b743",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-47/part-73/2025-06-10.xml",
+      "source_version": "2025-06-10",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2025-06-10/title-47.xml?part=73"
+    },
+    {
+      "bytes": 1711452,
+      "doc_id": "b10ee4ca99a1d1908e21f0ee5e66bcfe4ef747699f61574a1f62c7d51d3926ef",
+      "format": "xml",
+      "license": "public-domain",
+      "path": "data/gov/ecfr/title-47/part-73/2026-06-22.xml",
+      "source_version": "2026-06-22",
+      "uri": "https://www.ecfr.gov/api/versioner/v1/full/2026-06-22/title-47.xml?part=73"
+    },
+    {
+      "bytes": 1471,
+      "doc_id": "a14b5be60da89ad87fd5bec9267bf984fa9ad697c79aea2c75b12ea24dea0e4a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-27609.json",
+      "source_version": "2019-27609",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-27609.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1561,
+      "doc_id": "c6d576444e59c44114ef01dbc62cb0df98d5e6709b31e9b7834bb780842e5b56",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-27958.json",
+      "source_version": "2019-27958",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-27958.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1652,
+      "doc_id": "343f21ae10a831f331a25facbb2217e4cf832de4ccd97857f38e4264366e333b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-27961.json",
+      "source_version": "2019-27961",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-27961.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1705,
+      "doc_id": "bd0c965c70c0af43632c638f23d9f108ec959225ae3e4eb1d6fb6113dffb6dbc",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-27980.json",
+      "source_version": "2019-27980",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-27980.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1489,
+      "doc_id": "b0e0d0cae42c41c094ece48b38d8a308780b6c553309da40d316a112c125c8ee",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-28113.json",
+      "source_version": "2019-28113",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-28113.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2062,
+      "doc_id": "8463a647f44b02e2f2c9d55b5f7c1131df1cf477e5870ccfe59c75506f56ca6a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-28115.json",
+      "source_version": "2019-28115",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-28115.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1606,
+      "doc_id": "867c6fae1f35bbb25fe050ba36b242d706e0b46b88298d1cf7b306a4abfdfcdb",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-28190.json",
+      "source_version": "2019-28190",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-28190.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1747,
+      "doc_id": "142ac3def661f62a5a2d830b14c388408aa2ee78e7bd450c87d87dcaa36558d6",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-28191.json",
+      "source_version": "2019-28191",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-28191.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1827,
+      "doc_id": "14791f6ae7858d0a688e49f560fba58a16e6c2afa5f59bc78a449e61f21a05ce",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2019-28388.json",
+      "source_version": "2019-28388",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2019-28388.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1788,
+      "doc_id": "88905b3f3fb67de1dfd63a4898a5705413d89e9cff97ab3a9a56f3ac31b5901a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-00115.json",
+      "source_version": "2020-00115",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-00115.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1645,
+      "doc_id": "a051332ba34f67d5f6c071e4754c30ff30d69f7fd17b58b88750e65167b8d37d",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-00292.json",
+      "source_version": "2020-00292",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-00292.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1663,
+      "doc_id": "f0da634abc9b074b9b93ce8a540071e02a5a667acd9f16f80832066051e7231b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-00339.json",
+      "source_version": "2020-00339",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-00339.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1190,
+      "doc_id": "bac5036fc1566e46dbcf5e3b1769b935ca7571ce19c0915bb2d30944a624eb17",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-00466.json",
+      "source_version": "2020-00466",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-00466.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1451,
+      "doc_id": "e16ef30e44a31d78cb7a3e92f97606450d4d0cff0ee6f5ac7d240dd87b168c38",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-00671.json",
+      "source_version": "2020-00671",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-00671.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1617,
+      "doc_id": "c0c98f388083f9c12fe9a455694ab82f4d3c5c1ab1e6afaf832a9a6088e7d1c1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-01009.json",
+      "source_version": "2020-01009",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-01009.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2010,
+      "doc_id": "3f731791f69af352d87a72f165f210a94e116729e882da9603ce175a307f4dea",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-01654.json",
+      "source_version": "2020-01654",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-01654.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1308,
+      "doc_id": "2d448d8ba17dc5dd9bbe1a6650e01f5a2ab5cfaae0e9456447cc472cccc5be0a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-01767.json",
+      "source_version": "2020-01767",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-01767.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 3907,
+      "doc_id": "7a6a407bc244ad92df7a852f5da2c2f3797d1b2808459a4df5bbb3b55bf5fd53",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-02745.json",
+      "source_version": "2020-02745",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-02745.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1642,
+      "doc_id": "a11151faba08a9bf62419d5b6f6a50b8439d377f2c41bd4070ba31acd65a6ae1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-02773.json",
+      "source_version": "2020-02773",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-02773.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1700,
+      "doc_id": "877fb3f8a2892672767029a4d17c884bf469e1a3486e6bd2bcbe1b9dd9ae7aa4",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-02973.json",
+      "source_version": "2020-02973",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-02973.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1909,
+      "doc_id": "a736513fcf571e5f0c542688ad810c1ee43ac32ee9ded42db8ba1c95d586e3a5",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-04659.json",
+      "source_version": "2020-04659",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-04659.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1657,
+      "doc_id": "763cdc03771273a7f3a7f3cdf84025e0b6ae071c7d0f450f6774fa93566ca11a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-04965.json",
+      "source_version": "2020-04965",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-04965.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1652,
+      "doc_id": "86cb2d0031367c9144e5095ad67b7ae508360cc072c78f4d7759dfcf90ab1ffe",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-05170.json",
+      "source_version": "2020-05170",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-05170.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1632,
+      "doc_id": "4ee1b98e13fd729c590262fd48267a69927cbd7b8e7e6d934fad7145ff98f592",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-06927.json",
+      "source_version": "2020-06927",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-06927.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2079,
+      "doc_id": "189a054959e8f388b2f85e2b2ce15e28716a98c364d57f49a090658f2893e293",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-26070.json",
+      "source_version": "2020-26070",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-26070.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1776,
+      "doc_id": "8ac1850a4851000492a975eda460a1db4d9a946600a3dc23ca54acf05facb9a2",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-27277.json",
+      "source_version": "2020-27277",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-27277.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1740,
+      "doc_id": "f12e36bada1b7e7b41bfce35488877d04a624fa83d326f3cae89f2af9fb4bdf6",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-27981.json",
+      "source_version": "2020-27981",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-27981.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2243,
+      "doc_id": "eaac387ef61d16793911112d19a698111305626a6d3a46737666e1b3e6852fa9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-28025.json",
+      "source_version": "2020-28025",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-28025.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1356,
+      "doc_id": "53a598101b8a891e34c18eab1566e7278cced88337d6996be66d50002c163054",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-28041.json",
+      "source_version": "2020-28041",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-28041.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2097,
+      "doc_id": "ed807e4742ce4875b9bcaf3bc4004ee59d795647271d50e2f752dfe94a9cd95f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-28615.json",
+      "source_version": "2020-28615",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-28615.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1410,
+      "doc_id": "a17a2f249fb58a5b556fe3a48921340c6cdf419edbb9308e86ecd4c5df5f499c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-28710.json",
+      "source_version": "2020-28710",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-28710.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2006,
+      "doc_id": "288c81e204dfb3497ca576e5f3180070ebed320de17e44f24f17edd6d49fb76c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2020-28985.json",
+      "source_version": "2020-28985",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2020-28985.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1333,
+      "doc_id": "050ddc2e80de52eb059314fd1b103f71673952f7218620cddb72d75063255074",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-00081.json",
+      "source_version": "2021-00081",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-00081.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1382,
+      "doc_id": "dad920851b956960f1d52b785f7a2b3107553162abf3b5276a76a3a5d361fd83",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-00084.json",
+      "source_version": "2021-00084",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-00084.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1716,
+      "doc_id": "2375d85a3cb33b4d9ee9dcd35edaabe8161d92d796b5636e08ef3ab51892d227",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01084.json",
+      "source_version": "2021-01084",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01084.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1811,
+      "doc_id": "e1cf3eee2b7bf996c1d1e91a471ffeeac8cd276d58ec5dce8067495807f08cfb",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01103.json",
+      "source_version": "2021-01103",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01103.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1825,
+      "doc_id": "5df83b540ed589e7ee953f6b838cda509e59d09b8625a822c16611e1f313a88c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01104.json",
+      "source_version": "2021-01104",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01104.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1766,
+      "doc_id": "533d38ce281345e365310d92953ecfcbfd07973016daad7d62bbf922e323262d",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01329.json",
+      "source_version": "2021-01329",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01329.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2147,
+      "doc_id": "bfcc1f73d3b386380dc346cb12558a9392e095241326c5126847e7c5cdd0c59d",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01492.json",
+      "source_version": "2021-01492",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01492.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2137,
+      "doc_id": "51369e9bea0b40048f7ad201e050acdcb3a6b3070e24d684d5db5055d11324bb",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-01993.json",
+      "source_version": "2021-01993",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-01993.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1535,
+      "doc_id": "7cb55681b631b16bcd40b70c730ecca84cbc72ec98b86e03cb83076b0563bf74",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-02058.json",
+      "source_version": "2021-02058",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-02058.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1418,
+      "doc_id": "5767cda2d77ef3c717d775432822358f5112adeee7cdcc3cee68fe84d25fd03e",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-02103.json",
+      "source_version": "2021-02103",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-02103.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1477,
+      "doc_id": "5e36e38aa87bfcd0124e134196459ee884d7ba4484a29f1f8035db2fb445ac92",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-02104.json",
+      "source_version": "2021-02104",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-02104.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1970,
+      "doc_id": "7463b7e6ef15dc339ab3d9ac228c43210ccbee47825cb06029da75d27f09667b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-02107.json",
+      "source_version": "2021-02107",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-02107.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1578,
+      "doc_id": "73850d2f0fd8e8afc27509800baade71cf8666798c028be8a9d78dcdf6931f56",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-03683.json",
+      "source_version": "2021-03683",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-03683.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1812,
+      "doc_id": "452a6706f42b061a57dff26f21bb48fcf6df5a347dda9abbf7bbae318bf78078",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-04289.json",
+      "source_version": "2021-04289",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-04289.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1877,
+      "doc_id": "4ffdeb6b29bf0dcc9831e27b536673f968716cd8c930791e957fca29cf088938",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-04552.json",
+      "source_version": "2021-04552",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-04552.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1502,
+      "doc_id": "233682beaf0c507d652baf42ab3cf133c57bb3da72ae90dabc17951290526541",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-05770.json",
+      "source_version": "2021-05770",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-05770.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1824,
+      "doc_id": "4716f9659cd6992d9599b5ff67985888dd299453183d1428adc5fdc1b57686ea",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2021-28537.json",
+      "source_version": "2021-28537",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2021-28537.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1750,
+      "doc_id": "b55b50349b8e19818ae39d3f90fa6de74bbe8f3d3eb56faf1742a2088f0fe7fa",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00126.json",
+      "source_version": "2022-00126",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00126.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1703,
+      "doc_id": "aae6cd3eb324d6c26ed5c5c3eb6837aa8cdee6126a2c227f7de4d9771cba92b6",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00168.json",
+      "source_version": "2022-00168",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00168.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1631,
+      "doc_id": "957965bf09399f0a556c073d34ced212c6482da4f3454fc65f8f6972f38f57f0",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00199.json",
+      "source_version": "2022-00199",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00199.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2008,
+      "doc_id": "0b343b7ff27950c528986a347c36b3a8fc68a7e979b242f1d2730823f24545d8",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00216.json",
+      "source_version": "2022-00216",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00216.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1537,
+      "doc_id": "b0634634f47cdfab368f7d540fd8f0af3a108abd99f3375510254354ba7a256f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00276.json",
+      "source_version": "2022-00276",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00276.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1842,
+      "doc_id": "56bcfd8567f2b1d898f1217b8867f92f5fd6930a510e6b9084bd8c041a37ddcc",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00560.json",
+      "source_version": "2022-00560",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00560.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1787,
+      "doc_id": "cbf7f582e4fe4d6bd98d32ee0413e663f8dae33d687172877ee68f9547b26618",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00705.json",
+      "source_version": "2022-00705",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00705.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1847,
+      "doc_id": "050cb36e9f2ac5c00af307fb14face7395010aa062814bf709b2905d139df47c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00825.json",
+      "source_version": "2022-00825",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00825.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1398,
+      "doc_id": "405899bf8c44c6406828ad9494871de9f76a068d46325a393c9ee527259fe116",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-00826.json",
+      "source_version": "2022-00826",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-00826.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1364,
+      "doc_id": "a8b61d2884707b967fc14d95d631e844ab06a869582bbcc5efddbb5413fe31b5",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01001.json",
+      "source_version": "2022-01001",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01001.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1177,
+      "doc_id": "a5aab1a2e3bef433db2f481ac9a61282a121724d2ea8c084fe5320a858897363",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01002.json",
+      "source_version": "2022-01002",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01002.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1365,
+      "doc_id": "227f92ac07ff5e0667ff5d0710dc4cf3541e394e8b0b49912f8479127e899176",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01088.json",
+      "source_version": "2022-01088",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01088.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1542,
+      "doc_id": "32cb6e6bf71fe1ab36be9fecfee16d38044145d03f7d74055a89e01c764d3fd0",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01153.json",
+      "source_version": "2022-01153",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01153.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1360,
+      "doc_id": "b49ba8bc78eb40b3962ba3531d603c1fb275db9cb5f1be5308efdc0b3357084f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01311.json",
+      "source_version": "2022-01311",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01311.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1767,
+      "doc_id": "21e69a50007a4954c3b089c7c5248616dbed33aa4578f488e4fdc966732de28f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-01880.json",
+      "source_version": "2022-01880",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-01880.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1181,
+      "doc_id": "552649674068088336d03e60a7d61dfeffdfefc4c145e8ea0b55dfe066b2b195",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-02212.json",
+      "source_version": "2022-02212",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-02212.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1529,
+      "doc_id": "7d10ca547e80c3ec31cd307259485447100dbb4ac3f63e7ec9e6d4187be4890c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-02910.json",
+      "source_version": "2022-02910",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-02910.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1695,
+      "doc_id": "ade2c61113d3c99ee166c64caafc24bc7326ee84058b45fc9884bdfaef4b2c41",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-03678.json",
+      "source_version": "2022-03678",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-03678.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1579,
+      "doc_id": "6a98ea123acfd85d8d62e1bb62bf439eb52d10f4a7e6228e98fe10666502d4d9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-03812.json",
+      "source_version": "2022-03812",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-03812.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1362,
+      "doc_id": "09b35f2c5e4aa0d6627fcf627db18cb77dbaa37a2d73ca42e3f311c8bc97a677",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-04860.json",
+      "source_version": "2022-04860",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-04860.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1527,
+      "doc_id": "ec33f99f9203c70b24d108cd6f37f02f2a4be4b93e69590091e8a36deca94806",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-06288.json",
+      "source_version": "2022-06288",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-06288.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1545,
+      "doc_id": "2284248619eb8c47e7217248b4c9838f113461e7985248e08b8274092ee5afab",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-06803.json",
+      "source_version": "2022-06803",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-06803.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1765,
+      "doc_id": "43d53e8472febb528c2841228f032dec01128a28511c8e6d4014cfce8a85f112",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-09378.json",
+      "source_version": "2022-09378",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-09378.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1754,
+      "doc_id": "ed6507e977d9ddba7d99ec0cf777c96bb2d8a7e52c7bcf1e9b10be1e86d291d3",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-24751.json",
+      "source_version": "2022-24751",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-24751.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1239,
+      "doc_id": "e2051de7296b8d82e05d7ebbe574a49cfb79dfe7ee4ea28b59f0c1dcdd6ebecc",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-28332.json",
+      "source_version": "2022-28332",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-28332.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1135,
+      "doc_id": "d911713e8e7eb031aa09b4f5e90529773c2c155d1d856c96ed31304bb9f9f9d2",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-28333.json",
+      "source_version": "2022-28333",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-28333.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1199,
+      "doc_id": "76b6b2a31b5dd7d02e168d3c8c5a8b89279b68d5390f84174dce2ba5ce7d2bae",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-28352.json",
+      "source_version": "2022-28352",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-28352.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1847,
+      "doc_id": "0651bd96e08e83465ed2f5a12a3d9823c9ca5fb70950829c58f38c1841cc45f1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2022-28497.json",
+      "source_version": "2022-28497",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2022-28497.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1966,
+      "doc_id": "2d5975cffe9d9f61ce8a02e6ff058509f7bda04b610b38833651f741ebf1979f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00071.json",
+      "source_version": "2023-00071",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00071.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1646,
+      "doc_id": "87c1f42cedee78857a9afe403f69f24826f6927b6af9fbe0ff578cb3ec92a64a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00102.json",
+      "source_version": "2023-00102",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00102.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2351,
+      "doc_id": "644956f68c06cb4fdda736b0c6fbabaed49be2709e41a915583d1a3f9e2ebac9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00187.json",
+      "source_version": "2023-00187",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00187.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2573,
+      "doc_id": "12076a79d8a135afc684efadcebd6cf740292b040beecbcd7ca0e38b2f290c71",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00354.json",
+      "source_version": "2023-00354",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00354.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1790,
+      "doc_id": "c3428657f58ef457b5b24c7c2c6fba4a5b4ca59f42d692eef5a4e5d80901b5e1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00488.json",
+      "source_version": "2023-00488",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00488.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1967,
+      "doc_id": "b83d72e7a6adaa83f7ce00c6c82dbfc62bdbc89576811911755b2098c8c0a106",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00527.json",
+      "source_version": "2023-00527",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00527.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1391,
+      "doc_id": "598f9bc847a369d27d4f7acf5daa295d6ff722f2cf4baa32409381639c60d6d1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00617.json",
+      "source_version": "2023-00617",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00617.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1395,
+      "doc_id": "b29c414df38f0fc2e3f4bc230a1f20043d261596b03f655ad5d7891cda7710f3",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00618.json",
+      "source_version": "2023-00618",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00618.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1842,
+      "doc_id": "6f731def0ab68fe73cca3cef901c1ad4f044150a91b632dbe0ab9813df511605",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00665.json",
+      "source_version": "2023-00665",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00665.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1208,
+      "doc_id": "8b3118ee9dfafa61ec202d6f71e4e77d1c62d7767ed3af4d6a3641a90ed6440a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-00878.json",
+      "source_version": "2023-00878",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-00878.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1213,
+      "doc_id": "1b234c29b32bc1add5a602c8079d551c97dff866150b1c0c7325b7bb793ca216",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-01002.json",
+      "source_version": "2023-01002",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-01002.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1710,
+      "doc_id": "351cdfefa7785e0cdb5bc3a7c67c246c791ef67d9878b5e1dde4fdd4b639ee50",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-01707.json",
+      "source_version": "2023-01707",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-01707.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1720,
+      "doc_id": "335f0291a7bcb5529750f75f53f04bce6db14976e09c5d15cd60a5e1a6f145ee",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-01708.json",
+      "source_version": "2023-01708",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-01708.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1703,
+      "doc_id": "1beedfd8767d2bfe3e394023a7d3e975d0fe28010a82c7afb6a2e06f2cc027be",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-01709.json",
+      "source_version": "2023-01709",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-01709.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2614,
+      "doc_id": "a2e76139407c69f1ddf584bc51b86a3c7df5b5632e7e48e5d7051bfacadd7c0e",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-01938.json",
+      "source_version": "2023-01938",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-01938.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1525,
+      "doc_id": "36f3ff5c0f126ae2e87a46c1424b16b339dc4f8ba981f423c2211ffc1dff528b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-05428.json",
+      "source_version": "2023-05428",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-05428.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1472,
+      "doc_id": "d14358e9307e8371af8a9e10e9fb2414eaa55fd5aaeedac62ba34703d53adeb9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-06925.json",
+      "source_version": "2023-06925",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-06925.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1562,
+      "doc_id": "380c0773f9bb349f633a92463a920df91fd5799f8fa7ae47b17bc9b511e8b7d7",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-07644.json",
+      "source_version": "2023-07644",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-07644.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1625,
+      "doc_id": "4414712e1cb0b60272cc4e7cc73ae5e1d675fe3d5923242576604031046f74a1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-07647.json",
+      "source_version": "2023-07647",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-07647.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2618,
+      "doc_id": "a885ae1c36287e3d9070e78b0c5a2283fd03c31747b5078bdd17d2a3867968c9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-24626.json",
+      "source_version": "2023-24626",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-24626.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1762,
+      "doc_id": "b229be7ef28c259c025c49d4266616d7d21657320b514e11c846b4367ebce66b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2023-28619.json",
+      "source_version": "2023-28619",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2023-28619.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1634,
+      "doc_id": "1dbf5835a64d7761bd182c2846184938ab9218f6d663ca7611e886358dfda749",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-00004.json",
+      "source_version": "2024-00004",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-00004.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1634,
+      "doc_id": "0dbd8cbc89f06ae5c6b15107a4e0b55f5431b7fe03afa2cd0c412add56b992c5",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-00437.json",
+      "source_version": "2024-00437",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-00437.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1742,
+      "doc_id": "7935ca80ba2112766a57a77e6bca8bb24a1bd74f3fab6822f1c4e2f609e21efa",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-00694.json",
+      "source_version": "2024-00694",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-00694.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1777,
+      "doc_id": "df9a3480fa72a70ee91fe36ef44949cd594daa92e73f387ab9d4c1b9d2c98f2a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-00875.json",
+      "source_version": "2024-00875",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-00875.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1316,
+      "doc_id": "6f3ae75b2bdaa9d60bbf1b7642f2f05f3f6d4839cb6725b9419c7f740638de46",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-00988.json",
+      "source_version": "2024-00988",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-00988.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1821,
+      "doc_id": "a4b1764f52b95a5ddde8ce95816e5a6e30d1b672c0c39c93686bee6aa0d19e69",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01186.json",
+      "source_version": "2024-01186",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01186.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1584,
+      "doc_id": "e738af2a28b1c827f8e71835ada2724bdbeb3b415e677ea3eb3a8f391e58c992",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01358.json",
+      "source_version": "2024-01358",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01358.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1593,
+      "doc_id": "c5331f48e349bc9a7f2bbe87ab5b382a0d974e096a60dde1ac5b8712a05cf064",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01359.json",
+      "source_version": "2024-01359",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01359.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1586,
+      "doc_id": "f3282b6bcdd264e2ff5bfb57d3b026e72bc992f1c37bb89833ee6a2fe486889c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01360.json",
+      "source_version": "2024-01360",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01360.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1768,
+      "doc_id": "0370f35f25547d711ea7697725fcfb4c4af007df126ac811bbdc3dcac10c5ac4",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01417.json",
+      "source_version": "2024-01417",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01417.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2065,
+      "doc_id": "3f2b50101e4d0b5c858b34c79a6a71abbc6206bf0c7f88d85a68eb8d9675a7e9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01431.json",
+      "source_version": "2024-01431",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01431.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1946,
+      "doc_id": "1304b581710b4af5cd8bfbee49d40234508060542e6b7b50bb9ddc20de6a5a59",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01450.json",
+      "source_version": "2024-01450",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01450.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1533,
+      "doc_id": "f8b8825c4ab102ce09466dd38dd530d2a903741305fd675dc63426e6d84570c1",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-01928.json",
+      "source_version": "2024-01928",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-01928.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2228,
+      "doc_id": "f901c053676df828f65ae25fabc667f629f1660c2fee7c0bacc11c3c9154e1d3",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-02039.json",
+      "source_version": "2024-02039",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-02039.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1638,
+      "doc_id": "c05958c8dc81c6fd4b64f2059798b0019654f5be307899d0506bab68d319514b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-02084.json",
+      "source_version": "2024-02084",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-02084.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1654,
+      "doc_id": "3c7bdf3ba30c825af78caccba9293e3cfffee1cbeb539bd54abdfaf8e1487a1a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-02187.json",
+      "source_version": "2024-02187",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-02187.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1781,
+      "doc_id": "dc6a4de14906abd5fd7de97249d2aa3314aadc76956cfea4dfa090c5a820da3e",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-02389.json",
+      "source_version": "2024-02389",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-02389.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1983,
+      "doc_id": "5882907fc2f472434679a3270d62e01286c19f840306120bd0efa1567f43c7a9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-02577.json",
+      "source_version": "2024-02577",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-02577.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1855,
+      "doc_id": "4155a911a687643562f1e0585bf74a99e3a2956df7ba8169fb6324c274936972",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-03455.json",
+      "source_version": "2024-03455",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-03455.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1458,
+      "doc_id": "c03531f6b807b7cd78d6c9c49ab8bf3d2e53ac2b0817be7c33eb424aed6f3f82",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-03462.json",
+      "source_version": "2024-03462",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-03462.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2080,
+      "doc_id": "c340d5a6779df1e636548520dc8af2037c7c4f4954b17a646c7f64d372a64ba9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-03956.json",
+      "source_version": "2024-03956",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-03956.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1307,
+      "doc_id": "d99df14b1fb59cfd0ab0c5e2c8af99df932d3b3b86a45790ebf614e27d17dc39",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-04243.json",
+      "source_version": "2024-04243",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-04243.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1586,
+      "doc_id": "3a344229c19bb8a4fafca0e2ed0cf532c2059ccde2fa86353b8f7c137e16c87a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-31328.json",
+      "source_version": "2024-31328",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-31328.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2017,
+      "doc_id": "c7b789a161a9f9a9ae7a57674a2e280ca1d70b6b71bd63a8f5eabc6272d62bd0",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-31420.json",
+      "source_version": "2024-31420",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-31420.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1832,
+      "doc_id": "d8dfa6c4db424d6725257bb30b8a7a3972bfe1434b7cbd29bd44d94ab02213ae",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-31636.json",
+      "source_version": "2024-31636",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-31636.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1926,
+      "doc_id": "1c13ca126994e32057ce37c792d0814f61c0f513fa8aca7afad759d8d2398a51",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-31658.json",
+      "source_version": "2024-31658",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-31658.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1946,
+      "doc_id": "6b183f87df6ac84276af00ba827d4bdc3124da1ed610915319a34a3a71811c84",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2024-31671.json",
+      "source_version": "2024-31671",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2024-31671.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1760,
+      "doc_id": "45ed341263e64966a1dcfce9b5faf99e708d657447bcd321d8db7ea5976d3915",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00013.json",
+      "source_version": "2025-00013",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00013.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1928,
+      "doc_id": "5127b4558f384efd58102f6892c945ad2db2ebe98ebcfff687c383acd4fe709b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00185.json",
+      "source_version": "2025-00185",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00185.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1738,
+      "doc_id": "e73c9780f81aadc41d96562963118665c39c1f117b082a0bce21ea455af4a28b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00398.json",
+      "source_version": "2025-00398",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00398.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1208,
+      "doc_id": "3137dabbd8777070b3729ecae3f586e6791e5adcb7eba856c8f4f1c39f684ac0",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00493.json",
+      "source_version": "2025-00493",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00493.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1536,
+      "doc_id": "a419d635c057722b7b42d13bf66d1944038ef8878ac9b86e23438b54d49ea767",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00573.json",
+      "source_version": "2025-00573",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00573.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1553,
+      "doc_id": "92f27c5d2598f204136e4aa74d54120522e75479ea402091f7acad57fef3af27",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-00693.json",
+      "source_version": "2025-00693",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-00693.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1848,
+      "doc_id": "ecf4d45b2ad09a3047f7f9d1889a84614d8cce2ad6080368088aecd6f709258e",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-02368.json",
+      "source_version": "2025-02368",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-02368.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1723,
+      "doc_id": "25ffd614dcb6fe6f2ce692d5510bd953455d13eafcdde1f47149ad850a9d79cd",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-02747.json",
+      "source_version": "2025-02747",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-02747.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1541,
+      "doc_id": "6c25cbb7ba71ce31463508112d3f7970a583194f9784976fb7c7fa0e334e0acb",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-02756.json",
+      "source_version": "2025-02756",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-02756.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1402,
+      "doc_id": "bcf7d7e1818d55162e54bbd7e237de9aeafa9c11184acf91cce2c6024cd25de2",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-02867.json",
+      "source_version": "2025-02867",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-02867.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1726,
+      "doc_id": "838b83f70f6ecf167d7bec1cf48154dcb4b796b9a741f3dc077abff3da532d65",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-02869.json",
+      "source_version": "2025-02869",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-02869.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1329,
+      "doc_id": "bfc8fc353a2d287f79555d7670cb991f6a617b24a94121a206e1088b1204fa74",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-03379.json",
+      "source_version": "2025-03379",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-03379.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1294,
+      "doc_id": "1fc73addcb78d6a0a4266d22bd46679fb932cb6a2f9b0d1cc8cdbb32a9fa1acc",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-03468.json",
+      "source_version": "2025-03468",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-03468.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1292,
+      "doc_id": "b12c28681dc3f21f0e1ccc23ee42d9665606522d8d4c9d668953d8215952b7dd",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-03470.json",
+      "source_version": "2025-03470",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-03470.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1220,
+      "doc_id": "ca07749e7ec34a88fd7c4d70f689f5d7fc8412f8f7c7e73ba8c23373391e8c08",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-04917.json",
+      "source_version": "2025-04917",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-04917.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1599,
+      "doc_id": "c3656407fa171c75c0f28f399882f221e198584ee2cc58c9e15201862be10919",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-04918.json",
+      "source_version": "2025-04918",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-04918.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1640,
+      "doc_id": "f6c90560977b0fb0282fbec3c298193d13b69a945a95fbcf8cae4624ac99adf9",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-05091.json",
+      "source_version": "2025-05091",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-05091.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1623,
+      "doc_id": "ed9374f9c2cef19d0267ab1d852a9cf83174a2d9ab4db9c36f5f863177488a65",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-05748.json",
+      "source_version": "2025-05748",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-05748.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1453,
+      "doc_id": "04a409246a874d32827f773cc18902398710e170c6f23e4ea2d911f2bd9acbc6",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2025-05778.json",
+      "source_version": "2025-05778",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2025-05778.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1737,
+      "doc_id": "0be04689a6256fe15b063d6cfea3f963492c4d5397ba3fda97e85564f051cc26",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00048.json",
+      "source_version": "2026-00048",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00048.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 2022,
+      "doc_id": "9a75f66f7a30312857dc8dc40eda151a7cb31dd0a4d2ac0776a02b65b32c7c73",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00077.json",
+      "source_version": "2026-00077",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00077.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1961,
+      "doc_id": "4e332dc3fd0635e51e64f534a8e6a662998ff2e75418a547e6c8f299c403852c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00149.json",
+      "source_version": "2026-00149",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00149.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1894,
+      "doc_id": "ef07cd852d14db828472b3913e4159d0fda98c4b74b93fddc8cd04bb2620bcc4",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00176.json",
+      "source_version": "2026-00176",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00176.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1487,
+      "doc_id": "7f62626b7afa88cab063e1c87a4b8e334268a3fb08ba58cc7d33c1c1bee7e021",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00326.json",
+      "source_version": "2026-00326",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00326.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1966,
+      "doc_id": "87a11518e20ddcaa3f69d6b5207261ab99bebc520e454f9be7cabb7102b22b0a",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00346.json",
+      "source_version": "2026-00346",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00346.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1870,
+      "doc_id": "594e27f07d65a6a4c8159bac03d913fa62bfad51981ec2e8216e80bd82218266",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00453.json",
+      "source_version": "2026-00453",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00453.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1825,
+      "doc_id": "4e1aa8e84c05a3fddce986f92ca94b040f72da71a1e48eedae904e3d082df084",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00834.json",
+      "source_version": "2026-00834",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00834.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1539,
+      "doc_id": "89cd068d1257844edd4181eff0ae747c53cef414174b3096b6d5d9b85822699c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00846.json",
+      "source_version": "2026-00846",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00846.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1446,
+      "doc_id": "7b825963e31825c52e4ad767c328c16d82f424fb6ecb668de9a56ef3e39d8a35",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00931.json",
+      "source_version": "2026-00931",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00931.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1420,
+      "doc_id": "4acef18ed98b9f24f7db3543744100eaa8fbd539917b8e8d9f3299c625e1f211",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-00932.json",
+      "source_version": "2026-00932",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-00932.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1980,
+      "doc_id": "53e844724b1c139eea53345ade7fec377253cf80395e05fff3ce0d0166fe6f4b",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-01279.json",
+      "source_version": "2026-01279",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-01279.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1372,
+      "doc_id": "779dc44a521678ce0a27acf4fc7494122cb92b4cc00b9fa300e5fc85a052fb71",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-01398.json",
+      "source_version": "2026-01398",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-01398.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1733,
+      "doc_id": "7f3228d68d59fcadcb4ca832ac0f95d43156c0be2220c1e3dee3bec2785a60b5",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-01400.json",
+      "source_version": "2026-01400",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-01400.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1640,
+      "doc_id": "30db31c95e45b2d7bd12991be30131f4a6198cfc1f62a6ae35b7be4704e5f230",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-02175.json",
+      "source_version": "2026-02175",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-02175.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1707,
+      "doc_id": "3ccbcd97fbcb05507042cd19cdef066bb54576cfd5227356b1f17cff8e21fdbb",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-02365.json",
+      "source_version": "2026-02365",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-02365.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1694,
+      "doc_id": "a4357756c4b3cd6861e0dbc48d267c8b7cb49e0c6880ebcea84d36e0165d894f",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-02373.json",
+      "source_version": "2026-02373",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-02373.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1758,
+      "doc_id": "ebf78accb24ead0341f92f064a0fff5cb8938b3a7ec538b89c72065e3eff11e4",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-02623.json",
+      "source_version": "2026-02623",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-02623.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1814,
+      "doc_id": "f0c469a3d9a1a568cf1b44b44aff28346610d11e4db3b401e605540ee6b5b765",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-02857.json",
+      "source_version": "2026-02857",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-02857.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1844,
+      "doc_id": "51dab867f7306c4a7032c8a4479e41d7af24408c30867b2dca94d0239a36ec97",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-03015.json",
+      "source_version": "2026-03015",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-03015.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1771,
+      "doc_id": "9ab56bbb9cdfe33052411d93f7f1db3f0cce2403b4d31eca6bac194cd9cdc5b8",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-06992.json",
+      "source_version": "2026-06992",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-06992.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1626,
+      "doc_id": "015909501bf2a5151f28f663e73732fec1144f7fefe369bfb4951931b0a1ae03",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-08423.json",
+      "source_version": "2026-08423",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-08423.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 1491,
+      "doc_id": "258406b94ee87e44217ae131f7545bab9505c01b8fdf5221b97a37e68f47f85c",
+      "format": "json",
+      "license": "public-domain",
+      "path": "data/gov/fr/2026-09838.json",
+      "source_version": "2026-09838",
+      "uri": "https://www.federalregister.gov/api/v1/documents/2026-09838.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url"
+    },
+    {
+      "bytes": 681276,
+      "doc_id": "968a8c95cbe86e9f76f5a71a8e2d2002a41a4cfdb1f509460a53a5b38a8b0318",
+      "format": "html",
+      "license": "public-domain",
+      "path": "data/gov/irm/part20/irm_20-001-001r.html",
+      "source_version": "2025-11-25",
+      "uri": "https://www.irs.gov/irm/part20/irm_20-001-001r"
+    },
+    {
+      "bytes": 626609,
+      "doc_id": "a6494c916809eb60c752767079309edb4f584c96270895ec7bb50ade73004a32",
+      "format": "html",
+      "license": "public-domain",
+      "path": "data/gov/irm/part21/irm_21-004-001r.html",
+      "source_version": "2026-09-02",
+      "uri": "https://www.irs.gov/irm/part21/irm_21-004-001r"
+    },
+    {
+      "bytes": 416815,
+      "doc_id": "c45a720083ff5a3096239156a7d9a0cd1b9add24ca9952f42be97a560d5c199d",
+      "format": "html",
+      "license": "public-domain",
+      "path": "data/gov/irm/part21/irm_21-005-001r.html",
+      "source_version": "2026-09-15",
+      "uri": "https://www.irs.gov/irm/part21/irm_21-005-001r"
+    },
+    {
+      "bytes": 1747616,
+      "doc_id": "6bcaf92be7180127df477ce821e0606ff787349c622614f8d91cca498c1a071e",
+      "format": "html",
+      "license": "public-domain",
+      "path": "data/gov/irm/part5/irm_05-019-001r.html",
+      "source_version": "2026-02-03",
+      "uri": "https://www.irs.gov/irm/part5/irm_05-019-001r"
+    }
+  ],
+  "license_summary": "US federal government works (eCFR, Federal Register, Internal Revenue Manual), public domain under 17 U.S.C. 105",
+  "version": "2026-11-08"
+}

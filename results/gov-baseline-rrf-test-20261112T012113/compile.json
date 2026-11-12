@@ -1,0 +1,18 @@
+{
+  "empty_docs": [],
+  "fingerprint": "fe978fc9c5ee87b300444934f7eee83288df0ee18af70a1e8a21fd6faf17119a",
+  "index_source": "loaded",
+  "n_chunks": 5056,
+  "n_docs": 180,
+  "span_containment": 0.9926778242677824,
+  "text_fidelity": {
+    "checked": 0,
+    "formats_na": [
+      "html",
+      "json",
+      "xml"
+    ],
+    "matching": 0,
+    "share": null
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "corpus": "bench",
+  "version": "2026-11-08",
+  "name": "EnterpriseRAG-Bench",
+  "repository": "https://github.com/onyx-dot-app/EnterpriseRAG-Bench",
+  "dataset": "https://huggingface.co/datasets/onyx-dot-app/EnterpriseRAG-Bench",
+  "revision": "69916e31c68aa5963c00248fd7f0bc12d04fd235",
+  "license": "MIT",
+  "license_summary": "EnterpriseRAG-Bench (Onyx / DanswerAI, Inc.), MIT licence; synthetic internal documents of the fictional company Redwood Inference",
+  "documents": {
+    "url": "https://huggingface.co/datasets/onyx-dot-app/EnterpriseRAG-Bench/resolve/69916e31c68aa5963c00248fd7f0bc12d04fd235/data/documents/test.parquet",
+    "sha256": "6b0747bf160af9427b12101537d53056ac592ada9831c1a98ae01fa50a8d2a9f",
+    "bytes": 1409893131,
+    "path": "data/bench/_source/documents.parquet"
+  },
+  "questions": {
+    "url": "https://huggingface.co/datasets/onyx-dot-app/EnterpriseRAG-Bench/resolve/69916e31c68aa5963c00248fd7f0bc12d04fd235/data/questions/test.parquet",
+    "sha256": "e25066f4eff3843dd0f3df0d1348113471e072e75007ffe390a0aa83f2a80af2",
+    "bytes": 408737,
+    "path": "data/bench/_source/questions.parquet"
+  },
+  "seed": 20261108,
+  "max_docs": 2000,
+  "exclude_question_types": ["high_level"],
+  "qtype_map": {
+    "basic": "factoid",
+    "semantic": "factoid",
+    "constrained": "factoid",
+    "conflicting_info": "factoid",
+    "miscellaneous": "factoid",
+    "intra_document_reasoning": "overview",
+    "project_related": "overview",
+    "completeness": "overview",
+    "info_not_found": "insufficient"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "corpus": "research",
+  "version": "2026-11-08",
+  "license_summary": "Repository reports, notes and papers catalog: Apache-2.0. Sampled PDFs keep their own licences (per papers/manifest.csv) and are never committed.",
+  "repo_license": "Apache-2.0",
+  "text_globs": ["reports/*.md", "research_notes/**/*.md"],
+  "catalog": "papers/manifest.csv",
+  "pdf_sample": {"seed": 20261108, "size": 200, "status": "downloaded"}
+}

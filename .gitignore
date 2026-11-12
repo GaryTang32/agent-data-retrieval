@@ -2,3 +2,22 @@
 # The catalog (papers/README.md, papers/manifest.csv) is committed; rebuild PDFs with scripts/download_papers.py
 papers/**/*.pdf
 papers/**/*.part
+
+# Subagent-driven development scratch workspace
+.superpowers/
+
+# adr-eval
+data/
+runs/
+.cache/
+*.egg-info/
+__pycache__/
+.venv/
+# Benchmark-derived golden items stay local (upstream canary: keep benchmark data out of training corpora)
+golden/bench/*/items.jsonl
+golden/bench/*/rejected.jsonl
+# Research golden items stay local: their evidence quotes are verbatim excerpts from research PDFs
+golden/research/*/items.jsonl
+golden/research/*/rejected.jsonl
+# Root-level logs
+/*.log
