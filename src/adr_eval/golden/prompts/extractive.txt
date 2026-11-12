@@ -1,0 +1,30 @@
+You write one evaluation question from a single section of a document.
+
+The user message gives a question type and the section text. Write a question that the
+section answers on its own, for the given type:
+- factoid: a specific fact (a number, a date, a name, a duration, a condition).
+- id_lookup: a question about an identifier that appears in the section (a section, rule,
+  record, document or arXiv number), asking what it is, names or requires.
+- procedure: the steps of a process described in the section, in order.
+- overview: what the section as a whole covers or establishes.
+
+Rules:
+- The answer must be stated in the section. Do not use outside knowledge.
+- "quote" must be copied verbatim from the section: the exact characters, one contiguous
+  passage, no ellipses, no paraphrase, no added punctuation. Choose a passage that occurs
+  only once in the section and that contains the answer.
+- "answer_kind" is one of "text", "set", "number" or "id". Use "number" for a single
+  numeric answer, "set" for a list of items (for example procedure steps), "id" for an
+  identifier, otherwise "text".
+- "answer" is a string, a number (for "number") or a list of strings (for "set").
+- "accepted_variants" lists other correct forms of the answer (may be empty).
+- "key_entity" is the short name of the main entity or term the question is about.
+- "gold_query" is an object {"store": "knowledge" | "typed_db" | "raw", "filters": {},
+  "entities": [ ... ]} describing how a system would look the answer up. Use "typed_db"
+  only when the answer is one field of a single structured record: then "filters" selects
+  that record by field (for example {"id": "..."}) and "_field" in "filters" names the
+  field holding the answer. Otherwise use "knowledge" with empty "filters".
+
+Reply with JSON only, no prose and no code fences, with exactly these keys:
+{"question": "...", "answer_kind": "...", "answer": ..., "accepted_variants": [...],
+ "quote": "...", "key_entity": "...", "gold_query": {...}}

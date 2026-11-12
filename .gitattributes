@@ -1,0 +1,8 @@
+# Files pinned by SHA-256 in corpus manifests, golden sets or test fixtures: never convert
+# line endings, or the hashes and character offsets stop matching.
+papers/manifest.csv -text
+reports/*.md -text
+research_notes/** -text
+golden/** -text
+corpora/** -text
+tests/fixtures/** -text

@@ -1,0 +1,93 @@
+{
+  "corpus": "gov",
+  "version": "2026-11-08",
+  "license": "public-domain",
+  "license_summary": "US federal government works (eCFR, Federal Register, Internal Revenue Manual), public domain under 17 U.S.C. 105",
+  "parts": [
+    {
+      "title": 33,
+      "part": "165",
+      "agency": "coast-guard",
+      "dates": [
+        "2024-06-27",
+        "2025-06-30",
+        "2026-06-30"
+      ]
+    },
+    {
+      "title": 47,
+      "part": "73",
+      "agency": "federal-communications-commission",
+      "dates": [
+        "2024-06-13",
+        "2025-06-10",
+        "2026-06-22"
+      ]
+    },
+    {
+      "title": 33,
+      "part": "117",
+      "agency": "coast-guard",
+      "dates": [
+        "2024-06-27",
+        "2025-06-27",
+        "2026-06-26"
+      ]
+    }
+  ],
+  "irm_urls": [
+    "https://www.irs.gov/irm/part5/irm_05-019-001r",
+    "https://www.irs.gov/irm/part20/irm_20-001-001r",
+    "https://www.irs.gov/irm/part21/irm_21-004-001r",
+    "https://www.irs.gov/irm/part21/irm_21-005-001r"
+  ],
+  "federal_register": {
+    "order": "oldest",
+    "per_page": 8,
+    "windows": [
+      [
+        "2020-01-01",
+        "2020-12-31"
+      ],
+      [
+        "2021-01-01",
+        "2021-12-31"
+      ],
+      [
+        "2022-01-01",
+        "2022-12-31"
+      ],
+      [
+        "2023-01-01",
+        "2023-12-31"
+      ],
+      [
+        "2024-01-01",
+        "2024-12-31"
+      ],
+      [
+        "2025-01-01",
+        "2025-12-31"
+      ],
+      [
+        "2026-01-01",
+        "2026-10-31"
+      ]
+    ],
+    "fields": [
+      "document_number",
+      "type",
+      "subtype",
+      "title",
+      "action",
+      "abstract",
+      "dates",
+      "publication_date",
+      "effective_on",
+      "agencies",
+      "cfr_references",
+      "docket_ids",
+      "html_url"
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "corpus": "gov",
+  "version": "2026-11-08",
+  "license": "public-domain",
+  "license_summary": "US federal government works (eCFR, Federal Register, Internal Revenue Manual), public domain under 17 U.S.C. 105",
+  "parts": [
+    {
+      "title": 33,
+      "part": "117",
+      "agency": "coast-guard",
+      "dates": [
+        "2024-06-27",
+        "2025-06-27"
+      ]
+    }
+  ],
+  "irm_urls": [
+    "https://www.irs.gov/irm/part21/irm_21-005-001r"
+  ],
+  "federal_register": {
+    "order": "oldest",
+    "per_page": 2,
+    "windows": [
+      [
+        "2023-01-01",
+        "2023-12-31"
+      ]
+    ],
+    "fields": [
+      "document_number",
+      "type",
+      "subtype",
+      "title",
+      "action",
+      "abstract",
+      "dates",
+      "publication_date",
+      "effective_on",
+      "agencies",
+      "cfr_references",
+      "docket_ids",
+      "html_url"
+    ]
+  }
+}

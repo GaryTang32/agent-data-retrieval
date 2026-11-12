@@ -1,0 +1,2212 @@
+{
+  "corpus": "research",
+  "documents": [
+    {
+      "bytes": 251038,
+      "doc_id": "ae7ba200f53ac3beb3d9c9c6797226ffd4029b9cb6bd3495e3b65169554c55e5",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2019_nogueira_document_expansion_by_query_prediction_1904.08375.pdf",
+      "source_version": "sha256:ae7ba200f53a",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2019_nogueira_document_expansion_by_query_prediction_1904.08375.pdf"
+    },
+    {
+      "bytes": 556214,
+      "doc_id": "bc0b0b84fcad566ef3b1ac57121269dfd584b0f1e1b6df510266296a831d23d3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2019_sakata_faq_retrieval_using_query_question_similarity_and_bert_based_1905.02851.pdf",
+      "source_version": "sha256:bc0b0b84fcad",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2019_sakata_faq_retrieval_using_query_question_similarity_and_bert_based_1905.02851.pdf"
+    },
+    {
+      "bytes": 1761373,
+      "doc_id": "c2dec45d0b2d4c9393a5e8f51a52628897e511960a253d9dcfc00348fae93457",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2022_dai_promptagator_few_shot_dense_retrieval_from_8_examples_2209.11755.pdf",
+      "source_version": "sha256:c2dec45d0b2d",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2022_dai_promptagator_few_shot_dense_retrieval_from_8_examples_2209.11755.pdf"
+    },
+    {
+      "bytes": 424964,
+      "doc_id": "dc0ae3c5584ed146beee122e6a9ad9c48547dde048d53e9be8435d8f1d354531",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2022_gao_precise_zero_shot_dense_retrieval_without_relevance_labels_2212.10496.pdf",
+      "source_version": "sha256:dc0ae3c5584e",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2022_gao_precise_zero_shot_dense_retrieval_without_relevance_labels_2212.10496.pdf"
+    },
+    {
+      "bytes": 2214748,
+      "doc_id": "4b928270d5cde919f2198688e755a2de8d2b735b6f9c8c9d964f7d794197d43f",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2024_dhulipala_muvera_multi_vector_retrieval_via_fixed_dimensional_encoding_2405.19504.pdf",
+      "source_version": "sha256:4b928270d5cd",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2024_dhulipala_muvera_multi_vector_retrieval_via_fixed_dimensional_encoding_2405.19504.pdf"
+    },
+    {
+      "bytes": 2322560,
+      "doc_id": "ede5b695e5e9cb13dc96919a1bd0d66238875b796fc51f3f466796b67d51bd3a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2024_jiang_longrag_enhancing_retrieval_augmented_generation_with_long_c_2406.15319.pdf",
+      "source_version": "sha256:ede5b695e5e9",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2024_jiang_longrag_enhancing_retrieval_augmented_generation_with_long_c_2406.15319.pdf"
+    },
+    {
+      "bytes": 1681358,
+      "doc_id": "6b144afadf0e721d9adbec8c20373a86b5d0224dfc22ba2254e03e7522d669ba",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2024_pradeep_ragnarok_a_reusable_rag_framework_and_baselines_for_trec_202_2406.16828.pdf",
+      "source_version": "sha256:6b144afadf0e",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2024_pradeep_ragnarok_a_reusable_rag_framework_and_baselines_for_trec_202_2406.16828.pdf"
+    },
+    {
+      "bytes": 193074,
+      "doc_id": "f78a7e7afa9754123a5dd1ce970d65b253793e2fa77a5076cf4ea289ebf123c8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2024_wang_multilingual_e5_text_embeddings_a_technical_report_2402.05672.pdf",
+      "source_version": "sha256:f78a7e7afa97",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2024_wang_multilingual_e5_text_embeddings_a_technical_report_2402.05672.pdf"
+    },
+    {
+      "bytes": 181293,
+      "doc_id": "fc511d5b9f071339c8b0c943119a08adcc5fdd1c3d442d2cf4a77fd2ea78401a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2025_bhat_rethinking_chunk_size_for_long_document_retrieval_a_multi_da_2505.21700.pdf",
+      "source_version": "sha256:fc511d5b9f07",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2025_bhat_rethinking_chunk_size_for_long_document_retrieval_a_multi_da_2505.21700.pdf"
+    },
+    {
+      "bytes": 10505211,
+      "doc_id": "978396b4431fde200eed4be46db6fd21f98c7c192e467c61df9390a04ba6ebaa",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2025_bruni_amaqa_a_metadata_based_qa_dataset_for_rag_systems_2505.13557.pdf",
+      "source_version": "sha256:978396b4431f",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2025_bruni_amaqa_a_metadata_based_qa_dataset_for_rag_systems_2505.13557.pdf"
+    },
+    {
+      "bytes": 739231,
+      "doc_id": "18c72f4e4b8d6837abfeb974c6d4029694c00aefac0e8ef3c0ad48afdcb63c1b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2025_conti_context_is_gold_to_find_the_gold_passage_evaluating_and_trai_2505.24782.pdf",
+      "source_version": "sha256:18c72f4e4b8d",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2025_conti_context_is_gold_to_find_the_gold_passage_evaluating_and_trai_2505.24782.pdf"
+    },
+    {
+      "bytes": 346103,
+      "doc_id": "d882813e34420cbb3dd2777f28d239398ce616e823fa9d2e651989536f817801",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2025_mishra_a_systematic_framework_for_enterprise_knowledge_retrieval_le_2512.05411.pdf",
+      "source_version": "sha256:d882813e3442",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2025_mishra_a_systematic_framework_for_enterprise_knowledge_retrieval_le_2512.05411.pdf"
+    },
+    {
+      "bytes": 918828,
+      "doc_id": "236213b98db58ea23379b417072b253e73a6069f4d86994c9e8aa3af84fbded9",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2025_saha_quim_rag_advancing_retrieval_augmented_generation_with_inver_2501.02702.pdf",
+      "source_version": "sha256:236213b98db5",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2025_saha_quim_rag_advancing_retrieval_augmented_generation_with_inver_2501.02702.pdf"
+    },
+    {
+      "bytes": 521985,
+      "doc_id": "af8e7949859f4829798b6f1889333900666088b8f1743c26fca7734d3e929d6e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2026_allu_document_retrieval_aware_chunking_d_rac_universal_retrieval_2609.24220.pdf",
+      "source_version": "sha256:af8e7949859f",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2026_allu_document_retrieval_aware_chunking_d_rac_universal_retrieval_2609.24220.pdf"
+    },
+    {
+      "bytes": 598269,
+      "doc_id": "693ef3d19278b84c05686f0b4386c43321ddf56a1ca1d842305a85077f2be7e3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2026_farooq_semantic_compression_trees_multi_resolution_knowledge_retrie_2608.21610.pdf",
+      "source_version": "sha256:693ef3d19278",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2026_farooq_semantic_compression_trees_multi_resolution_knowledge_retrie_2608.21610.pdf"
+    },
+    {
+      "bytes": 886905,
+      "doc_id": "bb5fb5c99b5a30506ac2eb1bcca6caaf12201e775b67c7aa8cb9e47daecff02a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2026_lyu_lost_in_a_single_vector_improving_long_document_retrieval_wi_2606.18781.pdf",
+      "source_version": "sha256:bb5fb5c99b5a",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2026_lyu_lost_in_a_single_vector_improving_long_document_retrieval_wi_2606.18781.pdf"
+    },
+    {
+      "bytes": 834787,
+      "doc_id": "92c96437bacf8423b79b20c2d11a0fda6c680f3a2ef1b73b1f130d24f53e11ed",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2026_maharjan_chunking_retrieval_and_re_ranking_an_empirical_evaluation_of_2601.15457.pdf",
+      "source_version": "sha256:92c96437bacf",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2026_maharjan_chunking_retrieval_and_re_ranking_an_empirical_evaluation_of_2601.15457.pdf"
+    },
+    {
+      "bytes": 5932740,
+      "doc_id": "fd51a9820187b8f20bc55b3ec3adcfe8b9b320d7900eba1f6522676c89be77e9",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_indexing_chunking_enrichment/2026_singh_parser_chunking_and_embedding_interactions_in_retrieval_augm_2609.31660.pdf",
+      "source_version": "sha256:fd51a9820187",
+      "uri": "file://papers/01_indexing_chunking_enrichment/2026_singh_parser_chunking_and_embedding_interactions_in_retrieval_augm_2609.31660.pdf"
+    },
+    {
+      "bytes": 86276,
+      "doc_id": "fde5ab0f127b09362fa09b08cafe050f903aec038eefc2079c2c1dd6ce96bb8d",
+      "format": "pdf",
+      "license": "CC BY-NC-SA 3.0 (ACL Anthology)",
+      "path": "papers/01_information_theory_foundations/2002_genzel_entropy_rate_constancy_in_text.pdf",
+      "source_version": "sha256:fde5ab0f127b",
+      "uri": "file://papers/01_information_theory_foundations/2002_genzel_entropy_rate_constancy_in_text.pdf"
+    },
+    {
+      "bytes": 887611,
+      "doc_id": "9257019bf3bda3d0e2de8eb65a091ef236db48307abedd32b1706e01b8c5eaa7",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_information_theory_foundations/2017_mandros_discovering_reliable_approximate_functional_dependencies_1705.09391.pdf",
+      "source_version": "sha256:9257019bf3bd",
+      "uri": "file://papers/01_information_theory_foundations/2017_mandros_discovering_reliable_approximate_functional_dependencies_1705.09391.pdf"
+    },
+    {
+      "bytes": 440939,
+      "doc_id": "134c989ca0e60c3b2ef460159436dbe79643d04e825ffceb350d8e70669ea01c",
+      "format": "pdf",
+      "license": "CC BY 4.0",
+      "path": "papers/01_information_theory_foundations/2019_peyrard_a_simple_theoretical_model_of_importance_for_summarization.pdf",
+      "source_version": "sha256:134c989ca0e6",
+      "uri": "file://papers/01_information_theory_foundations/2019_peyrard_a_simple_theoretical_model_of_importance_for_summarization.pdf"
+    },
+    {
+      "bytes": 938636,
+      "doc_id": "88ad346255b3aacd5c411d9ce04ab4690d961075006866bf43e2d56d531eaa26",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_information_theory_foundations/2021_reimers_the_curse_of_dense_low_dimensional_information_retrieval_for_2012.14210.pdf",
+      "source_version": "sha256:88ad346255b3",
+      "uri": "file://papers/01_information_theory_foundations/2021_reimers_the_curse_of_dense_low_dimensional_information_retrieval_for_2012.14210.pdf"
+    },
+    {
+      "bytes": 737914,
+      "doc_id": "bce3546c70d58f704ea52bc42ae1cc5cbc8c4b37c59ee68c83b37d62037d62df",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_information_theory_foundations/2024_huang_compression_represents_intelligence_linearly_2404.09937.pdf",
+      "source_version": "sha256:bce3546c70d5",
+      "uri": "file://papers/01_information_theory_foundations/2024_huang_compression_represents_intelligence_linearly_2404.09937.pdf"
+    },
+    {
+      "bytes": 816825,
+      "doc_id": "4a25a2d6a39fe67ae6399ea8ce1352ddc0b57c4d6f9d3a0c558a443b19c9bb1c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_information_theory_foundations/2024_zhu_an_information_bottleneck_perspective_for_effective_noise_fi_2406.01549.pdf",
+      "source_version": "sha256:4a25a2d6a39f",
+      "uri": "file://papers/01_information_theory_foundations/2024_zhu_an_information_bottleneck_perspective_for_effective_noise_fi_2406.01549.pdf"
+    },
+    {
+      "bytes": 262241,
+      "doc_id": "74e092702db58518afeaf909e1d3380848165b2cb9ae75dc6822b04f66aa5be0",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_surveys_foundations/2007_green_provenance_semirings.pdf",
+      "source_version": "sha256:74e092702db5",
+      "uri": "file://papers/01_surveys_foundations/2007_green_provenance_semirings.pdf"
+    },
+    {
+      "bytes": 918735,
+      "doc_id": "3c0200b6d5effe3c4cdb1ab06dbf63e7240a313e469b4ef81dd6eac1c85195a1",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_surveys_foundations/2010_chiticariu_systemt_an_algebraic_approach_to_declarative_information_ext.pdf",
+      "source_version": "sha256:3c0200b6d5ef",
+      "uri": "file://papers/01_surveys_foundations/2010_chiticariu_systemt_an_algebraic_approach_to_declarative_information_ext.pdf"
+    },
+    {
+      "bytes": 1054175,
+      "doc_id": "bfa2671c794e30f519ac323170f5aaa4a2ae38b35448d4bf62d89e76a5905d91",
+      "format": "pdf",
+      "license": "CC-BY-4.0",
+      "path": "papers/01_surveys_foundations/2018_aumuller_ann_benchmarks_a_benchmarking_tool_for_approximate_nearest_n_1807.05614.pdf",
+      "source_version": "sha256:bfa2671c794e",
+      "uri": "file://papers/01_surveys_foundations/2018_aumuller_ann_benchmarks_a_benchmarking_tool_for_approximate_nearest_n_1807.05614.pdf"
+    },
+    {
+      "bytes": 102433,
+      "doc_id": "82e6b646b5aa7f7c7dc22fa786f74c5ca14bc26e4d8804ef03190ad3d11af4a1",
+      "format": "pdf",
+      "license": "arXiv-nonexclusive",
+      "path": "papers/01_surveys_foundations/2018_lin_repeatability_corner_cases_in_document_ranking_the_impact_of_1807.05798.pdf",
+      "source_version": "sha256:82e6b646b5aa",
+      "uri": "file://papers/01_surveys_foundations/2018_lin_repeatability_corner_cases_in_document_ranking_the_impact_of_1807.05798.pdf"
+    },
+    {
+      "bytes": 1662567,
+      "doc_id": "396a0fadeb4cd40f5c8ccc36b73a0815f6cb4d7f6bfa53b6c48c1f9aba7c7e02",
+      "format": "pdf",
+      "license": "arXiv-nonexclusive",
+      "path": "papers/01_surveys_foundations/2023_gao_retrieval_augmented_generation_for_large_language_models_a_s_2312.10997.pdf",
+      "source_version": "sha256:396a0fadeb4c",
+      "uri": "file://papers/01_surveys_foundations/2023_gao_retrieval_augmented_generation_for_large_language_models_a_s_2312.10997.pdf"
+    },
+    {
+      "bytes": 803506,
+      "doc_id": "a0bbe3e61ea7e43a0695324fa37d5e3c99059467c4a178d0e9d0d90dd00331e7",
+      "format": "pdf",
+      "license": "CC-BY-4.0",
+      "path": "papers/01_surveys_foundations/2024_biswal_text2sql_is_not_enough_unifying_ai_and_databases_with_tag_2408.14717.pdf",
+      "source_version": "sha256:a0bbe3e61ea7",
+      "uri": "file://papers/01_surveys_foundations/2024_biswal_text2sql_is_not_enough_unifying_ai_and_databases_with_tag_2408.14717.pdf"
+    },
+    {
+      "bytes": 1098200,
+      "doc_id": "8471b7413a1250bd022cd65dc39328cb58fb2d8a0c0c9b273edbc38fd8a40a2e",
+      "format": "pdf",
+      "license": "CC-BY-4.0",
+      "path": "papers/01_surveys_foundations/2024_dai_uqe_a_query_engine_for_unstructured_databases_2407.09522.pdf",
+      "source_version": "sha256:8471b7413a12",
+      "uri": "file://papers/01_surveys_foundations/2024_dai_uqe_a_query_engine_for_unstructured_databases_2407.09522.pdf"
+    },
+    {
+      "bytes": 6799267,
+      "doc_id": "5f9f6d02c11493e36ba929c9964c4ddc3238d69884430f5ec0734aaf1717ddf1",
+      "format": "pdf",
+      "license": "arXiv-nonexclusive",
+      "path": "papers/01_surveys_foundations/2024_liu_a_survey_of_text_to_sql_in_the_era_of_llms_where_are_we_and_2408.05109.pdf",
+      "source_version": "sha256:5f9f6d02c114",
+      "uri": "file://papers/01_surveys_foundations/2024_liu_a_survey_of_text_to_sql_in_the_era_of_llms_where_are_we_and_2408.05109.pdf"
+    },
+    {
+      "bytes": 4371800,
+      "doc_id": "1863e73e8e9e2124fa0e94a7348b53a91e2cac98eb1fc303675e7f2b8765c6db",
+      "format": "pdf",
+      "license": "CC-BY-4.0",
+      "path": "papers/01_surveys_foundations/2025_deng_unstructured_data_analysis_using_llms_a_comprehensive_benchm_2510.27119.pdf",
+      "source_version": "sha256:1863e73e8e9e",
+      "uri": "file://papers/01_surveys_foundations/2025_deng_unstructured_data_analysis_using_llms_a_comprehensive_benchm_2510.27119.pdf"
+    },
+    {
+      "bytes": 618247,
+      "doc_id": "5fc546a2ac9c7614a9321f88c9dcac339e64a8401accf8ce65c41683c2a16171",
+      "format": "pdf",
+      "license": "CC-BY-4.0",
+      "path": "papers/01_surveys_foundations/2025_weller_on_the_theoretical_limitations_of_embedding_based_retrieval_2508.21038.pdf",
+      "source_version": "sha256:5fc546a2ac9c",
+      "uri": "file://papers/01_surveys_foundations/2025_weller_on_the_theoretical_limitations_of_embedding_based_retrieval_2508.21038.pdf"
+    },
+    {
+      "bytes": 1644577,
+      "doc_id": "7e9e221d9ee23447f24a562254d3c881cc828f97362ebe71905066733e154bcd",
+      "format": "pdf",
+      "license": "arXiv-nonexclusive",
+      "path": "papers/01_surveys_foundations/2025_zhang_deterministic_inference_across_tensor_parallel_sizes_that_el_2511.17826.pdf",
+      "source_version": "sha256:7e9e221d9ee2",
+      "uri": "file://papers/01_surveys_foundations/2025_zhang_deterministic_inference_across_tensor_parallel_sizes_that_el_2511.17826.pdf"
+    },
+    {
+      "bytes": 578200,
+      "doc_id": "e14bc055d508a65e949c16b3b40021a6c1effab74800ee3ad26d7e99c1ffde8e",
+      "format": "pdf",
+      "license": "arXiv-nonexclusive",
+      "path": "papers/01_surveys_foundations/2026_kim_confining_nondeterminism_ai_driven_research_systems_as_dbmss_2607.10508.pdf",
+      "source_version": "sha256:e14bc055d508",
+      "uri": "file://papers/01_surveys_foundations/2026_kim_confining_nondeterminism_ai_driven_research_systems_as_dbmss_2607.10508.pdf"
+    },
+    {
+      "bytes": 1972220,
+      "doc_id": "15ee6136e41eb70d05692ca5f5af18b47fc63754c3a5004de686d8b1be2c6d2c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/01_web_search_infrastructure/2019_subramanya_diskann_fast_accurate_billion_point_nearest_neighbor_search.pdf",
+      "source_version": "sha256:15ee6136e41e",
+      "uri": "file://papers/01_web_search_infrastructure/2019_subramanya_diskann_fast_accurate_billion_point_nearest_neighbor_search.pdf"
+    },
+    {
+      "bytes": 10010725,
+      "doc_id": "1aaba4b08b43f832e2f55d6273475d958c3615b376e7f354eafd5ba31ee9449e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_deep_research_agents/2025_gou_mind2web_2_evaluating_agentic_search_with_agent_as_a_judge_2506.21506.pdf",
+      "source_version": "sha256:1aaba4b08b43",
+      "uri": "file://papers/02_deep_research_agents/2025_gou_mind2web_2_evaluating_agentic_search_with_agent_as_a_judge_2506.21506.pdf"
+    },
+    {
+      "bytes": 168973,
+      "doc_id": "b68a302e4067ffa6f039334e582e89078d14a8bedbfa046f143a7f5d953949ad",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_ir_theory/2001_lavrenko_relevance_based_language_models.pdf",
+      "source_version": "sha256:b68a302e4067",
+      "uri": "file://papers/02_ir_theory/2001_lavrenko_relevance_based_language_models.pdf"
+    },
+    {
+      "bytes": 1022447,
+      "doc_id": "ef7164b2b82f2c5768c5c2db99cd2f5753cc871d28a916a26001e173f98e207d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_ir_theory/2007_smucker_a_comparison_of_statistical_significance_tests_for_informati.pdf",
+      "source_version": "sha256:ef7164b2b82f",
+      "uri": "file://papers/02_ir_theory/2007_smucker_a_comparison_of_statistical_significance_tests_for_informati.pdf"
+    },
+    {
+      "bytes": 414399,
+      "doc_id": "da5ff644dd359dcfe928d609768273e984cbef0f5aeeb16e5d9924410a7222f1",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_ir_theory/2009_agrawal_diversifying_search_results.pdf",
+      "source_version": "sha256:da5ff644dd35",
+      "uri": "file://papers/02_ir_theory/2009_agrawal_diversifying_search_results.pdf"
+    },
+    {
+      "bytes": 1953981,
+      "doc_id": "39b183cb8c70b158fad7529d446109a3f4fa9e63b4fac909873972c5796a0060",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2021_stanisawek_kleister_key_information_extraction_datasets_involving_long_2105.05796.pdf",
+      "source_version": "sha256:39b183cb8c70",
+      "uri": "file://papers/02_parsing_tables_forms/2021_stanisawek_kleister_key_information_extraction_datasets_involving_long_2105.05796.pdf"
+    },
+    {
+      "bytes": 7215177,
+      "doc_id": "4fa8dff93d74a84069210c84a38d14d62a39ec8f4e4c90bf955fdebdebcf6636",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2022_nassar_tableformer_table_structure_understanding_with_transformers_2203.01017.pdf",
+      "source_version": "sha256:4fa8dff93d74",
+      "uri": "file://papers/02_parsing_tables_forms/2022_nassar_tableformer_table_structure_understanding_with_transformers_2203.01017.pdf"
+    },
+    {
+      "bytes": 608408,
+      "doc_id": "6c669f67f04616b366cd6c383ee6814592564c579125c25084150d86ba9b11d3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2023_simsa_docile_2023_teaser_document_information_localization_and_ext_2301.12394.pdf",
+      "source_version": "sha256:6c669f67f046",
+      "uri": "file://papers/02_parsing_tables_forms/2023_simsa_docile_2023_teaser_document_information_localization_and_ext_2301.12394.pdf"
+    },
+    {
+      "bytes": 853604,
+      "doc_id": "d45ca5498d727b988b9836969f873b481a9a21a9bbdad1629fca02bd2a929603",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2025_li_score_a_semantic_evaluation_framework_for_generative_documen_2509.19345.pdf",
+      "source_version": "sha256:d45ca5498d72",
+      "uri": "file://papers/02_parsing_tables_forms/2025_li_score_a_semantic_evaluation_framework_for_generative_documen_2509.19345.pdf"
+    },
+    {
+      "bytes": 5320067,
+      "doc_id": "addf0b231d67bfe4091e006047cca70b5dd0e7f9915d047b72cbcec6b60b2200",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2025_livathinos_advanced_layout_analysis_models_for_docling_2509.11720.pdf",
+      "source_version": "sha256:addf0b231d67",
+      "uri": "file://papers/02_parsing_tables_forms/2025_livathinos_advanced_layout_analysis_models_for_docling_2509.11720.pdf"
+    },
+    {
+      "bytes": 1884112,
+      "doc_id": "00eb8aba59ea9f346776791014c158d97a6b167148c33bdaaa5dec767beca697",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2025_poznanski_olmocr_2_unit_test_rewards_for_document_ocr_2510.19817.pdf",
+      "source_version": "sha256:00eb8aba59ea",
+      "uri": "file://papers/02_parsing_tables_forms/2025_poznanski_olmocr_2_unit_test_rewards_for_document_ocr_2510.19817.pdf"
+    },
+    {
+      "bytes": 14513989,
+      "doc_id": "d006f3f9100afd24e728ab469edd44974c849133121b2a4e53525605b9e44bba",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2025_poznanski_olmocr_unlocking_trillions_of_tokens_in_pdfs_with_vision_lan_2502.18443.pdf",
+      "source_version": "sha256:d006f3f9100a",
+      "uri": "file://papers/02_parsing_tables_forms/2025_poznanski_olmocr_unlocking_trillions_of_tokens_in_pdfs_with_vision_lan_2502.18443.pdf"
+    },
+    {
+      "bytes": 34585476,
+      "doc_id": "b86714f0780649118cb6c9251c70678e6790c76fe61aa70b347938a5555ca00a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2025_smock_pubtables_v2_a_new_large_scale_dataset_for_full_page_and_mul_2512.10888.pdf",
+      "source_version": "sha256:b86714f07806",
+      "uri": "file://papers/02_parsing_tables_forms/2025_smock_pubtables_v2_a_new_large_scale_dataset_for_full_page_and_mul_2512.10888.pdf"
+    },
+    {
+      "bytes": 13933491,
+      "doc_id": "39b41ae3030ea829e19ae130e24ffcbdb95b0e60641164fa04ba8e2c39c668c1",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2026_yang_dr_docbench_a_comprehensive_benchmark_for_expert_level_and_d_2606.01393.pdf",
+      "source_version": "sha256:39b41ae3030e",
+      "uri": "file://papers/02_parsing_tables_forms/2026_yang_dr_docbench_a_comprehensive_benchmark_for_expert_level_and_d_2606.01393.pdf"
+    },
+    {
+      "bytes": 9989629,
+      "doc_id": "ea3a656329d2e6ea1094ae690c709a52ab5edb639d4a4bb0c6819c5e4c964c22",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_parsing_tables_forms/2026_zhou_real5_omnidocbench_a_full_scale_physical_reconstruction_benc_2603.04205.pdf",
+      "source_version": "sha256:ea3a656329d2",
+      "uri": "file://papers/02_parsing_tables_forms/2026_zhou_real5_omnidocbench_a_full_scale_physical_reconstruction_benc_2603.04205.pdf"
+    },
+    {
+      "bytes": 558397,
+      "doc_id": "dee9185ced28099dcf689698051090a309bcaf584bf41dd95e7ec679c8bc2132",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2024_li_autoflow_automated_workflow_generation_for_large_language_mo_2407.12821.pdf",
+      "source_version": "sha256:dee9185ced28",
+      "uri": "file://papers/02_procedures_sops_workflows/2024_li_autoflow_automated_workflow_generation_for_large_language_mo_2407.12821.pdf"
+    },
+    {
+      "bytes": 1729278,
+      "doc_id": "0e8935affc4b62448e28c083748ef04bb9799711c41fcaeb449b35fe8746d8b3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2025_cao_remember_me_refine_me_a_dynamic_procedural_memory_framework_2512.10696.pdf",
+      "source_version": "sha256:0e8935affc4b",
+      "uri": "file://papers/02_procedures_sops_workflows/2025_cao_remember_me_refine_me_a_dynamic_procedural_memory_framework_2512.10696.pdf"
+    },
+    {
+      "bytes": 5058708,
+      "doc_id": "09644c37bc87794725f848bdd85fc7faa93fbf0c07eae53fcd4e10036d2ee918",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2025_fang_memp_exploring_agent_procedural_memory_2508.06433.pdf",
+      "source_version": "sha256:09644c37bc87",
+      "uri": "file://papers/02_procedures_sops_workflows/2025_fang_memp_exploring_agent_procedural_memory_2508.06433.pdf"
+    },
+    {
+      "bytes": 2285794,
+      "doc_id": "de48ffb744cc36772d48016593508e6742e1ebfecf4fadac1a69c7d3801125c8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2025_schmotz_agent_skills_enable_a_new_class_of_realistic_and_trivially_s_2510.26328.pdf",
+      "source_version": "sha256:de48ffb744cc",
+      "uri": "file://papers/02_procedures_sops_workflows/2025_schmotz_agent_skills_enable_a_new_class_of_realistic_and_trivially_s_2510.26328.pdf"
+    },
+    {
+      "bytes": 6868062,
+      "doc_id": "4eb783c03e6a30c128d871ecbda6ef23e38c819ce07588445fb756515d96bc7f",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2025_tang_agent_kb_leveraging_cross_domain_experience_for_agentic_prob_2507.06229.pdf",
+      "source_version": "sha256:4eb783c03e6a",
+      "uri": "file://papers/02_procedures_sops_workflows/2025_tang_agent_kb_leveraging_cross_domain_experience_for_agentic_prob_2507.06229.pdf"
+    },
+    {
+      "bytes": 751025,
+      "doc_id": "a8ef39247392eb49e275768c19aca11a111c997e432225dcbcf74dfbf31abae7",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2025_wang_agentspec_customizable_runtime_enforcement_for_safe_and_reli_2503.18666.pdf",
+      "source_version": "sha256:a8ef39247392",
+      "uri": "file://papers/02_procedures_sops_workflows/2025_wang_agentspec_customizable_runtime_enforcement_for_safe_and_reli_2503.18666.pdf"
+    },
+    {
+      "bytes": 458344,
+      "doc_id": "1b00b0328f3c3f287d3012566689b217c607f4d715be335826c0b3787ed18642",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2026_ding_from_atomic_actions_to_standard_operating_procedures_iterati_2607.07321.pdf",
+      "source_version": "sha256:1b00b0328f3c",
+      "uri": "file://papers/02_procedures_sops_workflows/2026_ding_from_atomic_actions_to_standard_operating_procedures_iterati_2607.07321.pdf"
+    },
+    {
+      "bytes": 647037,
+      "doc_id": "8c1572ce5641230712a3db1fa5b522e8147786044842b69c7570a9740c65e5a8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2026_jiang_care_grounded_recursive_self_improvement_for_production_cust_2611.02839.pdf",
+      "source_version": "sha256:8c1572ce5641",
+      "uri": "file://papers/02_procedures_sops_workflows/2026_jiang_care_grounded_recursive_self_improvement_for_production_cust_2611.02839.pdf"
+    },
+    {
+      "bytes": 736487,
+      "doc_id": "ab2e8ca90242ea61206592160af2f8bab23d83a9dfed290db8125d93e44e2984",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2026_li_vigil_runtime_enforcement_of_behavioral_specifications_in_ai_2606.26524.pdf",
+      "source_version": "sha256:ab2e8ca90242",
+      "uri": "file://papers/02_procedures_sops_workflows/2026_li_vigil_runtime_enforcement_of_behavioral_specifications_in_ai_2606.26524.pdf"
+    },
+    {
+      "bytes": 2772903,
+      "doc_id": "f6fbe657daa349b1495bef6fecd7b1a3c845da3bf296d2589eedb45e051613bd",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2026_shi_knowledge_evaluating_conversational_agents_over_unstructured_2603.04370.pdf",
+      "source_version": "sha256:f6fbe657daa3",
+      "uri": "file://papers/02_procedures_sops_workflows/2026_shi_knowledge_evaluating_conversational_agents_over_unstructured_2603.04370.pdf"
+    },
+    {
+      "bytes": 1216655,
+      "doc_id": "17cc61f37500376a69220be09700274f86ab0352641ef5ae8024bf7a37f77afd",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/02_procedures_sops_workflows/2026_ying_multi_agent_procedural_graph_extraction_with_structural_and_2601.19170.pdf",
+      "source_version": "sha256:17cc61f37500",
+      "uri": "file://papers/02_procedures_sops_workflows/2026_ying_multi_agent_procedural_graph_extraction_with_structural_and_2601.19170.pdf"
+    },
+    {
+      "bytes": 1384716,
+      "doc_id": "1675c2dcd5ecaef47e8a4356062f60be642cee82e1bbacb044c9d047dce4c856",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_coding_agent_retrieval/2024_xia_agentless_demystifying_llm_based_software_engineering_agents_2407.01489.pdf",
+      "source_version": "sha256:1675c2dcd5ec",
+      "uri": "file://papers/03_coding_agent_retrieval/2024_xia_agentless_demystifying_llm_based_software_engineering_agents_2407.01489.pdf"
+    },
+    {
+      "bytes": 7871491,
+      "doc_id": "5dcb3713b2bb417d9f046f2098c0d84ae98d581f15b00ad1b6955caa9079ac3c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_coding_agent_retrieval/2026_oskooei_deep_agentic_search_for_repository_level_code_question_answe_2608.01507.pdf",
+      "source_version": "sha256:5dcb3713b2bb",
+      "uri": "file://papers/03_coding_agent_retrieval/2026_oskooei_deep_agentic_search_for_repository_level_code_question_answe_2608.01507.pdf"
+    },
+    {
+      "bytes": 338351,
+      "doc_id": "1b1a54b5e9bb158e4059b4ca1c2fbce26fdbf0e252edaf62ca1b6f50cf6de57f",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_coding_agent_retrieval/2026_xu_does_a_language_server_save_tokens_for_coding_agents_a_measu_2608.13568.pdf",
+      "source_version": "sha256:1b1a54b5e9bb",
+      "uri": "file://papers/03_coding_agent_retrieval/2026_xu_does_a_language_server_save_tokens_for_coding_agents_a_measu_2608.13568.pdf"
+    },
+    {
+      "bytes": 552666,
+      "doc_id": "56e20d19cd85a400a20a8383e6076a02815d1c2d4bcde028bc35c74eb4cf3295",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_coding_agent_retrieval/2026_yu_the_physical_cost_of_context_quality_constrained_resource_ac_2610.34763.pdf",
+      "source_version": "sha256:56e20d19cd85",
+      "uri": "file://papers/03_coding_agent_retrieval/2026_yu_the_physical_cost_of_context_quality_constrained_resource_ac_2610.34763.pdf"
+    },
+    {
+      "bytes": 100774,
+      "doc_id": "bd426b235f4d7751f88b27da91c03ee14a678d3cf048d4e0cfd6d99fbaae45f3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2003_sang_introduction_to_the_conll_2003_shared_task_language_independ.pdf",
+      "source_version": "sha256:bd426b235f4d",
+      "uri": "file://papers/03_llm_information_extraction/2003_sang_introduction_to_the_conll_2003_shared_task_language_independ.pdf"
+    },
+    {
+      "bytes": 2743015,
+      "doc_id": "2de0afde5b966174ca52909332681422507d9c6559bc25f9186e26d5940bd685",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2023_caufield_structured_prompt_interrogation_and_recursive_extraction_of_2304.02711.pdf",
+      "source_version": "sha256:2de0afde5b96",
+      "uri": "file://papers/03_llm_information_extraction/2023_caufield_structured_prompt_interrogation_and_recursive_extraction_of_2304.02711.pdf"
+    },
+    {
+      "bytes": 331612,
+      "doc_id": "a6b9c112906fe5a098f60cc312c1674d3f87ba233fde0c29298489d053225809",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2023_li_semi_automatic_data_enhancement_for_document_level_relation_2311.07314.pdf",
+      "source_version": "sha256:a6b9c112906f",
+      "uri": "file://papers/03_llm_information_extraction/2023_li_semi_automatic_data_enhancement_for_document_level_relation_2311.07314.pdf"
+    },
+    {
+      "bytes": 1441114,
+      "doc_id": "8ba47a7e733e39a7eaa6db51e9cb85dda41950c95c41cb87d9809593caf66aa4",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2023_pang_guideline_learning_for_in_context_information_extraction_2310.05066.pdf",
+      "source_version": "sha256:8ba47a7e733e",
+      "uri": "file://papers/03_llm_information_extraction/2023_pang_guideline_learning_for_in_context_information_extraction_2310.05066.pdf"
+    },
+    {
+      "bytes": 1155909,
+      "doc_id": "060b677ab95a89fdc00f25a3b44ec05ed07d15fc9f4e7b25c5219f6431a56ec2",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2023_wang_gpt_ner_named_entity_recognition_via_large_language_models_2304.10428.pdf",
+      "source_version": "sha256:060b677ab95a",
+      "uri": "file://papers/03_llm_information_extraction/2023_wang_gpt_ner_named_entity_recognition_via_large_language_models_2304.10428.pdf"
+    },
+    {
+      "bytes": 1104916,
+      "doc_id": "4fa0defcd370fb5db479802db1144b7d6751ffb53bad8a8d076fa59fd9a4dad5",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2024_qi_adelie_aligning_large_language_models_on_information_extract_2405.05008.pdf",
+      "source_version": "sha256:4fa0defcd370",
+      "uri": "file://papers/03_llm_information_extraction/2024_qi_adelie_aligning_large_language_models_on_information_extract_2405.05008.pdf"
+    },
+    {
+      "bytes": 1744542,
+      "doc_id": "9a4752020235d7a7d147eceb5ad110f40787c51c58c4941179bb987944457b0a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2025_li_mr_uie_multi_perspective_reasoning_with_reinforcement_learni_2509.09082.pdf",
+      "source_version": "sha256:9a4752020235",
+      "uri": "file://papers/03_llm_information_extraction/2025_li_mr_uie_multi_perspective_reasoning_with_reinforcement_learni_2509.09082.pdf"
+    },
+    {
+      "bytes": 1741085,
+      "doc_id": "4c5db894b2f6bb96ace6370d41054c0c53e9fbee1810ceb7b1eeed72bec6c283",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2025_wang_slot_structuring_the_output_of_large_language_models_2505.04016.pdf",
+      "source_version": "sha256:4c5db894b2f6",
+      "uri": "file://papers/03_llm_information_extraction/2025_wang_slot_structuring_the_output_of_large_language_models_2505.04016.pdf"
+    },
+    {
+      "bytes": 7834947,
+      "doc_id": "97d6282bfebd51cc24d5f65b2d3b74f143a0f15e247522a3d3d913077a97f79a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2026_le_schema_key_wording_as_an_instruction_channel_in_structured_g_2604.14862.pdf",
+      "source_version": "sha256:97d6282bfebd",
+      "uri": "file://papers/03_llm_information_extraction/2026_le_schema_key_wording_as_an_instruction_channel_in_structured_g_2604.14862.pdf"
+    },
+    {
+      "bytes": 1664873,
+      "doc_id": "5cbb7c33f5c20e2bffa778cff303dc5cf476527c66462a55b2ff25658cda88fe",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2026_lee_the_format_tax_2604.03616.pdf",
+      "source_version": "sha256:5cbb7c33f5c2",
+      "uri": "file://papers/03_llm_information_extraction/2026_lee_the_format_tax_2604.03616.pdf"
+    },
+    {
+      "bytes": 863985,
+      "doc_id": "31a3369aab69fbcb62f0a2dc01885b9adab6894c239d06d09458722d2b945b40",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2026_messina_introducing_background_temperature_to_characterise_hidden_ra_2604.22411.pdf",
+      "source_version": "sha256:31a3369aab69",
+      "uri": "file://papers/03_llm_information_extraction/2026_messina_introducing_background_temperature_to_characterise_hidden_ra_2604.22411.pdf"
+    },
+    {
+      "bytes": 850860,
+      "doc_id": "da48730b329462616d3fb693c3609f60a48d2541fe4e81acc46172aa82698937",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_llm_information_extraction/2026_petrov_from_unstructured_recall_to_schema_grounded_memory_reliable_2604.27906.pdf",
+      "source_version": "sha256:da48730b3294",
+      "uri": "file://papers/03_llm_information_extraction/2026_petrov_from_unstructured_recall_to_schema_grounded_memory_reliable_2604.27906.pdf"
+    },
+    {
+      "bytes": 231270,
+      "doc_id": "50acfa1c7280d6e84425b690307185b40a8e9514cb0c239dac1232a468a8af0c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2024_chasandras_aueb_archimedes_at_rirag_2025_is_obligation_concatenation_re_2412.11567.pdf",
+      "source_version": "sha256:50acfa1c7280",
+      "uri": "file://papers/03_rules_policies_regulations/2024_chasandras_aueb_archimedes_at_rirag_2025_is_obligation_concatenation_re_2412.11567.pdf"
+    },
+    {
+      "bytes": 401792,
+      "doc_id": "41160619c8d819b1638397e3054cbcf6305feefff907903e274a1201d275c97b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2024_malviya_mst_r_multi_stage_tuning_for_retrieval_systems_and_metric_ev_2412.10313.pdf",
+      "source_version": "sha256:41160619c8d8",
+      "uri": "file://papers/03_rules_policies_regulations/2024_malviya_mst_r_multi_stage_tuning_for_retrieval_systems_and_metric_ev_2412.10313.pdf"
+    },
+    {
+      "bytes": 1205178,
+      "doc_id": "aa3e00fbdcafa19e8056aadd690d093e58d51ba7bebb57277b941b50345731d4",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2025_romeo_arpaccino_an_agentic_rag_for_policy_as_code_compliance_2507.10584.pdf",
+      "source_version": "sha256:aa3e00fbdcaf",
+      "uri": "file://papers/03_rules_policies_regulations/2025_romeo_arpaccino_an_agentic_rag_for_policy_as_code_compliance_2507.10584.pdf"
+    },
+    {
+      "bytes": 457385,
+      "doc_id": "ba8ec6570a41c42554ac89b9869020a2356cead5bdcf2618fc9c6208a89afdb5",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_cunningham_constitutional_classifiers_efficient_production_grade_defens_2601.04603.pdf",
+      "source_version": "sha256:ba8ec6570a41",
+      "uri": "file://papers/03_rules_policies_regulations/2026_cunningham_constitutional_classifiers_efficient_production_grade_defens_2601.04603.pdf"
+    },
+    {
+      "bytes": 381983,
+      "doc_id": "3a0b8b127d4c280fde47444545bcb5106dbf93899d56d95b6908b24407e92b11",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_deuer_automated_regulatory_compliance_question_answering_in_financ_2609.30009.pdf",
+      "source_version": "sha256:3a0b8b127d4c",
+      "uri": "file://papers/03_rules_policies_regulations/2026_deuer_automated_regulatory_compliance_question_answering_in_financ_2609.30009.pdf"
+    },
+    {
+      "bytes": 1133830,
+      "doc_id": "b19e65c8cc75fdd849000f817b30949b8c11884782cd68d2e4b5a9d662a5b363",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_graus_from_legal_text_to_executable_decision_models_evaluating_str_2604.17153.pdf",
+      "source_version": "sha256:b19e65c8cc75",
+      "uri": "file://papers/03_rules_policies_regulations/2026_graus_from_legal_text_to_executable_decision_models_evaluating_str_2604.17153.pdf"
+    },
+    {
+      "bytes": 541047,
+      "doc_id": "74ed02756709a27ba1e1fc2f39ef3c63a2589644ac32d0d7a84f04b99e79179c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_khan_stop_means_stop_measuring_and_repairing_the_enforcement_gap_2607.14166.pdf",
+      "source_version": "sha256:74ed02756709",
+      "uri": "file://papers/03_rules_policies_regulations/2026_khan_stop_means_stop_measuring_and_repairing_the_enforcement_gap_2607.14166.pdf"
+    },
+    {
+      "bytes": 1328549,
+      "doc_id": "b2fd2e676cc480cd0fbd09f98275972614dea9d050c3d484893b99baf403f0a2",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_malik_policyguard_from_organizational_policies_to_neuro_symbolicco_2606.32004.pdf",
+      "source_version": "sha256:b2fd2e676cc4",
+      "uri": "file://papers/03_rules_policies_regulations/2026_malik_policyguard_from_organizational_policies_to_neuro_symbolicco_2606.32004.pdf"
+    },
+    {
+      "bytes": 865221,
+      "doc_id": "96cef1da0e9ee9de44ee2e073979b36991c21686ee0f5837bfcd4868002e1ead",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_sah_the_verifier_tax_horizon_dependent_safety_success_tradeoffs_2603.19328.pdf",
+      "source_version": "sha256:96cef1da0e9e",
+      "uri": "file://papers/03_rules_policies_regulations/2026_sah_the_verifier_tax_horizon_dependent_safety_success_tradeoffs_2603.19328.pdf"
+    },
+    {
+      "bytes": 736242,
+      "doc_id": "04739ffa0fa66f2e5457699fe607783adb2e81780b6b8c60a1a64e10b2e2bafa",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_seck_governed_reasoning_for_institutional_ai_2604.10658.pdf",
+      "source_version": "sha256:04739ffa0fa6",
+      "uri": "file://papers/03_rules_policies_regulations/2026_seck_governed_reasoning_for_institutional_ai_2604.10658.pdf"
+    },
+    {
+      "bytes": 319019,
+      "doc_id": "e7fc0d40583e2c5d8475ec85215f03f40993694c1805ef487b004365ccd9dd0c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_shoham_think_before_you_act_decision_gate_for_llm_agents_2610.38620.pdf",
+      "source_version": "sha256:e7fc0d40583e",
+      "uri": "file://papers/03_rules_policies_regulations/2026_shoham_think_before_you_act_decision_gate_for_llm_agents_2610.38620.pdf"
+    },
+    {
+      "bytes": 958317,
+      "doc_id": "183e175bbd4126c78447aaa0d8ca3239605866263448a59209be01f861aa0941",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/03_rules_policies_regulations/2026_zhou_raise_reinforcing_access_control_policy_synthesis_in_llms_vi_2609.33796.pdf",
+      "source_version": "sha256:183e175bbd41",
+      "uri": "file://papers/03_rules_policies_regulations/2026_zhou_raise_reinforcing_access_control_policy_synthesis_in_llms_vi_2609.33796.pdf"
+    },
+    {
+      "bytes": 207856,
+      "doc_id": "0f5dd08e52165b5c9b17246ec7ecb9e71d6d2a9384dc167670bfedcfa29468f0",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2002_auer_finite_time_analysis_of_the_multiarmed_bandit_problem.pdf",
+      "source_version": "sha256:0f5dd08e5216",
+      "uri": "file://papers/04_decision_statistical_theory/2002_auer_finite_time_analysis_of_the_multiarmed_bandit_problem.pdf"
+    },
+    {
+      "bytes": 417855,
+      "doc_id": "ae4448f00941fe1c54073be236ca37b36ee5d04f6a77ddd574df23a91f5f5e5d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2011_lin_a_class_of_submodular_functions_for_document_summarization.pdf",
+      "source_version": "sha256:ae4448f00941",
+      "uri": "file://papers/04_decision_statistical_theory/2011_lin_a_class_of_submodular_functions_for_document_summarization.pdf"
+    },
+    {
+      "bytes": 875829,
+      "doc_id": "fecaf22ad19d95c029e40722d4c38acb2e2a053e7fa5128e2a799c4c953dcaec",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2014_russo_learning_to_optimize_via_information_directed_sampling_1403.5556.pdf",
+      "source_version": "sha256:fecaf22ad19d",
+      "uri": "file://papers/04_decision_statistical_theory/2014_russo_learning_to_optimize_via_information_directed_sampling_1403.5556.pdf"
+    },
+    {
+      "bytes": 2934353,
+      "doc_id": "a43d0f089add075ecb4c74f71c9eb6a648e020edc70139b19360d6e717ddc0e2",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2021_angelopoulos_learn_then_test_calibrating_predictive_algorithms_to_achieve_2110.01052.pdf",
+      "source_version": "sha256:a43d0f089add",
+      "uri": "file://papers/04_decision_statistical_theory/2021_angelopoulos_learn_then_test_calibrating_predictive_algorithms_to_achieve_2110.01052.pdf"
+    },
+    {
+      "bytes": 1210440,
+      "doc_id": "15f35bf6d3ff2abfc21eaff1f1a7df2a51a5c891f2bed752f6fd75d3e47a5ff7",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2021_gibbs_adaptive_conformal_inference_under_distribution_shift_2106.00170.pdf",
+      "source_version": "sha256:15f35bf6d3ff",
+      "uri": "file://papers/04_decision_statistical_theory/2021_gibbs_adaptive_conformal_inference_under_distribution_shift_2106.00170.pdf"
+    },
+    {
+      "bytes": 1761801,
+      "doc_id": "39bc1728988be08129f340cbd3ca3b414dd52a5ea0e04cfbfc03994588034546",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2024_chatzi_prediction_powered_ranking_of_large_language_models_2402.17826.pdf",
+      "source_version": "sha256:39bc1728988b",
+      "uri": "file://papers/04_decision_statistical_theory/2024_chatzi_prediction_powered_ranking_of_large_language_models_2402.17826.pdf"
+    },
+    {
+      "bytes": 2143679,
+      "doc_id": "9fab73121e60b8c2635a123c82189f52c7f3d4b5f282dc457c2939ad84e4955d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2024_fisch_stratified_prediction_powered_inference_for_hybrid_language_2406.04291.pdf",
+      "source_version": "sha256:9fab73121e60",
+      "uri": "file://papers/04_decision_statistical_theory/2024_fisch_stratified_prediction_powered_inference_for_hybrid_language_2406.04291.pdf"
+    },
+    {
+      "bytes": 642411,
+      "doc_id": "b60302b628ea15889b8c96e6ed84a5662e879cf2ed56a1c2ff34685226f27f5f",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/2024_yadkori_mitigating_llm_hallucinations_via_conformal_abstention_2405.01563.pdf",
+      "source_version": "sha256:b60302b628ea",
+      "uri": "file://papers/04_decision_statistical_theory/2024_yadkori_mitigating_llm_hallucinations_via_conformal_abstention_2405.01563.pdf"
+    },
+    {
+      "bytes": 103729,
+      "doc_id": "48bcd8cb635babe888b84711c7c5f8c5f73246610a18fa41d603c4aa50260b0e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/nd_ferguson_optimal_stopping_and_applications_chapter_1_stopping_rule_pr.pdf",
+      "source_version": "sha256:48bcd8cb635b",
+      "uri": "file://papers/04_decision_statistical_theory/nd_ferguson_optimal_stopping_and_applications_chapter_1_stopping_rule_pr.pdf"
+    },
+    {
+      "bytes": 200153,
+      "doc_id": "9196818f578f09e8a3135f4e2d73f1ce384c582ab8e0a0fd92fd3b816c816e44",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_decision_statistical_theory/nd_ferguson_optimal_stopping_and_applications_chapter_4_applications.pdf",
+      "source_version": "sha256:9196818f578f",
+      "uri": "file://papers/04_decision_statistical_theory/nd_ferguson_optimal_stopping_and_applications_chapter_4_applications.pdf"
+    },
+    {
+      "bytes": 711341,
+      "doc_id": "2ef77dc8d91bb93f6b3a4bd55df722bb2dd005f8a6dcb522b817effe3dcf976c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2023_chen_gladis_a_general_and_large_acronym_disambiguation_benchmark_2302.01860.pdf",
+      "source_version": "sha256:2ef77dc8d91b",
+      "uri": "file://papers/04_domain_knowledge_organization/2023_chen_gladis_a_general_and_large_acronym_disambiguation_benchmark_2302.01860.pdf"
+    },
+    {
+      "bytes": 3888524,
+      "doc_id": "26a976b9ec342c2b52f940dca68cc017a9bbbf5bef7b436e97233ab72f1a0989",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2024_asai_openscholar_synthesizing_scientific_literature_with_retrieva_2411.14199.pdf",
+      "source_version": "sha256:26a976b9ec34",
+      "uri": "file://papers/04_domain_knowledge_organization/2024_asai_openscholar_synthesizing_scientific_literature_with_retrieva_2411.14199.pdf"
+    },
+    {
+      "bytes": 9194345,
+      "doc_id": "662bc42821b8f4fc0544055facac03042158f6a14592532afa614745afe2be6a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2024_lam_concept_induction_analyzing_unstructured_text_with_high_leve_2404.12259.pdf",
+      "source_version": "sha256:662bc42821b8",
+      "uri": "file://papers/04_domain_knowledge_organization/2024_lam_concept_induction_analyzing_unstructured_text_with_high_leve_2404.12259.pdf"
+    },
+    {
+      "bytes": 185699,
+      "doc_id": "6a566511f79af0cae9e3cfef1be8a50d4d03007cdfb20deb0590477c2f88ae83",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2025_hosabettu_transformer_based_extraction_of_statutory_definitions_from_t_2504.16353.pdf",
+      "source_version": "sha256:6a566511f79a",
+      "uri": "file://papers/04_domain_knowledge_organization/2025_hosabettu_transformer_based_extraction_of_statutory_definitions_from_t_2504.16353.pdf"
+    },
+    {
+      "bytes": 1906806,
+      "doc_id": "b6a958a4b3c002a22bcad180bf7ce5ec02de6f4a29246c3fca64b83245885af1",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2026_blake_cuicurate_a_graphrag_based_framework_for_automated_clinical_2602.17949.pdf",
+      "source_version": "sha256:b6a958a4b3c0",
+      "uri": "file://papers/04_domain_knowledge_organization/2026_blake_cuicurate_a_graphrag_based_framework_for_automated_clinical_2602.17949.pdf"
+    },
+    {
+      "bytes": 6531041,
+      "doc_id": "5b6c4f9ffa1cffab9f4ae5bda8aa219cce60d9d51573e0d0ac821003c6f5ffbb",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2026_bolognesi_larag_link_aware_retrieval_strategy_for_rag_systems_in_hyper_2605.07517.pdf",
+      "source_version": "sha256:5b6c4f9ffa1c",
+      "uri": "file://papers/04_domain_knowledge_organization/2026_bolognesi_larag_link_aware_retrieval_strategy_for_rag_systems_in_hyper_2605.07517.pdf"
+    },
+    {
+      "bytes": 552171,
+      "doc_id": "e21112f6e5055f1811581069139a369bcb71354ee9bbd017333f5027901f486c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2026_kucera_scidef_datasets_and_tools_for_automated_definition_extractio_2602.05413.pdf",
+      "source_version": "sha256:e21112f6e505",
+      "uri": "file://papers/04_domain_knowledge_organization/2026_kucera_scidef_datasets_and_tools_for_automated_definition_extractio_2602.05413.pdf"
+    },
+    {
+      "bytes": 3493705,
+      "doc_id": "d276d97f34dc5c1afbd5d60adce93caf8f10a0e37ceaf1da6f0efa21c81c98ec",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_domain_knowledge_organization/2026_rossi_where_is_my_troubleshooting_procedure_studying_the_potential_2601.08706.pdf",
+      "source_version": "sha256:d276d97f34dc",
+      "uri": "file://papers/04_domain_knowledge_organization/2026_rossi_where_is_my_troubleshooting_procedure_studying_the_potential_2601.08706.pdf"
+    },
+    {
+      "bytes": 3183277,
+      "doc_id": "49e6e6a4a00c797a772ef905a154c0839426655027d5fa0ce6b632e6c1db2bfb",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_reading_synthesis_citation/2024_zhan_injecagent_benchmarking_indirect_prompt_injections_in_tool_i_2403.02691.pdf",
+      "source_version": "sha256:49e6e6a4a00c",
+      "uri": "file://papers/04_reading_synthesis_citation/2024_zhan_injecagent_benchmarking_indirect_prompt_injections_in_tool_i_2403.02691.pdf"
+    },
+    {
+      "bytes": 3544512,
+      "doc_id": "898ac4968ad38f9ba5baae34f85e69758e024ecd5a294730061287b85cdf6e3b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_reading_synthesis_citation/2026_nie_drnoise_benchmarking_deep_research_agents_in_misleading_evid_2607.17291.pdf",
+      "source_version": "sha256:898ac4968ad3",
+      "uri": "file://papers/04_reading_synthesis_citation/2026_nie_drnoise_benchmarking_deep_research_agents_in_misleading_evid_2607.17291.pdf"
+    },
+    {
+      "bytes": 975383,
+      "doc_id": "b7eff9d226f9141c4aec3326c5fc01688175e1f9d7ef286a15a51bbbf590e00b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_reading_synthesis_citation/2026_orduna_malea_unraveling_the_ai2_asta_scholarly_research_assistant_citatio_2606.08301.pdf",
+      "source_version": "sha256:b7eff9d226f9",
+      "uri": "file://papers/04_reading_synthesis_citation/2026_orduna_malea_unraveling_the_ai2_asta_scholarly_research_assistant_citatio_2606.08301.pdf"
+    },
+    {
+      "bytes": 2437497,
+      "doc_id": "73dfb01ae9024ab2c47b56587aee01c70844a0646e626e5008238a4ca8dbe30e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_reading_synthesis_citation/2026_zhai_evaluating_stochasticity_in_deep_research_agents_2602.23271.pdf",
+      "source_version": "sha256:73dfb01ae902",
+      "uri": "file://papers/04_reading_synthesis_citation/2026_zhai_evaluating_stochasticity_in_deep_research_agents_2602.23271.pdf"
+    },
+    {
+      "bytes": 492880,
+      "doc_id": "e6755229a3b75ea14a7dfc4ea62e4b86818cadeb66dd25ab11743447ad3aad0d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_reading_synthesis_citation/2026_zhao_llm_hallucinations_in_the_wild_large_scale_evidence_from_non_2605.07723.pdf",
+      "source_version": "sha256:e6755229a3b7",
+      "uri": "file://papers/04_reading_synthesis_citation/2026_zhao_llm_hallucinations_in_the_wild_large_scale_evidence_from_non_2605.07723.pdf"
+    },
+    {
+      "bytes": 4682286,
+      "doc_id": "be272d72f55267e5de3082ef26d55b2110024cba953d355f5cc512addb105507",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2024_glenn_blendsql_a_scalable_dialect_for_unifying_hybrid_question_ans_2402.17882.pdf",
+      "source_version": "sha256:be272d72f552",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2024_glenn_blendsql_a_scalable_dialect_for_unifying_hybrid_question_ans_2402.17882.pdf"
+    },
+    {
+      "bytes": 856588,
+      "doc_id": "728947adc3ce7176c13c2303d88123b9a7938d2cae88378c685d59b6181b1358",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2025_liu_palimpchat_declarative_and_interactive_ai_analytics_2502.03368.pdf",
+      "source_version": "sha256:728947adc3ce",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2025_liu_palimpchat_declarative_and_interactive_ai_analytics_2502.03368.pdf"
+    },
+    {
+      "bytes": 2457855,
+      "doc_id": "b2441d9f18cc894195aa8cc639fd04547f8fa60289b351b08946efffd0e26120",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2025_sun_agenticdata_an_agentic_data_analytics_system_for_heterogeneo_2508.05002.pdf",
+      "source_version": "sha256:b2441d9f18cc",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2025_sun_agenticdata_an_agentic_data_analytics_system_for_heterogeneo_2508.05002.pdf"
+    },
+    {
+      "bytes": 700169,
+      "doc_id": "a52cd39321f77b81ace7aa7d66ed05483a928ece2434b05aa9b045203a2a9d0a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2025_trummer_implementing_semantic_join_operators_efficiently_2510.08489.pdf",
+      "source_version": "sha256:a52cd39321f7",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2025_trummer_implementing_semantic_join_operators_efficiently_2510.08489.pdf"
+    },
+    {
+      "bytes": 969626,
+      "doc_id": "958a4ca1982022ce6d4a468fa1bafd47e39bf297a55489a2664d6e4e810e4b1d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2026_alrashed_the_stochastic_shift_a_new_evaluation_paradigm_for_text_to_s_2609.21133.pdf",
+      "source_version": "sha256:958a4ca19820",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2026_alrashed_the_stochastic_shift_a_new_evaluation_paradigm_for_text_to_s_2609.21133.pdf"
+    },
+    {
+      "bytes": 1923372,
+      "doc_id": "a56e99a4d217f273a213104608f45320f81820e7456c8a846a7d86253cb35a0d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2026_dong_bridge_the_last_mile_gap_to_semantic_analytics_compiling_nat_2606.04641.pdf",
+      "source_version": "sha256:a56e99a4d217",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2026_dong_bridge_the_last_mile_gap_to_semantic_analytics_compiling_nat_2606.04641.pdf"
+    },
+    {
+      "bytes": 588218,
+      "doc_id": "a21861d449dac0e62d873a2ee51cf38bb329e5ebbbe043a25b57ae48bd03f279",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2026_dong_from_interpretation_to_compilation_a_compilation_based_execu_2608.06677.pdf",
+      "source_version": "sha256:a21861d449da",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2026_dong_from_interpretation_to_compilation_a_compilation_based_execu_2608.06677.pdf"
+    },
+    {
+      "bytes": 8243286,
+      "doc_id": "d9e977655fa181182894d8585dbcc75410133f24a059c013a7323632f25ad19b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/04_semantic_operators_doc_to_table/2026_liang_beyond_tables_doc2db_bench_for_relationally_faithful_documen_2608.08459.pdf",
+      "source_version": "sha256:d9e977655fa1",
+      "uri": "file://papers/04_semantic_operators_doc_to_table/2026_liang_beyond_tables_doc2db_bench_for_relationally_faithful_documen_2608.08459.pdf"
+    },
+    {
+      "bytes": 6155558,
+      "doc_id": "8bb43c0bd11fafc8bdac7655eef0649b28fd9fbb44fca877b1d31d7b4527759a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2022_trivedi_interleaving_retrieval_with_chain_of_thought_reasoning_for_k_2212.10509.pdf",
+      "source_version": "sha256:8bb43c0bd11f",
+      "uri": "file://papers/05_agentic_search_memory/2022_trivedi_interleaving_retrieval_with_chain_of_thought_reasoning_for_k_2212.10509.pdf"
+    },
+    {
+      "bytes": 2405417,
+      "doc_id": "0aa19d874913ae5f95fc9913aaa9c0cb68f4a8cbba8d2e436ea9b41738e69d3c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2025_chen_browsecomp_plus_a_more_fair_and_transparent_evaluation_bench_2508.06600.pdf",
+      "source_version": "sha256:0aa19d874913",
+      "uri": "file://papers/05_agentic_search_memory/2025_chen_browsecomp_plus_a_more_fair_and_transparent_evaluation_bench_2508.06600.pdf"
+    },
+    {
+      "bytes": 452519,
+      "doc_id": "e4923c4484e7ca95f1050efc2175190bdfe16085ca0fd2edf33d1bfb53ab3d23",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2025_zhou_a_simple_yet_strong_baseline_for_long_term_conversational_me_2511.17208.pdf",
+      "source_version": "sha256:e4923c4484e7",
+      "uri": "file://papers/05_agentic_search_memory/2025_zhou_a_simple_yet_strong_baseline_for_long_term_conversational_me_2511.17208.pdf"
+    },
+    {
+      "bytes": 625559,
+      "doc_id": "ed93dc496b81b1ea37cdb5754738bf15ac43a0855cdf034249ed6745ceae7374",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2026_chen_iter_interaction_aware_retrieval_for_agentic_search_2608.27912.pdf",
+      "source_version": "sha256:ed93dc496b81",
+      "uri": "file://papers/05_agentic_search_memory/2026_chen_iter_interaction_aware_retrieval_for_agentic_search_2608.27912.pdf"
+    },
+    {
+      "bytes": 5698091,
+      "doc_id": "6be2af7eb60639b7b974810b4b0d49953aa3892eec158a365f06a8fd06260b84",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2026_hasan_model_context_protocol_mcp_tool_descriptions_are_smelly_towa_2602.14878.pdf",
+      "source_version": "sha256:6be2af7eb606",
+      "uri": "file://papers/05_agentic_search_memory/2026_hasan_model_context_protocol_mcp_tool_descriptions_are_smelly_towa_2602.14878.pdf"
+    },
+    {
+      "bytes": 1870268,
+      "doc_id": "ae0898d60ce2b91c5408b78bb8bbe4d466bb56babb7cb3ddfa83794fc7028e10",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2026_hsu_organize_then_retrieve_hierarchical_memory_navigation_for_ef_2606.11680.pdf",
+      "source_version": "sha256:ae0898d60ce2",
+      "uri": "file://papers/05_agentic_search_memory/2026_hsu_organize_then_retrieve_hierarchical_memory_navigation_for_ef_2606.11680.pdf"
+    },
+    {
+      "bytes": 193268,
+      "doc_id": "fcf153dbd49b7faea48e9c0a83697942b1e5ecde89524421cf3b7a963fa57967",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2026_khatri_do_context_files_help_coding_agents_a_two_agent_ablation_stu_2607.27250.pdf",
+      "source_version": "sha256:fcf153dbd49b",
+      "uri": "file://papers/05_agentic_search_memory/2026_khatri_do_context_files_help_coding_agents_a_two_agent_ablation_stu_2607.27250.pdf"
+    },
+    {
+      "bytes": 723070,
+      "doc_id": "5ffdaa8776ee57e51830bdd6e80285800bed4892310d3b621379a3afe2088264",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_agentic_search_memory/2026_yalavarthi_open_source_reproduction_and_explainability_analysis_of_corr_2603.16169.pdf",
+      "source_version": "sha256:5ffdaa8776ee",
+      "uri": "file://papers/05_agentic_search_memory/2026_yalavarthi_open_source_reproduction_and_explainability_analysis_of_corr_2603.16169.pdf"
+    },
+    {
+      "bytes": 471017,
+      "doc_id": "287030dfe8b78454b8ffb0cff6c302387882911cf7bb374cecf89d31b780fd5a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2019_hahn_theoretical_limitations_of_self_attention_in_neural_sequence_1906.06755.pdf",
+      "source_version": "sha256:287030dfe8b7",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2019_hahn_theoretical_limitations_of_self_attention_in_neural_sequence_1906.06755.pdf"
+    },
+    {
+      "bytes": 1240973,
+      "doc_id": "ad9be01798fcf4fdc66ff3630f7a6f1cc157c04d51d0821d7798e028cb175c4b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2021_xie_an_explanation_of_in_context_learning_as_implicit_bayesian_i_2111.02080.pdf",
+      "source_version": "sha256:ad9be01798fc",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2021_xie_an_explanation_of_in_context_learning_as_implicit_bayesian_i_2111.02080.pdf"
+    },
+    {
+      "bytes": 2725821,
+      "doc_id": "d9cac96592ae2a2d6c0ba0eb4a280ad0346a187c590f72cde58b604d510508fb",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2023_allen_zhu_physics_of_language_models_part_3_2_knowledge_manipulation_2309.14402.pdf",
+      "source_version": "sha256:d9cac96592ae",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2023_allen_zhu_physics_of_language_models_part_3_2_knowledge_manipulation_2309.14402.pdf"
+    },
+    {
+      "bytes": 947657,
+      "doc_id": "92f8aaad658caff829f70e46afac29d5c97f54a393003dbd14e118ab3f274518",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2023_ram_in_context_retrieval_augmented_language_models_2302.00083.pdf",
+      "source_version": "sha256:92f8aaad658c",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2023_ram_in_context_retrieval_augmented_language_models_2302.00083.pdf"
+    },
+    {
+      "bytes": 328901,
+      "doc_id": "b364eff727c74f7bfcde9d16ca9430e3f67181572ed94edc8509c2ef0432f7de",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2023_sun_head_to_tail_how_knowledgeable_are_large_language_models_llm_2308.10168.pdf",
+      "source_version": "sha256:b364eff727c7",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2023_sun_head_to_tail_how_knowledgeable_are_large_language_models_llm_2308.10168.pdf"
+    },
+    {
+      "bytes": 1754087,
+      "doc_id": "9085b63bde46f7118520958f91ecefac2ab389a34c63514a80946dacdc7e2c90",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2024_banerjee_llms_will_always_hallucinate_and_we_need_to_live_with_this_2409.05746.pdf",
+      "source_version": "sha256:9085b63bde46",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2024_banerjee_llms_will_always_hallucinate_and_we_need_to_live_with_this_2409.05746.pdf"
+    },
+    {
+      "bytes": 811862,
+      "doc_id": "a68efd295e8cd65e9115fca6bcc5d42829021a9602dcfae61baa70ba11e6e33d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2024_xu_hallucination_is_inevitable_an_innate_limitation_of_large_la_2401.11817.pdf",
+      "source_version": "sha256:a68efd295e8c",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2024_xu_hallucination_is_inevitable_an_innate_limitation_of_large_la_2401.11817.pdf"
+    },
+    {
+      "bytes": 815481,
+      "doc_id": "3d979cced3045ea063e455425ec996c0571d30534c01739c3d8e6f099afd3331",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2025_li_taming_knowledge_conflicts_in_language_models_2503.10996.pdf",
+      "source_version": "sha256:3d979cced304",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2025_li_taming_knowledge_conflicts_in_language_models_2503.10996.pdf"
+    },
+    {
+      "bytes": 1050233,
+      "doc_id": "7c5d30aabd13e591221ac375f37566ca5abd6ff33639e4a34286ca613258aa4e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2025_nakanishi_scalable_softmax_is_superior_for_attention_2501.19399.pdf",
+      "source_version": "sha256:7c5d30aabd13",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2025_nakanishi_scalable_softmax_is_superior_for_attention_2501.19399.pdf"
+    },
+    {
+      "bytes": 3268208,
+      "doc_id": "4fa44d0b6ca81e4c7e0d9958ae6eab22c3a049e36a5e8baf79f1f43e162b1313",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2025_xi_hallucination_as_a_computational_boundary_a_hierarchy_of_ine_2508.07334.pdf",
+      "source_version": "sha256:4fa44d0b6ca8",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2025_xi_hallucination_as_a_computational_boundary_a_hierarchy_of_ine_2508.07334.pdf"
+    },
+    {
+      "bytes": 537116,
+      "doc_id": "c66e7e8848a3931c0f03023769ef70a78785b2eaec15e0f1724e625f8392416a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_llm_capacity_rag_theory/2026_ganju_a_theory_of_time_sensitive_language_generation_sparse_halluc_2605.11302.pdf",
+      "source_version": "sha256:c66e7e8848a3",
+      "uri": "file://papers/05_llm_capacity_rag_theory/2026_ganju_a_theory_of_time_sensitive_language_generation_sparse_halluc_2605.11302.pdf"
+    },
+    {
+      "bytes": 197505,
+      "doc_id": "b513fa11d872b8ce45801b56ffe7353840b2a5c02b69961a810436e601ce0a7d",
+      "format": "pdf",
+      "license": "CC BY 4.0",
+      "path": "papers/05_schema_induction_matching/2022_linacre_splink_free_software_for_probabilistic_record_linkage_at_sca.pdf",
+      "source_version": "sha256:b513fa11d872",
+      "uri": "file://papers/05_schema_induction_matching/2022_linacre_splink_free_software_for_probabilistic_record_linkage_at_sca.pdf"
+    },
+    {
+      "bytes": 474374,
+      "doc_id": "49e03cc051bad9164c1e917e1883f6320e4bb6648c4d27c4dcf6952727348cba",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_schema_induction_matching/2024_ding_chatel_entity_linking_with_chatbots_2402.14858.pdf",
+      "source_version": "sha256:49e03cc051ba",
+      "uri": "file://papers/05_schema_induction_matching/2024_ding_chatel_entity_linking_with_chatbots_2402.14858.pdf"
+    },
+    {
+      "bytes": 2094548,
+      "doc_id": "9eb123458cfb5575979f31ac5676f5fab0121ac8202f97eb4fb4868f36a0f3de",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_schema_induction_matching/2025_ahuja_map_make_schema_guided_text_to_table_generation_2505.23174.pdf",
+      "source_version": "sha256:9eb123458cfb",
+      "uri": "file://papers/05_schema_induction_matching/2025_ahuja_map_make_schema_guided_text_to_table_generation_2505.23174.pdf"
+    },
+    {
+      "bytes": 1297549,
+      "doc_id": "a7fdbbbd50a20520e48b42ed9dd0c16bdaef9fe2cfcb088ec724c025545b30f3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_schema_induction_matching/2026_jonnalagedda_executable_schema_contracts_from_automatic_ingestion_to_mult_2606.05415.pdf",
+      "source_version": "sha256:a7fdbbbd50a2",
+      "uri": "file://papers/05_schema_induction_matching/2026_jonnalagedda_executable_schema_contracts_from_automatic_ingestion_to_mult_2606.05415.pdf"
+    },
+    {
+      "bytes": 1655260,
+      "doc_id": "d5d10c5a589fe8a700d5af873db705e0d66066c2c7f5155a52894ed17220a4f8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_search_quality_signals/2023_carlini_poisoning_web_scale_training_datasets_is_practical_2302.10149.pdf",
+      "source_version": "sha256:d5d10c5a589f",
+      "uri": "file://papers/05_search_quality_signals/2023_carlini_poisoning_web_scale_training_datasets_is_practical_2302.10149.pdf"
+    },
+    {
+      "bytes": 514983,
+      "doc_id": "4abe6f68d9c823c77975541488a5667b7549125623ee9dc5cc9daf417b981c59",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_search_quality_signals/2023_jagerman_query_expansion_by_prompting_large_language_models_2305.03653.pdf",
+      "source_version": "sha256:4abe6f68d9c8",
+      "uri": "file://papers/05_search_quality_signals/2023_jagerman_query_expansion_by_prompting_large_language_models_2305.03653.pdf"
+    },
+    {
+      "bytes": 297472,
+      "doc_id": "aa198a0df997f39ecd064670ed17f62b22fc567502890832ba1206de99be464b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/05_search_quality_signals/2023_pradeep_rankzephyr_effective_and_robust_zero_shot_listwise_reranking_2312.02724.pdf",
+      "source_version": "sha256:aa198a0df997",
+      "uri": "file://papers/05_search_quality_signals/2023_pradeep_rankzephyr_effective_and_robust_zero_shot_listwise_reranking_2312.02724.pdf"
+    },
+    {
+      "bytes": 254930,
+      "doc_id": "da1227992d4a308f9f6f9f99893fd7b00c26e6cf757b1372f426074c101ef56b",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/1997_broder_on_the_resemblance_and_containment_of_documents.pdf",
+      "source_version": "sha256:da1227992d4a",
+      "uri": "file://papers/06_kb_quality_lifecycle/1997_broder_on_the_resemblance_and_containment_of_documents.pdf"
+    },
+    {
+      "bytes": 947053,
+      "doc_id": "8f10d249d1ee0ed570dcb64256d234bfdc248944eb32132f0437791ee6f5d5f5",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2022_liska_streamingqa_a_benchmark_for_adaptation_to_new_knowledge_over_2205.11388.pdf",
+      "source_version": "sha256:8f10d249d1ee",
+      "uri": "file://papers/06_kb_quality_lifecycle/2022_liska_streamingqa_a_benchmark_for_adaptation_to_new_knowledge_over_2205.11388.pdf"
+    },
+    {
+      "bytes": 231984,
+      "doc_id": "6c24762a3f277fd120ed1adf34b01420ecf92f18ff6d1b5435fa0a09cb804ecb",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2023_es_ragas_automated_evaluation_of_retrieval_augmented_generation_2309.15217.pdf",
+      "source_version": "sha256:6c24762a3f27",
+      "uri": "file://papers/06_kb_quality_lifecycle/2023_es_ragas_automated_evaluation_of_retrieval_augmented_generation_2309.15217.pdf"
+    },
+    {
+      "bytes": 2314447,
+      "doc_id": "e42fe14f8e87d405b6100fbb41f86e2be30710ab5c8a72cc9a3753f9ebcbb444",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2023_vu_freshllms_refreshing_large_language_models_with_search_engin_2310.03214.pdf",
+      "source_version": "sha256:e42fe14f8e87",
+      "uri": "file://papers/06_kb_quality_lifecycle/2023_vu_freshllms_refreshing_large_language_models_with_search_engin_2310.03214.pdf"
+    },
+    {
+      "bytes": 1012543,
+      "doc_id": "d3e989b0d1d87a32eb8d28f6a466834a3fbe0f1868d5730b1bd6c89f06e431c8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2024_hwang_retrieval_augmented_generation_with_estimation_of_source_rel_2410.22954.pdf",
+      "source_version": "sha256:d3e989b0d1d8",
+      "uri": "file://papers/06_kb_quality_lifecycle/2024_hwang_retrieval_augmented_generation_with_estimation_of_source_rel_2410.22954.pdf"
+    },
+    {
+      "bytes": 6489112,
+      "doc_id": "6b9e6e7a4fd581670c0aee0f9ed78d5d9b938c28a42d913bc2eb691deb6db698",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2024_su_conflictbank_a_benchmark_for_evaluating_the_influence_of_kno_2408.12076.pdf",
+      "source_version": "sha256:6b9e6e7a4fd5",
+      "uri": "file://papers/06_kb_quality_lifecycle/2024_su_conflictbank_a_benchmark_for_evaluating_the_influence_of_kno_2408.12076.pdf"
+    },
+    {
+      "bytes": 716871,
+      "doc_id": "5aaed527a892550358f85c4800029179ce8e1fb08f010d8390d756bf89c847e8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2024_upadhyay_umbrela_umbrela_is_the_open_source_reproduction_of_the_bing_2406.06519.pdf",
+      "source_version": "sha256:5aaed527a892",
+      "uri": "file://papers/06_kb_quality_lifecycle/2024_upadhyay_umbrela_umbrela_is_the_open_source_reproduction_of_the_bing_2406.06519.pdf"
+    },
+    {
+      "bytes": 362821,
+      "doc_id": "a93e4dfc0f2585b6d24067871ca340f60db97e4f9ef85631940febf1df53580d",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2025_javadi_contradictions_in_context_challenges_for_retrieval_augmented_2511.06668.pdf",
+      "source_version": "sha256:a93e4dfc0f25",
+      "uri": "file://papers/06_kb_quality_lifecycle/2025_javadi_contradictions_in_context_challenges_for_retrieval_augmented_2511.06668.pdf"
+    },
+    {
+      "bytes": 749798,
+      "doc_id": "57cb8aab74751d4f75a7175aec36fc7a0e8c9e9c01520012b021bfc796e80191",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2025_luo_zero_rag_towards_retrieval_augmented_generation_with_zero_re_2511.00505.pdf",
+      "source_version": "sha256:57cb8aab7475",
+      "uri": "file://papers/06_kb_quality_lifecycle/2025_luo_zero_rag_towards_retrieval_augmented_generation_with_zero_re_2511.00505.pdf"
+    },
+    {
+      "bytes": 6176058,
+      "doc_id": "016a1712e77780694ce4a1d9923a62e9f54f502226405c5758f297a7fb52e595",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2025_pradeep_the_great_nugget_recall_automating_fact_extraction_and_rag_e_2504.15068.pdf",
+      "source_version": "sha256:016a1712e777",
+      "uri": "file://papers/06_kb_quality_lifecycle/2025_pradeep_the_great_nugget_recall_automating_fact_extraction_and_rag_e_2504.15068.pdf"
+    },
+    {
+      "bytes": 1757561,
+      "doc_id": "1e182422e31d8e9ae9bb91bf0dcea76465fe0be7e886204962a04fae3095469f",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2026_mu_towards_secure_retrieval_augmented_generation_a_comprehensiv_2603.21654.pdf",
+      "source_version": "sha256:1e182422e31d",
+      "uri": "file://papers/06_kb_quality_lifecycle/2026_mu_towards_secure_retrieval_augmented_generation_a_comprehensiv_2603.21654.pdf"
+    },
+    {
+      "bytes": 1146393,
+      "doc_id": "f82b483689f9dd3e333148b960fe6cf0f4a0efe2369f89ed6a6f6a401eb79dec",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kb_quality_lifecycle/2026_yalamarthi_policy_aware_vector_search_a_vision_for_fine_grained_access_2606.19803.pdf",
+      "source_version": "sha256:f82b483689f9",
+      "uri": "file://papers/06_kb_quality_lifecycle/2026_yalamarthi_policy_aware_vector_search_a_vision_for_fine_grained_access_2606.19803.pdf"
+    },
+    {
+      "bytes": 637034,
+      "doc_id": "285f0bb2470f056527a5916f6ab86f0fea8d399f3fec7d53a499e93ae8337e59",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2022_melnyk_knowledge_graph_generation_from_text_2211.10511.pdf",
+      "source_version": "sha256:285f0bb2470f",
+      "uri": "file://papers/06_kg_construction/2022_melnyk_knowledge_graph_generation_from_text_2211.10511.pdf"
+    },
+    {
+      "bytes": 1865739,
+      "doc_id": "97ee278e19ecc601cdd7f17c7d0f1a43d54bdbb608883a96eb5f8e2226b407dd",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2023_zhu_llms_for_knowledge_graph_construction_and_reasoning_recent_c_2305.13168.pdf",
+      "source_version": "sha256:97ee278e19ec",
+      "uri": "file://papers/06_kg_construction/2023_zhu_llms_for_knowledge_graph_construction_and_reasoning_recent_c_2305.13168.pdf"
+    },
+    {
+      "bytes": 821777,
+      "doc_id": "4025ef106513584961860d478a067bad6660e0316b9066991562a878af0c5082",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2024_bavaresco_llms_instead_of_human_judges_a_large_scale_empirical_study_a_2406.18403.pdf",
+      "source_version": "sha256:4025ef106513",
+      "uri": "file://papers/06_kg_construction/2024_bavaresco_llms_instead_of_human_judges_a_large_scale_empirical_study_a_2406.18403.pdf"
+    },
+    {
+      "bytes": 1089781,
+      "doc_id": "9627b37a1e68219eff257f59cae11b3319b1b13a30cb886fa48bad2f3ad52907",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2024_huang_can_llms_be_good_graph_judge_for_knowledge_graph_constructio_2411.17388.pdf",
+      "source_version": "sha256:9627b37a1e68",
+      "uri": "file://papers/06_kg_construction/2024_huang_can_llms_be_good_graph_judge_for_knowledge_graph_constructio_2411.17388.pdf"
+    },
+    {
+      "bytes": 2622938,
+      "doc_id": "25569156081a7e7ef1dcd6d421a29e0d5c2b64ffb7b7bfef12ea6004ef62f3e3",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2024_lairgi_itext2kg_incremental_knowledge_graphs_construction_using_lar_2409.03284.pdf",
+      "source_version": "sha256:25569156081a",
+      "uri": "file://papers/06_kg_construction/2024_lairgi_itext2kg_incremental_knowledge_graphs_construction_using_lar_2409.03284.pdf"
+    },
+    {
+      "bytes": 1108975,
+      "doc_id": "26ed8ae11c3d3d67e4e85ccc6f21b2cbbb2713754c9a3cef16fa929801606541",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2025_sun_lkd_kgc_domain_specific_kg_construction_via_llm_driven_knowl_2505.24163.pdf",
+      "source_version": "sha256:26ed8ae11c3d",
+      "uri": "file://papers/06_kg_construction/2025_sun_lkd_kgc_domain_specific_kg_construction_via_llm_driven_knowl_2505.24163.pdf"
+    },
+    {
+      "bytes": 1004240,
+      "doc_id": "a18e64764a8ecacb1ffec989634971307394e010c4ac26f47bb3cda226b51a83",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2025_zhang_rakg_document_level_retrieval_augmented_knowledge_graph_cons_2504.09823.pdf",
+      "source_version": "sha256:a18e64764a8e",
+      "uri": "file://papers/06_kg_construction/2025_zhang_rakg_document_level_retrieval_augmented_knowledge_graph_cons_2504.09823.pdf"
+    },
+    {
+      "bytes": 5042075,
+      "doc_id": "4a353a6739a0d8e2e888d38273e97d242a0f15df44b05df331af39e42cd62853",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/06_kg_construction/2026_amrani_graphragprov_graphrag_meets_how_provenance_2610.37237.pdf",
+      "source_version": "sha256:4a353a6739a0",
+      "uri": "file://papers/06_kg_construction/2026_amrani_graphragprov_graphrag_meets_how_provenance_2610.37237.pdf"
+    },
+    {
+      "bytes": 1307057,
+      "doc_id": "50aa8da6bf61c37f4819f45a5db19cafba4721540d14bf97b4ab29a196265d1a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2020_zhong_semantic_evaluation_for_text_to_sql_with_distilled_test_suit_2010.02840.pdf",
+      "source_version": "sha256:50aa8da6bf61",
+      "uri": "file://papers/07_structured_query_interfaces/2020_zhong_semantic_evaluation_for_text_to_sql_with_distilled_test_suit_2010.02840.pdf"
+    },
+    {
+      "bytes": 888633,
+      "doc_id": "41241a987040ab1d9b4948d707fae6508659dc91eb09b2e04c7f6ff053fddfde",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2023_wang_mac_sql_a_multi_agent_collaborative_framework_for_text_to_sq_2312.11242.pdf",
+      "source_version": "sha256:41241a987040",
+      "uri": "file://papers/07_structured_query_interfaces/2023_wang_mac_sql_a_multi_agent_collaborative_framework_for_text_to_sq_2312.11242.pdf"
+    },
+    {
+      "bytes": 1159127,
+      "doc_id": "799568d483ac4f8e68379cbec43fa70f3b434bc67d497cfe6fb9c1b5ec3daf7a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2024_furst_evaluating_the_data_model_robustness_of_text_to_sql_systems_2402.08349.pdf",
+      "source_version": "sha256:799568d483ac",
+      "uri": "file://papers/07_structured_query_interfaces/2024_furst_evaluating_the_data_model_robustness_of_text_to_sql_systems_2402.08349.pdf"
+    },
+    {
+      "bytes": 1103814,
+      "doc_id": "b5f18dfe7c9505039ce4ee99bfbf629ea7ff81668dbc7b5481b86d9433036a9e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2024_lee_trustsql_benchmarking_text_to_sql_reliability_with_penalty_b_2403.15879.pdf",
+      "source_version": "sha256:b5f18dfe7c95",
+      "uri": "file://papers/07_structured_query_interfaces/2024_lee_trustsql_benchmarking_text_to_sql_reliability_with_penalty_b_2403.15879.pdf"
+    },
+    {
+      "bytes": 722208,
+      "doc_id": "f53567ffad07730f081dca534dca3f8eefadcca15cf78be1e028fc8ab265b0f8",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2024_ozsoy_text2cypher_bridging_natural_language_and_graph_databases_2412.10064.pdf",
+      "source_version": "sha256:f53567ffad07",
+      "uri": "file://papers/07_structured_query_interfaces/2024_ozsoy_text2cypher_bridging_natural_language_and_graph_databases_2412.10064.pdf"
+    },
+    {
+      "bytes": 2161792,
+      "doc_id": "61d1e379e733c38ed68a5a59cf3c96ac13941757957420ebc646883a03357fea",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2024_pourreza_chase_sql_multi_path_reasoning_and_preference_optimized_cand_2410.01943.pdf",
+      "source_version": "sha256:61d1e379e733",
+      "uri": "file://papers/07_structured_query_interfaces/2024_pourreza_chase_sql_multi_path_reasoning_and_preference_optimized_cand_2410.01943.pdf"
+    },
+    {
+      "bytes": 2268971,
+      "doc_id": "da298fe288af7a507d29d44853679e3cbb8b1a4d40645dae745127075b458e3e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2025_ozsoy_enhancing_text2cypher_with_schema_filtering_2505.05118.pdf",
+      "source_version": "sha256:da298fe288af",
+      "uri": "file://papers/07_structured_query_interfaces/2025_ozsoy_enhancing_text2cypher_with_schema_filtering_2505.05118.pdf"
+    },
+    {
+      "bytes": 578244,
+      "doc_id": "31cb5229ca4568d33fca8ad0bbf8a2410f5247013bc321fcc6f5ba7bb8b9a892",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2026_ranganath_pipe_cypher_automatic_enterprise_benchmark_generation_for_te_2606.08481.pdf",
+      "source_version": "sha256:31cb5229ca45",
+      "uri": "file://papers/07_structured_query_interfaces/2026_ranganath_pipe_cypher_automatic_enterprise_benchmark_generation_for_te_2606.08481.pdf"
+    },
+    {
+      "bytes": 341274,
+      "doc_id": "d13fdc1d166939da40a0853ef750df93b54389302909139f19b05df45a398b09",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/07_structured_query_interfaces/2026_yang_ggc_selective_query_correction_for_reliable_text_to_sparql_g_2607.28082.pdf",
+      "source_version": "sha256:d13fdc1d1669",
+      "uri": "file://papers/07_structured_query_interfaces/2026_yang_ggc_selective_query_correction_for_reliable_text_to_sparql_g_2607.28082.pdf"
+    },
+    {
+      "bytes": 1176411,
+      "doc_id": "67f9d34162146817e121070c8cd6449cd9ca5b78f8e73548e90690bed17623fd",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2020_chen_hybridqa_a_dataset_of_multi_hop_question_answering_over_tabu_2004.07347.pdf",
+      "source_version": "sha256:67f9d3416214",
+      "uri": "file://papers/08_hybrid_structured_rag/2020_chen_hybridqa_a_dataset_of_multi_hop_question_answering_over_tabu_2004.07347.pdf"
+    },
+    {
+      "bytes": 3123791,
+      "doc_id": "e6481f3b966192a3e72518abf7206ebf79c10517c50e39b19ec3f7c82a763ab0",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2020_oguz_unik_qa_unified_representations_of_structured_and_unstructur_2012.14610.pdf",
+      "source_version": "sha256:e6481f3b9661",
+      "uri": "file://papers/08_hybrid_structured_rag/2020_oguz_unik_qa_unified_representations_of_structured_and_unstructur_2012.14610.pdf"
+    },
+    {
+      "bytes": 923676,
+      "doc_id": "ddabb8d1af2e151ea4c7fef212e3702f94231edb637294f4c73fb0b854855c3e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2022_amouyal_qampari_an_open_domain_question_answering_benchmark_for_ques_2205.12665.pdf",
+      "source_version": "sha256:ddabb8d1af2e",
+      "uri": "file://papers/08_hybrid_structured_rag/2022_amouyal_qampari_an_open_domain_question_answering_benchmark_for_ques_2205.12665.pdf"
+    },
+    {
+      "bytes": 1265617,
+      "doc_id": "8a125d224aeeedadc4a5cb490a2516a4bdf75671c962cb66de2ac21f6d89ae23",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2022_cheng_binding_language_models_in_symbolic_languages_2210.02875.pdf",
+      "source_version": "sha256:8a125d224aee",
+      "uri": "file://papers/08_hybrid_structured_rag/2022_cheng_binding_language_models_in_symbolic_languages_2210.02875.pdf"
+    },
+    {
+      "bytes": 727432,
+      "doc_id": "a7af01f63076c170afc632cc6b04460403b523145c729768c9e2791688a3724a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2024_kong_opentab_advancing_large_language_models_as_open_domain_table_2402.14361.pdf",
+      "source_version": "sha256:a7af01f63076",
+      "uri": "file://papers/08_hybrid_structured_rag/2024_kong_opentab_advancing_large_language_models_as_open_domain_table_2402.14361.pdf"
+    },
+    {
+      "bytes": 481158,
+      "doc_id": "18907c5afdfb59c42a406ee1c11b0d14dc40c2ee05a2cd6f66d6533884a53e80",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2024_nahid_tabsqlify_enhancing_reasoning_capabilities_of_llms_through_t_2404.10150.pdf",
+      "source_version": "sha256:18907c5afdfb",
+      "uri": "file://papers/08_hybrid_structured_rag/2024_nahid_tabsqlify_enhancing_reasoning_capabilities_of_llms_through_t_2404.10150.pdf"
+    },
+    {
+      "bytes": 1882234,
+      "doc_id": "cd0633f655116a86f2f9af50e3e61fc0af746f56c98b68acd36e73510a93891e",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2024_reddy_docfinqa_a_long_context_financial_reasoning_dataset_2401.06915.pdf",
+      "source_version": "sha256:cd0633f65511",
+      "uri": "file://papers/08_hybrid_structured_rag/2024_reddy_docfinqa_a_long_context_financial_reasoning_dataset_2401.06915.pdf"
+    },
+    {
+      "bytes": 1638905,
+      "doc_id": "b852a161dacdd1eb3ebebc140b8d9f6724aba6512bdabf74ff75f84159d03918",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2024_wang_chain_of_table_evolving_tables_in_the_reasoning_chain_for_ta_2401.04398.pdf",
+      "source_version": "sha256:b852a161dacd",
+      "uri": "file://papers/08_hybrid_structured_rag/2024_wang_chain_of_table_evolving_tables_in_the_reasoning_chain_for_ta_2401.04398.pdf"
+    },
+    {
+      "bytes": 747331,
+      "doc_id": "3fd16019f656a194e361003c751daab52eed0d0fb30c5ae034ade6a3a5be5c27",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_hybrid_structured_rag/2026_b_agentic_dag_orchestrated_planner_framework_for_multi_modal_m_2603.14229.pdf",
+      "source_version": "sha256:3fd16019f656",
+      "uri": "file://papers/08_hybrid_structured_rag/2026_b_agentic_dag_orchestrated_planner_framework_for_multi_modal_m_2603.14229.pdf"
+    },
+    {
+      "bytes": 2140755,
+      "doc_id": "b18ac8a05ba486b85c4306a49b726e45d5ba24835b305699d79440876f315b72",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/08_open_source_kb_stacks/2024_liang_kag_boosting_llms_in_professional_domains_via_knowledge_augm_2409.13731.pdf",
+      "source_version": "sha256:b18ac8a05ba4",
+      "uri": "file://papers/08_open_source_kb_stacks/2024_liang_kag_boosting_llms_in_professional_domains_via_knowledge_augm_2409.13731.pdf"
+    },
+    {
+      "bytes": 1207639,
+      "doc_id": "65fa9f9494f00bfb8df26e3de3ccce9c7b011088eaa51a0a349fc2b068456654",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/09_quality_versioning_provenance/2023_xiong_can_llms_express_their_uncertainty_an_empirical_evaluation_o_2306.13063.pdf",
+      "source_version": "sha256:65fa9f9494f0",
+      "uri": "file://papers/09_quality_versioning_provenance/2023_xiong_can_llms_express_their_uncertainty_an_empirical_evaluation_o_2306.13063.pdf"
+    },
+    {
+      "bytes": 6196891,
+      "doc_id": "d67bb6157df77fadb8e64187fbb81f1a2d4b85dfe89135b30b81b3439e6ad579",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/09_quality_versioning_provenance/2024_ye_justice_or_prejudice_quantifying_biases_in_llm_as_a_judge_2410.02736.pdf",
+      "source_version": "sha256:d67bb6157df7",
+      "uri": "file://papers/09_quality_versioning_provenance/2024_ye_justice_or_prejudice_quantifying_biases_in_llm_as_a_judge_2410.02736.pdf"
+    },
+    {
+      "bytes": 3495104,
+      "doc_id": "69723b18dd301fd3cf11639d60bad194af92a498a9a964c89d55e7d63846d4f0",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/09_quality_versioning_provenance/2025_morishige_ensuring_reproducibility_in_generative_ai_systems_for_genera_2505.02854.pdf",
+      "source_version": "sha256:69723b18dd30",
+      "uri": "file://papers/09_quality_versioning_provenance/2025_morishige_ensuring_reproducibility_in_generative_ai_systems_for_genera_2505.02854.pdf"
+    },
+    {
+      "bytes": 643279,
+      "doc_id": "07b6b7d85414c3ff822e9af694ce94b850382237d8953a2043069ab537fe9f98",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/09_quality_versioning_provenance/2026_qian_from_unreliable_to_usable_decomposing_failure_modes_and_conf_2610.20417.pdf",
+      "source_version": "sha256:07b6b7d85414",
+      "uri": "file://papers/09_quality_versioning_provenance/2026_qian_from_unreliable_to_usable_decomposing_failure_modes_and_conf_2610.20417.pdf"
+    },
+    {
+      "bytes": 2419355,
+      "doc_id": "63dcc89bf2b9af66d692e78e82fd2d3876337da43e5f21e9de353d424d88d768",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2022_haris_scholarly_knowledge_extraction_from_published_software_packa_2212.07921.pdf",
+      "source_version": "sha256:63dcc89bf2b9",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2022_haris_scholarly_knowledge_extraction_from_published_software_packa_2212.07921.pdf"
+    },
+    {
+      "bytes": 1961554,
+      "doc_id": "f8c38e520ad590ab7f9b91b378b9bf9ffe8bccacb17a83aff144d16efeb2c929",
+      "format": "pdf",
+      "license": "CC BY 4.0",
+      "path": "papers/10_semistructured_multimodal_sources/2022_jacobsson_an_open_access_database_and_analysis_tool_for_perovskite_sol.pdf",
+      "source_version": "sha256:f8c38e520ad5",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2022_jacobsson_an_open_access_database_and_analysis_tool_for_perovskite_sol.pdf"
+    },
+    {
+      "bytes": 953749,
+      "doc_id": "61652cc8984865571c71825a02573a1f32e8406196824bf8ca2903ae391b7cb6",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2022_loukas_finer_financial_numeric_entity_recognition_for_xbrl_tagging_2203.06482.pdf",
+      "source_version": "sha256:61652cc89848",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2022_loukas_finer_financial_numeric_entity_recognition_for_xbrl_tagging_2203.06482.pdf"
+    },
+    {
+      "bytes": 1326756,
+      "doc_id": "19b90ad03e9c72fadeb0b410a95ec4535dc3b64e94c76e7d5fecfd5ec3ad3ff5",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2022_shon_slue_phase_2_a_benchmark_suite_of_diverse_spoken_language_un_2212.10525.pdf",
+      "source_version": "sha256:19b90ad03e9c",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2022_shon_slue_phase_2_a_benchmark_suite_of_diverse_spoken_language_un_2212.10525.pdf"
+    },
+    {
+      "bytes": 431265,
+      "doc_id": "796e7f6c47c4bf98dbfec88cd73abe07dc546e3a96550964d7b910a9e0c7a85c",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2023_bain_whisperx_time_accurate_speech_transcription_of_long_form_aud_2303.00747.pdf",
+      "source_version": "sha256:796e7f6c47c4",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2023_bain_whisperx_time_accurate_speech_transcription_of_long_form_aud_2303.00747.pdf"
+    },
+    {
+      "bytes": 5456230,
+      "doc_id": "18e5bf28afb861fc49d93437b952828d5db576a30e1bcd8d30850567b5680c84",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2023_jiang_a_large_scale_evaluation_for_log_parsing_techniques_how_far_2308.10828.pdf",
+      "source_version": "sha256:18e5bf28afb8",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2023_jiang_a_large_scale_evaluation_for_log_parsing_techniques_how_far_2308.10828.pdf"
+    },
+    {
+      "bytes": 2222001,
+      "doc_id": "a8aaf25a37e22c7d363d64c2591356c48f9d43567d6d86e31270dcfb4f80acd0",
+      "format": "pdf",
+      "license": "CC BY 4.0",
+      "path": "papers/10_semistructured_multimodal_sources/2025_kelly_a_dataset_of_curie_and_neel_temperatures_auto_generated_with.pdf",
+      "source_version": "sha256:a8aaf25a37e2",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2025_kelly_a_dataset_of_curie_and_neel_temperatures_auto_generated_with.pdf"
+    },
+    {
+      "bytes": 2571758,
+      "doc_id": "38c262844bb6da5a18e79a9f3480a26f413589cfc61d5a1d78c43245621cb101",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/10_semistructured_multimodal_sources/2026_mansour_axe_low_cost_cross_domain_web_structured_information_extract_2602.01838.pdf",
+      "source_version": "sha256:38c262844bb6",
+      "uri": "file://papers/10_semistructured_multimodal_sources/2026_mansour_axe_low_cost_cross_domain_web_structured_information_extract_2602.01838.pdf"
+    },
+    {
+      "bytes": 36945,
+      "doc_id": "fc4c9de7a2a40e09109ec4f47e60f8a7b7af83f1eb27584ddcd7381c1f812f7a",
+      "format": "pdf",
+      "license": "unknown",
+      "path": "papers/12_enterprise_idp_vendors_cases/2021_dlt_speeding_up_claims_processing_at_a_large_cabinet_level_feder.pdf",
+      "source_version": "sha256:fc4c9de7a2a4",
+      "uri": "file://papers/12_enterprise_idp_vendors_cases/2021_dlt_speeding_up_claims_processing_at_a_large_cabinet_level_feder.pdf"
+    },
+    {
+      "bytes": 645038,
+      "doc_id": "28e5d55241074af38f2f46d815e127fcbfb312c0c792db9ca50b5f8b5260c320",
+      "format": "pdf",
+      "license": "CC BY 4.0",
+      "path": "papers/12_enterprise_idp_vendors_cases/2026_gomez_information_extraction_from_electricity_invoices_with_genera_2604.25927.pdf",
+      "source_version": "sha256:28e5d5524107",
+      "uri": "file://papers/12_enterprise_idp_vendors_cases/2026_gomez_information_extraction_from_electricity_invoices_with_genera_2604.25927.pdf"
+    },
+    {
+      "bytes": 1277912,
+      "doc_id": "3fbd836906a97264f46fc8252148f279b0f8e0c395316af3c28bb93f1cd66fb5",
+      "format": "csv",
+      "license": "Apache-2.0",
+      "path": "papers/manifest.csv",
+      "source_version": "sha256:3fbd836906a9",
+      "uri": "file://papers/manifest.csv"
+    },
+    {
+      "bytes": 94619,
+      "doc_id": "6d0fbcc848d126dcae94121744060217e4506b21a6a96f3ebf166d5731528ad7",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Agent data retrieval research summary.md",
+      "source_version": "sha256:6d0fbcc848d1",
+      "uri": "file://reports/Agent data retrieval research summary.md"
+    },
+    {
+      "bytes": 52331,
+      "doc_id": "85918f93f738b6080b53d002566132943651d80cba322a4bc4b38b6bbf020f65",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Agent ready data lake toolkit.md",
+      "source_version": "sha256:85918f93f738",
+      "uri": "file://reports/Agent ready data lake toolkit.md"
+    },
+    {
+      "bytes": 91994,
+      "doc_id": "c0ed9eb1ce4e482e6c2e929216ac02649124630228f32cb94ff2a2ff30235af0",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Deterministic retrieval data conversion.md",
+      "source_version": "sha256:c0ed9eb1ce4e",
+      "uri": "file://reports/Deterministic retrieval data conversion.md"
+    },
+    {
+      "bytes": 129627,
+      "doc_id": "b93f8bcc66bd8e9b76c930708041424f50fb149f1d43c99b6c6a762afc356528",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Deterministic retrieval methods catalog.md",
+      "source_version": "sha256:b93f8bcc66bd",
+      "uri": "file://reports/Deterministic retrieval methods catalog.md"
+    },
+    {
+      "bytes": 81561,
+      "doc_id": "bb3a1427ee98dc7e0dbede7a45e09433abc3ea06bbeea8ca7721c02fc5c8367b",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/How AI research agents retrieve information.md",
+      "source_version": "sha256:bb3a1427ee98",
+      "uri": "file://reports/How AI research agents retrieve information.md"
+    },
+    {
+      "bytes": 156307,
+      "doc_id": "91481f2d2b6036e880f668cadeb7fbd08aed3239d8508e365f9dca96f846da1b",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Information theory of agent retrieval.md",
+      "source_version": "sha256:91481f2d2b60",
+      "uri": "file://reports/Information theory of agent retrieval.md"
+    },
+    {
+      "bytes": 109463,
+      "doc_id": "1a26479adf136bb62194a10be20f247c6484e550fb6a24c2cf5967ebc4f1ec69",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Searchable agent knowledge base construction.md",
+      "source_version": "sha256:1a26479adf13",
+      "uri": "file://reports/Searchable agent knowledge base construction.md"
+    },
+    {
+      "bytes": 114348,
+      "doc_id": "3dd362285509770b9826ebf0380abba8923f9e1cf653c8e08ecaac853bbd3190",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "reports/Searchable agent knowledge base methods catalog.md",
+      "source_version": "sha256:3dd362285509",
+      "uri": "file://reports/Searchable agent knowledge base methods catalog.md"
+    },
+    {
+      "bytes": 35753,
+      "doc_id": "45b77cee082ad3b9ba58441f19ebdc9ced3bd49f98ee21110802846ca75dc2d2",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Agent ready data lake toolkit/competitive_landscape_gaps.md",
+      "source_version": "sha256:45b77cee082a",
+      "uri": "file://research_notes/Agent ready data lake toolkit/competitive_landscape_gaps.md"
+    },
+    {
+      "bytes": 40997,
+      "doc_id": "d68f5366302ea28c208b1ad66a7a086fdb079a14486798fa5d46c8aa4c3ac826",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Agent ready data lake toolkit/data_schema_engineering.md",
+      "source_version": "sha256:d68f5366302e",
+      "uri": "file://research_notes/Agent ready data lake toolkit/data_schema_engineering.md"
+    },
+    {
+      "bytes": 35805,
+      "doc_id": "b3332ab4379719525bad66a8b0b435688f9da0d2062064143a7da567ad454c2b",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Agent ready data lake toolkit/document_ingestion_parsing.md",
+      "source_version": "sha256:b3332ab43797",
+      "uri": "file://research_notes/Agent ready data lake toolkit/document_ingestion_parsing.md"
+    },
+    {
+      "bytes": 33076,
+      "doc_id": "823d16168d231398af71f5a1d0c496d66025f7e1c0adc14dd6dd24adfdbf681c",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Agent ready data lake toolkit/graph_information_engineering.md",
+      "source_version": "sha256:823d16168d23",
+      "uri": "file://research_notes/Agent ready data lake toolkit/graph_information_engineering.md"
+    },
+    {
+      "bytes": 37135,
+      "doc_id": "4f8eb8579c4722f3525c61b96ad3f72b36f12f4c461a232a42a6c03b8ff1bbca",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Agent ready data lake toolkit/storage_agent_retrieval.md",
+      "source_version": "sha256:4f8eb8579c47",
+      "uri": "file://research_notes/Agent ready data lake toolkit/storage_agent_retrieval.md"
+    },
+    {
+      "bytes": 48888,
+      "doc_id": "a6520efb3c33b15648b21495884883b3990e65dc4bf2c7c4bfbef68c99657be4",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/01_surveys_foundations.md",
+      "source_version": "sha256:a6520efb3c33",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/01_surveys_foundations.md"
+    },
+    {
+      "bytes": 53300,
+      "doc_id": "3b58431f1d6884f79d9a73357982ab85f028bd89d04dad354ef9ba9ef66b3c43",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/02_parsing_tables_forms.md",
+      "source_version": "sha256:3b58431f1d68",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/02_parsing_tables_forms.md"
+    },
+    {
+      "bytes": 55076,
+      "doc_id": "f7894b1dd79332abe1373c04b27f913eb3846581a9b7f9a936ea9ace514ff3e9",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/03_llm_information_extraction.md",
+      "source_version": "sha256:f7894b1dd793",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/03_llm_information_extraction.md"
+    },
+    {
+      "bytes": 54017,
+      "doc_id": "4ac16a49775f62664960bdc90089fd1f602ea5628f2c823f6148315bfc19e967",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/04_semantic_operators_doc_to_table.md",
+      "source_version": "sha256:4ac16a49775f",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/04_semantic_operators_doc_to_table.md"
+    },
+    {
+      "bytes": 51657,
+      "doc_id": "b2cf80f3a3c7d50205fe8b7f89098a931181974d08ca3bf98880b64b941856a8",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/05_schema_induction_matching.md",
+      "source_version": "sha256:b2cf80f3a3c7",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/05_schema_induction_matching.md"
+    },
+    {
+      "bytes": 53960,
+      "doc_id": "4433ec960142f1423a673df092920bbe151a503bec1da205c7c58b6f89961a88",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/06_kg_construction.md",
+      "source_version": "sha256:4433ec960142",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/06_kg_construction.md"
+    },
+    {
+      "bytes": 46919,
+      "doc_id": "df69006260f68c5db3172b0fa03391fdd0ee01e5fde06e8233e53dc459de2cef",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/07_structured_query_interfaces.md",
+      "source_version": "sha256:df69006260f6",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/07_structured_query_interfaces.md"
+    },
+    {
+      "bytes": 46192,
+      "doc_id": "0e4fde84fcd95ad91d96a151615bc47a93999fb3bb41f7c40faf33ab9249c170",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/08_hybrid_structured_rag.md",
+      "source_version": "sha256:0e4fde84fcd9",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/08_hybrid_structured_rag.md"
+    },
+    {
+      "bytes": 55998,
+      "doc_id": "9873b99d57af1090a77d0873ace7a58012db20225836ea1cc1b539475e2140e6",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/09_quality_versioning_provenance.md",
+      "source_version": "sha256:9873b99d57af",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/09_quality_versioning_provenance.md"
+    },
+    {
+      "bytes": 52565,
+      "doc_id": "be2c52686e6c6c305d5131e64ec6ff3c4acf61780936b4f59575967bdc7e2445",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/10_semistructured_multimodal_sources.md",
+      "source_version": "sha256:be2c52686e6c",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/10_semistructured_multimodal_sources.md"
+    },
+    {
+      "bytes": 69510,
+      "doc_id": "bbd54cc4c89b6dfe9f47343131003897a090b1abcfd12d66c3d4f41fffebf3c8",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/11_enterprise_cloud_platforms.md",
+      "source_version": "sha256:bbd54cc4c89b",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/11_enterprise_cloud_platforms.md"
+    },
+    {
+      "bytes": 49356,
+      "doc_id": "575d318083402e46e112c59bf4432e25ee2dad1f93350156fea8dd0dfaca239a",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/12_enterprise_idp_vendors_cases.md",
+      "source_version": "sha256:575d31808340",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/12_enterprise_idp_vendors_cases.md"
+    },
+    {
+      "bytes": 66014,
+      "doc_id": "15e06fd993a86ca982e48b15c4fb70a27cfdf1926274320bd9201d977bfbc796",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Deterministic retrieval data conversion/13_open_source_implementation.md",
+      "source_version": "sha256:15e06fd993a8",
+      "uri": "file://research_notes/Deterministic retrieval data conversion/13_open_source_implementation.md"
+    },
+    {
+      "bytes": 54835,
+      "doc_id": "412f0dfdf68fd8490ef90517a311adae8f56833905b8aa052381e83ac40871e9",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/How AI research agents retrieve information/01_web_search_infrastructure.md",
+      "source_version": "sha256:412f0dfdf68f",
+      "uri": "file://research_notes/How AI research agents retrieve information/01_web_search_infrastructure.md"
+    },
+    {
+      "bytes": 72367,
+      "doc_id": "1e927ac9e4babc155e529177b3a0c5ccfecad5248fa6b2da58d2a6ceb3fe1e95",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/How AI research agents retrieve information/02_deep_research_agents.md",
+      "source_version": "sha256:1e927ac9e4ba",
+      "uri": "file://research_notes/How AI research agents retrieve information/02_deep_research_agents.md"
+    },
+    {
+      "bytes": 64137,
+      "doc_id": "5be1edc5fb0a8b4d705f8af08d8ef646795ae4d8b60e6711b2b34d649c729bae",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/How AI research agents retrieve information/03_coding_agent_retrieval.md",
+      "source_version": "sha256:5be1edc5fb0a",
+      "uri": "file://research_notes/How AI research agents retrieve information/03_coding_agent_retrieval.md"
+    },
+    {
+      "bytes": 52995,
+      "doc_id": "182f19ed231a87d57fe840685e137cd0a1c71a3641fffe53cfeabdb56e3a6888",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/How AI research agents retrieve information/04_reading_synthesis_citation.md",
+      "source_version": "sha256:182f19ed231a",
+      "uri": "file://research_notes/How AI research agents retrieve information/04_reading_synthesis_citation.md"
+    },
+    {
+      "bytes": 56698,
+      "doc_id": "6f29bcaf9e68796f849a4838b81d5602f0448c6573e6f1b1d5e1f67e3fe1e834",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/How AI research agents retrieve information/05_search_quality_signals.md",
+      "source_version": "sha256:6f29bcaf9e68",
+      "uri": "file://research_notes/How AI research agents retrieve information/05_search_quality_signals.md"
+    },
+    {
+      "bytes": 65972,
+      "doc_id": "e42e8aba44d8ac3682e49aad6a052b90e7ba0708cf9f19ead7bb50692a46f51e",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Information theory of agent retrieval/01_information_theory_foundations.md",
+      "source_version": "sha256:e42e8aba44d8",
+      "uri": "file://research_notes/Information theory of agent retrieval/01_information_theory_foundations.md"
+    },
+    {
+      "bytes": 73230,
+      "doc_id": "860201c027129186e71d39c3069d6ac44e770a7dbedc78a6cc435b58aaee4a45",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Information theory of agent retrieval/02_ir_theory.md",
+      "source_version": "sha256:860201c02712",
+      "uri": "file://research_notes/Information theory of agent retrieval/02_ir_theory.md"
+    },
+    {
+      "bytes": 75884,
+      "doc_id": "31b6d81c703eee5aa6413336ea7d8156299bb9fa5a3e9c37d358c8bedc326fa6",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Information theory of agent retrieval/03_information_science.md",
+      "source_version": "sha256:31b6d81c703e",
+      "uri": "file://research_notes/Information theory of agent retrieval/03_information_science.md"
+    },
+    {
+      "bytes": 79151,
+      "doc_id": "0d28e24a2f650e892264bcb2b0a468f08f4e5cfe029f9950bd81687a9252dd5d",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Information theory of agent retrieval/04_decision_statistical_theory.md",
+      "source_version": "sha256:0d28e24a2f65",
+      "uri": "file://research_notes/Information theory of agent retrieval/04_decision_statistical_theory.md"
+    },
+    {
+      "bytes": 67969,
+      "doc_id": "5e2ecf736f99c1c1c2a5844b05c6fa5d80e69920cc106780219d308a428427bd",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Information theory of agent retrieval/05_llm_capacity_rag_theory.md",
+      "source_version": "sha256:5e2ecf736f99",
+      "uri": "file://research_notes/Information theory of agent retrieval/05_llm_capacity_rag_theory.md"
+    },
+    {
+      "bytes": 71648,
+      "doc_id": "b90ebadf150457ca97eb1c54e046dab0c4c8e67a54a1568f2ddcf721b71014f8",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/01_indexing_chunking_enrichment.md",
+      "source_version": "sha256:b90ebadf1504",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/01_indexing_chunking_enrichment.md"
+    },
+    {
+      "bytes": 52942,
+      "doc_id": "e6b6c9867d7f52a369e677eeb3d6d3b62a4bdfb24cddf95187f3495cef8bc1f9",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/02_procedures_sops_workflows.md",
+      "source_version": "sha256:e6b6c9867d7f",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/02_procedures_sops_workflows.md"
+    },
+    {
+      "bytes": 61708,
+      "doc_id": "6ec8ecf15c8e62ece2241d77429b6fa0d67e9fe6b47f0107f30c5f9bc8b0ce77",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/03_rules_policies_regulations.md",
+      "source_version": "sha256:6ec8ecf15c8e",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/03_rules_policies_regulations.md"
+    },
+    {
+      "bytes": 61214,
+      "doc_id": "f60662c8ef3e974ff1321a82f0a220dffa80437f8b46f6d1c7b72e5d24b3cdf5",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/04_domain_knowledge_organization.md",
+      "source_version": "sha256:f60662c8ef3e",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/04_domain_knowledge_organization.md"
+    },
+    {
+      "bytes": 65337,
+      "doc_id": "54ff51ceff0c3d29a982bf6ada826eed723c8f5b229a637d136d8013895e816a",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/05_agentic_search_memory.md",
+      "source_version": "sha256:54ff51ceff0c",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/05_agentic_search_memory.md"
+    },
+    {
+      "bytes": 75408,
+      "doc_id": "7a9c89e7bf100e9e78400bad9b7c8dc0bfc4a4b21ac92f6c2bb12d5b3872bab7",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/06_kb_quality_lifecycle.md",
+      "source_version": "sha256:7a9c89e7bf10",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/06_kb_quality_lifecycle.md"
+    },
+    {
+      "bytes": 56627,
+      "doc_id": "2e8576900649b813d68cd67b58017d2c1fec0ab4664b6f24ea5c0e5263b352c1",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/07_enterprise_knowledge_platforms.md",
+      "source_version": "sha256:2e8576900649",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/07_enterprise_knowledge_platforms.md"
+    },
+    {
+      "bytes": 70601,
+      "doc_id": "cf2cc38d52a8e6d67a6ca3707746f36d1c78851c5a08421f9cc4ebbb8937733f",
+      "format": "md",
+      "license": "Apache-2.0",
+      "path": "research_notes/Searchable agent knowledge base construction/08_open_source_kb_stacks.md",
+      "source_version": "sha256:cf2cc38d52a8",
+      "uri": "file://research_notes/Searchable agent knowledge base construction/08_open_source_kb_stacks.md"
+    }
+  ],
+  "license_summary": "Repository reports, notes and papers catalog: Apache-2.0. Sampled PDFs keep their own licences (per papers/manifest.csv) and are never committed.",
+  "version": "2026-11-08"
+}

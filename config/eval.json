@@ -1,0 +1,13 @@
+{
+  "_comment": "Run configuration for adr-eval. generator and judge name profiles in config/models.json (override per command with --generator / --judge). No API keys here: an API profile reads its key from the environment variable named in its api_key_env. Claude Code profiles use the logged-in Claude subscription.",
+  "generator": "claude_code_sonnet",
+  "judge": "claude_code_opus",
+  "models": "config/models.json",
+  "repeats": 5,
+  "t_values": [0.5, 0.75, 0.9],
+  "seed": 20261108,
+  "concurrency": 4,
+  "prices": "config/prices.json",
+  "cache_dir": ".cache/llm",
+  "index_dir": ".cache/index"
+}

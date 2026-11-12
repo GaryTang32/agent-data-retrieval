@@ -1,0 +1,16 @@
+{
+  "empty_docs": [],
+  "fingerprint": "150af34ab34d41a83f6fe552a8313c6a514f26b1567cb6205e3e633f21c6becc",
+  "index_source": "loaded",
+  "n_chunks": 7305,
+  "n_docs": 245,
+  "span_containment": 1.0,
+  "text_fidelity": {
+    "checked": 45,
+    "formats_na": [
+      "pdf"
+    ],
+    "matching": 45,
+    "share": 1.0
+  }
+}

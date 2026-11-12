@@ -1,0 +1,8 @@
+{
+  "https://www.ecfr.gov/api/versioner/v1/full/2024-06-27/title-33.xml?part=117": "ecfr_t33_p117_2024-06-27.xml",
+  "https://www.ecfr.gov/api/versioner/v1/full/2025-06-27/title-33.xml?part=117": "ecfr_t33_p117_2025-06-27.xml",
+  "https://www.federalregister.gov/api/v1/documents.json?conditions%5Bagencies%5D%5B%5D=coast-guard&conditions%5Bcfr%5D%5Btitle%5D=33&conditions%5Bcfr%5D%5Bpart%5D=117&conditions%5Bpublication_date%5D%5Bgte%5D=2023-01-01&conditions%5Bpublication_date%5D%5Blte%5D=2023-12-31&fields%5B%5D=document_number&order=oldest&per_page=2": "fr_list_33_117_2023.json",
+  "https://www.federalregister.gov/api/v1/documents/2023-01707.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url": "fr_2023-01707.json",
+  "https://www.federalregister.gov/api/v1/documents/2023-01708.json?fields%5B%5D=document_number&fields%5B%5D=type&fields%5B%5D=subtype&fields%5B%5D=title&fields%5B%5D=action&fields%5B%5D=abstract&fields%5B%5D=dates&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies&fields%5B%5D=cfr_references&fields%5B%5D=docket_ids&fields%5B%5D=html_url": "fr_2023-01708.json",
+  "https://www.irs.gov/irm/part21/irm_21-005-001r": "irm_21-005-001r.html"
+}

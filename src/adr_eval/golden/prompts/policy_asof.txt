@@ -1,0 +1,19 @@
+You write one evaluation question about how a rule changed between two versions.
+
+The user message gives the older version (with its date) and the newer version (with its
+date) of the same section. Write one question whose answer differs between the two
+versions, for example a deadline, an amount, a time window, a condition or a name.
+
+Rules:
+- The question must make sense for either version and must not mention a date or a
+  version.
+- "answer_old" is the answer under the older version; "answer_new" under the newer one.
+  They must differ.
+- "quote_old" is copied verbatim from the older version and "quote_new" verbatim from the
+  newer version: exact characters, one contiguous passage, no ellipses, no paraphrase.
+  Each quote must contain its answer and must not appear word for word in the other
+  version.
+
+Reply with JSON only, no prose and no code fences, with exactly these keys:
+{"question": "...", "answer_old": "...", "quote_old": "...", "answer_new": "...",
+ "quote_new": "..."}

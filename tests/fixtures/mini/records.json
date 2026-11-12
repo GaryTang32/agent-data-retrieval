@@ -1,0 +1,8 @@
+[
+  {"id": "REC-001", "type": "grant", "year": 2019, "title": "Rural Broadband Pilot"},
+  {"id": "REC-002", "type": "grant", "year": 2021, "title": "Community Library Upgrade"},
+  {"id": "REC-003", "type": "contract", "year": 2021, "title": "Road Maintenance Services"},
+  {"id": "REC-004", "type": "contract", "year": 2022, "title": "Records Digitisation"},
+  {"id": "REC-005", "type": "grant", "year": 2022, "title": "Flood Preparedness Fund"},
+  {"id": "REC-006", "type": "audit", "year": 2023, "title": "Annual Financial Review"}
+]

@@ -1,0 +1,70 @@
+{
+  "corpus": "mini",
+  "documents": [
+    {
+      "bytes": 330,
+      "doc_id": "32426f2f7fa04bbcacfc1dd05b7df0851f623f249ddabd0bf680de3197c0bca5",
+      "format": "md",
+      "license": "fixture-original",
+      "path": "escalation_guide.md",
+      "source_version": "1",
+      "uri": "file://escalation_guide.md"
+    },
+    {
+      "bytes": 805,
+      "doc_id": "38332eef2e3d9df7dca5ae39572c57cd117ffa0ac658460eb7815104a73017aa",
+      "format": "html",
+      "license": "fixture-original",
+      "path": "procedure.html",
+      "source_version": "1",
+      "uri": "file://procedure.html"
+    },
+    {
+      "bytes": 536,
+      "doc_id": "bf261512c569b20415e40690c6275e93977ed2a224bb08c3b1e277e5a4f6df73",
+      "format": "json",
+      "license": "fixture-original",
+      "path": "records.json",
+      "source_version": "1",
+      "uri": "file://records.json"
+    },
+    {
+      "bytes": 572,
+      "doc_id": "0ae656ecfff1fd2f1169bed39cfc021e99eb8f412a2878c303cbb5334f58873e",
+      "format": "md",
+      "license": "fixture-original",
+      "path": "refund_policy.md",
+      "source_version": "1",
+      "uri": "file://refund_policy.md"
+    },
+    {
+      "bytes": 345,
+      "doc_id": "faae59d2ddca399151a8eead27d97e88d88dea6aabcb9c03e8f9a2caa2e8c329",
+      "format": "xml",
+      "license": "fixture-original",
+      "path": "regulation_s12_2023-01-01.xml",
+      "source_version": "2023-01-01",
+      "uri": "file://regulation_s12_2023-01-01.xml"
+    },
+    {
+      "bytes": 345,
+      "doc_id": "e9bfce170e2bd875f60539f8e2ab23ac1eebe17f342ce6ca8e35b0d816fa8305",
+      "format": "xml",
+      "license": "fixture-original",
+      "path": "regulation_s12_2024-01-01.xml",
+      "source_version": "2024-01-01",
+      "uri": "file://regulation_s12_2024-01-01.xml"
+    },
+    {
+      "bytes": 1014,
+      "doc_id": "e582c178755fcae59da2c9bf5e9d48494dc1a98733eb4420a6ce560f8e13a742",
+      "format": "pdf",
+      "license": "fixture-original",
+      "path": "service_charter.pdf",
+      "source_version": "1",
+      "uri": "file://service_charter.pdf"
+    }
+  ],
+  "license_summary": "fixture-original",
+  "version": "1"
+}

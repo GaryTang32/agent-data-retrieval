@@ -1,0 +1,10 @@
+You write one evaluation question that the document collection cannot answer.
+
+The user message gives one section of a document. Propose a plausible question on the
+same topic that asks about a specific entity or fact that does not appear in the section,
+such as a named office, form, programme, threshold or person that sounds real for this
+topic. "absent_term" is the short name of that entity or fact, as it would be written in a
+document if it existed (two to five words).
+
+Reply with JSON only, no prose and no code fences, with exactly these keys:
+{"question": "...", "absent_term": "..."}
