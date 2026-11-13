@@ -437,10 +437,10 @@
   <!-- =================== HEADER =================== -->
   <header id="top">
     <div class="hero">
-      <p class="eyebrow">Project status · 12 November 2026</p>
+      <p class="eyebrow">Project status · 13 November 2026</p>
       <h1>Agent Data Retrieval Status</h1>
       <p class="dek">What the repository is for, the plan, what is done, what is pending, and the purpose of every step so far.</p>
-      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 in progress</span><span>Baseline recorded and reviewed</span><span>CI passing</span><span>All work pushed</span></p>
+      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 merged</span><span>Phase 1 started</span><span>Metric definitions version 2</span><span>CI passing</span><span>All work pushed</span></p>
     </div>
     <div class="brief">
       <span class="k"><svg class="ic" aria-hidden="true"><use href="#i-brief"/></svg>Key points</span>
@@ -448,20 +448,20 @@
         <li><strong>The repository is still work in progress.</strong> Research and design are finished. The toolkit itself (Phases 1–6) has not been started. The only results so far are the baseline's own numbers.</li>
         <li><strong>The Phase 0 evaluation harness is built.</strong> It is the yardstick every later component must beat. 410 automated tests pass locally and in CI. Each part was independently reviewed, and a final whole-branch review is done.</li>
         <li><strong>Three golden question sets are generated and verified.</strong> gov 297, research 275 and bench 728 items, with 0 verification failures. Only the gov set is in git; research and bench stay local.</li>
-        <li><strong>The baseline is recorded with 1 repeat.</strong> Six runs, 2,072 rows. Accuracy is 0.70–0.72 with RRF fusion and 0.73–0.81 with tuned linear fusion (<a href="#rs-base">section 2.6</a>).</li>
-        <li><strong>The baseline shows where the toolkit has to help.</strong> It scores 0 of 27 (RRF) and 2 of 27 (linear) on gov count and filter questions. The final review also found four metric artefacts that Phase 1 has to settle first.</li>
+        <li><strong>The baseline is recorded under version 2 of the metric definitions.</strong> Six runs, 2,072 rows. Accuracy is 0.71–0.72 with RRF fusion and 0.75–0.81 with tuned linear fusion (<a href="#rs-base">section 2.6</a>).</li>
+        <li><strong>Phase 1 has started with the scoring rules.</strong> Four rules the final review flagged were tested on the real corpora, redefined and reviewed: identical copies of evidence, the ranking score, identifier answers and query understanding. The baseline still scores 0 of 27 (RRF) and 2 of 27 (linear) on gov count and filter questions.</li>
         <li><strong>Three Phase 0 exit items need outside input:</strong> a human-labelled sample, a judge from a different model family, and human vetting of golden items.</li>
       </ul>
-      <p class="rec"><strong>Recommendation:</strong> open the Phase 0 pull request and squash-merge it, then start Phase 1 by settling the metric definitions the review flagged (<a href="#td-next">section 3.2</a>). The 5-repeat run is optional.</p>
+      <p class="rec"><strong>Next:</strong> design and build the rest of Phase 1, the evidence store and record format, structure-led chunking and the search tools, and measure each against this baseline (<a href="#td-next">section 3.2</a>).</p>
     </div>
 
     <div class="stats six" aria-label="Project status in numbers">
-      <div class="stat"><span class="num">410</span><span class="lbl">Automated tests passing, locally and in CI</span></div>
+      <div class="stat"><span class="num">503</span><span class="lbl">Automated tests passing, locally and in CI</span></div>
       <div class="stat"><span class="num">1,300</span><span class="lbl">Verified golden questions across three corpora</span></div>
       <div class="stat"><span class="num">17,948</span><span class="lbl">Text chunks indexed for the baseline</span></div>
-      <div class="stat"><span class="num">8,170</span><span class="lbl">Model calls saved, so reruns are free</span></div>
+      <div class="stat"><span class="num">8,532</span><span class="lbl">Model calls saved, so reruns are free</span></div>
       <div class="stat"><span class="num">6</span><span class="lbl">Baseline runs recorded: 2 systems, 3 corpora, 1 repeat</span></div>
-      <div class="stat"><span class="num">0 of 7</span><span class="lbl">Roadmap phases finished; Phase 0 in progress</span></div>
+      <div class="stat"><span class="num">1 of 7</span><span class="lbl">Roadmap phases merged; Phase 1 started</span></div>
     </div>
 
     <nav class="toc" aria-label="Contents">
@@ -545,8 +545,8 @@
       <table style="min-width:860px">
         <thead><tr><th>Phase</th><th>Scope</th><th>Purpose</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><th scope="row">0 Evaluation first</th><td>Golden question sets over three corpora, a five-track evaluation harness, a recorded flat hybrid baseline (BM25 + dense)</td><td>Build the yardstick before the toolkit, so every later piece has to prove it beats a known baseline</td><td><span class="str str-qual">In progress</span></td></tr>
-          <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec with conformance tests, content-hash registry, parse routing, structure-led chunks, hybrid search with reranking, <code>search</code> / <code>read</code> / <code>grep</code> tools</td><td>The lossless, hash-pinned foundation that every answer cites</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">0 Evaluation first</th><td>Golden question sets over three corpora, a five-track evaluation harness, a recorded flat hybrid baseline (BM25 + dense)</td><td>Build the yardstick before the toolkit, so every later piece has to prove it beats a known baseline</td><td><span class="str str-strong">Merged</span></td></tr>
+          <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec with conformance tests, content-hash registry, parse routing, structure-led chunks, hybrid search with reranking, <code>search</code> / <code>read</code> / <code>grep</code> tools</td><td>The lossless, hash-pinned foundation that every answer cites</td><td><span class="str str-qual">In progress</span></td></tr>
           <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records from MCP and OpenAPI</td><td>Permissions and currency are hard to add later, so they come early</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">3 Typed deterministic database</th><td>Schema contracts, grounded extraction with span checks, entity resolution, semantic layer with guarded SQL</td><td>Exact answers for count, filter and lookup questions, rebuilt with identical checksums</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">4 Knowledge units and enforcement</th><td>Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings</td><td>Make domain knowledge, rules and procedures searchable as typed units</td><td><span class="str str-na">Not started</span></td></tr>
@@ -560,7 +560,7 @@
 
   <section id="fd-path" aria-labelledby="h-fd3">
     <h3 id="h-fd3"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">1.3</span>Phase 0 step by step</h3>
-    <p class="lead-in">Twelve steps from research to a merged baseline. Eleven are done; the pull request remains.</p>
+    <p class="lead-in">Twelve steps from research to a merged baseline. All twelve are done; Phase 0 was merged on 12 November.</p>
     <ol class="flow">
       <li class="done"><strong>Research</strong><span>Find the most effective methods before designing</span><span class="str str-strong">Done</span></li>
       <li class="done"><strong>Design spec and plan</strong><span>Agree what Phase 0 measures, then split the build into small reviewed tasks</span><span class="str str-strong">Done</span></li>
@@ -573,7 +573,7 @@
       <li class="done"><strong>Report interval fix</strong><span>Make confidence intervals match the averages shown</span><span class="str str-strong">Done</span></li>
       <li class="done"><strong>Results write-up</strong><span>Compare the two systems; publish <code>results/</code></span><span class="str str-strong">Done</span></li>
       <li class="done"><strong>Final review</strong><span>Two independent reviewers, fixes, a re-record and a re-review</span><span class="str str-strong">Done</span></li>
-      <li><strong>Pull request</strong><span>Land Phase 0 on <code>main</code></span><span class="str str-na">On your request</span></li>
+      <li class="done"><strong>Pull request</strong><span>Land Phase 0 on <code>main</code></span><span class="str str-strong">Merged</span></li>
     </ol>
   </section>
 
@@ -728,54 +728,65 @@
   </section>
 
   <section id="rs-base" aria-labelledby="h-rs6">
-    <h3 id="h-rs6"><svg class="ic hic" aria-hidden="true"><use href="#i-gauge"/></svg><span class="no">2.6</span>Baseline results (1 repeat)</h3>
-    <p class="lead-in">Two deliberately simple systems, measured on the test split of each corpus: BM25 plus a dense index, fused by reciprocal rank (RRF) or by a linear weight tuned on the dev split. These are the numbers later phases must beat, not a claim about the toolkit. They were recorded again on 12 November after the final review's fixes.</p>
+    <h3 id="h-rs6"><svg class="ic hic" aria-hidden="true"><use href="#i-gauge"/></svg><span class="no">2.6</span>Baseline results (1 repeat, metric definitions version 2)</h3>
+    <p class="lead-in">Two deliberately simple systems, measured on the test split of each corpus: BM25 plus a dense index, fused by reciprocal rank (RRF) or by a linear weight tuned on the dev split. These are the numbers later phases must beat, not a claim about the toolkit. They were recorded again on 13 November under the four scoring rules settled at the start of Phase 1.</p>
     <div class="tbl-wrap">
-      <table style="min-width:980px">
-        <thead><tr><th>Corpus</th><th>System</th><th>n</th><th>Accuracy [95% CI]</th><th>Wrong</th><th>Abstained</th><th>Partial</th><th>Error</th><th>Recall@10</th><th>nDCG@10</th><th>Penalised t=0.75</th></tr></thead>
+      <table style="min-width:1040px">
+        <thead><tr><th>Corpus</th><th>System</th><th>n</th><th>Accuracy [95% CI]</th><th>Wrong</th><th>Abstained</th><th>Partial</th><th>Recall@10</th><th>nDCG@10</th><th>MRR</th><th>Coverage@10</th><th>Penalised t=0.75</th></tr></thead>
         <tbody>
-          <tr><th scope="row">gov</th><td>RRF</td><td class="n">242</td><td class="n">0.702 [0.645, 0.760]</td><td class="n">0.169</td><td class="n">0.095</td><td class="n">0.033</td><td class="n">0.000</td><td class="n">0.683</td><td class="n">0.500</td><td class="n">0.095</td></tr>
-          <tr><th scope="row">gov</th><td>Linear</td><td class="n">242</td><td class="n">0.731 [0.674, 0.785]</td><td class="n">0.182</td><td class="n">0.041</td><td class="n">0.045</td><td class="n">0.000</td><td class="n">0.775</td><td class="n">0.584</td><td class="n">0.050</td></tr>
-          <tr><th scope="row">research</th><td>RRF</td><td class="n">222</td><td class="n">0.703 [0.640, 0.761]</td><td class="n">0.167</td><td class="n">0.113</td><td class="n">0.018</td><td class="n">0.000</td><td class="n">0.654</td><td class="n">0.502</td><td class="n">0.149</td></tr>
-          <tr><th scope="row">research</th><td>Linear</td><td class="n">222</td><td class="n">0.806 [0.752, 0.856]</td><td class="n">0.131</td><td class="n">0.041</td><td class="n">0.023</td><td class="n">0.000</td><td class="n">0.856</td><td class="n">0.710</td><td class="n">0.347</td></tr>
-          <tr><th scope="row">bench</th><td>RRF</td><td class="n">572</td><td class="n">0.720 [0.682, 0.755]</td><td class="n">0.054</td><td class="n">0.103</td><td class="n">0.121</td><td class="n">0.002</td><td class="n">0.859</td><td class="n">0.458</td><td class="n">0.196</td></tr>
-          <tr><th scope="row">bench</th><td>Linear</td><td class="n">572</td><td class="n">0.801 [0.767, 0.834]</td><td class="n">0.042</td><td class="n">0.056</td><td class="n">0.101</td><td class="n">0.000</td><td class="n">0.922</td><td class="n">0.529</td><td class="n">0.371</td></tr>
+          <tr><th scope="row">gov</th><td>RRF</td><td class="n">242</td><td class="n">0.719 [0.661, 0.773]</td><td class="n">0.153</td><td class="n">0.095</td><td class="n">0.033</td><td class="n">0.706</td><td class="n">0.614</td><td class="n">0.591</td><td class="n">0.706</td><td class="n">0.161</td></tr>
+          <tr><th scope="row">gov</th><td>Linear</td><td class="n">242</td><td class="n">0.752 [0.698, 0.806]</td><td class="n">0.169</td><td class="n">0.045</td><td class="n">0.033</td><td class="n">0.771</td><td class="n">0.691</td><td class="n">0.671</td><td class="n">0.771</td><td class="n">0.145</td></tr>
+          <tr><th scope="row">research</th><td>RRF</td><td class="n">222</td><td class="n">0.712 [0.653, 0.770]</td><td class="n">0.158</td><td class="n">0.113</td><td class="n">0.018</td><td class="n">0.654</td><td class="n">0.502</td><td class="n">0.465</td><td class="n">0.654</td><td class="n">0.185</td></tr>
+          <tr><th scope="row">research</th><td>Linear</td><td class="n">222</td><td class="n">0.806 [0.752, 0.856]</td><td class="n">0.131</td><td class="n">0.041</td><td class="n">0.023</td><td class="n">0.856</td><td class="n">0.710</td><td class="n">0.676</td><td class="n">0.856</td><td class="n">0.347</td></tr>
+          <tr><th scope="row">bench</th><td>RRF</td><td class="n">572</td><td class="n">0.720 [0.682, 0.755]</td><td class="n">0.054</td><td class="n">0.103</td><td class="n">0.121</td><td class="n">0.859</td><td class="n">0.766</td><td class="n">0.756</td><td class="n">0.698</td><td class="n">0.196</td></tr>
+          <tr><th scope="row">bench</th><td>Linear</td><td class="n">572</td><td class="n">0.801 [0.767, 0.834]</td><td class="n">0.042</td><td class="n">0.056</td><td class="n">0.101</td><td class="n">0.922</td><td class="n">0.854</td><td class="n">0.849</td><td class="n">0.782</td><td class="n">0.371</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">Six runs, 2,072 rows, 1 model error. 133 rows used a recovered reply: the model wrote its JSON, then a correction or a sentence around it, and the run took the last complete JSON object. The penalised score gives +1 for a correct answer, 0 for abstaining and −3 for a wrong or partial answer at t = 0.75. Retrieval metrics exclude questions whose right answer is "not in the corpus".</p>
+    <p class="note">Six runs, 2,072 rows, 1 model error. Coverage@10 is the share of the evidence's characters inside the top 10 chunks; the top 10 hold about 3,300 to 3,800 tokens in every run. The penalised score gives +1 for a correct answer, 0 for abstaining and −3 for a wrong or partial answer at t = 0.75.</p>
+    <h4>What changed from version 1 of the definitions</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:860px">
+        <thead><tr><th>Corpus</th><th>System</th><th>Accuracy</th><th>Recall@10</th><th>nDCG@10</th><th>MRR</th><th>Citation precision</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">gov</th><td>RRF</td><td class="n">0.702 → 0.719</td><td class="n">0.683 → 0.706</td><td class="n">0.500 → 0.614</td><td class="n">0.447 → 0.591</td><td class="n">0.465 → 0.716</td></tr>
+          <tr><th scope="row">gov</th><td>Linear</td><td class="n">0.731 → 0.752</td><td class="n">0.775 → 0.771</td><td class="n">0.584 → 0.691</td><td class="n">0.528 → 0.671</td><td class="n">0.499 → 0.737</td></tr>
+          <tr><th scope="row">research</th><td>RRF</td><td class="n">0.703 → 0.712</td><td class="n">0.654</td><td class="n">0.502</td><td class="n">0.465</td><td class="n">0.591</td></tr>
+          <tr><th scope="row">research</th><td>Linear</td><td class="n">0.806</td><td class="n">0.856</td><td class="n">0.710</td><td class="n">0.676</td><td class="n">0.696</td></tr>
+          <tr><th scope="row">bench</th><td>RRF</td><td class="n">0.720</td><td class="n">0.859</td><td class="n">0.458 → 0.766</td><td class="n">0.756</td><td class="n">0.915</td></tr>
+          <tr><th scope="row">bench</th><td>Linear</td><td class="n">0.801</td><td class="n">0.922</td><td class="n">0.529 → 0.854</td><td class="n">0.849</td><td class="n">0.934</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Each cell shows version 1, then version 2; a single value means no change. Same questions and prompts in both.</p>
+    <div class="cards">
+      <div><strong>Identical copies of the evidence count</strong><p>On gov the same regulation text appears in several dated versions; 111 of 711 test evidence spans have a copy. Retrieving any copy now counts, except for questions with an as-of date. This is why gov MRR and citation precision rise.</p></div>
+      <div><strong>nDCG@10 is a pure ranking score</strong><p>Any chunk that touches the evidence earns full credit. Version 1 gave partial credit, which capped bench at about 0.65. Bench nDCG rises to 0.77 and 0.85; research is unchanged.</p></div>
+      <div><strong>Identifiers match as whole identifiers</strong><p>"47 CFR § 73.1740" is now correct for the gold "73.1740". This is the whole accuracy rise: 4 answers on gov RRF, 5 on gov linear, 2 on research RRF.</p></div>
+      <div><strong>Query understanding is scored in three parts</strong><p>Right kind of query, record match, and entity names with partial credit. Version 1 required every field to match exactly, which mostly measured naming conventions.</p></div>
+      <div><strong>The gov linear weight was retuned</strong><p>It moved from 1.00 to 0.85, so 191 of 242 gov linear questions were answered again. Under the same rules the new weight scores slightly lower than 1.00, so this is tuning noise, not a gain.</p></div>
+      <div><strong>Checked against experiments first</strong><p>Each rule was tested on the real corpora before it was adopted: a perfect ranking now scores 1.0 at every chunk size, and the identifier rule agrees with the judge on all 161 recorded identifier answers.</p></div>
+    </div>
     <h4>Linear minus RRF, paired over the same items</h4>
     <div class="tbl-wrap">
       <table style="min-width:900px">
-        <thead><tr><th>Corpus</th><th>Recall@10 difference [95% CI]</th><th>nDCG@10 difference [95% CI]</th><th>Penalised t=0.75 difference [95% CI]</th><th>Only RRF correct / only linear correct</th><th>Accuracy difference</th></tr></thead>
+        <thead><tr><th>Corpus</th><th>Recall@10 difference [95% CI]</th><th>nDCG@10 difference [95% CI]</th><th>Coverage@10 difference [95% CI]</th><th>Only RRF correct / only linear correct</th><th>Accuracy difference</th></tr></thead>
         <tbody>
-          <tr><th scope="row">gov</th><td class="n">+0.092 [0.052, 0.134]</td><td class="n">+0.084 [0.049, 0.120]</td><td class="n">-0.045 [-0.182, 0.087]</td><td class="n">10 / 17</td><td><span class="str str-na">Not significant</span></td></tr>
-          <tr><th scope="row">research</th><td class="n">+0.203 [0.140, 0.266]</td><td class="n">+0.208 [0.157, 0.260]</td><td class="n">+0.198 [0.045, 0.360]</td><td class="n">4 / 27</td><td><span class="str str-strong">Significant</span></td></tr>
-          <tr><th scope="row">bench</th><td class="n">+0.062 [0.040, 0.087]</td><td class="n">+0.071 [0.053, 0.089]</td><td class="n">+0.173 [0.088, 0.263]</td><td class="n">12 / 58</td><td><span class="str str-strong">Significant</span></td></tr>
+          <tr><th scope="row">gov</th><td class="n">+0.065 [0.027, 0.103]</td><td class="n">+0.077 [0.045, 0.110]</td><td class="n">+0.065 [0.027, 0.103]</td><td class="n">8 / 16</td><td><span class="str str-na">Not significant</span></td></tr>
+          <tr><th scope="row">research</th><td class="n">+0.203 [0.140, 0.266]</td><td class="n">+0.208 [0.157, 0.260]</td><td class="n">+0.203 [0.140, 0.266]</td><td class="n">4 / 25</td><td><span class="str str-strong">Significant</span></td></tr>
+          <tr><th scope="row">bench</th><td class="n">+0.062 [0.040, 0.087]</td><td class="n">+0.088 [0.067, 0.110]</td><td class="n">+0.084 [0.064, 0.106]</td><td class="n">12 / 58</td><td><span class="str str-strong">Significant</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">Both retrieval differences are significant on every corpus after Holm correction. The last column is a McNemar exact test on correct versus not.</p>
+    <p class="note">All three retrieval differences are significant on every corpus after Holm correction. The last column is a McNemar exact test on correct versus not.</p>
     <h4>What the baseline shows</h4>
     <div class="cards">
       <div><strong>Tuned linear fusion retrieves better than RRF</strong><p>Recall@10 is higher by 0.06 to 0.20 on all three corpora. Accuracy is also significantly higher on research and bench, but not on gov.</p></div>
-      <div><strong>On gov and research, tuning chose keyword search alone</strong><p>The tuned weight is 1.00, all on BM25. The dev score is nearly flat from 0.85 to 1.00, so read this as "the dense index adds little here". On bench the weight is 0.70.</p></div>
+      <div><strong>Tuning puts most of the weight on keyword search</strong><p>The weight on BM25 is 1.00 on research, 0.85 on gov and 0.70 on bench. The dense index adds little on gov and research.</p></div>
       <div><strong>A flat baseline cannot count</strong><p>On gov, count and filter questions score 0 of 27 with RRF and 2 of 27 with linear. This is the gap the typed database in Phase 3 is meant to close.</p></div>
-      <div><strong>Whole structured queries almost never match</strong><p>0.2% on bench, 4% on research, 7% on gov. Only part of this is a model weakness: the score also reflects conventions in the gold queries.</p></div>
-      <div><strong>Rare-term questions are not harder</strong><p>Leaving out count and filter questions, the rarest tier scores higher than the most common tier in four of six runs and lower in two.</p></div>
-      <div><strong>Every run is below zero at t = 0.9</strong><p>On gov and research the loss comes mainly from wrong answers where abstaining was better. On bench it comes mainly from partial answers, which are penalised like wrong ones.</p></div>
-    </div>
-    <h4>Known artefacts in the metrics (found by the final review)</h4>
-    <div class="tbl-wrap">
-      <table style="min-width:860px">
-        <thead><tr><th>Artefact</th><th>Effect on the numbers</th><th>What happens next</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">Gov has identical text in several dated versions, and only the named copy counts as relevant</th><td>Gov MRR reads 0.44 (RRF); it would be 0.57 with identical copies counted. Citation precision reads 0.45, not 0.68. Recall@10 barely moves</td><td>Phase 1 decides whether identical copies count</td></tr>
-          <tr><th scope="row">Bench questions cite whole documents</th><td>nDCG@10 cannot exceed about 0.65 on bench, so 0.46 and 0.53 are about 71% and 82% of the attainable score</td><td>Phase 1 decides whether to normalise by the attainable score</td></tr>
-          <tr><th scope="row">The exact scorer for identifiers is stricter than the judge</th><td>15 rows are marked wrong by the exact scorer and correct by the judge ("47 CFR § 73.1740" against "73.1740"); none the other way</td><td>Phase 1 decides how identifiers are matched</td></tr>
-          <tr><th scope="row">Query-understanding scores reflect gold conventions</th><td>Gold uses a different operation name for facts than the prompt describes, and most bench gold queries list no entities</td><td>Redefine before Phase 2</td></tr>
-        </tbody>
-      </table>
+      <div><strong>The model usually picks the right kind of query</strong><p>84% on gov, 66% on research, 87% on bench. Its weak spot is routing procedure questions as plain facts.</p></div>
+      <div><strong>Rare-term questions are neither harder nor easier</strong><p>Leaving out count and filter questions, the rarest tier scores higher than the most common tier in two of six runs and lower in four.</p></div>
+      <div><strong>Every run is below zero at t = 0.9</strong><p>On gov and research the loss comes mainly from wrong answers where abstaining was better. On bench it comes mainly from partial answers.</p></div>
     </div>
     <h4>Accuracy by question type</h4>
     <div class="tbl-wrap">
@@ -783,15 +794,15 @@
         <thead><tr><th>Corpus</th><th>Question type</th><th>n</th><th>RRF</th><th>Linear</th></tr></thead>
         <tbody>
           <tr><th scope="row">gov</th><td>count_filter</td><td class="n">27</td><td class="n">0.000</td><td class="n">0.074</td></tr>
-          <tr><th scope="row">gov</th><td>factoid</td><td class="n">37</td><td class="n">0.865</td><td class="n">0.892</td></tr>
-          <tr><th scope="row">gov</th><td>id_lookup</td><td class="n">36</td><td class="n">0.639</td><td class="n">0.722</td></tr>
+          <tr><th scope="row">gov</th><td>factoid</td><td class="n">37</td><td class="n">0.892</td><td class="n">0.865</td></tr>
+          <tr><th scope="row">gov</th><td>id_lookup</td><td class="n">36</td><td class="n">0.722</td><td class="n">0.861</td></tr>
           <tr><th scope="row">gov</th><td>insufficient</td><td class="n">29</td><td class="n">0.966</td><td class="n">0.931</td></tr>
-          <tr><th scope="row">gov</th><td>overview</td><td class="n">36</td><td class="n">0.778</td><td class="n">0.694</td></tr>
+          <tr><th scope="row">gov</th><td>overview</td><td class="n">36</td><td class="n">0.778</td><td class="n">0.722</td></tr>
           <tr><th scope="row">gov</th><td>policy_asof</td><td class="n">34</td><td class="n">0.676</td><td class="n">0.706</td></tr>
           <tr><th scope="row">gov</th><td>procedure</td><td class="n">43</td><td class="n">0.837</td><td class="n">0.930</td></tr>
           <tr><th scope="row">research</th><td>count_filter</td><td class="n">27</td><td class="n">0.222</td><td class="n">0.593</td></tr>
           <tr><th scope="row">research</th><td>factoid</td><td class="n">40</td><td class="n">0.875</td><td class="n">0.975</td></tr>
-          <tr><th scope="row">research</th><td>id_lookup</td><td class="n">39</td><td class="n">0.769</td><td class="n">0.872</td></tr>
+          <tr><th scope="row">research</th><td>id_lookup</td><td class="n">39</td><td class="n">0.821</td><td class="n">0.872</td></tr>
           <tr><th scope="row">research</th><td>insufficient</td><td class="n">42</td><td class="n">0.762</td><td class="n">0.714</td></tr>
           <tr><th scope="row">research</th><td>overview</td><td class="n">35</td><td class="n">0.600</td><td class="n">0.686</td></tr>
           <tr><th scope="row">research</th><td>procedure</td><td class="n">39</td><td class="n">0.821</td><td class="n">0.923</td></tr>
@@ -803,18 +814,18 @@
         </tbody>
       </table>
     </div>
-    <h4>Tuned weight and query understanding by field</h4>
+    <h4>Tuned weight and query understanding</h4>
     <div class="tbl-wrap">
-      <table style="min-width:760px">
-        <thead><tr><th>Corpus</th><th>Linear weight on BM25</th><th>Store</th><th>Operation</th><th>Filters</th><th>Entities</th><th>As-of date</th><th>Whole query</th></tr></thead>
+      <table style="min-width:680px">
+        <thead><tr><th>Corpus</th><th>Linear weight on BM25</th><th>Right kind of query (n)</th><th>Record match (n)</th><th>Entities, partial credit (n)</th></tr></thead>
         <tbody>
-          <tr><th scope="row">gov</th><td class="n">1.00</td><td class="n">0.855</td><td class="n">0.343</td><td class="n">0.500</td><td class="n">0.095</td><td class="n">0.979</td><td class="n">0.070</td></tr>
-          <tr><th scope="row">research</th><td class="n">1.00</td><td class="n">0.635</td><td class="n">0.450</td><td class="n">0.788</td><td class="n">0.086</td><td class="n">0.986</td><td class="n">0.041</td></tr>
-          <tr><th scope="row">bench</th><td class="n">0.70</td><td class="n">0.876</td><td class="n">0.248</td><td class="n">0.657</td><td class="n">0.028</td><td class="n">0.934</td><td class="n">0.002</td></tr>
+          <tr><th scope="row">gov</th><td class="n">0.85</td><td class="n">0.836 (213)</td><td class="n">1.000 (27)</td><td class="n">0.584 (213)</td></tr>
+          <tr><th scope="row">research</th><td class="n">1.00</td><td class="n">0.661 (180)</td><td class="n">0.963 (27)</td><td class="n">0.565 (180)</td></tr>
+          <tr><th scope="row">bench</th><td class="n">0.70</td><td class="n">0.867 (517)</td><td class="n">– (0)</td><td class="n">0.526 (150)</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><strong>Read with care:</strong> the generated questions were written by a model reading the source text, so they share its vocabulary and favour keyword search. The judge is from the same model family as the generator, and its agreement with human labels has not been measured. With one repeat, answer agreement across repeats is not measured. The full tables, the changes since the first recording and the limits are in <code>results/README.md</code>.</p>
+    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><strong>Read with care:</strong> the generated questions were written by a model reading the source text, so they favour keyword search. The judge is from the same model family as the generator, and its agreement with human labels has not been measured. Answers vary between calls: when 191 gov questions were answered again, 16 outcomes changed, which is as large as the gap between the two gov systems. The full tables and limits are in <code>results/README.md</code>.</p>
   </section>
 
   <!-- =================== PART 3: PENDING =================== -->
@@ -863,8 +874,8 @@
   <section id="td-next" aria-labelledby="h-td2">
     <h3 id="h-td2"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">3.2</span>Remaining Phase 0 steps</h3>
     <ol class="todo">
-      <li><strong>Open the Phase 0 pull request</strong><p>Squash-merged, so the PDF excerpts that sit in this branch's earlier commits never reach <code>main</code>. Purpose: land Phase 0 so Phase 1 starts from a measured baseline.</p><span class="meta"><span>On your request</span><span class="str str-na">To do</span></span></li>
-      <li><strong>Settle the metric definitions</strong><p>Decide whether identical copies of a text count as relevant, whether nDCG is normalised by the attainable score, how identifiers are matched, and how query understanding is scored. Purpose: later phases must be measured by definitions that do not reward the wrong thing.</p><span class="meta"><span>Opening decision of Phase 1</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Design and build the evidence store</strong><p>A record format with tests, a content-hash registry, structure-led chunks, and <code>search</code>, <code>read</code> and <code>grep</code> tools. Purpose: the first component of the toolkit itself, measured against the baseline.</p><span class="meta"><span>Phase 1</span><span class="str str-qual">Next</span></span></li>
+      <li><strong>Open a pull request for the metric definitions</strong><p>The four new scoring rules, the version 2 baseline and the comparison with version 1 are on the working branch. Purpose: land them on <code>main</code>.</p><span class="meta"><span>On your request</span><span class="str str-na">To do</span></span></li>
       <li><strong>Run 5 repeats (optional)</strong><p>Repeats 2–5 for both systems. Purpose: measure answer agreement across repeats and pass^5, the determinism numbers a single repeat cannot give.</p><span class="meta"><span>Any time</span><span class="str str-na">Optional</span></span></li>
       <li><strong>Improve the golden sets (v0.2)</strong><p>Check every "not in the corpus" question against the corpus, require questions to name what they ask about, keep policy pairs in one split, and drop questions drawn from catalogue rows. Purpose: fix the weak questions the review found.</p><span class="meta"><span>Early in Phase 1</span><span class="str str-na">To do</span></span></li>
       <li><strong>Harden the reply parser</strong><p>Three rare cases remain: a JSON example quoted after the answer, a cut-off reply with a nested object, and a reply that is a list. Purpose: a recovered reply should always be the one the model meant.</p><span class="meta"><span>Early in Phase 1</span><span class="str str-na">To do</span></span></li>
@@ -916,7 +927,7 @@
           <tr><th scope="row"><code>papers/</code></th><td>Source catalog (<code>manifest.csv</code>, <code>README.md</code>); PDFs are local only</td></tr>
           <tr><th scope="row"><code>docs/superpowers/</code></th><td>Phase 0 design spec and implementation plan</td></tr>
           <tr><th scope="row"><code>docs/eval/providers.md</code></th><td>How to set up each model provider</td></tr>
-          <tr><th scope="row"><code>src/adr_eval/</code>, <code>tests/</code></th><td>The evaluation harness and its 410 tests</td></tr>
+          <tr><th scope="row"><code>src/adr_eval/</code>, <code>tests/</code></th><td>The evaluation harness and its 503 tests</td></tr>
           <tr><th scope="row"><code>config/</code></th><td>Run settings, model profiles and the price table; no keys</td></tr>
           <tr><th scope="row"><code>corpora/</code></th><td>Pinned manifests for gov, research and bench; files download into <code>data/</code>, which is not committed</td></tr>
           <tr><th scope="row"><code>golden/</code></th><td>Golden sets v0.1: gov items and its review exclusions; hash-pinned READMEs for research and bench</td></tr>
@@ -963,6 +974,9 @@ adr-eval run gov --system baseline-rrf --split test --repeats 1 --dry-run</code>
           <tr><td class="n">8ef4c2e · d414cc9</td><th scope="row">Review fixes: scorer, reply recovery, honest report lines, run safety</th><td>Correct scoring and no misleading figures</td></tr>
           <tr><td class="n">a7cee87 · 9cddfbc</td><th scope="row">CI and pins, golden exclusions, research set local only</th><td>Tests that run in CI; nothing published that should not be</td></tr>
           <tr><td class="n">7a5bd81</td><th scope="row">Baseline re-recorded, write-up corrected</th><td>Results scored by the reviewed code, with supported claims only</td></tr>
+          <tr><td class="n">983c1da</td><th scope="row">Phase 0 merged to main</th><td>One squashed commit, so no PDF excerpts are published</td></tr>
+          <tr><td class="n">4063a0e · 3aa3728</td><th scope="row">Metric definitions version 2</th><td>Scoring rules that do not reward the wrong thing</td></tr>
+          <tr><td class="n">d6f753a · d11c318</td><th scope="row">Baseline under version 2, with the comparison</th><td>The numbers Phase 1 is measured against</td></tr>
         </tbody>
       </table>
     </div>
@@ -970,9 +984,9 @@ adr-eval run gov --system baseline-rrf --split test --repeats 1 --dry-run</code>
 
   <section class="endnote" id="conclusion" aria-labelledby="h-concl">
     <h2 id="h-concl"><svg class="ic hic" aria-hidden="true"><use href="#i-check"/></svg>Conclusion</h2>
-    <p>The project has its yardstick and its first measurement, and both have been through a final review. The harness is built and tested, three verified golden sets cover 1,300 questions, and the flat hybrid baseline is recorded with one repeat. It answers 70% to 81% of test questions correctly and fails almost every count and filter question on gov. The review also showed that four metrics need their definitions settled before later phases are measured against them.</p>
-    <p>What remains in Phase 0 is the pull request; the 5-repeat run is optional. Phases 1–6, the toolkit itself, now have numbers to beat.</p>
-    <p class="note">Status as of 12 November 2026, branch <code>claude/magical-lamport-n94rs3</code> at commit <code>7a5bd81</code>. Baseline figures are from the test split with one repeat; 5-repeat call counts are upper bounds from the dry run.</p>
+    <p>Phase 0 is merged: the harness, three verified golden sets covering 1,300 questions, and a reviewed baseline. Phase 1 has started by settling four scoring rules, and the baseline is recorded again under them. It answers 71% to 81% of test questions correctly and fails almost every count and filter question on gov.</p>
+    <p>The toolkit itself is still to be built. The next step is the evidence store, the first component that will be measured against these numbers. Three Phase 0 items still need outside input: human labels, a judge from another model family, and human vetting of golden items.</p>
+    <p class="note">Status as of 13 November 2026, branch <code>claude/magical-lamport-n94rs3</code> at commit <code>d11c318</code>. Baseline figures are from the test split with one repeat under metric definitions version 2.</p>
   </section>
 </main>
 </div>
