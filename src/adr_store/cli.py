@@ -1,6 +1,7 @@
-"""`adr` command line: `adr ingest <corpus> --store <dir>` (below) and the retrieval tools
-`adr index`, `adr search`, `adr read` and `adr grep` (spec §9; the code is in
-`adr_store.tools`, this module only parses arguments and prints).
+"""`adr` command line: `adr ingest <corpus> --store <dir>` and `adr ingest --path <folder>
+--store <dir>` (below), and the retrieval tools `adr index`, `adr search`, `adr read` and
+`adr grep` (spec §9; the code is in `adr_store.tools`, this module only parses arguments and
+prints).
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
@@ -16,9 +17,16 @@ conformance violation fails the command with the documents and rules named, and 
 is written. The compile figures of spec §10.3 are printed and written to
 `<store>/compile/<snapshot>.json` (no timings in that file, so it is reproducible).
 
+`--path` ingests the loose files of a folder instead (recursive, in relative-path order,
+hidden files and directories skipped): `doc_id` is the SHA-256 of the bytes and the text is
+the harness's `extract_text`, as for a corpus. Files with an unsupported extension are skipped
+and counted, identical files are ingested once; the same checks, figures and exit codes apply
+(a folder that is missing or holds no supported file, or a file whose text cannot be
+extracted, exits 2; a file that cannot be read exits 3).
+
 Exit codes: 0 done; 1 a document fails conformance; 2 the corpus cannot be loaded or the
-store refuses a write; 3 an unexpected error (a bug), reported on one line with the document
-being processed.
+store refuses a write; 3 a document that cannot be read or an unexpected error (a bug),
+reported on one line with the document being processed.
 """
 
 from __future__ import annotations
@@ -30,7 +38,8 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from adr_eval.corpora.base import ExtractionError
+from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
+from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.runner import RunError, load_checked_corpus
 from adr_store import tools
@@ -79,7 +88,7 @@ def _format_figures(added: list[Added]) -> dict:
     }
 
 
-def compile_figures(corpus: str, snapshot: str, added: list[Added], checked: int,
+def compile_figures(corpus: str | None, snapshot: str, added: list[Added], checked: int,
                     failures: int) -> dict:
     """The compile track of spec §10.3 for one ingest (evidence-in-one-chunk needs chunks
     and comes with the chunker)."""
@@ -103,7 +112,7 @@ def compile_figures(corpus: str, snapshot: str, added: list[Added], checked: int
 
 
 def _print_figures(f: dict, seconds: float) -> None:
-    print(f"{f['corpus']}: snapshot {f['snapshot']}")
+    print(f"{f['corpus'] or f['path']}: snapshot {f['snapshot']}")
     print(f"  documents {f['documents']}, elements {f['elements']}, leaves {f['leaves']}, "
           f"sections {f['sections']}")
     c = f["conformance"]
@@ -120,7 +129,31 @@ def _print_figures(f: dict, seconds: float) -> None:
     print(f"  wall-clock {seconds:.1f}s")
 
 
+def _report_failures(failures: list[tuple[str, ConformanceError]], checked: int) -> int:
+    print(f"error: {len(failures)} of {checked} documents fail conformance; "
+          f"no snapshot written", file=sys.stderr)
+    for path, e in failures:
+        print(f"  {path} ({e.doc_id[:12]}):", file=sys.stderr)
+        for p in e.problems[:PROBLEMS_SHOWN]:
+            print(f"    {p}", file=sys.stderr)
+    return EXIT_CONFORMANCE
+
+
+def _commit(store: Store, store_dir: Path, corpus: str | None, added: list[Added],
+            checked: int, t0: float, extra: dict | None = None) -> int:
+    """Commit the snapshot, write and print its compile figures (plus `extra` keys)."""
+    snapshot = store.commit()
+    figures = compile_figures(corpus, snapshot, added, checked, 0)
+    figures.update(extra or {})
+    payload = json.dumps(figures, indent=2, sort_keys=True) + "\n"
+    write_atomic(Path(store_dir) / "compile" / f"{snapshot}.json", payload.encode("utf-8"))
+    _print_figures(figures, time.perf_counter() - t0)
+    return 0
+
+
 def _ingest(a: argparse.Namespace) -> int:
+    if a.path is not None:
+        return _ingest_path(a)
     t0 = time.perf_counter()
     check_local_files(a.corpus)
     loaded = load_checked_corpus(a.corpus)
@@ -140,19 +173,90 @@ def _ingest(a: argparse.Namespace) -> int:
         except Exception as e:  # a bug: name the document, then stop
             raise _Unexpected(d.path, d.doc_id, e) from e
     if failures:
-        print(f"error: {len(failures)} of {len(manifest_docs)} documents fail conformance; "
-              f"no snapshot written", file=sys.stderr)
-        for path, e in failures:
-            print(f"  {path} ({e.doc_id[:12]}):", file=sys.stderr)
-            for p in e.problems[:PROBLEMS_SHOWN]:
-                print(f"    {p}", file=sys.stderr)
-        return EXIT_CONFORMANCE
-    snapshot = store.commit()
-    figures = compile_figures(a.corpus, snapshot, added, len(manifest_docs), 0)
-    payload = json.dumps(figures, indent=2, sort_keys=True) + "\n"
-    write_atomic(Path(a.store) / "compile" / f"{snapshot}.json", payload.encode("utf-8"))
-    _print_figures(figures, time.perf_counter() - t0)
-    return 0
+        return _report_failures(failures, len(manifest_docs))
+    return _commit(store, a.store, a.corpus, added, len(manifest_docs), t0)
+
+
+# -- `adr ingest --path <dir>`: loose files ----------------------------------------------
+
+# file extension (lower case) -> harness format; other files are skipped and counted
+PATH_FORMATS = {".md": "md", ".markdown": "md", ".txt": "txt", ".html": "html",
+                ".htm": "html", ".pdf": "pdf", ".xml": "xml", ".json": "json", ".csv": "csv"}
+
+
+class _UsageError(Exception):
+    """`adr ingest --path` cannot start (no such folder, nothing to ingest)."""
+
+
+def loose_files(folder: Path) -> tuple[list[tuple[str, Path]], int]:
+    """The supported files under `folder` as (relative POSIX path, path), sorted by relative
+    path, and the number of unsupported files. Hidden files and anything under a hidden
+    directory (a name that starts with a dot) are left out and not counted."""
+    found: list[tuple[str, Path]] = []
+    unsupported = 0
+    for p in folder.rglob("*"):
+        rel = p.relative_to(folder)
+        if any(part.startswith(".") for part in rel.parts) or not p.is_file():
+            continue
+        if p.suffix.lower() in PATH_FORMATS:
+            found.append((rel.as_posix(), p))
+        else:
+            unsupported += 1
+    return sorted(found), unsupported
+
+
+def _ingest_path(a: argparse.Namespace) -> int:
+    """Ingest the loose files of a folder like a corpus: `doc_id` is the SHA-256 of the bytes,
+    the text is the harness's `extract_text`, the uri `file://<relative path>` and the source
+    version `sha256:<doc_id[:12]>` (as the research corpus has them), no licence. Identical
+    files are ingested once, under the first relative path."""
+    t0 = time.perf_counter()
+    folder = Path(a.path)
+    if not folder.is_dir():
+        raise _UsageError(f"{folder}: not a directory")
+    files, unsupported = loose_files(folder)
+    if not files:
+        raise _UsageError(f"{folder}: no supported files (extensions "
+                          f"{', '.join(sorted(PATH_FORMATS))}); {unsupported} unsupported")
+    store = Store.create(a.store)
+    added: list[Added] = []
+    failures: list[tuple[str, ConformanceError]] = []
+    seen: set[str] = set()
+    duplicates = 0
+    for rel, p in files:
+        fmt = PATH_FORMATS[p.suffix.lower()]
+        try:
+            raw = p.read_bytes()
+        except Exception as e:  # unreadable: name the file, then stop
+            raise _Unexpected(rel, "", e) from e
+        doc_id = sha256_bytes(raw)
+        if doc_id in seen:
+            duplicates += 1
+            continue
+        seen.add(doc_id)
+        try:
+            text = extract_text(raw, fmt)
+        except Exception as e:  # as when a corpus is loaded
+            raise ExtractionError(f"{rel}: could not extract text ({fmt}): "
+                                  f"{type(e).__name__}: {e}") from e
+        doc = Document(doc_id, text, fmt, f"sha256:{doc_id[:12]}", f"file://{rel}")
+        try:
+            added.append(store.add(doc, raw, license=None))
+        except ConformanceError as e:
+            failures.append((rel, e))
+        except StoreError:
+            raise
+        except Exception as e:  # a bug: name the document, then stop
+            raise _Unexpected(rel, doc_id, e) from e
+    if failures:
+        return _report_failures(failures, len(seen))
+    counts = {"found": len(files) + unsupported, "ingested": len(added),
+              "unsupported": unsupported, "duplicates": duplicates}
+    code = _commit(store, a.store, None, added, len(seen), t0,
+                   {"path": str(folder), "files": counts})
+    print(f"  files {counts['found']}: ingested {counts['ingested']}, unsupported "
+          f"{unsupported}, duplicates {duplicates} (hidden files not read)")
+    return code
 
 
 # -- the retrieval tools -----------------------------------------------------------------
@@ -271,9 +375,13 @@ def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools.")
     sub = ap.add_subparsers(dest="command", required=True)
-    ing = sub.add_parser("ingest", help="read a pinned corpus into a store and commit a "
-                                        "snapshot")
-    ing.add_argument("corpus", choices=NAMES)
+    ing = sub.add_parser("ingest", help="read a pinned corpus, or the loose files of a "
+                                        "folder, into a store and commit a snapshot")
+    what = ing.add_mutually_exclusive_group(required=True)
+    what.add_argument("corpus", nargs="?", choices=NAMES, help="a pinned corpus")
+    what.add_argument("--path", type=Path, default=None,
+                      help="a folder of loose files (recursive; hidden files skipped; "
+                           f"extensions {' '.join(sorted(PATH_FORMATS))})")
     ing.add_argument("--store", required=True, type=Path, help="store directory")
     ing.set_defaults(fn=_ingest)
 
@@ -323,12 +431,14 @@ def main(argv: list[str] | None = None) -> int:
     a = _parser().parse_args(argv)
     try:
         return a.fn(a)
-    except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError) as e:
+    except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError,
+            _UsageError) as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_LOAD_OR_STORE
     except _Unexpected as e:
-        print(f"error: unexpected {_one_line(e.error)} while processing {e.path} "
-              f"({e.doc_id[:12]}); no snapshot written", file=sys.stderr)
+        doc = f" ({e.doc_id[:12]})" if e.doc_id else ""
+        print(f"error: unexpected {_one_line(e.error)} while processing {e.path}{doc}; "
+              f"no snapshot written", file=sys.stderr)
         return EXIT_UNEXPECTED
     except Exception as e:  # a bug outside any one document
         print(f"error: unexpected {_one_line(e)} in adr {a.command}", file=sys.stderr)
