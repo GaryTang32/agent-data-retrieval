@@ -5,6 +5,10 @@ is the harness's), parses and checks every document, and commits one snapshot. A
 conformance violation fails the command with the documents and rules named, and no snapshot
 is written. The compile figures of spec §10.3 are printed and written to
 `<store>/compile/<snapshot>.json` (no timings in that file, so it is reproducible).
+
+Exit codes: 0 done; 1 a document fails conformance; 2 the corpus cannot be loaded or the
+store refuses a write; 3 an unexpected error (a bug), reported on one line with the document
+being processed.
 """
 
 from __future__ import annotations
@@ -23,6 +27,19 @@ from adr_store.store import Added, ConformanceError, Store, StoreError, write_at
 
 UNKNOWN_LICENSES = frozenset({"", "unknown"})
 PROBLEMS_SHOWN = 5
+EXIT_CONFORMANCE, EXIT_LOAD_OR_STORE, EXIT_UNEXPECTED = 1, 2, 3
+
+
+class _Unexpected(Exception):
+    """An unexpected error while ingesting one document: which document, and the error."""
+
+    def __init__(self, path: str, doc_id: str, error: Exception):
+        super().__init__(f"{path} ({doc_id[:12]})")
+        self.path, self.doc_id, self.error = path, doc_id, error
+
+
+def _one_line(e: Exception) -> str:
+    return f"{type(e).__name__}: {' '.join(str(e).split())}"
 
 
 def _share(part: int, whole: int) -> float | None:
@@ -107,6 +124,10 @@ def _ingest(a: argparse.Namespace) -> int:
             added.append(store.add(loaded.docs[d.doc_id], raw, license=license))
         except ConformanceError as e:
             failures.append((d.path, e))
+        except StoreError:
+            raise
+        except Exception as e:  # a bug: name the document, then stop
+            raise _Unexpected(d.path, d.doc_id, e) from e
     if failures:
         print(f"error: {len(failures)} of {len(manifest_docs)} documents fail conformance; "
               f"no snapshot written", file=sys.stderr)
@@ -114,7 +135,7 @@ def _ingest(a: argparse.Namespace) -> int:
             print(f"  {path} ({e.doc_id[:12]}):", file=sys.stderr)
             for p in e.problems[:PROBLEMS_SHOWN]:
                 print(f"    {p}", file=sys.stderr)
-        return 1
+        return EXIT_CONFORMANCE
     snapshot = store.commit()
     figures = compile_figures(a.corpus, snapshot, added, len(manifest_docs), 0)
     payload = json.dumps(figures, indent=2, sort_keys=True) + "\n"
@@ -140,7 +161,14 @@ def main(argv: list[str] | None = None) -> int:
         return a.fn(a)
     except (RunError, LocalFilesMissing, ExtractionError, StoreError) as e:
         print(f"error: {e}", file=sys.stderr)
-        return 2
+        return EXIT_LOAD_OR_STORE
+    except _Unexpected as e:
+        print(f"error: unexpected {_one_line(e.error)} while processing {e.path} "
+              f"({e.doc_id[:12]}); no snapshot written", file=sys.stderr)
+        return EXIT_UNEXPECTED
+    except Exception as e:  # a bug outside any one document
+        print(f"error: unexpected {_one_line(e)} in adr {a.command}", file=sys.stderr)
+        return EXIT_UNEXPECTED
 
 
 if __name__ == "__main__":

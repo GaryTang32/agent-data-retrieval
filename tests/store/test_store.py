@@ -273,3 +273,33 @@ def test_ingest_reports_a_corpus_that_cannot_load(tmp_path, capsys, monkeypatch)
     monkeypatch.setattr(cli, "load_checked_corpus", missing)
     assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 2
     assert "not found" in capsys.readouterr().err
+
+
+def test_ingest_exits_3_naming_the_document_on_an_unexpected_error(tmp_path, capsys,
+                                                                   monkeypatch):
+    from adr_store import cli
+
+    def crashing(fmt, raw, text, doc_id):
+        if fmt == "md":
+            raise RuntimeError("parser bug\nwith a second line")
+        return parse_document(fmt, raw, text, doc_id)
+
+    monkeypatch.setattr(store_mod, "parse_document", crashing)
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 3
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1, err  # one line
+    assert "RuntimeError" in err and "parser bug" in err and ".md" in err
+    assert not (tmp_path / "s" / "HEAD").exists()
+
+
+def test_ingest_exits_3_on_an_unexpected_error_after_the_documents(tmp_path, capsys,
+                                                                   monkeypatch):
+    from adr_store import cli
+
+    def broken(*args):
+        raise KeyError("by_format")
+
+    monkeypatch.setattr(cli, "compile_figures", broken)
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 3
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "KeyError" in err
