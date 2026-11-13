@@ -158,11 +158,15 @@ def align(text: str, candidates: Sequence[Candidate]) -> tuple[list[Heading], in
     dropped = 0
     cursor = 0
     for c in candidates:
-        i = index.find(c.lines, cursor) if c.lines and all(c.lines) else None
+        i, n_lines = None, len(c.lines)
+        if c.lines and all(c.lines):
+            i = index.find(c.lines, cursor)
+            if i is None and n_lines > 1:  # the extractor may have joined the lines
+                i, n_lines = index.find((" ".join(c.lines),), cursor), 1
         if i is None:
             dropped += 1
             continue
-        last = i + len(c.lines) - 1
+        last = i + n_lines - 1
         span = trim(text, index.starts[i], index.ends[last])
         if span is None:  # unreachable: a matched line has content
             dropped += 1
