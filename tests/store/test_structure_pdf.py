@@ -67,6 +67,8 @@ def test_text_before_the_first_heading_has_no_section():
     "1 University of Somewhere, London",
     "12 lowercase title",
     "1 A heading with far too many words to be a real section heading in a paper",
+    "1 Japan 7 10 24",
+    "1 A title broken across lines by hyphen-",
 ])
 def test_numbered_lines_that_are_not_headings(line):
     text = f"Abstract\n{line}\n"
@@ -85,3 +87,14 @@ def test_mini_pdf_through_the_dispatcher():
     parsed = parse_document("pdf", raw, text, hashlib.sha256(raw).hexdigest())
     assert conforms(parsed.elements, text, raw, "pdf") == []
     assert [e.page for e in parsed.elements] == [1, 2]
+
+
+def test_top_level_numbering_keeps_one_style():
+    text = "1 Introduction\nbody\n2. Do this step first\nbody\n2 Method\nbody\n3. And this"
+    assert slices(_parsed(text).elements, text, "heading") == ["1 Introduction", "2 Method"]
+
+
+def test_no_numbered_headings_after_the_references():
+    text = "1 Introduction\nbody\nReferences\n[1] A paper.\n2 Appendix Material\nAppendix A"
+    assert slices(_parsed(text).elements, text, "heading") == [
+        "1 Introduction", "References", "Appendix A"]
