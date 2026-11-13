@@ -10,6 +10,7 @@ import numpy as np
 
 from adr_eval.models import jsonl_lines
 from adr_eval.pipeline import EXACT_TO_JUDGE
+from adr_eval.runner import RunError
 from adr_eval.scoring.determinism import answer_agreement, pass_hat_k, retrieval_identity_rate
 from adr_eval.scoring.outcomes import penalised_score
 from adr_eval.scoring.stats import (
@@ -25,7 +26,7 @@ DEFAULT_SEED = 20261108
 COMPARE_T = 0.75
 PROXY_NOTE = "proxy, not human κ: judge vs the exact scorer on number/set/id items"
 G2_FIELDS = ("store", "op", "filters", "entities", "as_of")
-G3_KEYS = ("recall@10", "ndcg@10", "mrr")
+G3_KEYS = ("recall@10", "ndcg@10", "mrr", "coverage@10")
 RECOVERY_STAGES = ("query", "answer", "judge", "judge_check")
 
 
@@ -80,12 +81,18 @@ def _g2(rows: list[dict]) -> dict:
     }
 
 
+def _metric(rows: list[dict], key: str) -> list[float]:
+    """`key` from each row's metrics; rows recorded before the metric existed are skipped."""
+    return [r["metrics"][key] for r in rows if r["metrics"].get(key) is not None]
+
+
 def _g3_block(rows: list[dict]) -> dict:
     multi = [r["metrics"]["full_coverage"] for r in rows if r["metrics"]["n_spans"] > 1]
     return {"n": len(rows),
-            **{k: _mean(r["metrics"][k] for r in rows) for k in G3_KEYS},
+            **{k: _mean(_metric(rows, k)) for k in G3_KEYS},
+            "tokens@10": _mean(_metric(rows, "tokens@10")),
             "full_coverage": _mean(multi), "n_multi_span": len(multi),
-            "ci": {k: _ci([r["metrics"][k] for r in rows]) for k in G3_KEYS}}
+            "ci": {k: _ci(_metric(rows, k)) for k in G3_KEYS}}
 
 
 def _g3(rows: list[dict]) -> dict:
@@ -211,6 +218,11 @@ def _judge(rows: list[dict], cfg: dict) -> dict:
     }
 
 
+def metrics_version(run_dir: Path) -> int:
+    """The metrics version a run was recorded under; 1 when config.json has no such field."""
+    return _read_json(Path(run_dir) / "config.json").get("metrics_version", 1)
+
+
 def build_report(run_dir: Path) -> dict:
     run_dir = Path(run_dir)
     cfg = _read_json(run_dir / "config.json")
@@ -222,6 +234,7 @@ def build_report(run_dir: Path) -> dict:
         **{k: cfg.get(k) for k in ("run_id", "corpus", "system", "split", "repeats", "status",
                                    "stub", "w", "snapshot", "n_items")},
         "generator_model": cfg.get("generator", {}).get("model"),
+        "metrics_version": cfg.get("metrics_version", 1),
         "n_rows": len(rows),
         "g1": _read_json(run_dir / "compile.json"),
         "g2": _g2(rows), "g3": _g3(rows),
@@ -296,7 +309,8 @@ def render_markdown(report: dict) -> str:
            f"Corpus `{r['corpus']}`, system `{r['system']}`, split `{r['split']}`, "
            f"{r['repeats']} repeats, {r['n_rows']} rows, status `{r['status']}`. "
            f"Generator `{r['generator_model']}`, judge `{j['model']}`"
-           + (f", linear w = {r['w']}" if r.get("w") is not None else "") + ".", ""]
+           + (f", linear w = {r['w']}" if r.get("w") is not None else "")
+           + f". Metrics version {r.get('metrics_version', 1)}.", ""]
     for w in r["warnings"]:
         out += [f"> **Warning:** {w}", ""]
     out += ["Values in brackets are 95% CIs (percentile bootstrap, 10,000 resamples). "
@@ -331,9 +345,10 @@ def render_markdown(report: dict) -> str:
                 f"with the required keys was used) in {e2e['json_recovered_rows']} row(s): "
                 f"{stages}.", ""]
     out += ["## G3 retrieval (excluding `insufficient`)", ""]
-    out += _table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "full coverage"],
-                  [[k, v["n"], *(_with_ci(v[m], v["ci"][m]) for m in G3_KEYS),
-                    v["full_coverage"]]
+    out += _table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "coverage@10", "tokens@10",
+                   "full coverage"],
+                  [[k, v["n"], *(_with_ci(v.get(m), v["ci"].get(m)) for m in G3_KEYS),
+                    v.get("tokens@10"), v["full_coverage"]]
                    for k, v in [("pooled", g3["pooled"]),
                                 *((f"rarity {k}", v) for k, v in g3["by_rarity"].items()),
                                 *((f"qtype {k}", v) for k, v in g3["by_qtype"].items()),
@@ -380,7 +395,14 @@ def _first_repeat(run_dir: Path) -> dict[str, dict]:
 
 
 def compare(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> dict:
-    """Paired over shared (item_id, repeat 0); differences are run_b - run_a."""
+    """Paired over shared (item_id, repeat 0); differences are run_b - run_a.
+
+    Refuses (RunError) runs recorded under different metrics versions."""
+    va, vb = metrics_version(run_a), metrics_version(run_b)
+    if va != vb:
+        raise RunError(f"cannot compare runs with different metrics versions: "
+                       f"{Path(run_a).name} is metrics version {va}, "
+                       f"{Path(run_b).name} is metrics version {vb}")
     seed = _read_json(Path(run_a) / "config.json").get("seed") or DEFAULT_SEED
     a, b = _first_repeat(run_a), _first_repeat(run_b)
     shared = sorted(a.keys() & b.keys())
@@ -389,6 +411,7 @@ def compare(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> dict:
         else penalised_score([r["outcome"]], COMPARE_T),
         "ndcg@10": lambda r: r["metrics"]["ndcg@10"] if r["metrics"] else None,
         "recall@10": lambda r: r["metrics"]["recall@10"] if r["metrics"] else None,
+        "coverage@10": lambda r: r["metrics"].get("coverage@10") if r["metrics"] else None,
     }
     metrics: dict[str, dict] = {}
     for name, get in getters.items():

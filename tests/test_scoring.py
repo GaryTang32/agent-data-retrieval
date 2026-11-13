@@ -147,44 +147,44 @@ def test_overlap():
 
 
 def test_ndcg_perfect_is_one_and_recall_partial():
-    assert ndcg_at_k([C_FULL], [EV], 10) == pytest.approx(1.0)
-    assert recall_at_k([C_FULL], [EV, EV_OTHER], 10) == 0.5
+    assert ndcg_at_k([C_FULL], [[EV]], 10) == pytest.approx(1.0)
+    assert recall_at_k([C_FULL], [[EV], [EV_OTHER]], 10) == 0.5
 
 
 def test_ndcg_discounts_rank_and_empty_is_zero():
     import math
-    assert ndcg_at_k([ch("x", 500, 510), C_FULL], [EV], 10) == pytest.approx(1 / math.log2(3))
+    assert ndcg_at_k([ch("x", 500, 510), C_FULL], [[EV]], 10) == pytest.approx(1 / math.log2(3))
     assert ndcg_at_k([C_FULL], [], 10) == 0.0
-    assert ndcg_at_k([], [EV], 10) == 0.0
+    assert ndcg_at_k([], [[EV]], 10) == 0.0
 
 
 def test_ndcg_two_spans_one_chunk_is_below_one():
     # ideal DCG has two gains of 1.0; one chunk can only deliver one.
-    assert ndcg_at_k([C_FULL], [EV, EV_OTHER], 10) < 1.0
+    assert ndcg_at_k([C_FULL], [[EV], [EV_OTHER]], 10) < 1.0
 
 
 def test_recall_and_mrr_respect_k():
     ranked = [ch("x", 500, 510), ch("y", 600, 610), C_FULL]
-    assert recall_at_k(ranked, [EV], k=2) == 0.0
-    assert recall_at_k(ranked, [EV], k=3) == 1.0
-    assert mrr(ranked, [EV]) == pytest.approx(1 / 3)
-    assert mrr([ch("x", 500, 510)], [EV]) == 0.0
+    assert recall_at_k(ranked, [[EV]], k=2) == 0.0
+    assert recall_at_k(ranked, [[EV]], k=3) == 1.0
+    assert mrr(ranked, [[EV]]) == pytest.approx(1 / 3)
+    assert mrr([ch("x", 500, 510)], [[EV]]) == 0.0
     assert recall_at_k(ranked, [], 10) == 0.0
 
 
 def test_full_coverage():
     both = [ch("p", 0, 10), ch("q", 100, 110)]
-    assert full_coverage(both, [EV, EV_OTHER], 10) is True
-    assert full_coverage(both[:1], [EV, EV_OTHER], 10) is False
-    assert full_coverage(both, [EV, EV_OTHER], 1) is False
+    assert full_coverage(both, [[EV], [EV_OTHER]], 10) is True
+    assert full_coverage(both[:1], [[EV], [EV_OTHER]], 10) is False
+    assert full_coverage(both, [[EV], [EV_OTHER]], 1) is False
 
 
 def test_citation_precision_and_evidence_cited():
-    assert citation_precision([], [EV]) is None
-    assert citation_precision([C_FULL, ch("x", 500, 510)], [EV]) == 0.5
-    assert evidence_cited([C_FULL], [EV, EV_OTHER]) is True  # any span, not all
-    assert evidence_cited([], [EV]) is False
-    assert evidence_cited([ch("x", 500, 510)], [EV]) is False
+    assert citation_precision([], [[EV]]) is None
+    assert citation_precision([C_FULL, ch("x", 500, 510)], [[EV]]) == 0.5
+    assert evidence_cited([C_FULL], [[EV], [EV_OTHER]]) is True  # any span, not all
+    assert evidence_cited([], [[EV]]) is False
+    assert evidence_cited([ch("x", 500, 510)], [[EV]]) is False
 
 
 # -- compile metrics ---------------------------------------------------------------------
@@ -257,20 +257,20 @@ def test_parse_number_signs_and_edges(raw, expected):
 
 
 def test_ndcg_duplicate_chunk_not_double_counted():
-    assert ndcg_at_k([C_FULL, C_FULL], [EV], 10) == pytest.approx(1.0)
-    assert ndcg_at_k([C_FULL, ch("c2", 0, 30)], [EV], 10) == pytest.approx(1.0)
+    assert ndcg_at_k([C_FULL, C_FULL], [[EV]], 10) == pytest.approx(1.0)
+    assert ndcg_at_k([C_FULL, ch("c2", 0, 30)], [[EV]], 10) == pytest.approx(1.0)
 
 
 def test_ndcg_partial_chunks_over_one_span_at_most_one():
-    assert ndcg_at_k([ch("p", 0, 5), ch("q", 5, 10)], [EV], 10) <= 1.0
+    assert ndcg_at_k([ch("p", 0, 5), ch("q", 5, 10)], [[EV]], 10) <= 1.0
 
 
 def test_ndcg_never_exceeds_one_and_other_metrics_unaffected():
     ranked = [C_FULL, C_FULL, ch("c2", 0, 30)]
-    assert ndcg_at_k(ranked, [EV], 10) <= 1.0
-    assert recall_at_k(ranked, [EV], 10) == 1.0
-    assert mrr(ranked, [EV]) == 1.0
-    assert full_coverage(ranked, [EV], 10) is True
+    assert ndcg_at_k(ranked, [[EV]], 10) <= 1.0
+    assert recall_at_k(ranked, [[EV]], 10) == 1.0
+    assert mrr(ranked, [[EV]]) == 1.0
+    assert full_coverage(ranked, [[EV]], 10) is True
 
 
 def test_number_accepts_variants():
