@@ -1,10 +1,15 @@
-"""Markdown: `#` headings give sections; paragraphs, list items, tables and fenced code are
+"""Markdown: headings give sections; paragraphs, list items, tables and fenced code are
 leaves (spec §6). The canonical text is the file itself, so nothing needs aligning.
 
-A deliberately small block reader, line by line: ATX headings (not setext), fences of three or
-more backticks or tildes, pipe tables (lines starting with `|`), and list items (one leaf per
-marker line, with its continuation lines). Anything else is a paragraph, ended by a blank line
-or by the start of another block.
+A deliberately small block reader, line by line: ATX headings (`## Title`), setext headings,
+fences of three or more backticks or tildes, pipe tables (lines starting with `|`), and list
+items (one leaf per marker line, with its continuation lines). Anything else is a paragraph,
+ended by a blank line or by the start of another block.
+
+A setext heading, CommonMark style, is a line of text underlined by a line of `=` (level 1)
+or of at least three `-` (level 2), each indented at most three spaces. The text line follows
+a blank line or starts the document, and is not a list item, table row, ATX heading or fence;
+the heading leaf covers both lines. A paragraph of several lines is never a setext heading.
 """
 
 from __future__ import annotations
@@ -18,14 +23,32 @@ _ATX = re.compile(r" {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*")
 _FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
 _TABLE = re.compile(r"[ \t]*\|")
 _LIST = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
+_UNDERLINE = re.compile(r" {0,3}(=+|-{3,})[ \t]*")
+_SETEXT_TEXT = re.compile(r" {0,3}\S.*")  # at most three spaces of indent, as for ATX
 
 
-def _lines(text: str):
+def _lines(text: str) -> list[tuple[int, int, str]]:
     """(start, end, line) for every line, `end` before the newline."""
+    out = []
     pos = 0
     for line in text.split("\n"):
-        yield pos, pos + len(line), line
+        out.append((pos, pos + len(line), line))
         pos += len(line) + 1
+    return out
+
+
+def _setext(lines: list[tuple[int, int, str]], i: int) -> int | None:
+    """The level of a setext heading whose text is line i, or None."""
+    line = lines[i][2].rstrip()
+    if (i + 1 >= len(lines) or (i > 0 and lines[i - 1][2].strip())
+            or not _SETEXT_TEXT.fullmatch(line) or _UNDERLINE.fullmatch(line)
+            or _LIST.match(line) or _TABLE.match(line) or _FENCE.match(line)
+            or _heading(line)):
+        return None
+    m = _UNDERLINE.fullmatch(lines[i + 1][2].rstrip())
+    if m is None:
+        return None
+    return 1 if m.group(1)[0] == "=" else 2
 
 
 def _heading(line: str) -> tuple[int, str] | None:
@@ -62,7 +85,11 @@ def _read(text: str) -> tuple[list[Heading], list[Block]]:
     headings: list[Heading] = []
     r = _Reader(text)
     fence: tuple[str, int] | None = None  # (marker run, start offset of the fence)
-    for start, end, line in _lines(text):
+    lines = _lines(text)
+    skip = -1  # the underline of a setext heading, already part of its heading leaf
+    for i, (start, end, line) in enumerate(lines):
+        if i == skip:
+            continue
         if fence is not None:
             marker, fence_start = fence
             closing = re.fullmatch(rf" {{0,3}}{marker[0]}{{{len(marker)},}}[ \t]*", line.rstrip())
@@ -78,6 +105,10 @@ def _read(text: str) -> tuple[list[Heading], list[Block]]:
         elif h := _heading(line):
             r.flush()
             headings.append(Heading(*trim(text, start, end), h[0], h[1]))
+        elif level := _setext(lines, i):
+            r.flush()
+            headings.append(Heading(*trim(text, start, lines[i + 1][1]), level, collapse(line)))
+            skip = i + 1
         elif _TABLE.match(line):
             if r.open and r.open[0] == "table":
                 r.extend(end)

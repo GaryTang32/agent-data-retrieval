@@ -77,3 +77,38 @@ def test_mini_markdown_through_the_dispatcher():
     titles = [e.title for e in parsed.elements if e.type == "section"]
     assert titles == ["Agency Refund Policy", "Eligibility", "Processing", "Exceptions"]
     assert conforms(parsed.elements, text, raw, "md") == []
+
+
+def test_setext_headings_cover_both_lines_and_nest():
+    raw = b"Title\n=====\n\nIntro.\n\nPart\n----\nBody.\n\nSmall\n=\n"
+    text, parsed = _parse(raw)
+    assert conforms(parsed.elements, text, raw, "md") == []
+    assert slices(parsed.elements, text, "heading") == ["Title\n=====", "Part\n----", "Small\n="]
+    secs = [(e.level, e.title, e.section_path) for e in parsed.elements if e.type == "section"]
+    assert secs == [(1, "Title", []), (2, "Part", ["Title"]), (1, "Small", [])]
+    assert slices(parsed.elements, text, "paragraph") == ["Intro.", "Body."]
+    assert (parsed.headings_found, parsed.headings_aligned) == (3, 3)
+
+
+def test_setext_heading_at_the_start_with_crlf_and_indented_underline():
+    raw = b"Summary\r\n   -------  \r\nText.\r\n"
+    text, parsed = _parse(raw)
+    assert conforms(parsed.elements, text, raw, "md") == []
+    assert slices(parsed.elements, text, "heading") == ["Summary\r\n   -------"]
+    assert [e.title for e in parsed.elements if e.type == "section"] == ["Summary"]
+
+
+@pytest.mark.parametrize("raw", [
+    b"Lead line\nnot a heading\n---\n",  # the previous line is not blank
+    b"- a list item\n---\n",
+    b"1. a list item\n===\n",
+    b"```\nIn code\n===\n```\n",
+    b"Two dashes\n--\n",
+    b"\n   \n---\n",  # no text line
+    b"# Atx\n---\n",
+    b"| a | b |\n---\n",
+    b"    Indented code\n---\n",
+])
+def test_lines_that_are_not_setext_headings(raw):
+    _, parsed = _parse(raw)
+    assert parsed.headings_found == int(raw.startswith(b"#"))  # only the ATX heading
