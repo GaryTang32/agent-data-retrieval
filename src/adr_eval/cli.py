@@ -42,6 +42,12 @@ def _exclusions(corpus: str) -> dict[str, str]:
 
 
 def _golden_gen(a: argparse.Namespace) -> int:
+    items = runner.golden_dir(a.corpus) / "items.jsonl"
+    if items.exists() and not a.overwrite:  # checked before any client is made or call sent
+        print(f"error: {items} exists and is frozen (golden sets are data, not regenerated "
+              f"when scoring rules change; a regenerated set is a new version); pass "
+              f"--overwrite to replace it", file=sys.stderr)
+        return 2
     handler = logging.StreamHandler(sys.stderr)  # the per-qtype tally lines
     handler.setFormatter(logging.Formatter("%(message)s"))
     log = logging.getLogger("adr_eval.golden.generate")
@@ -224,6 +230,8 @@ def _parser() -> argparse.ArgumentParser:
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--gen", action="store_const", const=_golden_gen, dest="fn")
     mode.add_argument("--verify", action="store_const", const=_golden_verify, dest="fn")
+    p.add_argument("--overwrite", action="store_true",
+                   help="with --gen: replace an existing (frozen) items.jsonl")
     _profile_args(p, judge=True)
 
     p = sub.add_parser("index", help="build (or check) the saved hybrid index")
@@ -263,7 +271,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.command == "golden" and a.fn is _golden_verify:
         given = [f for f, v in (("--generator", a.generator), ("--judge", a.judge),
-                                ("--max-calls", a.max_calls)) if v is not None]
+                                ("--max-calls", a.max_calls),
+                                ("--overwrite", a.overwrite or None)) if v is not None]
         if given:
             ap.error(f"golden --verify makes no model calls; remove {', '.join(given)} "
                      f"(used only with --gen)")

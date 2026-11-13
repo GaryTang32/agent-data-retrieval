@@ -1,18 +1,18 @@
 # Phase 0 baseline results (1 repeat)
 
-> **Work in progress.** These are the recorded numbers for the flat hybrid baseline. They are the yardstick later phases must beat, not a claim about the toolkit, which is not built yet. Several of the metrics have known artefacts: read the limits at the end before quoting any figure.
+> **Work in progress.** These are the recorded numbers for the flat hybrid baseline under **version 2 of the metric definitions**. They are the yardstick later phases must beat, not a claim about the toolkit, which is not built yet. The version 1 numbers and their write-up are in [`v1/`](v1/README.md); the section "Version 1 to version 2" lists every headline number that moved and why.
 
 ## What was run
 
-- **Recorded:** 12 November 2026, from saved model calls plus 29 new ones. This replaces the first recording of 11 November, made before the final review's fixes (see "Changes since the first recording").
+- **Recorded:** 13 November 2026, from saved model calls plus 362 new ones (all in the gov linear run, whose tuned weight changed). Metric definitions: version 2 (`docs/superpowers/specs/2026-11-13-metric-definitions-design.md`).
 - **Split:** test. **Repeats:** 1.
 - **Systems:** `baseline-rrf` (BM25 + dense, reciprocal rank fusion, k=60) and `baseline-linear` (BM25 + dense, linear fusion with a weight tuned on the dev split).
 - **Generator:** `claude-sonnet-5-5`. **Judge:** `claude-opus-5-5`. Both ran through Claude Code on a subscription, so the recorded spend is $0. Sampling temperature is not pinned.
-- **Golden sets:** v0.1. **Rows:** 2,072 across six runs; 1 ended in a model error; 133 used a recovered reply (explained below).
+- **Golden sets:** v0.1. **Rows:** 2,072 across six runs; 1 ended in a model error; 135 used a recovered reply: the model wrote its JSON with a correction or a sentence around it, and the run took the last complete JSON object.
 
 | Corpus | Test items | Chunks | Index fingerprint | Linear weight `w` |
 |---|---|---|---|---|
-| gov | 242 | 5,056 | `fe978fc9c5ee…` | 1.00 |
+| gov | 242 | 5,056 | `fe978fc9c5ee…` | 0.85 |
 | research | 222 | 7,305 | `150af34ab34d…` | 1.00 |
 | bench | 572 | 5,587 | `62835d2b1430…` | 0.70 |
 
@@ -24,51 +24,54 @@ Accuracy counts a row as correct only when the answer is fully correct. The pena
 
 | Corpus | System | n | Accuracy | Wrong | Abstained | Partial | Error | Penalised t=0.5 | t=0.75 | t=0.9 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| gov | RRF | 242 | 0.702 [0.645, 0.760] | 0.169 | 0.095 | 0.033 | 0.000 | 0.500 | 0.095 | -1.120 |
-| gov | Linear | 242 | 0.731 [0.674, 0.785] | 0.182 | 0.041 | 0.045 | 0.000 | 0.504 | 0.050 | -1.314 |
-| research | RRF | 222 | 0.703 [0.640, 0.761] | 0.167 | 0.113 | 0.018 | 0.000 | 0.518 | 0.149 | -0.959 |
+| gov | RRF | 242 | 0.719 [0.661, 0.773] | 0.153 | 0.095 | 0.033 | 0.000 | 0.533 | 0.161 | -0.955 |
+| gov | Linear | 242 | 0.752 [0.698, 0.806] | 0.169 | 0.045 | 0.033 | 0.000 | 0.550 | 0.145 | -1.070 |
+| research | RRF | 222 | 0.712 [0.653, 0.770] | 0.158 | 0.113 | 0.018 | 0.000 | 0.536 | 0.185 | -0.869 |
 | research | Linear | 222 | 0.806 [0.752, 0.856] | 0.131 | 0.041 | 0.023 | 0.000 | 0.653 | 0.347 | -0.572 |
 | bench | RRF | 572 | 0.720 [0.682, 0.755] | 0.054 | 0.103 | 0.121 | 0.002 | 0.546 | 0.196 | -0.855 |
 | bench | Linear | 572 | 0.801 [0.767, 0.834] | 0.042 | 0.056 | 0.101 | 0.000 | 0.657 | 0.371 | -0.490 |
 
 ## Retrieval (questions with evidence; `insufficient` excluded)
 
-| Corpus | System | n | Recall@10 | nDCG@10 | MRR |
-|---|---|---|---|---|---|
-| gov | RRF | 213 | 0.683 [0.621, 0.743] | 0.500 [0.449, 0.551] | 0.447 [0.394, 0.501] |
-| gov | Linear | 213 | 0.775 [0.719, 0.828] | 0.584 [0.537, 0.632] | 0.528 [0.477, 0.579] |
-| research | RRF | 180 | 0.654 [0.582, 0.723] | 0.502 [0.438, 0.564] | 0.465 [0.399, 0.530] |
-| research | Linear | 180 | 0.856 [0.802, 0.905] | 0.710 [0.654, 0.764] | 0.676 [0.616, 0.734] |
-| bench | RRF | 517 | 0.859 [0.828, 0.887] | 0.458 [0.429, 0.487] | 0.756 [0.721, 0.789] |
-| bench | Linear | 517 | 0.922 [0.900, 0.943] | 0.529 [0.500, 0.559] | 0.849 [0.821, 0.876] |
+| Corpus | System | n | Recall@10 | nDCG@10 | MRR | Coverage@10 | Tokens in top 10 |
+|---|---|---|---|---|---|---|---|
+| gov | RRF | 213 | 0.706 [0.646, 0.765] | 0.614 [0.557, 0.669] | 0.591 [0.531, 0.648] | 0.706 [0.646, 0.765] | 3,543 |
+| gov | Linear | 213 | 0.771 [0.715, 0.824] | 0.691 [0.637, 0.742] | 0.671 [0.616, 0.726] | 0.771 [0.715, 0.824] | 3,534 |
+| research | RRF | 180 | 0.654 [0.582, 0.723] | 0.502 [0.438, 0.564] | 0.465 [0.399, 0.530] | 0.654 [0.582, 0.723] | 3,729 |
+| research | Linear | 180 | 0.856 [0.802, 0.905] | 0.710 [0.654, 0.764] | 0.676 [0.616, 0.734] | 0.856 [0.802, 0.905] | 3,752 |
+| bench | RRF | 517 | 0.859 [0.828, 0.887] | 0.766 [0.734, 0.796] | 0.756 [0.721, 0.789] | 0.698 [0.666, 0.728] | 3,343 |
+| bench | Linear | 517 | 0.922 [0.900, 0.943] | 0.854 [0.829, 0.878] | 0.849 [0.821, 0.876] | 0.782 [0.755, 0.809] | 3,352 |
 
 ### Linear minus RRF (paired over the same items)
 
 | Corpus | Metric | n | Mean difference | 95% CI | p (Holm) |
 |---|---|---|---|---|---|
-| gov | penalised@0.75 | 242 | -0.045 | [-0.182, 0.087] | 0.511 |
-| gov | ndcg@10 | 213 | 0.084 | [0.049, 0.120] | < 0.0008 |
-| gov | recall@10 | 213 | 0.092 | [0.052, 0.134] | < 0.0008 |
-| research | penalised@0.75 | 222 | 0.198 | [0.045, 0.360] | 0.015 |
-| research | ndcg@10 | 180 | 0.208 | [0.157, 0.260] | < 0.0008 |
-| research | recall@10 | 180 | 0.203 | [0.140, 0.266] | < 0.0008 |
-| bench | penalised@0.75 | 571 | 0.173 | [0.088, 0.263] | < 0.0008 |
-| bench | ndcg@10 | 517 | 0.071 | [0.053, 0.089] | < 0.0008 |
-| bench | recall@10 | 517 | 0.062 | [0.040, 0.087] | < 0.0008 |
+| gov | penalised@0.75 | 242 | -0.017 | [-0.149, 0.107] | 0.810 |
+| gov | ndcg@10 | 213 | 0.077 | [0.045, 0.110] | < 0.0010 |
+| gov | recall@10 | 213 | 0.065 | [0.027, 0.103] | 0.002 |
+| gov | coverage@10 | 213 | 0.065 | [0.027, 0.103] | 0.002 |
+| research | penalised@0.75 | 222 | 0.162 | [0.014, 0.315] | 0.037 |
+| research | ndcg@10 | 180 | 0.208 | [0.157, 0.260] | < 0.0010 |
+| research | recall@10 | 180 | 0.203 | [0.140, 0.266] | < 0.0010 |
+| research | coverage@10 | 180 | 0.203 | [0.140, 0.266] | < 0.0010 |
+| bench | penalised@0.75 | 571 | 0.173 | [0.088, 0.263] | < 0.0010 |
+| bench | ndcg@10 | 517 | 0.088 | [0.067, 0.110] | < 0.0010 |
+| bench | recall@10 | 517 | 0.062 | [0.040, 0.087] | < 0.0010 |
+| bench | coverage@10 | 517 | 0.084 | [0.064, 0.106] | < 0.0010 |
 
 Correct-versus-not, McNemar exact test (A = RRF, B = linear):
 
-- **gov:** McNemar exact on correct vs not: only A correct 10, only B correct 17, p = 0.2478 (Holm 0.4956).
-- **research:** McNemar exact on correct vs not: only A correct 4, only B correct 27, p = 0.0000 (Holm 0.0001).
-- **bench:** McNemar exact on correct vs not: only A correct 12, only B correct 58, p = 0.0000 (Holm 0.0000).
+- **gov:** McNemar exact on correct vs not: only A correct 8, only B correct 16, p = 0.1516 (Holm 0.3032).
+- **research:** McNemar exact on correct vs not: only A correct 4, only B correct 25, p = 0.0001 (Holm 0.0002).
+- **bench:** McNemar exact on correct vs not: only A correct 12, only B correct 58, p = 2.2 × 10⁻⁸ (Holm 2.2 × 10⁻⁸).
 
 ## What the baseline shows
 
-1. **Tuned linear fusion retrieves better than RRF on all three corpora.** Recall@10 is higher by 0.06 to 0.20 and nDCG@10 by 0.07 to 0.21, all significant after Holm correction. Accuracy is also significantly higher on research and bench (McNemar p = 0.00003 and p < 0.000001); on gov the accuracy difference is not significant (p = 0.25).
-2. **On gov and research the tuned weight is 1.00, so the "linear" system is BM25 alone.** Read this as "the dense index adds little here", not "adds nothing": the review found the gov dev score almost flat between weights 0.85 and 1.00 (nDCG 0.6005 to 0.6019 on 42 dev items in the first recording), so 1.00 is a noise-level choice. On bench the weight is 0.70.
-3. **A flat baseline cannot count.** On gov, count and filter questions score 0 of 27 with RRF and 2 of 27 with linear. Most need more records than ten retrieved chunks can hold; 9 of the 27 need ten records or fewer, and most of those fail too. This is the gap the typed database (Phase 3) is meant to close.
-4. **Whole structured queries almost never match the gold query** (0.2% on bench, 4% on research, 7% on gov), but this is only partly a model weakness. See "G2 measures gold conventions too" below.
-5. **Rare-term questions are not harder for this baseline.** Leaving out count and filter questions (all of which sit in the common tier), the rarest tier scores higher than the most common tier in four of the six runs and lower in two. The raw gap between tiers on gov and research is mostly the count and filter questions.
+1. **Tuned linear fusion retrieves better than RRF on all three corpora.** Recall@10 is higher by 0.06 to 0.20, nDCG@10 by 0.08 to 0.21 and coverage@10 by 0.06 to 0.20, all significant after Holm correction. Accuracy is also significantly higher on research and bench (McNemar p = 0.0001 and p < 0.000001); on gov the accuracy difference is not significant (p = 0.15).
+2. **Tuning puts most or all of the weight on BM25.** The tuned weight on BM25 is 1.00 on research, 0.85 on gov and 0.70 on bench. Under version 1 the gov weight was 1.00, and the earlier review found the version 1 dev score almost flat between 0.85 and 1.00. On the test split under version 2, a weight of 1.00 would score slightly higher than the tuned 0.85 (nDCG@10 0.700 against 0.691), so the move is tuning noise, not a gain. Read it as "the dense index adds little on gov and research".
+3. **A flat baseline cannot count.** On gov, count and filter questions score 0 of 27 with RRF and 2 of 27 with linear. This is the gap the typed database (Phase 3) is meant to close.
+4. **The model usually picks the right kind of query, and names entities loosely.** The generated query has the right route on 84% of gov questions, 66% on research and 87% on bench. Record queries return the right records on 27 of 27 gov questions and 26 of 27 on research. Entity names get about half credit (0.53 to 0.58). The weak spots are procedure questions routed as plain facts (31 of 35 route misses on gov, 23 of 61 on research), research identifier questions sent to the record store when the answer is in the prose (17 of 61), and, on bench, fact and overview questions routed as procedures (31 of 69).
+5. **Rare-term questions are neither clearly harder nor easier.** Leaving out count and filter questions (all of which sit in the common tier), the rarest tier scores higher than the most common tier in two of the six runs and lower in four. The gaps are about 0.03 or less except on gov RRF (rare higher by 0.09) and bench linear (common higher by 0.07).
 6. **Every run scores below zero at t = 0.9**, where a wrong or partial answer costs 9 points. On gov and research the loss comes mainly from wrong answers given where abstaining would have been better. On bench it comes mainly from partially correct answers, which are penalised like wrong ones.
 
 ## Accuracy by question type
@@ -76,15 +79,15 @@ Correct-versus-not, McNemar exact test (A = RRF, B = linear):
 | Corpus | Question type | n | RRF | Linear |
 |---|---|---|---|---|
 | gov | count_filter | 27 | 0.000 | 0.074 |
-| gov | factoid | 37 | 0.865 | 0.892 |
-| gov | id_lookup | 36 | 0.639 | 0.722 |
+| gov | factoid | 37 | 0.892 | 0.865 |
+| gov | id_lookup | 36 | 0.722 | 0.861 |
 | gov | insufficient | 29 | 0.966 | 0.931 |
-| gov | overview | 36 | 0.778 | 0.694 |
+| gov | overview | 36 | 0.778 | 0.722 |
 | gov | policy_asof | 34 | 0.676 | 0.706 |
 | gov | procedure | 43 | 0.837 | 0.930 |
 | research | count_filter | 27 | 0.222 | 0.593 |
 | research | factoid | 40 | 0.875 | 0.975 |
-| research | id_lookup | 39 | 0.769 | 0.872 |
+| research | id_lookup | 39 | 0.821 | 0.872 |
 | research | insufficient | 42 | 0.762 | 0.714 |
 | research | overview | 35 | 0.600 | 0.686 |
 | research | procedure | 39 | 0.821 | 0.923 |
@@ -100,71 +103,80 @@ Generated items are tiered by how many documents contain their key term: `tail` 
 
 | Corpus | System | Head n | Head accuracy | Head without count_filter (n) | Torso n | Torso accuracy | Tail n | Tail accuracy |
 |---|---|---|---|---|---|---|---|---|
-| gov | RRF | 109 | 0.514 | 0.683 (82) | 18 | 0.889 | 86 | 0.814 |
-| gov | Linear | 109 | 0.596 | 0.768 (82) | 18 | 0.889 | 86 | 0.802 |
-| research | RRF | 113 | 0.637 | 0.767 (86) | 0 | – | 67 | 0.776 |
+| gov | RRF | 109 | 0.541 | 0.720 (82) | 18 | 0.944 | 86 | 0.814 |
+| gov | Linear | 109 | 0.624 | 0.805 (82) | 18 | 1.000 | 86 | 0.802 |
+| research | RRF | 113 | 0.655 | 0.791 (86) | 0 | – | 67 | 0.776 |
 | research | Linear | 113 | 0.814 | 0.884 (86) | 0 | – | 67 | 0.851 |
 | bench | RRF | 72 | 0.708 | 0.708 (72) | 0 | – | 78 | 0.718 |
 | bench | Linear | 72 | 0.875 | 0.875 (72) | 0 | – | 78 | 0.808 |
 
 ## Other tracks
 
-| Corpus | G1 span containment | G2 store | G2 op | G2 filters | G2 entities | G2 as_of | G2 whole query | G2 execution match (n) |
-|---|---|---|---|---|---|---|---|---|
-| gov | 0.993 | 0.855 | 0.343 | 0.500 | 0.095 | 0.979 | 0.070 | 1.000 (27) |
-| research | 1.000 | 0.635 | 0.450 | 0.788 | 0.086 | 0.986 | 0.041 | 0.963 (27) |
-| bench | 0.202 | 0.876 | 0.248 | 0.657 | 0.028 | 0.934 | 0.002 | – (0) |
+| Corpus | G1 span containment | Evidence spans with copies | Right kind of query (n) | Record match (n) | Entities, partial credit (n) |
+|---|---|---|---|---|---|
+| gov | 0.993 | 111 of 711 | 0.836 (213) | 1.000 (27) | 0.584 (213) |
+| research | 1.000 | 0 of 367 | 0.661 (180) | 0.963 (27) | 0.565 (180) |
+| bench | 0.202 | 0 of 741 | 0.867 (517) | – (0) | 0.526 (150) |
 
 - **G1 span containment** is the share of gold evidence spans that fit inside one chunk. It is low on bench because the benchmark's own questions cite whole documents. For generated overview and procedure items the evidence is exactly one baseline chunk, so this figure is satisfied by construction for the baseline and would count against a different chunker.
-- **G2** is zero-shot conversion of the question into a structured query, scored per field against the gold query. It is the same for both systems. See the limits below before reading it as query understanding.
-- **Determinism:** with one repeat, retrieval identity and answer agreement are not measured in these runs. Separately, the final review reloaded each saved index in a fresh process and re-retrieved every test question of the first recording: all 2,080 ranked lists matched on ids and scores.
+- **Evidence spans with copies** counts the test questions' evidence spans whose text, with 200 characters of context either side, also appears in another document. Retrieving a copy counts as retrieving the evidence, except for questions with an as-of date.
+- **Right kind of query** is whether the generated query has the same route as the gold query (a record count, list or lookup; a fact in prose; a procedure). Questions whose right answer is to abstain are left out. **Record match** is whether a record query returns the same records as the gold query. **Entities** gives partial credit for overlapping names, on questions whose gold query lists entities. All three are the same for both systems.
+- **Determinism:** with one repeat, retrieval identity and answer agreement are not measured in these runs.
 
-| Corpus | System | Judge vs exact scorer: agreement | κ (3 labels) | κ (partial counted as incorrect) | n | Judge self-consistency (n) | Citation precision | Evidence cited | Tokens in | Tokens out | Median latency (s) |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| gov | RRF | 0.918 | 0.629 | 0.834 | 49 | 0.979 (141) | 0.465 | 0.695 | 3,521,426 | 108,950 | 5.8 |
-| gov | Linear | 0.877 | 0.518 | 0.755 | 57 | 0.979 (146) | 0.499 | 0.734 | 3,557,323 | 111,016 | 7.2 |
-| research | RRF | 0.968 | 0.870 | 0.912 | 62 | 0.968 (93) | 0.591 | 0.761 | 3,509,471 | 87,129 | – |
-| research | Linear | 1.000 | 1.000 | 1.000 | 75 | 0.990 (96) | 0.696 | 0.895 | 3,571,037 | 88,963 | – |
-| bench | RRF | 0.967 | 0.318 | 0.651 | 30 | 0.988 (427) | 0.915 | 0.947 | 8,993,028 | 306,080 | 6.3 |
-| bench | Linear | 0.974 | 0.000 | 0.000 | 38 | 0.991 (447) | 0.934 | 0.963 | 9,087,936 | 307,786 | 5.8 |
+| Corpus | System | Judge vs exact scorer: agreement | κ (3 labels) | κ (partial counted as incorrect) | n | Judge self-consistency (n) | Citation precision | Evidence cited | Median latency (s) |
+|---|---|---|---|---|---|---|---|---|---|
+| gov | RRF | 1.000 | 0.766 | 1.000 | 49 | 0.979 (141) | 0.716 | 0.816 | – |
+| gov | Linear | 0.982 | 0.664 | 0.962 | 55 | 0.986 (147) | 0.737 | 0.851 | 6.8 |
+| research | RRF | 1.000 | 0.954 | 1.000 | 62 | 0.968 (93) | 0.591 | 0.761 | – |
+| research | Linear | 1.000 | 1.000 | 1.000 | 75 | 0.990 (96) | 0.696 | 0.895 | – |
+| bench | RRF | 0.967 | 0.318 | 0.651 | 30 | 0.988 (427) | 0.915 | 0.947 | – |
+| bench | Linear | 0.974 | 0.000 | 0.000 | 38 | 0.991 (447) | 0.934 | 0.963 | – |
 
-The judge-versus-exact columns compare the judge with the exact scorer on number, set and identifier answers. Agreement is the raw share of rows where they agree once the judge's "partial" is counted as incorrect. κ is low where almost every row has the same label (bench linear: the judge said correct on all rows), which is a property of κ, not a sign of disagreement.
+## Version 1 to version 2
 
-## Changes since the first recording
+Each cell shows the version 1 value, then the version 2 value; a single value means no change. Both recordings use the same golden sets and prompts, and the same saved model calls except on gov linear, where the 191 questions whose top 10 changed were answered again.
 
-The first recording (11 November) had 2,080 rows and 26 model errors. The final review led to four changes, and the runs were recorded again from saved model calls:
+| Corpus | System | Accuracy | Recall@10 | nDCG@10 | MRR | Citation precision | Evidence cited | Penalised t=0.75 | Linear weight |
+|---|---|---|---|---|---|---|---|---|---|
+| gov | RRF | 0.702 → 0.719 | 0.683 → 0.706 | 0.500 → 0.614 | 0.447 → 0.591 | 0.465 → 0.716 | 0.695 → 0.816 | 0.095 → 0.161 | – |
+| gov | Linear | 0.731 → 0.752 | 0.775 → 0.771 | 0.584 → 0.691 | 0.528 → 0.671 | 0.499 → 0.737 | 0.734 → 0.851 | 0.050 → 0.145 | 1.00 → 0.85 |
+| research | RRF | 0.703 → 0.712 | 0.654 | 0.502 | 0.465 | 0.591 | 0.761 | 0.149 → 0.185 | – |
+| research | Linear | 0.806 | 0.856 | 0.710 | 0.676 | 0.696 | 0.895 | 0.347 | 1.00 |
+| bench | RRF | 0.720 | 0.859 | 0.458 → 0.766 | 0.756 | 0.915 | 0.947 | 0.196 | – |
+| bench | Linear | 0.801 | 0.922 | 0.529 → 0.854 | 0.849 | 0.934 | 0.963 | 0.371 | 0.70 |
 
-- **Self-corrected replies are now recovered.** In the first recording, 25 of the 26 errors were replies the strict parser rejected: 15 wrote a JSON answer, then a correction and a second JSON object; 10 wrote a sentence before the JSON. Runs now take the last JSON object that has the required fields and mark the row (`json_recovered`). In this recording 133 rows are marked: 108 in query conversion, 24 in the answer, 3 in judge replies. One error remains, an answer of the wrong type. Golden-set generation still uses the strict parser.
-- **The exact scorer honours accepted variants** for number and set answers ("13 pages" for 13).
-- **Nine gov questions were removed**: the review found five "not in the corpus" questions answerable from the corpus and four partly answerable. Only about 20 of the 50 such gov questions were checked by hand, so more may remain.
-- **Five items were added** (four on gov, one on bench): number answers with unit variants that the old scorer wrongly rejected during golden-set checks.
+Why each number moved:
 
-Accuracy rose by 0.01 to 0.03 on gov and research and by under 0.01 on bench. All changes are inside the first recording's intervals.
+| Change in the definitions | What moved |
+|---|---|
+| **Identical copies of the evidence count** (not for questions with an as-of date). 111 of the 711 gov test evidence spans have a copy in another dated version; research and bench have none. | Gov only: Recall@10, MRR, nDCG@10, citation precision and evidence cited all rise. Gov MRR goes from 0.45 to 0.59 (RRF) and from 0.53 to 0.67 (linear); citation precision from 0.47 to 0.72 and from 0.50 to 0.74 |
+| **nDCG@10 gives full credit to any chunk that touches the evidence.** Version 1 gave credit in proportion to the share of the evidence a chunk covered, which capped bench at about 0.65. | Bench nDCG@10 goes from 0.46 to 0.77 (RRF) and from 0.53 to 0.85 (linear). Research is unchanged because its evidence fits in one chunk; on gov the rise comes from the copies |
+| **Coverage@10 and tokens in the top 10 are new.** Coverage is the share of the evidence's characters inside the top 10 chunks. | New columns; nothing to compare |
+| **Identifier answers match as whole identifiers.** "47 CFR § 73.1740" is now correct for the gold "73.1740". | Accuracy and the penalised scores rise on gov RRF (4 answers) and research RRF (2 answers). The rule also accounts for the whole accuracy rise on gov linear (5 answers): its regenerated answers gained 5 correct and lost 5 |
+| **The linear weight is tuned on the new nDCG.** | The gov weight moves from 1.00 to 0.85, so gov linear retrieves differently: 191 of its 242 questions have a different top 10 and were answered again (362 new model calls). Under the same version 2 rules the new weight scores slightly lower than 1.00 on every retrieval and citation figure (Recall@10 0.771 against 0.780, nDCG@10 0.691 against 0.700, MRR 0.671 against 0.681, citation precision 0.737 against 0.768). The rises shown for gov linear in the table above come from the copies rule, not from the new weight |
+| **Query understanding is scored by route, record match and entities with partial credit.** Version 1 compared every field for exact equality. | The version 1 figures (whole query 0.2% to 7%) are replaced, not moved; they remain in each `report.json` as diagnostics |
+| **Coverage@10 joins the system comparison.** | Coverage@10 is added as a fifth test. The comparison p-values also change because the outcomes and retrieval scores above changed: the research accuracy gap narrows (McNemar p 0.00003 to 0.0001) and the gov Recall@10 gap between the systems falls from 0.092 to 0.065 |
 
-## Known artefacts in the metrics
+What did not change: retrieval itself for five of the six runs, every prompt, the golden sets, and all research linear figures.
 
-Unless stated otherwise, these were measured by the final review on the first recording. They are properties of how this harness scores, not of the baseline, and they are left as they are until Phase 1 decides the definitions.
+## Limits that remain
 
-- **Gov ranks are understated by duplicate text.** More than half of the gov chunks have byte-identical text in another dated version of the same regulation, and only the copy named in the golden item counts as relevant. Counting an identical copy as relevant would raise gov MRR from 0.44 to 0.57 (RRF) and from 0.52 to 0.66 (linear), citation precision from 0.45 to 0.68 and from 0.49 to 0.73, and evidence-cited from 0.69 to 0.81 and from 0.73 to 0.86. Recall@10 barely moves. A later phase that only deduplicates versions would gain about 0.13 MRR on gov without retrieving anything better.
-- **Bench nDCG@10 cannot reach 1.** The benchmark's own questions cite whole documents, and a chunk earns credit in proportion to how much of the cited span it covers. The attainable ceiling on the bench test split is about 0.65, so the recorded 0.46 and 0.53 are about 71% and 82% of what is attainable. The ceiling depends on chunk size, which Phase 1 changes.
-- **The exact scorer for identifiers is stricter than the judge.** In this recording, in 15 rows the exact scorer marks an answer wrong and the judge marks the same answer correct; there are none the other way round. Typical case: "47 CFR § 73.1740" against the gold "73.1740". These rows carry the full penalty.
-- **G2 measures gold conventions too.** Gold queries use `lookup` for factoid questions, while the conversion prompt describes `explain` as the operation for facts; questions whose right answer is to abstain have a gold store and operation that cannot be known before retrieval; most bench gold queries have an empty entity list; and entities are compared as exact sets of free-text phrases. The per-field numbers are comparable between systems that use the same prompt, but they are not a clean measure of query understanding.
-- **Rarity tiers are uneven.** Tied term counts collapse the tiers (gov 109 head, 18 torso, 86 tail; research has no torso).
-- **Six of the twenty gov policy pairs put the same question in both dev and test**, because the split is by item, not by pair.
-
-## Read with care
-
-- **Questions favour keyword search.** Generated questions were written by a model reading the source section, so they share its vocabulary. This is a likely reason BM25 does so well, and findings 1 and 2 may not hold for questions written without seeing the text.
-- **Same-family judge.** Sonnet generates and Opus judges. Agreement with human labels has not been measured.
-- **The judge also helped select the golden items.** Free-text items were accepted when the same judge called a re-answer correct, which could make those items easier for this judge.
-- **Golden items are not human-vetted.** They are model-drafted and code-checked. A reviewer read 41 gov and research items against their sources and found the answers correct, but also found weak questions: some overview questions say "this section" without naming it, five research overview items come from catalogue rows, and five gov policy pairs ask about typography.
-- **One repeat.** Answer agreement across repeats is not measured, and temperature is not pinned under Claude Code.
+- **Questions favour keyword search.** Generated questions were written by a model reading the source section, so they share its vocabulary. Findings 1 and 2 may not hold for questions written without seeing the text.
+- **Coverage@10 rises with chunk size**, because larger chunks put more text in the top 10. Compare it only between systems whose tokens in the top 10 are similar.
+- **Five gov passages (four in the test split) have copies that the rule misses**, because text next to them was amended between versions and the rule requires 200 matching characters of context.
+- **The identifier rule also accepts a sub-paragraph** ("(b)(4)(i)" for the gold "(b)(4)") and an answer that lists several identifiers including the right one. In these runs no accepted answer is a sub-paragraph. Two gov answers carry a second identifier as a supporting citation, and the judge agrees they are correct; none hedges between alternatives.
+- **Query scores are not tied to answer quality.** Nothing uses the generated query yet, so a better score here has not been shown to give better answers. The entity match is lenient: one name's words must contain the other's.
+- **Same-family judge.** Sonnet generates and Opus judges. Agreement with human labels has not been measured, and the judge also helped select the free-text golden items.
+- **Golden items are not human-vetted**, and only about 20 of the 50 gov "not in the corpus" questions were checked by hand. Six of the twenty gov policy pairs put the same question in both dev and test. The rarity tiers are uneven (gov 109 head, 18 torso, 86 tail; research has no torso).
+- **One repeat, and answers vary between calls.** Answer agreement across repeats is not measured, and temperature is not pinned under Claude Code. When gov linear's 191 questions were answered again, 16 outcomes changed (5 became correct, 5 stopped being correct). That is the same size as the difference between the two gov systems (8 against 16 questions), which finding 1 reports as not significant.
+- **The judge-agreement κ on bench cannot be read on its own.** Bench linear shows κ 0.000 with 97% raw agreement, because the judge gave almost every row the same label. Use the raw agreement column.
+- **Median latency covers new calls only.** In this recording that means the 191 regenerated gov linear answers; the other runs reused saved calls.
 - **Bench is a 2,000-document subset** of EnterpriseRAG-Bench with its own questions, so these numbers are not comparable to results on the full benchmark.
 - **Reproducing these runs needs local data.** The research corpus needs the local PDF library, the research and bench golden sets are local only, and the gov corpus is fetched from live government sites that may change.
 
 ## Files
 
-Each run folder holds `config.json` (models, prompt hashes, snapshot, index fingerprint, golden-set hash, fusion settings), `report.json`, `report.md` and `compile.json`. The RRF folders also hold the comparison against the linear run. Per-row results stay local in `runs/` because bench rows contain benchmark text.
+`v2/` holds the six runs under version 2 and `v1/` the six under version 1. Each run folder holds `config.json` (models, prompt hashes, snapshot, index fingerprint, golden-set hash, fusion settings, metrics version), `report.json`, `report.md` and `compile.json`. The RRF folders also hold the comparison against the linear run. Per-row results stay local in `runs/` because bench rows contain benchmark text. Runs with different metrics versions cannot be compared with `adr-eval report --compare`.
 
 ```
 adr-eval run gov --system baseline-rrf --split test --repeats 1

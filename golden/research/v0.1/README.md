@@ -24,6 +24,14 @@ The corpus has no dated versions, so there are no `policy_asof` items. Rejected:
 
 Split: dev 53, test 222. Tail share among rated items: 0.36 (82 of 225).
 
+## Frozen data
+
+The item files are frozen data. They are not regenerated when scoring rules change. The
+generator's evidence-only check uses the harness's exact scorer, so regenerating with later
+code (for example the whole-identifier rule of metrics version 2) can admit a different set;
+that set would be a new version, not v0.1. `adr-eval golden research --gen` refuses to write
+over an existing `items.jsonl` unless `--overwrite` is given.
+
 ## Regenerate
 
 The research corpus needs the local PDF library (`scripts/download_papers.py`, then
@@ -35,6 +43,9 @@ adr-eval golden research --gen --generator claude_code_sonnet --judge claude_cod
 adr-eval golden research --verify
 ```
 
-With the same cache the output is byte-identical; from a cold cache, model replies may
-differ (Claude Code does not pin temperature), so compare the per-type counts above, not
-the hashes.
+Current code needs `--overwrite` on `--gen` when the item files already exist. With the same
+cache and the code that generated them (metrics version 1, up to commit `4063a0e`, which has
+no `--overwrite` flag) the output is byte-identical; later code may admit a different set
+(see "Frozen data"). From a cold
+cache, model replies may differ (Claude Code does not pin temperature), so compare the
+per-type counts above, not the hashes.

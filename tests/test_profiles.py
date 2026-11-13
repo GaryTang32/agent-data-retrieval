@@ -184,6 +184,7 @@ def test_golden_gen_judge_profile_and_shared_max_calls(tmp_path, monkeypatch, ca
 
     # a cap that fits the generator's calls alone stops once the judge's calls count too
     calls.clear()
+    args.append("--overwrite")  # the first run wrote items.jsonl
     rc = main([*args, "--max-calls", str(gen_calls + judge_calls - 1)])
     assert rc == 3 and calls["judge"] > 0
     assert calls["generator"] + calls["judge"] == gen_calls + judge_calls - 1

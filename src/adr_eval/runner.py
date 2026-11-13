@@ -31,7 +31,7 @@ from adr_eval.llm import (
     load_prices,
     price_entry,
 )
-from adr_eval.models import GoldenItem, load_items
+from adr_eval.models import Evidence, GoldenItem, load_items
 from adr_eval.pipeline import (
     Budget,
     Context,
@@ -46,7 +46,7 @@ from adr_eval.retrieval.dense import DenseIndex
 from adr_eval.retrieval.fusion import tune_linear_weight
 from adr_eval.retrieval.index import _CHANNEL_K, RRF_K, TOP_N, HybridIndex
 from adr_eval.retrieval.lexical import BM25Index
-from adr_eval.scoring import compile_metrics
+from adr_eval.scoring import METRICS_VERSION, compile_metrics, evidence_groups
 from adr_eval.scoring.exact import normalize_value
 from adr_eval.scoring.judge import Judge
 from adr_eval.scoring.judge import prompt_hash as judge_prompt_hash
@@ -155,8 +155,9 @@ def ensure_index(corpus: str, loaded: LoadedCorpus, config: dict,
 
 
 def compile_report(items: list[GoldenItem], loaded: LoadedCorpus, index: HybridIndex,
-                   source: str) -> dict:
-    """G1: span containment, extracted-text fidelity, empty documents, fingerprint."""
+                   source: str, copies: dict[str, int] | None = None) -> dict:
+    """G1: span containment, extracted-text fidelity, empty documents, fingerprint, and
+    `copies` (`evidence_groups.copy_stats` over the run's items) as "evidence_copies"."""
     by_doc: dict[str, list[Chunk]] = {}
     for c in index.chunks.values():
         by_doc.setdefault(c.doc_id, []).append(c)
@@ -166,16 +167,21 @@ def compile_report(items: list[GoldenItem], loaded: LoadedCorpus, index: HybridI
         "empty_docs": sorted(loaded.empty_docs),
         "n_docs": len(loaded.docs), "n_chunks": len(index.chunks),
         "fingerprint": index.fingerprint, "index_source": source,
+        "evidence_copies": copies,
     }
 
 
-def tune_w(index: HybridIndex, items: list[GoldenItem]) -> float:
+def tune_w(index: HybridIndex, items: list[GoldenItem],
+           groups: dict[str, list[list[Evidence]]] | None = None) -> float:
+    """Linear fusion weight maximising nDCG@10 over the dev items' evidence groups."""
     dev = [i for i in items if i.split == "dev" and i.evidence and i.qtype != "insufficient"]
     if not dev:
         raise RunError("baseline-linear needs dev-split items with evidence to tune w")
+    groups = groups or {}
 
     def ndcg(item: GoldenItem):
-        return lambda ids: ndcg_at_k([index.chunks[c] for c in ids], item.evidence, 10)
+        g = groups.get(item.id) or [[e] for e in item.evidence]
+        return lambda ids: ndcg_at_k([index.chunks[c] for c in ids], g, 10)
 
     return tune_linear_weight([
         (index.bm25.search(i.question, k=_CHANNEL_K), index.dense.search(i.question, k=_CHANNEL_K),
@@ -427,7 +433,8 @@ def run(
     if not items:
         raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}")
     index, source = ensure_index(corpus, loaded, config, rebuild)
-    w = tune_w(index, all_items) if system == "baseline-linear" else None
+    groups = evidence_groups.build_all(all_items, loaded.docs)
+    w = tune_w(index, all_items, groups) if system == "baseline-linear" else None
     retrieved = {i.id: [index.retrieve(i.question, system, w=w) for _ in range(repeats)]
                  for i in items}
     prices = load_prices(_repo_path(config.get("prices", "config/prices.json")))
@@ -459,7 +466,8 @@ def run(
                               MeteredClient(judge, budget, prices))
     judge_ = Judge(judge_meter, recover=True)
     cfg = {
-        "run_id": run_dir.name, "corpus": corpus, "system": system, "split": split,
+        "run_id": run_dir.name, "metrics_version": METRICS_VERSION,
+        "corpus": corpus, "system": system, "split": split,
         "repeats": repeats, "n_items": len(items), "stub": stub,
         "generator": _client_info(generator, prices, names["generator"], specs["generator"]),
         "judge": _client_info(judge, prices, names["judge"], specs["judge"]),
@@ -482,10 +490,12 @@ def run(
         "status": "running", "started": datetime.now(UTC).isoformat(),
     }
     _write_json(run_dir / "config.json", cfg)
-    _write_json(run_dir / "compile.json", compile_report(all_items, loaded, index, source))
+    copies = evidence_groups.copy_stats(groups[i.id] for i in items)
+    _write_json(run_dir / "compile.json",
+                compile_report(all_items, loaded, index, source, copies))
 
     ctx = Context(index, adapter.records(loaded), schema,
-                  gen_meter, judge_)
+                  gen_meter, judge_, groups)
     results = run_dir / "results.jsonl"
     rows: list[dict] = []
 

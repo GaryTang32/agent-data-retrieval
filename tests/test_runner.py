@@ -386,14 +386,15 @@ def _row(item_id, repeat, retrieved, outcome="correct", latency=1.0, qtype="fact
     }
 
 
-def _synthetic_run(tmp_path, rows, repeats=2) -> Path:
-    d = tmp_path / "run"
+def _synthetic_run(tmp_path, rows, repeats=2, metrics_version=None, name="run") -> Path:
+    d = tmp_path / name
     d.mkdir()
+    version = {} if metrics_version is None else {"metrics_version": metrics_version}
     (d / "config.json").write_text(json.dumps({
-        "run_id": "run", "corpus": "mini", "system": "baseline-rrf", "split": "test",
+        "run_id": name, "corpus": "mini", "system": "baseline-rrf", "split": "test",
         "repeats": repeats, "t_values": [0.5, 0.75, 0.9], "status": "complete", "stub": False,
         "same_family_judge": False, "judge": {"model": "j", "family": "x"},
-        "generator": {"model": "g", "family": "y"}, "fingerprint": "f" * 64,
+        "generator": {"model": "g", "family": "y"}, "fingerprint": "f" * 64, **version,
     }))
     (d / "compile.json").write_text(json.dumps({
         "span_containment": 1.0, "text_fidelity": {"share": 1.0}, "empty_docs": [],
@@ -440,7 +441,8 @@ def test_report_penalised_hand_computed_with_cis(tmp_path):
     assert e2e["accuracy"] == pytest.approx(0.2) and acc["n"] == 5
     assert acc["ci95"][0] <= 0.2 <= acc["ci95"][1]
     pooled = rep["g3"]["pooled"]["ci"]
-    assert set(pooled) == {"recall@10", "ndcg@10", "mrr"}
+    assert set(pooled) == {"recall@10", "ndcg@10", "mrr", "coverage@10"}
+    assert pooled["coverage@10"] is None  # rows written before the metric existed
     assert pooled["ndcg@10"]["ci95"] == [0.5, 0.5]  # every synthetic row has nDCG 0.5
     stratum = e2e["by_rarity_qtype"]["tail/factoid"]
     assert stratum["ci"]["accuracy"]["n"] == 5
@@ -744,3 +746,98 @@ def test_cli_run_exits_4_on_determinism_violation(tmp_path, monkeypatch, capsys)
     assert main(["run", "mini", "--system", "baseline-rrf", "--stub",
                  "--out", str(tmp_path)]) == 4
     assert "warning: determinism check failed" in capsys.readouterr().out
+
+
+# -- metrics version 2 ------------------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_stub_run_stamps_metrics_version_and_new_row_metrics(tmp_path):
+    from adr_eval.scoring import METRICS_VERSION
+
+    assert METRICS_VERSION == 2
+    run_dir = run_with_stub(tmp_path)
+    assert json.loads((run_dir / "config.json").read_text())["metrics_version"] == 2
+    copies = json.loads((run_dir / "compile.json").read_text())["evidence_copies"]
+    n_spans = sum(len(i["evidence"]) for i in _test_items())
+    assert copies == {"spans": n_spans, "spans_with_copies": 0, "copies": 0}
+    scored = [r for r in _rows(run_dir) if r["metrics"] is not None]
+    assert scored and all(0.0 <= r["metrics"]["coverage@10"] <= 1.0 for r in scored)
+    assert all(isinstance(r["metrics"]["tokens@10"], int) and r["metrics"]["tokens@10"] > 0
+               for r in scored)
+    rep = build_report(run_dir)
+    assert rep["metrics_version"] == 2 and "Metrics version 2" in render_markdown(rep)
+    assert rep["g3"]["pooled"]["coverage@10"] is not None
+    assert rep["g3"]["pooled"]["tokens@10"] > 0
+
+
+def _v2_row(item_id, coverage, tokens):
+    row = _row(item_id, 0, ["c1"])
+    row["metrics"] = {**row["metrics"], "coverage@10": coverage, "tokens@10": tokens}
+    return row
+
+
+def test_report_g3_coverage_with_ci_and_mean_tokens(tmp_path):
+    rows = [_v2_row("a", 0.5, 100), _v2_row("b", 1.0, 300)]
+    rep = build_report(_synthetic_run(tmp_path, rows, repeats=1, metrics_version=2))
+    pooled = rep["g3"]["pooled"]
+    assert pooled["coverage@10"] == 0.75 and pooled["tokens@10"] == 200
+    assert pooled["ci"]["coverage@10"]["n"] == 2
+    assert rep["g3"]["by_rarity"]["tail"]["coverage@10"] == 0.75
+    md = render_markdown(rep)
+    assert "coverage@10" in md and "tokens@10" in md and "0.750 [" in md
+
+
+def test_report_without_version_field_is_version_1_and_builds(tmp_path):
+    rep = build_report(_synthetic_run(tmp_path, [_row("a", 0, ["c1"]), _row("b", 0, ["c1"])],
+                                      repeats=1))
+    assert rep["metrics_version"] == 1
+    assert rep["g3"]["pooled"]["coverage@10"] is None
+    assert rep["g3"]["pooled"]["tokens@10"] is None
+    md = render_markdown(rep)
+    assert "Metrics version 1" in md and "| – | – |" in md
+
+
+def test_compare_refuses_different_metrics_versions(tmp_path, capsys):
+    rows = [_v2_row("a", 0.5, 100), _v2_row("b", 1.0, 300)]
+    v1 = _synthetic_run(tmp_path, rows, repeats=1, name="old")
+    v2 = _synthetic_run(tmp_path, rows, repeats=1, metrics_version=2, name="new")
+    with pytest.raises(RunError, match="version 2.*version 1"):
+        compare(v2, v1)
+    capsys.readouterr()
+    assert main(["report", str(v2), "--compare", str(v1)]) == 2
+    err = capsys.readouterr().err.strip()
+    assert len(err.splitlines()) == 1 and "2" in err and "1" in err and "metrics version" in err
+    c = compare(v2, _synthetic_run(tmp_path, rows, repeats=1, metrics_version=2, name="new2"))
+    assert c["metrics"]["coverage@10"]["n"] == 2 and c["metrics"]["coverage@10"]["mean_diff"] == 0
+
+
+def _g2_row(item_id, route_ok, entity_f1, exec_match=None):
+    row = _row(item_id, 0, ["c1"])
+    row.update(route_ok=route_ok, entity_f1=entity_f1, query_exec_match=exec_match)
+    return row
+
+
+def test_report_g2_route_accuracy_entity_f1_and_record_match(tmp_path):
+    rows = [_g2_row("a", True, 1.0, True), _g2_row("b", False, 0.5, False),
+            _g2_row("c", True, None), _g2_row("d", None, None)]
+    rep = build_report(_synthetic_run(tmp_path, rows, repeats=1, metrics_version=2))
+    g2 = rep["g2"]
+    assert g2["route_accuracy"] == pytest.approx(2 / 3) and g2["route_n"] == 3
+    assert g2["entity_f1"] == 0.75 and g2["entity_n"] == 2
+    assert g2["exec_match"] == 0.5 and g2["exec_n"] == 2
+    assert g2["exact"] == 0.0 and g2["per_field"]["store"] == 1.0  # kept in report.json
+    md = render_markdown(rep).split("## G2 query understanding")[1].split("## G1")[0]
+    assert "route accuracy" in md and "record match" in md and "entity F1" in md
+    assert "| 0.667 | 3 | 0.500 | 2 | 0.750 | 2 |" in md
+    assert "store" not in md and "exact" not in md  # per-field table and whole-query match
+
+
+def test_report_g2_for_rows_without_query_scores(tmp_path):
+    rep = build_report(_synthetic_run(tmp_path, [_row("a", 0, ["c1"]), _row("b", 0, ["c1"])],
+                                      repeats=1))
+    g2 = rep["g2"]
+    assert g2["route_accuracy"] is None and g2["route_n"] == 0
+    assert g2["entity_f1"] is None and g2["entity_n"] == 0
+    md = render_markdown(rep).split("## G2 query understanding")[1].split("## G1")[0]
+    assert "| – | 0 | – | 0 | – | 0 |" in md
