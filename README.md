@@ -2,8 +2,8 @@
 
 > **Status: work in progress.** This repository is under active development and is not
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
-> harness and a recorded baseline. The toolkit itself (Phases 1–6 below) is not built yet:
-> Phase 1 has started. Interfaces, file formats and results may change without notice.
+> harness, a recorded baseline and the Phase 1 evidence store with its `adr` tools. Phases 2–6
+> are not built yet. Interfaces, file formats and results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -44,7 +44,7 @@ Two terms are used precisely:
 ```mermaid
 flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
-    P1["Phase 1<br/>Evidence store<br/>🔄 1 of 6 steps"]
+    P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
     P2["Phase 2<br/>Permissions and<br/>applicability"]
     P3["Phase 3<br/>Typed database"]
     P4["Phase 4<br/>Knowledge units"]
@@ -57,16 +57,15 @@ flowchart LR
     classDef done fill:#d8f0e3,stroke:#1d7a4f,color:#0b3d27
     classDef active fill:#fff1cc,stroke:#a86b00,color:#4a3000
     classDef todo fill:#eef0f4,stroke:#8a93a6,color:#3a4152
-    class P0 done
-    class P1 active
+    class P0,P1 done
     class P2,P3,P4,P5,P6 todo
 ```
 
 | Phase | What it delivers | Status | Steps done | Progress |
 |---|---|---|---|---|
 | 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
-| 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | 🔄 In progress | 1 of 6 | `██░░░░░░░░` |
-| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data | Not started | – | `░░░░░░░░░░` |
+| 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | ✅ Built and measured ([results](results/phase1/README.md)) | 6 of 6 | `██████████` |
+| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data | Next | – | `░░░░░░░░░░` |
 | 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | Not started | – | `░░░░░░░░░░` |
 | 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
 | 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
@@ -81,11 +80,11 @@ criteria pass.
 | # | Step | Purpose | Status |
 |---|---|---|---|
 | 1 | Metric definitions version 2 | Scoring rules that do not reward the wrong thing, settled before anything is measured against them | ✅ Merged ([`results/README.md`](results/README.md)) |
-| 2 | Record format, structure parsers, store | A lossless, content-addressed record of every document and its sections | 🔄 Building |
-| 3 | Structure-led chunks | Chunks that follow headings and carry a breadcrumb | Not started |
-| 4 | Retrieval over the store | Breadcrumb-weighted keyword search, dense search, an optional reranker | Not started |
-| 5 | `search`, `read` and `grep` tools | The interface agents call, with a retrieval log | Not started |
-| 6 | Measure against the baseline | Keep each component only if it beats the baseline | Not started |
+| 2 | Record format, structure parsers, store | A lossless, content-addressed record of every document and its sections | ✅ Built; 2,425 documents round-trip losslessly |
+| 3 | Structure-led chunks | Chunks that follow headings and carry a breadcrumb | ✅ Built; a 1% edit re-embeds at most 0.6% of chunks |
+| 4 | Retrieval over the store | Breadcrumb-weighted keyword search, dense search, an optional reranker | ✅ Built; reranker switched off (it lowers quality) |
+| 5 | `search`, `read` and `grep` tools | The interface agents call, with a retrieval log | ✅ Built (`adr ingest`, `index`, `search`, `read`, `grep`) |
+| 6 | Measure against the baseline | Keep each component only if it beats the baseline | ✅ Measured: level with the baseline, not better, so the baseline stays the reference ([`results/phase1/README.md`](results/phase1/README.md)) |
 
 Design: [`docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md`](docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md).
 Plan: [`docs/superpowers/plans/2026-11-13-phase1-evidence-store.md`](docs/superpowers/plans/2026-11-13-phase1-evidence-store.md).
@@ -99,7 +98,7 @@ design targets taken from the research, not results.
 | Phase | Scope | Status |
 |---|---|---|
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
-| **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **In progress**: metric definitions version 2 merged; the evidence store is being built |
+| **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **Built and measured.** Three exit criteria met, one partly (no bounding boxes), one deferred (parse routing needs layout models), one not applicable. Retrieval is level with the baseline, which stays the reference ([results](results/phase1/README.md)) |
 | **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | Not started |
 | **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | Not started |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
@@ -124,6 +123,24 @@ The full roadmap with exit criteria is in
 The only results so far are the baseline's own numbers. They describe a deliberately simple
 system and are not a performance claim about the toolkit.
 
+### Phase 1 results
+
+Measured on the test split of all three corpora against `baseline-linear`
+([`results/phase1/README.md`](results/phase1/README.md)):
+
+| Question | Answer |
+|---|---|
+| Does the store keep every document intact? | Yes: 2,425 documents round-trip losslessly; every leaf element has a character span, every PDF leaf a page |
+| Is re-indexing after an edit cheap? | Yes: editing 1% of documents re-embeds 0.03–0.55% of chunks |
+| How long until 100 PDFs are searchable? | 8.4 minutes on a 4-core machine with all cores embedding |
+| Is retrieval repeatable? | Yes: identical rankings across runs and rebuilds |
+| Does it retrieve better than the baseline? | Only on gov (Recall@10 0.771 → 0.802, significant); level on research and bench |
+| Are the answers better? | No significant difference on any corpus (accuracy 0.731 vs 0.752 on gov, 0.779 vs 0.806 on research, 0.813 vs 0.801 on bench) |
+| Did the reranker help? | No: it lowered quality on every corpus and is switched off |
+
+So the baseline stays the reference for later phases; the store, its spans and its tools are
+what Phases 2–5 build on.
+
 ## What is in the repository
 
 | Path | Contents |
@@ -133,10 +150,11 @@ system and are not a performance claim about the toolkit.
 | `papers/` | Catalog of about 2,570 sources (`README.md`, `manifest.csv`). The PDFs are kept local only; rebuild them with `scripts/download_papers.py` (see the warning below). |
 | `docs/superpowers/` | The Phase 0 design spec and implementation plan. |
 | `src/adr_eval/`, `tests/` | The evaluation harness and its tests. |
+| `src/adr_store/` | The Phase 1 evidence store: record format, structure parsers, content-addressed store, structure-led chunks, retrieval and the `adr` tools. |
 | `config/` | Run settings, model profiles and price table. No API keys are stored here. |
 | `corpora/` | Pinned manifests (SHA-256 per file) and notes for the three corpora. Corpus files download into `data/`, which is not committed. |
 | `golden/` | Golden question sets: `gov` committed; `research` and `bench` items local only, with READMEs that pin their hashes and counts. |
-| `results/` | Recorded baseline runs and their summary. |
+| `results/` | Recorded baseline runs and their summary; Phase 1 results in `results/phase1/`. |
 
 ## Evaluation harness
 
@@ -194,6 +212,34 @@ Reproducibility limits:
   `research` corpus document: rerunning it changes the research snapshot. Restore the file
   afterwards with `git checkout papers/manifest.csv`.
 - Build corpora in a clean `data/` directory.
+
+## Evidence store tools
+
+The `adr` command works on one store and one index. For example, for loose files:
+
+```bash
+adr ingest --path <folder> --store <store>
+```
+
+```bash
+adr index <store> --system p1-struct-bc --w-bc 2 --weight 0.9 --threads 0
+```
+
+```bash
+adr search "<question>" --store <store> --top 10
+```
+
+```bash
+adr read <doc_id> --store <store> --start 0 --end 500
+```
+
+```bash
+adr grep "<pattern>" --store <store> --max 20
+```
+
+`adr ingest <corpus>` ingests a pinned corpus instead. `p1-struct-bc` needs its breadcrumb weight and fusion weight: give them with `--w-bc` and `--weight`, or with `--tuning <run>` to take the values an `adr-eval retrieval` run tuned on the dev split. `--json` gives machine-readable output, and
+every call appends one line to `<store>/log/retrieval.jsonl`. `--threads 0` embeds on all cores;
+the vectors are identical to single-threaded ones.
 
 ## License
 
