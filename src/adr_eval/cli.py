@@ -1,4 +1,4 @@
-"""`adr-eval` command line: fetch, golden, index, run, report, doctor."""
+"""`adr-eval` command line: fetch, golden, index, run, retrieval, report, doctor."""
 
 from __future__ import annotations
 
@@ -7,12 +7,13 @@ import json
 import logging
 import sys
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from adr_eval import runner
+from adr_eval import runner, systems
 from adr_eval.cache import Cache
 from adr_eval.corpora.base import ExtractionError, HashMismatch
 from adr_eval.corpora.registry import (
@@ -23,7 +24,15 @@ from adr_eval.corpora.registry import (
     get_adapter,
 )
 from adr_eval.models import GoldenItem, jsonl_lines, write_items
-from adr_eval.report import compare, render_compare_markdown, render_markdown, write_report
+from adr_eval.report import (
+    compare,
+    compare_retrieval,
+    load_retrieval,
+    render_compare_markdown,
+    render_markdown,
+    render_retrieval_compare_markdown,
+    write_report,
+)
 
 
 def _fetch(a: argparse.Namespace) -> int:
@@ -164,6 +173,38 @@ def _run(a: argparse.Namespace) -> int:
     return 4 if rep["determinism_violation"] else 0
 
 
+def _retrieval(a: argparse.Namespace) -> int:
+    t0 = time.perf_counter()
+    run_id = runner.run_retrieval(a.corpus, a.system, a.split, runner.load_config(),
+                                  out_root=a.out, rebuild=a.rebuild,
+                                  lexical_only=a.lexical_only)
+    data = load_retrieval(a.out / run_id)
+    p = data["summary"]["pooled"]
+    print(f"{a.out / run_id}: {p['n']} scored items; Recall@10 {p['recall@10']:.3f}, "
+          f"nDCG@10 {p['ndcg@10']:.3f}, MRR {p['mrr']:.3f}, coverage@10 "
+          f"{p['coverage@10']:.3f}; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0
+
+
+def _retrieval_dir(name: str, out: Path) -> Path:
+    d = Path(name) if Path(name).is_dir() else out / name
+    if not (d / "retrieval.json").is_file():
+        raise runner.RunError(f"{d}: no retrieval.json; pass a retrieval run id under {out} "
+                              f"or a run dir")
+    return d
+
+
+def _retrieval_compare(a: argparse.Namespace) -> int:
+    run_a, run_b = _retrieval_dir(a.run_a, a.out), _retrieval_dir(a.run_b, a.out)
+    c = compare_retrieval(run_a, run_b)
+    (run_a / f"compare-{run_b.name}.json").write_text(
+        json.dumps(c, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    md = render_retrieval_compare_markdown(c)
+    (run_a / f"compare-{run_b.name}.md").write_text(md, encoding="utf-8")
+    print(md)
+    return 0
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -239,9 +280,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--rebuild", action="store_true", help="replace a saved index")
     p.set_defaults(fn=_index)
 
-    p = sub.add_parser("run", help="run a baseline system over a split")
+    p = sub.add_parser("run", help="run a registered system over a split")
     p.add_argument("corpus", choices=NAMES)
-    p.add_argument("--system", required=True, choices=runner.SYSTEMS)
+    p.add_argument("--system", required=True, choices=systems.NAMES)
     p.add_argument("--repeats", type=int, default=None, help="default: config repeats")
     p.add_argument("--split", choices=("dev", "test"), default="test")
     p.add_argument("--max-dollars", type=float, default=None)
@@ -252,6 +293,24 @@ def _parser() -> argparse.ArgumentParser:
                    help="deterministic stub generator and judge (tests and demos)")
     _profile_args(p, judge=True)
     p.set_defaults(fn=_run)
+
+    p = sub.add_parser("retrieval", help="retrieval track only (no model calls): "
+                                         "retrieval.json/retrieval.md for a system")
+    p.add_argument("corpus", choices=NAMES)
+    p.add_argument("--system", required=True, choices=systems.NAMES)
+    p.add_argument("--split", choices=("dev", "test"), default="test")
+    p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
+    p.add_argument("--lexical-only", action="store_true",
+                   help="the system's BM25 channel alone (no embedding; a diagnostic)")
+    p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
+    p.set_defaults(fn=_retrieval)
+
+    p = sub.add_parser("retrieval-compare",
+                       help="paired comparison of two retrieval runs (run_b minus run_a)")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
+    p.set_defaults(fn=_retrieval_compare)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

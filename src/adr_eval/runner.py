@@ -1,4 +1,5 @@
-"""Run a baseline system over a golden split: setup, index, clients, budget and output files."""
+"""Run a registered system over a golden split: setup, index, clients, budget and output
+files; and the retrieval-only track (`run_retrieval`), which creates no model client."""
 
 from __future__ import annotations
 
@@ -7,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,11 +42,12 @@ from adr_eval.pipeline import (
     model_id,
     price_usd,
     process_item,
+    retrieval_scores,
 )
 from adr_eval.retrieval.chunker import Chunk, chunk_document
 from adr_eval.retrieval.dense import DenseIndex
 from adr_eval.retrieval.fusion import tune_linear_weight
-from adr_eval.retrieval.index import _CHANNEL_K, RRF_K, TOP_N, HybridIndex
+from adr_eval.retrieval.index import _CHANNEL_K, HybridIndex
 from adr_eval.retrieval.lexical import BM25Index
 from adr_eval.scoring import METRICS_VERSION, compile_metrics, evidence_groups
 from adr_eval.scoring.exact import normalize_value
@@ -52,8 +55,6 @@ from adr_eval.scoring.judge import Judge
 from adr_eval.scoring.judge import prompt_hash as judge_prompt_hash
 from adr_eval.scoring.retrieval_metrics import ndcg_at_k, overlap
 
-System = Literal["baseline-rrf", "baseline-linear"]
-SYSTEMS = ("baseline-rrf", "baseline-linear")
 CONFIG_PATH = REPO_ROOT / "config" / "eval.json"
 MODELS_PATH = REPO_ROOT / "config" / "models.json"
 
@@ -324,7 +325,7 @@ class _Recorder:
         return Completion(self.reply, tin, tout, self.model, 0.0, False)
 
 
-def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index: HybridIndex,
+def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index,
              schema: dict, gen_model: tuple[str, str], judge_model: tuple[str, str],
              prices: dict) -> None:
     """`gen_model` / `judge_model` are (model, provider) pairs for the price lookup."""
@@ -401,9 +402,21 @@ def _role_clients(config: dict, given: dict[str, ModelClient | None], stub: bool
     return clients, names, specs
 
 
+def _system_names() -> tuple[str, ...]:
+    from adr_eval import systems
+
+    return systems.NAMES
+
+
+def _check_system(system: str) -> None:
+    names = _system_names()
+    if system not in names:
+        raise RunError(f"unknown system {system!r}; expected one of {', '.join(names)}")
+
+
 def run(
     corpus: str,
-    system: System,
+    system: str,
     split: Literal["dev", "test"],
     repeats: int,
     config: dict,
@@ -421,8 +434,9 @@ def run(
     `config["generator"]` / `config["judge"]` name profiles in config/models.json;
     `generator` / `judge` override the clients built from them (tests).
     """
-    if system not in SYSTEMS:
-        raise RunError(f"unknown system {system!r}; expected one of {', '.join(SYSTEMS)}")
+    from adr_eval import systems
+
+    _check_system(system)
     stub = bool(config.get("stub"))
     clients, names, specs = _role_clients(config, {"generator": generator, "judge": judge},
                                           stub, dry_run)
@@ -432,11 +446,10 @@ def run(
     items = sorted((i for i in all_items if i.split == split), key=lambda i: i.id)
     if not items:
         raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}")
-    index, source = ensure_index(corpus, loaded, config, rebuild)
     groups = evidence_groups.build_all(all_items, loaded.docs)
-    w = tune_w(index, all_items, groups) if system == "baseline-linear" else None
-    retrieved = {i.id: [index.retrieve(i.question, system, w=w) for _ in range(repeats)]
-                 for i in items}
+    index = systems.build(system, corpus, loaded, all_items, groups, config, rebuild=rebuild)
+    source, w = index.source, index.w
+    retrieved = {i.id: [index.retrieve(i.question) for _ in range(repeats)] for i in items}
     prices = load_prices(_repo_path(config.get("prices", "config/prices.json")))
     if stub and (generator is None or judge is None):
         sg, sj = stub_clients(all_items, index.chunks)
@@ -478,9 +491,7 @@ def run(
         "snapshot": loaded.manifest.snapshot(), "fingerprint": index.fingerprint,
         "golden": _display_path(golden_items_path(corpus)),
         "golden_sha256": hashlib.sha256(golden_items_path(corpus).read_bytes()).hexdigest(),
-        "retrieval": {"fusion": "rrf" if system == "baseline-rrf" else "linear",
-                      "rrf_k": RRF_K if system == "baseline-rrf" else None,
-                      "channel_k": _CHANNEL_K, "top_n": TOP_N, "linear_w": w},
+        "retrieval": index.run_config(),
         "seed": config.get("seed"),
         "price_table_as_of": {model_id(c): e.get("as_of") for c in (generator, judge)
                               if (e := price_entry(model_id(c), prices, c.name)) is not None},
@@ -533,4 +544,62 @@ def run(
                spent_usd=budget.spent, calls=budget.calls,
                served_model_mismatch=any(_served_mismatch(cfg[r]) for r in ("generator", "judge")))
     _write_json(run_dir / "config.json", cfg)
+    return run_dir.name
+
+
+# -- the retrieval track ----------------------------------------------------------------
+
+
+def run_retrieval(corpus: str, system: str, split: Literal["dev", "test"], config: dict,
+                  out_root: Path = Path("runs"), *, rebuild: bool = False,
+                  lexical_only: bool = False) -> str:
+    """The retrieval track only (spec §10.1): no model client is created and no model is
+    called. Writes `<out_root>/<run_id>/retrieval.json` and `retrieval.md`; returns the run id.
+    """
+    from adr_eval import systems
+    from adr_eval.report import render_retrieval_markdown, retrieval_summary
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    _check_system(system)
+    loaded = load_checked_corpus(corpus)
+    all_items = load_golden(corpus, loaded)
+    items = sorted((i for i in all_items if i.split == split), key=lambda i: i.id)
+    if not items:
+        raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}")
+    groups = evidence_groups.build_all(all_items, loaded.docs)
+    built = systems.build(system, corpus, loaded, all_items, groups, config, rebuild=rebuild,
+                          lexical_only=lexical_only)
+    rows = []
+    for item in items:
+        hits = built.retrieve(item.question)
+        ranked = [built.chunks[c] for c, _ in hits]
+        rows.append({"item_id": item.id, "qtype": item.qtype, "rarity": item.rarity,
+                     "ranked": [c for c, _ in hits], "scores": [s for _, s in hits],
+                     "metrics": retrieval_scores(
+                         item, ranked, groups.get(item.id) or [[e] for e in item.evidence])})
+    by_doc: dict[str, list[Chunk]] = {}
+    for c in built.chunks.values():
+        by_doc.setdefault(c.doc_id, []).append(c)
+    name = f"{system}-lexical" if lexical_only else system
+    run_dir = _new_run_dir(Path(out_root),
+                           f"{corpus}-{name}-{split}-retrieval-{started:%Y%m%dT%H%M%S}")
+    cfg = {
+        "run_id": run_dir.name, "track": "retrieval", "metrics_version": METRICS_VERSION,
+        "corpus": corpus, "system": system, "split": split, "lexical_only": lexical_only,
+        "n_items": len(items), "snapshot": loaded.manifest.snapshot(),
+        "fingerprint": built.fingerprint, "index_source": built.source,
+        "settings": built.run_config(), "w": built.w,
+        "golden": _display_path(golden_items_path(corpus)),
+        "golden_sha256": hashlib.sha256(golden_items_path(corpus).read_bytes()).hexdigest(),
+        "seed": config.get("seed"),
+        "compile": {"n_chunks": len(built.chunks),
+                    "span_containment": compile_metrics.span_containment(all_items, by_doc),
+                    "evidence_copies": evidence_groups.copy_stats(groups[i.id] for i in items)},
+        "started": started.isoformat(), "finished": datetime.now(UTC).isoformat(),
+        "wall_clock_s": round(time.perf_counter() - t0, 1),
+    }
+    data = {"config": cfg, "summary": retrieval_summary(rows), "rows": rows}
+    _write_json(run_dir / "retrieval.json", data)
+    (run_dir / "retrieval.md").write_text(render_retrieval_markdown(data), encoding="utf-8")
     return run_dir.name

@@ -1,4 +1,5 @@
-"""Reports over a run directory (JSON and markdown) and paired comparisons of two runs."""
+"""Reports over a run directory (JSON and markdown) and paired comparisons of two runs; the
+same for retrieval-track runs (`retrieval.json`)."""
 
 from __future__ import annotations
 
@@ -469,4 +470,96 @@ def render_compare_markdown(c: dict) -> str:
     mc = c["mcnemar"]
     out += [f"McNemar exact on correct vs not: only A correct {mc['only_a_correct']}, only B "
             f"correct {mc['only_b_correct']}, p = {mc['p']:.4f} (Holm {mc['p_holm']:.4f}).", ""]
+    return "\n".join(out)
+
+
+# -- the retrieval track ----------------------------------------------------------------
+
+
+def retrieval_summary(rows: list[dict]) -> dict:
+    """G3 figures of a retrieval-track run: pooled and per rarity / qtype, with 95% CIs
+    (items without metrics, i.e. `insufficient`, are left out)."""
+    return _g3([{**r, "repeat": 0} for r in rows])
+
+
+def load_retrieval(run_dir: Path) -> dict:
+    path = Path(run_dir) / "retrieval.json"
+    if not path.is_file():
+        raise RunError(f"{run_dir}: no retrieval.json; pass a retrieval run id or directory")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def render_retrieval_markdown(data: dict) -> str:
+    cfg, g3 = data["config"], data["summary"]
+    s = cfg["settings"]
+    knobs = ", ".join(f"{k} {s[k]}" for k in ("fusion", "linear_w", "w_bc", "prefix", "rerank")
+                      if k in s)
+    out = [f"# Retrieval: {cfg['run_id']}", "",
+           f"Corpus `{cfg['corpus']}`, system `{cfg['system']}`"
+           + (" (lexical channel only)" if cfg.get("lexical_only") else "")
+           + f", split `{cfg['split']}`, {cfg['n_items']} items. Settings: {knobs}. "
+           f"Index fingerprint `{cfg['fingerprint']}`. Metrics version "
+           f"{cfg['metrics_version']}. No model calls. Wall-clock {cfg['wall_clock_s']} s.", "",
+           "Values in brackets are 95% CIs (percentile bootstrap of the mean over items, "
+           "10,000 resamples); none where n < 2. `insufficient` items carry no metrics.", ""]
+    out += _table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "coverage@10", "tokens@10",
+                   "full coverage"],
+                  [[k, v["n"], *(_with_ci(v.get(m), v["ci"].get(m)) for m in G3_KEYS),
+                    v.get("tokens@10"), v["full_coverage"]]
+                   for k, v in [("pooled", g3["pooled"]),
+                                *((f"rarity {k}", v) for k, v in g3["by_rarity"].items()),
+                                *((f"qtype {k}", v) for k, v in g3["by_qtype"].items())]])
+    comp = cfg.get("compile") or {}
+    out += [f"Chunks {comp.get('n_chunks')}; span containment "
+            f"{_fmt(comp.get('span_containment'))}.", ""]
+    return "\n".join(out)
+
+
+def compare_retrieval(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> dict:
+    """Paired differences (run_b - run_a) of the retrieval metrics over shared items, with
+    paired bootstrap CIs and Holm-adjusted p across the four metrics. Refuses runs of other
+    metrics versions, corpora or splits."""
+    a, b = load_retrieval(run_a), load_retrieval(run_b)
+    ca, cb = a["config"], b["config"]
+    if ca["metrics_version"] != cb["metrics_version"]:
+        raise RunError(f"cannot compare runs with different metrics versions: "
+                       f"{Path(run_a).name} is metrics version {ca['metrics_version']}, "
+                       f"{Path(run_b).name} is metrics version {cb['metrics_version']}")
+    for key in ("corpus", "split"):
+        if ca[key] != cb[key]:
+            raise RunError(f"cannot compare runs of different {key}s: {ca[key]} and {cb[key]}")
+    seed = ca.get("seed") or DEFAULT_SEED
+    ra = {r["item_id"]: r for r in a["rows"] if r["metrics"] is not None}
+    rb = {r["item_id"]: r for r in b["rows"] if r["metrics"] is not None}
+    shared = sorted(ra.keys() & rb.keys())
+    if not shared:
+        raise RunError(f"{Path(run_a).name} and {Path(run_b).name} share no scored items")
+    metrics: dict[str, dict] = {}
+    for k in G3_KEYS:
+        x = [ra[i]["metrics"][k] for i in shared]
+        y = [rb[i]["metrics"][k] for i in shared]
+        mean, lo, hi = paired_bootstrap_ci(x, y, n=n_resamples, seed=seed)
+        metrics[k] = {"n": len(shared), "a": _mean(x), "b": _mean(y), "mean_diff": mean,
+                      "ci95": [lo, hi], "p": _bootstrap_p(x, y, n_resamples, seed)}
+    adjusted = holm({k: m["p"] for k, m in metrics.items()})
+    for k, m in metrics.items():
+        m["p_holm"] = adjusted[k]
+    return {"run_a": Path(run_a).name, "run_b": Path(run_b).name,
+            "system_a": ca["system"], "system_b": cb["system"], "corpus": ca["corpus"],
+            "split": ca["split"], "metrics_version": ca["metrics_version"],
+            "n_pairs": len(shared), "n_resamples": n_resamples, "difference": "run_b - run_a",
+            "metrics": metrics}
+
+
+def render_retrieval_compare_markdown(c: dict) -> str:
+    bound = 2 / c["n_resamples"]
+    out = [f"# Retrieval comparison: {c['run_b']} minus {c['run_a']}", "",
+           f"`{c['system_b']}` minus `{c['system_a']}` on `{c['corpus']}` / `{c['split']}`, "
+           f"paired over {c['n_pairs']} shared items; paired bootstrap 95% CIs; Holm-adjusted "
+           f"p across the four metrics. Metrics version {c['metrics_version']}.", ""]
+    out += _table(["metric", "n", "A", "B", "mean diff", "95% CI", "p", "p (Holm)"],
+                  [[k, m["n"], m["a"], m["b"], m["mean_diff"],
+                    f"[{m['ci95'][0]:.3f}, {m['ci95'][1]:.3f}]", _p_cell(m["p"], bound),
+                    _p_cell(m["p_holm"], bound * len(c["metrics"]))]
+                   for k, m in c["metrics"].items()])
     return "\n".join(out)

@@ -140,13 +140,21 @@ class StoreIndex:
                            FieldBM25(settings.w_bc), embedding,
                            reranker if settings.rerank else None, [c.chunk_id for c in chunks])
 
-    def with_w_bc(self, w_bc: int) -> StoreIndex:
-        """The same index with another breadcrumb weight (dense vectors shared)."""
-        settings = Settings(w_bc, self.settings.prefix, self.settings.rerank)
-        lexical = FieldBM25(w_bc, self.lexical.bm25.k1, self.lexical.bm25.b)
-        lexical.build(list(self.chunks.values()))
+    def with_settings(self, *, w_bc: int | None = None, rerank: bool | None = None,
+                      reranker: CrossEncoderReranker | None = None) -> StoreIndex:
+        """The same chunks and dense vectors with another breadcrumb weight or reranker
+        setting (the prefix is fixed by the vectors)."""
+        settings = Settings(self.settings.w_bc if w_bc is None else w_bc, self.settings.prefix,
+                            self.settings.rerank if rerank is None else rerank)
+        lexical = self.lexical
+        if settings.w_bc != self.settings.w_bc:
+            lexical = FieldBM25(settings.w_bc, self.lexical.bm25.k1, self.lexical.bm25.b)
+            lexical.build(list(self.chunks.values()))
+        reranker = reranker or self.reranker
+        if settings.rerank and reranker is None:
+            reranker = CrossEncoderReranker()
         return StoreIndex(self.snapshot, list(self.chunks.values()), settings, self.chunker,
-                          lexical, self.dense, self.reranker, self.embedding)
+                          lexical, self.dense, reranker, self.embedding)
 
     # -- searching -------------------------------------------------------------------
 

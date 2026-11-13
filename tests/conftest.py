@@ -53,8 +53,9 @@ def writable_state(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def _isolate_writable_state(writable_state, monkeypatch):
-    """Keep tests from writing the repo's .cache/: the shipped config's index and LLM cache
-    dirs and DenseIndex's default embedding cache point at the session directory instead.
+    """Keep tests from writing the repo's .cache/: the shipped config's index, LLM cache, store
+    and embedding cache dirs and DenseIndex's default embedding cache point at the session
+    directory instead.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -63,7 +64,9 @@ def _isolate_writable_state(writable_state, monkeypatch):
 
     def load_config(path=runner.CONFIG_PATH):
         return {**real_load_config(path), "index_dir": str(writable_state / "index"),
-                "cache_dir": str(writable_state / "llm")}
+                "cache_dir": str(writable_state / "llm"),
+                "store_dir": str(writable_state / "store"),
+                "embedding_cache_dir": str(writable_state / "emb-store")}
 
     monkeypatch.setattr(runner, "load_config", load_config)
     model_name, _, model_cache_dir = DenseIndex.__init__.__defaults__

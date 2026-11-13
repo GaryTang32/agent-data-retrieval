@@ -241,8 +241,13 @@ def test_index_fingerprint_follows_the_store_snapshot_and_settings(mini_store, t
     assert len(idx.fingerprint) == 64 and idx.fingerprint == build(mini_store, tmp_path).fingerprint
     other = make_store(tmp_path / "other", doc(GUIDE, "md"))
     assert build(other, tmp_path).fingerprint != idx.fingerprint
-    assert idx.with_w_bc(2).fingerprint == build(mini_store, tmp_path,
-                                                 Settings(w_bc=2)).fingerprint
+    assert idx.with_settings(w_bc=2).fingerprint == build(mini_store, tmp_path,
+                                                          Settings(w_bc=2)).fingerprint
+    rr = fake_reranker()
+    both = idx.with_settings(w_bc=1, rerank=True, reranker=rr)
+    assert both.fingerprint == build(mini_store, tmp_path, Settings(w_bc=1, rerank=True),
+                                     reranker=rr).fingerprint
+    assert both.dense is idx.dense and both.with_settings(rerank=False).reranker is None
     assert build(mini_store, tmp_path, max_tokens=50).fingerprint != idx.fingerprint
     assert build(mini_store, tmp_path, cache=fake_cache(tmp_path / "e2", "b" * 64)
                  ).fingerprint != idx.fingerprint
