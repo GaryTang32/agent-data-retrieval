@@ -135,7 +135,7 @@ def test_element_ids_are_the_leaves_each_chunk_covers(fixture_store):
     for c in chunk_store(s, max_tokens=12, min_tokens=5):
         want = [e.element_id for e in leaves(s, c.doc_id)
                 if e.char_start < c.char_end and c.char_start < e.char_end]
-        assert c.element_ids == want and want
+        assert c.element_ids == tuple(want) and want
 
 
 # --- packing and sections ------------------------------------------------------------------
@@ -168,12 +168,21 @@ def test_sections_start_new_chunks_and_carry_their_breadcrumb(tmp_path):
 
 
 def test_tables_code_and_list_items_are_kept_whole_when_they_fit(fixture_store):
+    """A leaf is kept whole when it fits together with the headings directly before it that
+    travel with it (a heading moves with the start of its body; see the heading tests)."""
     s = fixture_store
     for max_tokens in (400, 12, 8):
         chunks = chunk_store(s, max_tokens=max_tokens, min_tokens=0)
         for doc_id in s.doc_ids():
-            for leaf in leaves(s, doc_id):
-                n = n_tokens(s.text(doc_id)[leaf.char_start:leaf.char_end])
+            text = s.text(doc_id)
+            ls = leaves(s, doc_id)
+            for k, leaf in enumerate(ls):
+                n = n_tokens(text[leaf.char_start:leaf.char_end])
+                if leaf.type != "heading":
+                    j = k
+                    while j > 0 and ls[j - 1].type == "heading":
+                        j -= 1
+                    n += sum(n_tokens(text[h.char_start:h.char_end]) for h in ls[j:k])
                 holders = [c for c in chunks if c.doc_id == doc_id
                            and c.char_start < leaf.char_end and leaf.char_start < c.char_end]
                 if n <= max_tokens:
@@ -249,6 +258,79 @@ def test_a_short_preamble_merges_into_the_first_section(tmp_path):
     assert len(chunk_texts(tmp_path, md, min_tokens=0)) == 2
 
 
+def W(k: int, p: str = "w") -> str:
+    return " ".join(f"{p}{i}" for i in range(k))
+
+
+def test_a_heading_moves_to_the_next_chunk_with_its_body(tmp_path):
+    """Review repro: `## S` (3 tokens with its body) carried into sibling `## L` whose body has
+    18 tokens, at max 20: no chunk may end on "## L"."""
+    md = f"# D\n\n{W(8, 'i')}.\n\n## S\n\ns1 s2\n\n## L\n\n{W(18, 'l')}\n"
+    texts = [t for t, _ in chunk_texts(tmp_path, md, max_tokens=20, min_tokens=6)]
+    assert not any(t.endswith("## L") for t in texts)
+    assert texts == [f"# D\n\n{W(8, 'i')}.", "## S\n\ns1 s2", f"## L\n\n{W(18, 'l')}"]
+
+
+def test_a_heading_whose_body_does_not_fit_takes_the_start_of_it(tmp_path):
+    """Heading plus first unit over max: the unit is cut at max minus the heading's tokens."""
+    md = f"# D\n\n{W(8, 'i')}.\n\n## L\n\n{W(25, 'l')}\n"
+    chunks = chunk_texts(tmp_path, md, max_tokens=12, min_tokens=0)
+    texts = [t for t, _ in chunks]
+    assert texts[1] == f"## L\n\n{W(11, 'l')}"
+    assert all(n_tokens(t) <= 12 for t in texts) and not any(t.endswith("## L") for t in texts)
+    assert " ".join(texts[2:]) == " ".join(f"l{i}" for i in range(11, 25))
+
+
+def test_a_chain_of_headings_travels_with_the_first_body(tmp_path):
+    """`## S` is carried into `## A`; `## A` and `### A1` go with A1's body, not with S."""
+    md = f"# D\n\n{W(5, 'i')}\n\n## S\n\ns1\n\n## A\n\n### A1\n\n{W(5, 'a')}\n"
+    texts = [t for t, _ in chunk_texts(tmp_path, md, max_tokens=8, min_tokens=3)]
+    assert texts == [f"# D\n\n{W(5, 'i')}", "## S\n\ns1", f"## A\n\n### A1\n\n{W(5, 'a')}"]
+
+
+def test_a_heading_only_section_reaching_min_tokens_keeps_its_first_subsection(tmp_path):
+    """Review repro: `## S1` (5 tokens with its body), `## S2`, `### S2a body` at min 6 must not
+    give a chunk ending "## S2"."""
+    md = (f"# D\n\n{W(8, 'i')}\n\n## S1\n\na1 a2 a3 a4\n\n## S2\n\n### S2a\n\n{W(8, 'z')}\n\n"
+          f"## T\n\n{W(8, 't')}\n")
+    chunks = chunk_texts(tmp_path, md, min_tokens=6)
+    assert not any(t.endswith("## S2") for t, _ in chunks)
+    assert chunks[1] == (f"## S1\n\na1 a2 a3 a4\n\n## S2\n\n### S2a\n\n{W(8, 'z')}",
+                         "D > S2 > S2a")
+    assert chunks[2] == (f"## T\n\n{W(8, 't')}", "D > T")
+
+
+@pytest.mark.parametrize("max_tokens,min_tokens", [(400, 40), (12, 5), (8, 4), (5, 3)])
+def test_no_chunk_ends_on_a_heading_whose_section_continues_in_the_next(mini_store, fixture_store,
+                                                                       max_tokens, min_tokens):
+    for s in stores(mini_store, fixture_store):
+        chunks = chunk_store(s, max_tokens=max_tokens, min_tokens=min_tokens)
+        for doc_id in s.doc_ids():
+            els = {e.element_id: e for e in s.elements(doc_id)}
+            mine = in_text_order([c for c in chunks if c.doc_id == doc_id])
+            for c, nxt in zip(mine, mine[1:], strict=False):
+                last = els[c.element_ids[-1]]
+                if last.type != "heading":
+                    continue
+                up = els[nxt.element_ids[0]].parent_id
+                while up is not None and up != last.parent_id:
+                    up = els[up].parent_id
+                # allowed only when the headings around the cut leave no room for any body
+                text = s.text(doc_id)
+                heads = 0
+                for ids in (reversed(c.element_ids), nxt.element_ids):
+                    for i in ids:
+                        if els[i].type != "heading":
+                            break
+                        heads += n_tokens(text[els[i].char_start:els[i].char_end])
+                assert up is None or heads >= max_tokens, (c.text, nxt.text)
+
+
+def test_store_chunks_are_hashable(mini_store):
+    chunks = chunk_store(mini_store[1])
+    assert len(set(chunks)) == len(chunks) and isinstance(chunks[0].element_ids, tuple)
+
+
 def _within(section_id, container, els) -> bool:
     while section_id is not None and section_id != container:
         section_id = els[section_id].parent_id
@@ -270,12 +352,19 @@ def test_a_chunk_spans_sections_only_to_carry_short_ones_forward(mini_store, fix
             last = covered[-1].parent_id
             before = [e for e in covered if e.parent_id != last]
             assert all(e.parent_id == last for e in covered[len(before):])
-            assert sum(n_tokens(text[e.char_start:e.char_end]) for e in before) < min_tokens
+            # headings of the sections that enclose the last one do not count: a group that
+            # reaches min_tokens on a heading-only section takes its first subsection too
+            carried = list(before)
+            while carried and carried[-1].type == "heading" and _within(
+                    last, carried[-1].parent_id, els):
+                carried.pop()
+            assert sum(n_tokens(text[e.char_start:e.char_end]) for e in carried) < min_tokens
             first = covered[0].parent_id
             container = els[first].parent_id if first else None
             assert all(_within(e.parent_id, container, els) for e in covered)
             title = document_title(s.source(c.doc_id), list(els.values()), text)
-            assert c.breadcrumb == breadcrumb(title, covered[-1].section_path)
+            path = covered[-1].section_path
+            assert c.breadcrumb in (breadcrumb(title, path), breadcrumb(None, path))
             merged += bool(before)
     assert merged
 
@@ -332,12 +421,28 @@ def test_heuristic_pdf_sections_do_not_give_the_title(fixture_store):
                       "html": "Permit Handbook", "md": "Field Guide"}
 
 
-def test_breadcrumb_parts_are_cut_to_80_characters(tmp_path):
+def test_breadcrumb_parts_are_cut_at_a_word_boundary_to_80_characters(tmp_path):
     long_title = "T" * 50 + " " + "U" * 60
     raw = f"# {long_title}\n\nBody.\n\n## {'S' * 100}\n\nMore body.\n".encode()
     s = make_store(tmp_path / "s", doc(raw, "md"))
     crumbs = sorted(c.breadcrumb for c in chunk_store(s, min_tokens=0))
-    assert crumbs == [long_title[:80], long_title[:80] + " > " + "S" * 80]
+    title = "T" * 50 + "…"
+    assert crumbs == [title, title + " > " + "S" * 79 + "…"]  # no space: a hard cut
+    words = "alpha beta gamma delta " * 5  # 115 characters
+    assert breadcrumb(words, []) == "alpha beta gamma delta alpha beta gamma delta alpha beta " \
+                                    "gamma delta alpha beta…"
+    assert all(len(p) <= 80 for p in breadcrumb(words, [words, "x" * 81]).split(" > "))
+    assert breadcrumb("x" * 80, []) == "x" * 80  # 80 characters are not cut
+
+
+def test_a_chunk_in_another_top_level_section_gets_no_title_prefix(tmp_path):
+    """The title comes from the first top-level section; its siblings are not inside it."""
+    md = ("Preamble words here.\n\n# First\n\nBody one.\n\n## Sub\n\nBody sub.\n\n"
+          "# Second\n\nBody two.\n\n## Deeper\n\nBody deeper.\n")
+    assert [b for _, b in chunk_texts(tmp_path, md, min_tokens=0)] == [
+        "First", "First", "First > Sub", "Second", "Second > Deeper"]
+    titled = "Body.\n"  # no sections: the title (here the URI) heads every chunk
+    assert [b for _, b in chunk_texts(tmp_path / "t", titled, min_tokens=0)] == ["file://doc.md"]
 
 
 # --- determinism ---------------------------------------------------------------------------
