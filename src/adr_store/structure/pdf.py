@@ -10,11 +10,19 @@ headings are whole lines that look like one, kept conservative (rulings 7 and §
   allowing one gap, or the first child), so affiliations, footnotes and table rows numbered
   out of sequence are not headings. Top-level numbers keep the style of the first one ("2"
   or "2."), which tells sections from numbered list items; none are taken after References;
-- a known unnumbered heading on a line of its own (Abstract, Introduction, ..., References,
-  Appendix ...), once per document, rank 1.
+- a known unnumbered heading on a line of its own, in Title Case or UPPER CASE (Abstract,
+  INTRODUCTION, ..., References), once per document, rank 1; or an appendix: "Appendix",
+  "APPENDIX" or "Appendices" alone, or "Appendix"/"APPENDIX" with a label of one or two
+  capitals or digits ("Appendix B", "Appendix A1:") and an optional capitalised title.
+  "Appendix A.8), as shown" and "Appendix F proves the bound" are running text. No candidate
+  may have a title starting with ".", ")" or ",", or a line ending in a hyphen.
 
 Numbered lines before the first anchor (a known heading, or a numbered one whose title is a
 known name such as "1 Introduction") are ignored: they are title-page affiliations.
+A known heading that sits inside numbered section n while n+1 follows ("Discussion" between
+"3" and "3.1" ... "4") is a figure or table label, not a heading, unless it is one that can
+close a section (References, Acknowledg(e)ments, Appendix ..., Conclusion(s)); a later line
+with the same word is then still a candidate.
 Sections and heading lines get confidence 0.6. Paragraphs split at blank lines and always
 at a form feed; each element's page is 1 + the number of form feeds before its start.
 """
@@ -36,7 +44,10 @@ _KNOWN = re.compile(
     r"(?i:abstract|introduction|related work|background|methods?|experiments|results"
     r"|discussion|conclusions?|references|acknowledge?ments)")
 _APPENDIX = re.compile(
-    r"(?i:appendix|appendices)(?:[ \t]+[A-Z0-9]{1,2})?(?:[.:]?[ \t]+[A-Z][^\n]{1,60})?")
+    r"Appendix|APPENDIX|Appendices|APPENDICES"
+    r"|(?:Appendix|APPENDIX)[ \t]+[A-Z0-9]{1,2}[.:]?(?:[ \t]+([A-Z][^\n]{1,60}))?")
+# known headings that may close a numbered section (the rest, inside one, are labels)
+_CLOSING = re.compile(r"(?i:references|acknowledge?ments|conclusions?|appendix\b.*|appendices)")
 
 
 @dataclass(frozen=True)
@@ -58,15 +69,32 @@ def _numbered(start: int, end: int, line: str) -> _Line | None:
         return None
     title = m.group(3).strip()
     words = title.split()
-    if (title[-1] in ".,;:-/" or "," in title or len(words) > MAX_TITLE_WORDS
+    if (not _plausible(title, line) or title[-1] in ".,;:-/" or "," in title
+            or len(words) > MAX_TITLE_WORDS
             or sum(1 for w in words if _NUMBER.fullmatch(w)) >= 2):
         return None
     number = tuple(int(p) for p in m.group(1).split("."))
     return _Line(start, end, line, number, title, bool(m.group(2)))
 
 
+def _cased(line: str) -> bool:
+    """Title Case ("Related Work") or UPPER CASE ("RELATED WORK"), never lower case."""
+    return line.isupper() or all(w[0].isupper() for w in line.split())
+
+
+def _plausible(title: str, line: str) -> bool:
+    """Not a sentence fragment: the title does not start with a closing mark, the line does
+    not end with a hyphen (a word wrapped to the next line)."""
+    return not title.startswith((".", ")", ",")) and not line.endswith("-")
+
+
 def _known(line: str) -> bool:
-    return bool(_KNOWN.fullmatch(line) or _APPENDIX.fullmatch(line)) and line[-1] not in ".,;"
+    if line[-1] in ".,;" or not _plausible("", line):
+        return False
+    if _KNOWN.fullmatch(line):
+        return _cased(line)
+    m = _APPENDIX.fullmatch(line)
+    return m is not None and _plausible(m.group(1) or "", line)
 
 
 def _key(s: str) -> str:
@@ -106,8 +134,27 @@ def find_headings(text: str) -> list[Heading]:
         found.append(cand)
         if anchor is None and (cand.number is None or _known(cand.title)):
             anchor = len(found) - 1
+    found = found[anchor or 0:]
+    while True:
+        kept = _filter(found)
+        labels = _labels(kept)
+        if not labels:
+            break
+        found = [c for c in found if c not in labels]
     return [Heading(c.start, c.end, len(c.number or (1,)), " ".join(c.text.split()))
-            for c in _filter(found[anchor or 0:])]
+            for c in kept]
+
+
+def _labels(kept: list[_Line]) -> set[_Line]:
+    """Known headings inside numbered section n with n+1 next at top level: figure or table
+    labels such as "Method" or "Discussion", unless the word may close a section."""
+    labels = set()
+    tops = [(i, c.number[0]) for i, c in enumerate(kept) if c.number and len(c.number) == 1]
+    for (i, n), (j, m) in zip(tops, tops[1:], strict=False):
+        if m == n + 1:
+            labels |= {c for c in kept[i + 1:j]
+                       if c.number is None and not _CLOSING.fullmatch(c.text)}
+    return labels
 
 
 def _filter(found: list[_Line]) -> list[_Line]:

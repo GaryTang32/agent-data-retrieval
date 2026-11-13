@@ -44,7 +44,7 @@ def test_layout_and_snapshot_id(tmp_path, mini):
     snap_bytes = (root / "snapshots" / f"{snap}.json").read_bytes()
     assert hashlib.sha256(snap_bytes).hexdigest() == snap
     body = json.loads(snap_bytes)
-    assert body["parser"] == PARSER == "adr_store.structure/1"
+    assert body["parser"] == PARSER == "adr_store.structure/2"
     assert body["extractor"] == f"adr_eval.extract/{EXTRACTOR_VERSION}"
     assert [d["doc_id"] for d in body["documents"]] == sorted(mini.docs)
     for d in body["documents"]:

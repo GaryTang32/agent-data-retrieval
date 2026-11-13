@@ -98,3 +98,86 @@ def test_no_numbered_headings_after_the_references():
     text = "1 Introduction\nbody\nReferences\n[1] A paper.\n2 Appendix Material\nAppendix A"
     assert slices(_parsed(text).elements, text, "heading") == [
         "1 Introduction", "References", "Appendix A"]
+
+
+# Lines seen in real papers that are sentence fragments, not headings: an appendix named in
+# running text, wrapped so that it starts a line (review of the research corpus).
+@pytest.mark.parametrize("line", [
+    "Appendix A.8), balancing cost.Call 1",
+    "Appendix D. These results emphasize the impor-",
+    "appendix. A manual evaluation on a sam-",
+    "Appendix F). This is due in part",
+    "Appendix C.3. In addition to the overall",
+    "Appendix A and filter out a subset",
+    "Appendix F proves the bound. The",
+    "Appendix E.2",
+    "Appendix Results Of Everything",
+    "Appendix A ), the next part",
+    "APPENDIX A. A title broken by hyphen-",
+])
+def test_appendix_fragments_are_not_headings(line):
+    text = f"Abstract\n{line}\n"
+    assert slices(_parsed(text).elements, text, "heading") == ["Abstract"]
+
+
+@pytest.mark.parametrize("line", [
+    "Appendix", "APPENDIX", "Appendices", "Appendix A", "APPENDIX B",
+    "Appendix B: Proof of Theorem 4", "Appendix C. Alternative Design", "Appendix A Related Work",
+    "Appendix 1", "Appendix A1: Prompts",
+])
+def test_appendix_headings(line):
+    text = f"Abstract\n{line}\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == ["Abstract", line]
+
+
+@pytest.mark.parametrize("line", ["results", "abstract", "references", "discussion",
+                                  "acknowledgements", "Abstract.", "Related work"])
+def test_known_words_in_lower_or_sentence_case_are_not_headings(line):
+    text = f"Title\n{line}\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == []
+
+
+@pytest.mark.parametrize("line", ["Results", "RESULTS", "Related Work", "RELATED WORK",
+                                  "Methods", "ACKNOWLEDGEMENTS"])
+def test_known_words_in_title_or_upper_case_are_headings(line):
+    text = f"Title\n{line}\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == [line]
+
+
+def test_a_known_word_inside_numbered_section_n_before_n_plus_1_is_body_text():
+    # a figure label "Discussion" between "3" and "3.1" must not take 3.1 to 3.2 from "3"
+    text = ("ABSTRACT\nbody\n1 INTRODUCTION\nbody\n3 DATASET CONSTRUCTION\nbody\nDiscussion\n"
+            "label\n3.1 Overview\nbody\n3.2 Grouping\nbody\n4 STUDY DESIGN\nbody\n")
+    els = _parsed(text).elements
+    assert slices(els, text, "heading") == [
+        "ABSTRACT", "1 INTRODUCTION", "3 DATASET CONSTRUCTION", "3.1 Overview",
+        "3.2 Grouping", "4 STUDY DESIGN"]
+    sub = next(e for e in els if e.type == "section" and e.title == "3.2 Grouping")
+    assert sub.section_path == ["3 DATASET CONSTRUCTION"]
+
+
+def test_a_known_word_on_a_later_page_between_numbered_sections_is_body_text():
+    text = "1. Introduction\nbody\n3. Overview\nbody\n\f\nABSTRACT\nbody\n4. The Framework\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == [
+        "1. Introduction", "3. Overview", "4. The Framework"]
+
+
+@pytest.mark.parametrize("word", ["Conclusion", "Conclusions", "Acknowledgments",
+                                  "Acknowledgements", "Appendix", "Appendix A"])
+def test_closing_words_may_still_end_a_numbered_section(word):
+    text = f"1 Introduction\nbody\n{word}\nbody\n2 Method\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == [
+        "1 Introduction", word, "2 Method"]
+
+
+def test_known_words_after_the_last_numbered_or_across_a_gap_are_kept():
+    text = "1 Introduction\nbody\nMethods\nbody\n3 Method Details\nbody\nResults\nbody\n"
+    assert slices(_parsed(text).elements, text, "heading") == [
+        "1 Introduction", "Methods", "3 Method Details", "Results"]
+
+
+def test_a_later_known_word_counts_when_the_first_was_body_text():
+    text = "1 Introduction\nbody\nResults\nlabel\n2 Method\nbody\nResults\nbody\n"
+    els = _parsed(text).elements
+    assert slices(els, text, "heading") == ["1 Introduction", "2 Method", "Results"]
+    assert text.index("Results\nbody") == next(e.char_start for e in els if e.title == "Results")
