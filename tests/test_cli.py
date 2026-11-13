@@ -48,7 +48,8 @@ def test_verify_without_items_names_the_path(tmp_path, monkeypatch, capsys, corp
     assert f"adr-eval golden {corpus} --gen" in err
 
 
-@pytest.mark.parametrize("flag", [["--generator", "x"], ["--judge", "x"], ["--max-calls", "3"]])
+@pytest.mark.parametrize("flag", [["--generator", "x"], ["--judge", "x"], ["--max-calls", "3"],
+                                  ["--overwrite"]])
 def test_verify_rejects_generation_options(flag, capsys):
     with pytest.raises(SystemExit) as e:
         main(["golden", "mini", "--verify", *flag])
@@ -101,8 +102,33 @@ def test_gen_passes_the_review_exclusions_file(tmp_path, monkeypatch):
     assert main(["golden", "mini", "--gen"]) == 0
     assert seen["exclusions"] == {}  # no file, no exclusions
     (tmp_path / "mini" / "review_exclusions.json").write_text('{"mini-x-1": "reviewed"}')
-    assert main(["golden", "mini", "--gen"]) == 0
+    assert main(["golden", "mini", "--gen", "--overwrite"]) == 0
     assert seen["exclusions"] == {"mini-x-1": "reviewed"}
+
+
+def test_gen_refuses_to_overwrite_a_frozen_set(tmp_path, monkeypatch, capsys):
+    made = []
+    monkeypatch.setattr("adr_eval.runner.make_client",
+                        lambda name, profiles, cache: made.append(name))
+    monkeypatch.setattr("adr_eval.runner.golden_dir", lambda corpus: tmp_path / corpus)
+    d = tmp_path / "mini"
+    d.mkdir()
+    (d / "items.jsonl").write_text("frozen\n")
+    assert main(["golden", "mini", "--gen"]) == 2
+    err = capsys.readouterr().err.strip()
+    assert len(err.splitlines()) == 1
+    assert "frozen" in err and "--overwrite" in err and str(d / "items.jsonl") in err
+    assert made == []  # refused before any client was made or call sent
+    assert (d / "items.jsonl").read_text() == "frozen\n" and not (d / "rejected.jsonl").exists()
+
+
+def test_gen_overwrite_replaces_an_existing_set(tmp_path, monkeypatch):
+    _stub_gen(tmp_path, monkeypatch)
+    d = tmp_path / "mini"
+    d.mkdir()
+    (d / "items.jsonl").write_text("frozen\n")
+    assert main(["golden", "mini", "--gen", "--overwrite"]) == 0
+    assert (d / "items.jsonl").read_text() != "frozen\n" and (d / "rejected.jsonl").is_file()
 
 
 def test_extraction_failure_names_the_file(tmp_path, monkeypatch, capsys):

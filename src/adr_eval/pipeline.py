@@ -9,7 +9,9 @@ that needed it in "json_recovered".
 
 from __future__ import annotations
 
+import re
 import threading
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -167,6 +169,44 @@ def field_hits(gold: GoldQuery, gen: GoldQuery | None) -> dict[str, bool]:
     }
 
 
+def route(q: GoldQuery) -> str:
+    """The retrieval route a query implies (spec §6)."""
+    if q.store == "typed_db":
+        return "records:" + q.op
+    return {"lookup": "prose:fact", "explain": "prose:fact", "procedure": "prose:procedure",
+            "abstain": "abstain"}.get(q.op, "prose:" + q.op)
+
+
+def route_ok(gold: GoldQuery, gen: GoldQuery | None) -> bool | None:
+    """None when the gold op is `abstain` (not knowable before retrieval); a missing generated
+    query is wrong."""
+    if gold.op == "abstain":
+        return None
+    return gen is not None and route(gen) == route(gold)
+
+
+def _entity_words(entity: str) -> frozenset[str]:
+    return frozenset(re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKC", entity).lower()))
+
+
+def _entity_match(a: frozenset[str], b: frozenset[str]) -> bool:
+    return bool(a) and bool(b) and (a <= b or b <= a)
+
+
+def entity_f1(gold: GoldQuery, gen: GoldQuery | None) -> float | None:
+    """F1 of entity matches (word-set containment either way); None when the gold query lists
+    no entities or its op is `abstain`; 0.0 when nothing is generated or nothing matches."""
+    if not gold.entities or gold.op == "abstain":
+        return None
+    golds = [_entity_words(e) for e in gold.entities]
+    gens = [_entity_words(e) for e in gen.entities] if gen is not None else []
+    if not gens:
+        return 0.0
+    p = sum(any(_entity_match(g, x) for x in golds) for g in gens) / len(gens)
+    r = sum(any(_entity_match(g, x) for x in gens) for g in golds) / len(golds)
+    return 2 * p * r / (p + r) if p + r else 0.0
+
+
 def exec_match(gold: GoldQuery, gen: GoldQuery | None, records: list[dict]) -> bool | None:
     """None when the gold query is not executable; else whether both results agree."""
     if gold.store != "typed_db":
@@ -247,8 +287,8 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
         "item_id": item.id, "repeat": repeat, "qtype": item.qtype, "rarity": item.rarity,
         "retrieved": [[cid, score] for cid, score in hits],
         "generated_query": None, "gold_query_field_hits": None, "query_exact": None,
-        "query_exec_match": None, "answer": None, "outcome": "error",
-        "judge_label": None, "judge_reason": None, "judge_check": None,
+        "query_exec_match": None, "route_ok": None, "entity_f1": None, "answer": None,
+        "outcome": "error", "judge_label": None, "judge_reason": None, "judge_check": None,
         "metrics": retrieval_scores(item, ranked, groups), "citation": None,
         "tokens": None, "cost_usd": 0.0, "notional_cost_usd": None, "served_models": [],
         "latency_s": None, "error": None, "json_recovered": [],
@@ -263,7 +303,9 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
         hits_ = field_hits(item.gold_query, gq)
         row.update(generated_query=gq.model_dump(mode="json") if gq else None,
                    gold_query_field_hits=hits_, query_exact=all(hits_.values()),
-                   query_exec_match=exec_match(item.gold_query, gq, ctx.records))
+                   query_exec_match=exec_match(item.gold_query, gq, ctx.records),
+                   route_ok=route_ok(item.gold_query, gq),
+                   entity_f1=entity_f1(item.gold_query, gq))
         stage = "answer"
         sa = answer_question(item.question, item.as_of, ranked, ctx.generator, repeat,
                              recover=True)

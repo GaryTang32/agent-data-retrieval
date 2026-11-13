@@ -810,3 +810,34 @@ def test_compare_refuses_different_metrics_versions(tmp_path, capsys):
     assert len(err.splitlines()) == 1 and "2" in err and "1" in err and "metrics version" in err
     c = compare(v2, _synthetic_run(tmp_path, rows, repeats=1, metrics_version=2, name="new2"))
     assert c["metrics"]["coverage@10"]["n"] == 2 and c["metrics"]["coverage@10"]["mean_diff"] == 0
+
+
+def _g2_row(item_id, route_ok, entity_f1, exec_match=None):
+    row = _row(item_id, 0, ["c1"])
+    row.update(route_ok=route_ok, entity_f1=entity_f1, query_exec_match=exec_match)
+    return row
+
+
+def test_report_g2_route_accuracy_entity_f1_and_record_match(tmp_path):
+    rows = [_g2_row("a", True, 1.0, True), _g2_row("b", False, 0.5, False),
+            _g2_row("c", True, None), _g2_row("d", None, None)]
+    rep = build_report(_synthetic_run(tmp_path, rows, repeats=1, metrics_version=2))
+    g2 = rep["g2"]
+    assert g2["route_accuracy"] == pytest.approx(2 / 3) and g2["route_n"] == 3
+    assert g2["entity_f1"] == 0.75 and g2["entity_n"] == 2
+    assert g2["exec_match"] == 0.5 and g2["exec_n"] == 2
+    assert g2["exact"] == 0.0 and g2["per_field"]["store"] == 1.0  # kept in report.json
+    md = render_markdown(rep).split("## G2 query understanding")[1].split("## G1")[0]
+    assert "route accuracy" in md and "record match" in md and "entity F1" in md
+    assert "| 0.667 | 3 | 0.500 | 2 | 0.750 | 2 |" in md
+    assert "store" not in md and "exact" not in md  # per-field table and whole-query match
+
+
+def test_report_g2_for_rows_without_query_scores(tmp_path):
+    rep = build_report(_synthetic_run(tmp_path, [_row("a", 0, ["c1"]), _row("b", 0, ["c1"])],
+                                      repeats=1))
+    g2 = rep["g2"]
+    assert g2["route_accuracy"] is None and g2["route_n"] == 0
+    assert g2["entity_f1"] is None and g2["entity_n"] == 0
+    md = render_markdown(rep).split("## G2 query understanding")[1].split("## G1")[0]
+    assert "| – | 0 | – | 0 | – | 0 |" in md

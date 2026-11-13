@@ -17,10 +17,44 @@ _MINUS = str.maketrans({"\u2212": "-", "\u2013": "-", "\u2012": "-"})
 _EDGE = re.compile(r"^[\W_]+|[\W_]+$")
 
 
+def _ws_lower(s: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", s).lower().split())
+
+
 def normalize_value(s: str) -> str:
     """NFKC, lowercase, strip punctuation/space at both ends, collapse whitespace."""
-    s = " ".join(unicodedata.normalize("NFKC", s).lower().split())
-    return _EDGE.sub("", s)
+    return _EDGE.sub("", _ws_lower(s))
+
+
+def _boundary(text: str, i: int, step: int) -> bool:
+    """Whether text[i] (looking away from a match in direction `step`) ends an identifier:
+    out of range, or not a letter/digit and not `.`/`-` followed (in that direction) by one."""
+    if not 0 <= i < len(text):
+        return True
+    c = text[i]
+    if c.isalnum():
+        return False
+    j = i + step
+    return not (c in ".-" and 0 <= j < len(text) and text[j].isalnum())
+
+
+def contains_identifier(pred: str, gold: str) -> bool:
+    """Whether `normalize_value(gold)` occurs in `pred` as a whole identifier (spec §5).
+
+    Both sides are NFKC-lowercased with whitespace collapsed. An occurrence qualifies when
+    the character before it is not a letter or digit, nor `.`/`-` directly preceded by one,
+    and the character after it is not a letter or digit, nor `.`/`-` directly followed by one.
+    """
+    g = normalize_value(gold)
+    if not g:
+        return False
+    text = _ws_lower(pred)
+    i = text.find(g)
+    while i != -1:
+        if _boundary(text, i - 1, -1) and _boundary(text, i + len(g), 1):
+            return True
+        i = text.find(g, i + 1)
+    return False
 
 
 def parse_number(s: str | float) -> float | None:
@@ -73,7 +107,9 @@ def exact_outcome(gold: Answer, pred: Any) -> Outcome | None:
     Returns None for `text` answers, which need the judge. For `number` and `set`, a
     prediction may also match an accepted variant: parsed as a number (unparseable variants
     are skipped) or, for sets, a variant written as a JSON list; and for either kind, a
-    non-list prediction equal to a variant as written (after `normalize_value`).
+    non-list prediction equal to a variant as written (after `normalize_value`). For `id`, a
+    non-list prediction is also correct when it contains the gold value (not a variant) as a
+    whole identifier (`contains_identifier`).
     """
     if gold.kind == "abstain":
         return "correct" if pred.abstain else "wrong"
@@ -106,4 +142,6 @@ def exact_outcome(gold: Answer, pred: Any) -> Outcome | None:
         return "wrong"
     golds = {normalize_value(str(g))
              for g in [gold.value, *gold.accepted_variants] if g is not None}
-    return "correct" if normalize_value(str(value)) in golds else "wrong"
+    hit = (normalize_value(str(value)) in golds
+           or (gold.value is not None and contains_identifier(str(value), str(gold.value))))
+    return "correct" if hit else "wrong"

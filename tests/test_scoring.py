@@ -11,7 +11,13 @@ from adr_eval.models import Answer, Evidence, GoldenItem, Manifest, ManifestDoc
 from adr_eval.retrieval.chunker import Chunk
 from adr_eval.scoring.compile_metrics import span_containment, text_fidelity
 from adr_eval.scoring.determinism import answer_agreement, pass_hat_k, retrieval_identity_rate
-from adr_eval.scoring.exact import exact_outcome, normalize_value, parse_number, set_prf
+from adr_eval.scoring.exact import (
+    contains_identifier,
+    exact_outcome,
+    normalize_value,
+    parse_number,
+    set_prf,
+)
 from adr_eval.scoring.outcomes import penalised_score
 from adr_eval.scoring.retrieval_metrics import (
     citation_precision,
@@ -121,6 +127,76 @@ def test_set_correct_only_on_exact_match():
 
 def test_pred_kind_mismatch_scored_by_gold_kind():
     assert exact_outcome(Answer(kind="id", value="x"), sa("x", kind="text")) == "correct"
+
+
+# recorded identifier answers (gov and research) that the version 1 rule marked wrong and the
+# judge correct: gold -> answer (the 13 recorded rows hold these 9 distinct cases)
+ID_CONTAINED = [
+    ("73.1740", "47 CFR § 73.1740"),
+    ("IRM 21.10.1", "IRM 21.10.1, Embedded Quality (EQ) for Accounts Management"),
+    ("(b)(4)", "Paragraph (b)(4) of § 73.3598"),
+    ("CGD 13-98-004", "CGD 13-98-004, 64 FR 72561, Dec. 28, 1999"),
+    ("3.8", "Section 3.8 (Experimental Volume)"),
+    ("2508.06600", "arXiv 2508.06600"),
+    ("IRM 5.19.1.4.3, Determine Correct Tax Liability",
+     "IRM 5.19.1.4.3, Determine Correct Tax Liability (and also advise the taxpayer they must "
+     "work directly with the PCA to pay the remaining balance while the account remains "
+     "assigned to the PCA)"),
+    ("§ 73.684", '§ 73.684, "Prediction of coverage" (using the F(50,10) curves in Figure 9a, '
+     '§ 73.699)'),
+    ("FCC Form 2100, Schedule 319",
+     "FCC Form 2100, Schedule 319 (Application for a Low Power FM Broadcast Station License)"),
+]
+ID_NOT_CONTAINED = [
+    ("4.2", 'Section 4.4, titled "Evaluation Metrics"'),
+    ("3.8", "13.8"),
+    ("3.8", "3.8.1"),
+    ("3.8", "3.85"),
+    ("11", "Table 110"),
+    ("IRM 21.10.1", "IRM 21.10.1.3"),
+    ("(b)(4)", "(a)(4)"),
+]
+
+
+@pytest.mark.parametrize("gold,pred", ID_CONTAINED)
+def test_id_answer_containing_the_gold_identifier_is_correct(gold, pred):
+    assert contains_identifier(pred, gold)
+    assert exact_outcome(Answer(kind="id", value=gold), sa(pred, "id")) == "correct"
+
+
+@pytest.mark.parametrize("gold,pred", ID_NOT_CONTAINED)
+def test_id_answer_without_the_whole_identifier_stays_wrong(gold, pred):
+    assert not contains_identifier(pred, gold)
+    assert exact_outcome(Answer(kind="id", value=gold), sa(pred, "id")) == "wrong"
+
+
+@pytest.mark.parametrize("pred,expected", [
+    ("3.8", True), ("see 3.8.", True), ("(3.8)", True), ("3.8-", True), ("§3.8", True),
+    ("x 3.8, y", True), ("a3.8", False), ("3.8a", False), ("2.3.8", False), ("3.8-1", False),
+    ("v-3.8", False), ("- 3.8", True), ("Section\u00a03.8", True), ("SECTION 3.8", True),
+])
+def test_contains_identifier_boundaries(pred, expected):
+    assert contains_identifier(pred, "3.8") is expected
+
+
+def test_contains_identifier_normalises_both_sides():
+    assert contains_identifier("Rule  ＡＢ-1  applies", "ab-1")  # NFKC, case, whitespace
+    assert contains_identifier("the IRM  21.10.1 text", " irm 21.10.1. ")
+    assert not contains_identifier("anything", "...")  # empty after normalisation
+    assert not contains_identifier("", "3.8")
+
+
+def test_id_containment_uses_the_gold_value_only():
+    gold = Answer(kind="id", value="REC-001", accepted_variants=["Record 1"])
+    assert exact_outcome(gold, sa("see Record 1 there", "id")) == "wrong"
+    assert exact_outcome(gold, sa("see REC-001 there", "id")) == "correct"
+    assert exact_outcome(gold, sa("record 1", "id")) == "correct"  # equality with a variant
+
+
+def test_id_list_prediction_stays_wrong_even_if_it_contains_the_gold():
+    gold = Answer(kind="id", value="3.8")
+    assert exact_outcome(gold, sa(["Section 3.8"], "id")) == "wrong"
+    assert exact_outcome(gold, sa(["3.8"], "id")) == "wrong"
 
 
 def test_evidence_only_check_default_compare_uses_exact_outcome():

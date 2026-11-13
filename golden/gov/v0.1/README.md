@@ -19,9 +19,11 @@ Model-drafted and code-checked; no item is human-vetted.
   quote, computes count and list answers from the records and assigns splits and rarity.
 - Judge profile `claude_code_opus` decides paraphrased text answers in the evidence-only
   check.
-- Every model reply is cached in `.cache/llm` (not committed). With that cache,
-  `adr-eval golden gov --gen` reproduces these files byte for byte (`--max-calls 0` proves
-  that no call reaches a model). From a cold cache the models may draft different
+- Every model reply is cached in `.cache/llm` (not committed). With that cache and the
+  code that generated them (metrics version 1, up to commit `4063a0e`),
+  `adr-eval golden gov --gen --overwrite` reproduces these files byte for byte
+  (`--max-calls 0` proves that no call reaches a model); later code may admit a different
+  set (see "Frozen data"). From a cold cache the models may draft different
   questions (Claude Code does not pin temperature), so compare the counts below.
 - The last step applies `review_exclusions.json`: listed items move to `rejected.jsonl`
   with `reject_reason: "review_excluded"`; every other item is unchanged.
@@ -35,13 +37,21 @@ other 293 accepted items are byte-identical to the first version.
 
 ```
 adr-eval fetch gov
-adr-eval golden gov --gen --generator claude_code_sonnet --judge claude_code_opus --max-calls 2000
+adr-eval golden gov --gen --overwrite --generator claude_code_sonnet --judge claude_code_opus --max-calls 2000
 adr-eval golden gov --verify
 ```
 
 The gov corpus is fetched from live government sites, and four IRM pages are pinned by
 exact bytes. If irs.gov changes those pages, `fetch gov` fails and this set cannot be
 checked by others (the corpus bytes are not committed).
+
+## Frozen data
+
+The item files are frozen data. They are not regenerated when scoring rules change. The
+generator's evidence-only check uses the harness's exact scorer, so regenerating with later
+code (for example the whole-identifier rule of metrics version 2) can admit a different set;
+that set would be a new version, not v0.1. `adr-eval golden gov --gen` refuses to write over
+an existing `items.jsonl` unless `--overwrite` is given.
 
 ## Counts
 

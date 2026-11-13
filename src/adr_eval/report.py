@@ -73,8 +73,13 @@ def _ci(values: list[float]) -> dict | None:
 def _g2(rows: list[dict]) -> dict:
     scored = [r for r in rows if r["gold_query_field_hits"] is not None]
     executable = [r["query_exec_match"] for r in scored if r["query_exec_match"] is not None]
+    # rows recorded before metrics version 2 lack route_ok and entity_f1
+    routed = [r["route_ok"] for r in scored if r.get("route_ok") is not None]
+    entities = [r["entity_f1"] for r in scored if r.get("entity_f1") is not None]
     return {
         "n": len(scored),
+        "route_accuracy": _mean(routed), "route_n": len(routed),
+        "entity_f1": _mean(entities), "entity_n": len(entities),
         "per_field": {f: _mean(r["gold_query_field_hits"][f] for r in scored) for f in G2_FIELDS},
         "exact": _mean(r["query_exact"] for r in scored),
         "exec_match": _mean(executable), "exec_n": len(executable),
@@ -361,9 +366,13 @@ def render_markdown(report: dict) -> str:
                     f"agreement {_fmt(det['answer_agreement'])}; pass^{det['k']} "
                     f"{_fmt(det['pass^k'])}.")
     out += ["## Determinism", "", det_line, ""]
-    out += ["## G2 query understanding", ""]
-    out += _table([*G2_FIELDS, "exact", "exec match"],
-                  [[*g2["per_field"].values(), g2["exact"], g2["exec_match"]]])
+    out += ["## G2 query understanding", "",
+            "Route accuracy over rows whose gold op is not `abstain`; record match over rows "
+            "whose gold query can be executed on the records; entity F1 over rows whose gold "
+            "query lists entities. Per-field hits are kept in report.json as diagnostics.", ""]
+    out += _table(["route accuracy", "n", "record match", "n", "entity F1", "n"],
+                  [[g2["route_accuracy"], g2["route_n"], g2["exec_match"], g2["exec_n"],
+                    g2["entity_f1"], g2["entity_n"]]])
     tf = g1.get("text_fidelity") or {}
     out += ["## G1 compile", "",
             f"Span containment {_fmt(g1.get('span_containment'))}; text fidelity "
