@@ -21,8 +21,9 @@ Model-drafted and code-checked; no item is human-vetted.
   check.
 - Every model reply is cached in `.cache/llm` (not committed). With that cache and the
   code that generated them (metrics version 1, up to commit `4063a0e`),
-  `adr-eval golden gov --gen --overwrite` reproduces these files byte for byte
-  (`--max-calls 0` proves that no call reaches a model); later code may admit a different
+  `adr-eval golden gov --gen` reproduces these files byte for byte
+  (`--max-calls 0` proves that no call reaches a model). That code has no `--overwrite`
+  flag; later code needs it to replace existing files and may admit a different
   set (see "Frozen data"). From a cold cache the models may draft different
   questions (Claude Code does not pin temperature), so compare the counts below.
 - The last step applies `review_exclusions.json`: listed items move to `rejected.jsonl`

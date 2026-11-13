@@ -36,8 +36,9 @@ adr-eval golden bench --gen --generator claude_code_sonnet --judge claude_code_o
 adr-eval golden bench --verify
 ```
 
-Add `--overwrite` to `--gen` when the item files already exist. With the same cache and the
-code that generated them (metrics version 1, up to commit `4063a0e`) the output is
-byte-identical; later code may admit a different set (see "Frozen data"). From a cold
+Current code needs `--overwrite` on `--gen` when the item files already exist. With the same
+cache and the code that generated them (metrics version 1, up to commit `4063a0e`, which has
+no `--overwrite` flag) the output is byte-identical; later code may admit a different set
+(see "Frozen data"). From a cold
 cache, model replies may differ (Claude Code does not pin temperature), so compare the
 per-type counts above, not the hashes.

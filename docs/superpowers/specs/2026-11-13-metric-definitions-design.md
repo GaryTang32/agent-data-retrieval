@@ -103,6 +103,10 @@ Whole-identifier match, on NFKC-lowercased, whitespace-collapsed text; `g` is
   letter or digit.
 
 So `3.8` matches "Section 3.8 (Experimental Volume)" but not "13.8", "3.8.1" or "3.85".
+Because `normalize_value` strips punctuation at both ends of the gold value, a sub-paragraph
+also passes ("(b)(4)(i)" for `(b)(4)`, "73.1740(a)" for `73.1740`), and a gold value that
+normalises to one letter would match ordinary words. No golden v0.1 item is affected (the
+shortest identifier golds are `11` and `14`); golden v0.2 must not admit such values.
 Accepted variants are not used for containment. List-valued predictions are unchanged (wrong for
 kind `id`). The rule lives in `scoring/exact.py` (`contains_identifier`) and is used wherever
 `exact_outcome` is.
