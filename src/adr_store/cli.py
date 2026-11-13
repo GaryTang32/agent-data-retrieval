@@ -118,9 +118,9 @@ def _ingest(a: argparse.Namespace) -> int:
     failures: list[tuple[str, ConformanceError]] = []
     manifest_docs = sorted(loaded.manifest.documents, key=lambda d: d.doc_id)
     for d in manifest_docs:
-        raw = (loaded.root / d.path).read_bytes()
         license = None if d.license.strip().lower() in UNKNOWN_LICENSES else d.license
         try:
+            raw = (loaded.root / d.path).read_bytes()
             added.append(store.add(loaded.docs[d.doc_id], raw, license=license))
         except ConformanceError as e:
             failures.append((d.path, e))

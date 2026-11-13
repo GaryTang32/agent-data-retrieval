@@ -10,6 +10,9 @@ A setext heading, CommonMark style, is a line of text underlined by a line of `=
 or of at least three `-` (level 2), each indented at most three spaces. The text line follows
 a blank line or starts the document, and is not a list item, table row, ATX heading or fence;
 the heading leaf covers both lines. A paragraph of several lines is never a setext heading.
+A `-` underline is a thematic break instead when the text line is a block quote (`> ...`, as
+in CommonMark), ends in ":" (an intro to unfenced YAML) or has more than 12 words (a
+paragraph); real setext headings in the bench corpus have 1 to 12 words.
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ _TABLE = re.compile(r"[ \t]*\|")
 _LIST = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
 _UNDERLINE = re.compile(r" {0,3}(=+|-{3,})[ \t]*")
 _SETEXT_TEXT = re.compile(r" {0,3}\S.*")  # at most three spaces of indent, as for ATX
+_QUOTE = re.compile(r" {0,3}>")
+MAX_DASH_SETEXT_WORDS = 12
 
 
 def _lines(text: str) -> list[tuple[int, int, str]]:
@@ -48,7 +53,12 @@ def _setext(lines: list[tuple[int, int, str]], i: int) -> int | None:
     m = _UNDERLINE.fullmatch(lines[i + 1][2].rstrip())
     if m is None:
         return None
-    return 1 if m.group(1)[0] == "=" else 2
+    if m.group(1)[0] == "=":
+        return 1
+    if (_QUOTE.match(line) or line.endswith(":")
+            or len(line.split()) > MAX_DASH_SETEXT_WORDS):
+        return None  # a thematic break, not a heading
+    return 2
 
 
 def _heading(line: str) -> tuple[int, str] | None:

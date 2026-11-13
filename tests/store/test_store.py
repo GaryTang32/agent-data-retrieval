@@ -44,7 +44,7 @@ def test_layout_and_snapshot_id(tmp_path, mini):
     snap_bytes = (root / "snapshots" / f"{snap}.json").read_bytes()
     assert hashlib.sha256(snap_bytes).hexdigest() == snap
     body = json.loads(snap_bytes)
-    assert body["parser"] == PARSER == "adr_store.structure/2"
+    assert body["parser"] == PARSER == "adr_store.structure/3"
     assert body["extractor"] == f"adr_eval.extract/{EXTRACTOR_VERSION}"
     assert [d["doc_id"] for d in body["documents"]] == sorted(mini.docs)
     for d in body["documents"]:
@@ -289,6 +289,29 @@ def test_ingest_exits_3_naming_the_document_on_an_unexpected_error(tmp_path, cap
     err = capsys.readouterr().err
     assert err.count("\n") == 1, err  # one line
     assert "RuntimeError" in err and "parser bug" in err and ".md" in err
+    assert not (tmp_path / "s" / "HEAD").exists()
+
+
+def test_ingest_exits_3_naming_the_document_it_cannot_read(tmp_path, capsys, monkeypatch):
+    from adr_store import cli
+
+    real_load, real_read = cli.load_checked_corpus, Path.read_bytes
+
+    def unreadable(self):
+        if self.name == "refund_policy.md":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_read(self)
+
+    def load(name):  # the corpus loads; reading one document for the store then fails
+        loaded = real_load(name)
+        monkeypatch.setattr(Path, "read_bytes", unreadable)
+        return loaded
+
+    monkeypatch.setattr(cli, "load_checked_corpus", load)
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 3
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1, err
+    assert "PermissionError" in err and "while processing refund_policy.md (" in err
     assert not (tmp_path / "s" / "HEAD").exists()
 
 

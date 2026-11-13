@@ -14,8 +14,8 @@ headings are whole lines that look like one, kept conservative (rulings 7 and §
   INTRODUCTION, ..., References), once per document, rank 1; or an appendix: "Appendix",
   "APPENDIX" or "Appendices" alone, or "Appendix"/"APPENDIX" with a label of one or two
   capitals or digits ("Appendix B", "Appendix A1:") and an optional capitalised title.
-  "Appendix A.8), as shown" and "Appendix F proves the bound" are running text. No candidate
-  may have a title starting with ".", ")" or ",", or a line ending in a hyphen.
+  "Appendix A.8), as shown" and "Appendix F proves the bound" are running text. No line
+  ending in a hyphen (a word wrapped to the next line) is a candidate.
 
 Numbered lines before the first anchor (a known heading, or a numbered one whose title is a
 known name such as "1 Introduction") are ignored: they are title-page affiliations.
@@ -45,7 +45,7 @@ _KNOWN = re.compile(
     r"|discussion|conclusions?|references|acknowledge?ments)")
 _APPENDIX = re.compile(
     r"Appendix|APPENDIX|Appendices|APPENDICES"
-    r"|(?:Appendix|APPENDIX)[ \t]+[A-Z0-9]{1,2}[.:]?(?:[ \t]+([A-Z][^\n]{1,60}))?")
+    r"|(?:Appendix|APPENDIX)[ \t]+[A-Z0-9]{1,2}[.:]?(?:[ \t]+[A-Z][^\n]{1,60})?")
 # known headings that may close a numbered section (the rest, inside one, are labels)
 _CLOSING = re.compile(r"(?i:references|acknowledge?ments|conclusions?|appendix\b.*|appendices)")
 
@@ -67,9 +67,9 @@ def _numbered(start: int, end: int, line: str) -> _Line | None:
     m = _NUMBERED.fullmatch(line)
     if m is None:
         return None
-    title = m.group(3).strip()
+    title = m.group(3).strip()  # ends where the (stripped) line ends
     words = title.split()
-    if (not _plausible(title, line) or title[-1] in ".,;:-/" or "," in title
+    if (title[-1] in ".,;:-/" or "," in title
             or len(words) > MAX_TITLE_WORDS
             or sum(1 for w in words if _NUMBER.fullmatch(w)) >= 2):
         return None
@@ -82,19 +82,12 @@ def _cased(line: str) -> bool:
     return line.isupper() or all(w[0].isupper() for w in line.split())
 
 
-def _plausible(title: str, line: str) -> bool:
-    """Not a sentence fragment: the title does not start with a closing mark, the line does
-    not end with a hyphen (a word wrapped to the next line)."""
-    return not title.startswith((".", ")", ",")) and not line.endswith("-")
-
-
 def _known(line: str) -> bool:
-    if line[-1] in ".,;" or not _plausible("", line):
+    if line[-1] in ".,;-":
         return False
     if _KNOWN.fullmatch(line):
         return _cased(line)
-    m = _APPENDIX.fullmatch(line)
-    return m is not None and _plausible(m.group(1) or "", line)
+    return _APPENDIX.fullmatch(line) is not None
 
 
 def _key(s: str) -> str:

@@ -181,3 +181,27 @@ def test_a_later_known_word_counts_when_the_first_was_body_text():
     els = _parsed(text).elements
     assert slices(els, text, "heading") == ["1 Introduction", "2 Method", "Results"]
     assert text.index("Results\nbody") == next(e.char_start for e in els if e.title == "Results")
+
+
+def _digest(raw: bytes, text: str) -> tuple[str, int]:
+    from adr_store.records import canonical_json
+
+    els = spdf.parse(raw, text, hashlib.sha256(raw).hexdigest())
+    return hashlib.sha256(b"".join(canonical_json(e) for e in els)).hexdigest(), len(els)
+
+
+def test_parser_output_on_the_pdf_fixtures_is_pinned():
+    # pinned before the dead hyphen and closing-mark checks were removed
+    assert _digest(PAGES, TEXT) == (
+        "f10284baa5afc8f5c4d40de2980f14c29e26be7bbc5ec7900160e10914493084", 25)
+    raw = (FIXTURES / "mini" / "service_charter.pdf").read_bytes()
+    assert _digest(raw, extract_text(raw, "pdf")) == (
+        "0ce6e5ae48dfb6f6516240715c56eca837857b07908feaa577fa16bbe25db315", 2)
+
+
+@pytest.mark.parametrize("line", [
+    "3 Dense Retrie-", "Results-", "Appendix B Proof of the Bound-", "Appendix-",
+    "REFERENCES-"])
+def test_a_line_ending_in_a_hyphen_is_never_a_heading(line):
+    text = f"Abstract\nbody\n{line}\nmore body"
+    assert slices(_parsed(text).elements, text, "heading") == ["Abstract"]

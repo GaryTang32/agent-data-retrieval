@@ -12,7 +12,7 @@ from importlib import import_module
 from adr_store.structure.text import Parsed
 
 # Bump whenever parser output can change; recorded in every source record and snapshot.
-PARSER_VERSION = "2"
+PARSER_VERSION = "3"
 PARSER = f"adr_store.structure/{PARSER_VERSION}"
 
 _MODULES = {
