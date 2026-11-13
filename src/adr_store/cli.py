@@ -17,12 +17,22 @@ conformance violation fails the command with the documents and rules named, and 
 is written. The compile figures of spec §10.3 are printed and written to
 `<store>/compile/<snapshot>.json` (no timings in that file, so it is reproducible).
 
-`--path` ingests the loose files of a folder instead (recursive, in relative-path order,
-hidden files and directories skipped): `doc_id` is the SHA-256 of the bytes and the text is
-the harness's `extract_text`, as for a corpus. Files with an unsupported extension are skipped
-and counted, identical files are ingested once; the same checks, figures and exit codes apply
-(a folder that is missing or holds no supported file, or a file whose text cannot be
-extracted, exits 2; a file that cannot be read exits 3).
+`--path` ingests the loose files of a folder instead (recursive, in relative-path order):
+`doc_id` is the SHA-256 of the bytes and the text is the harness's `extract_text`, as for a
+corpus. Hidden files and directories (a name that starts with a dot) are not read or counted;
+everything else is ingested, counted or reported: files with an unsupported extension (and
+anything that is not a regular file) as `unsupported`, symbolic links (to files or
+directories, dangling or not; never followed) as `symlinks`, names that are not UTF-8 as
+`bad_names` with a warning line each; identical files are ingested once (`duplicates`). A
+store directory inside the folder is not read. Every file is read and extracted before the
+first write: each file or directory that cannot be read ("cannot read <path>: <reason>") and
+each file whose text cannot be extracted is reported on its own line and nothing is written
+(exit 3 if any could not be read, else 2). The snapshot records each file's relative path
+(`paths`), so re-ingesting a changed folder into the same store gives a new snapshot and an
+unchanged one the same; the doc records stay as first written (their uri names the path the
+bytes were first ingested under), and bytes stored under another format (a new extension) are
+refused. The compile figures do not record the folder, so they do not depend on where it is
+or how it is spelled. A missing folder or one without supported files exits 2.
 
 Exit codes: 0 done; 1 a document fails conformance; 2 the corpus cannot be loaded or the
 store refuses a write; 3 a document that cannot be read or an unexpected error (a bug),
@@ -33,17 +43,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import sys
 import time
 from collections import defaultdict
-from pathlib import Path
+from dataclasses import dataclass, field
+from pathlib import Path, PurePath
 
 from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.runner import RunError, load_checked_corpus
 from adr_store import tools
-from adr_store.store import Added, ConformanceError, Store, StoreError, write_atomic
+from adr_store.store import (
+    Added,
+    ConformanceError,
+    Store,
+    StoreError,
+    stored_source,
+    write_atomic,
+)
 
 UNKNOWN_LICENSES = frozenset({"", "unknown"})
 PROBLEMS_SHOWN = 5
@@ -111,8 +131,8 @@ def compile_figures(corpus: str | None, snapshot: str, added: list[Added], check
     }
 
 
-def _print_figures(f: dict, seconds: float) -> None:
-    print(f"{f['corpus'] or f['path']}: snapshot {f['snapshot']}")
+def _print_figures(f: dict, label: str, seconds: float) -> None:
+    print(f"{label}: snapshot {f['snapshot']}")
     print(f"  documents {f['documents']}, elements {f['elements']}, leaves {f['leaves']}, "
           f"sections {f['sections']}")
     c = f["conformance"]
@@ -139,15 +159,18 @@ def _report_failures(failures: list[tuple[str, ConformanceError]], checked: int)
     return EXIT_CONFORMANCE
 
 
-def _commit(store: Store, store_dir: Path, corpus: str | None, added: list[Added],
-            checked: int, t0: float, extra: dict | None = None) -> int:
-    """Commit the snapshot, write and print its compile figures (plus `extra` keys)."""
-    snapshot = store.commit()
+def _commit(store: Store, store_dir: Path, label: str, added: list[Added], checked: int,
+            t0: float, extra: dict | None = None, *, paths: dict[str, str] | None = None,
+            corpus: str | None) -> int:
+    """Commit the snapshot (with `paths` for loose files), write and print its compile
+    figures (plus `extra` keys); `label` (the corpus, or the folder as given) is printed, not
+    written."""
+    snapshot = store.commit(paths=paths)
     figures = compile_figures(corpus, snapshot, added, checked, 0)
     figures.update(extra or {})
     payload = json.dumps(figures, indent=2, sort_keys=True) + "\n"
     write_atomic(Path(store_dir) / "compile" / f"{snapshot}.json", payload.encode("utf-8"))
-    _print_figures(figures, time.perf_counter() - t0)
+    _print_figures(figures, label, time.perf_counter() - t0)
     return 0
 
 
@@ -174,7 +197,7 @@ def _ingest(a: argparse.Namespace) -> int:
             raise _Unexpected(d.path, d.doc_id, e) from e
     if failures:
         return _report_failures(failures, len(manifest_docs))
-    return _commit(store, a.store, a.corpus, added, len(manifest_docs), t0)
+    return _commit(store, a.store, a.corpus, added, len(manifest_docs), t0, corpus=a.corpus)
 
 
 # -- `adr ingest --path <dir>`: loose files ----------------------------------------------
@@ -188,48 +211,141 @@ class _UsageError(Exception):
     """`adr ingest --path` cannot start (no such folder, nothing to ingest)."""
 
 
-def loose_files(folder: Path) -> tuple[list[tuple[str, Path]], int]:
-    """The supported files under `folder` as (relative POSIX path, path), sorted by relative
-    path, and the number of unsupported files. Hidden files and anything under a hidden
-    directory (a name that starts with a dot) are left out and not counted."""
-    found: list[tuple[str, Path]] = []
-    unsupported = 0
-    for p in folder.rglob("*"):
-        rel = p.relative_to(folder)
-        if any(part.startswith(".") for part in rel.parts) or not p.is_file():
-            continue
-        if p.suffix.lower() in PATH_FORMATS:
-            found.append((rel.as_posix(), p))
-        else:
-            unsupported += 1
-    return sorted(found), unsupported
+@dataclass
+class Walk:
+    """What `loose_files` found under a folder. `files` are the supported regular files as
+    (relative POSIX path, path), sorted by relative path; `unsupported` counts the other
+    regular files and anything that is neither a file, a directory nor a symlink (a fifo, a
+    socket, a device); `symlinks` the symbolic links, to files or directories, dangling or
+    not, none of them followed; `bad_names` the escaped relative paths of entries whose name
+    is not UTF-8 (a directory counts once, its contents are not listed); `unreadable` the
+    (relative path, reason) of directories or entries that could not be listed or examined."""
+
+    files: list[tuple[str, Path]] = field(default_factory=list)
+    unsupported: int = 0
+    symlinks: int = 0
+    bad_names: list[str] = field(default_factory=list)
+    unreadable: list[tuple[str, str]] = field(default_factory=list)
+
+
+def _reason(e: OSError) -> str:
+    return e.strerror or _one_line(e)
+
+
+def _escaped(rel: str) -> str:
+    """A relative path that may hold undecodable bytes (surrogate escapes), printable."""
+    return os.fsencode(rel).decode("utf-8", "backslashreplace")
+
+
+def loose_files(folder: Path, exclude: str | None = None) -> Walk:
+    """Walk `folder` (top down, symlinks not followed): every entry is ingested, counted or
+    reported, none skipped silently except hidden ones (a name that starts with a dot: hidden
+    files are not counted and hidden directories are not entered). `exclude` is the relative
+    path of a directory left out (the store, when it is inside the folder)."""
+    walk = Walk()
+    top = os.fspath(folder)
+
+    def rel_of(p: str) -> str:
+        return PurePath(os.path.relpath(p, top)).as_posix()
+
+    def failed(e: OSError) -> None:
+        walk.unreadable.append((rel_of(e.filename or top), _reason(e)))
+
+    for dirpath, dirnames, filenames in os.walk(top, onerror=failed, followlinks=False):
+        keep = []
+        for name in sorted(dirnames):
+            full = os.path.join(dirpath, name)
+            rel = rel_of(full)
+            if name.startswith("."):
+                continue
+            if not _utf8(name):
+                walk.bad_names.append(_escaped(rel))
+            elif os.path.islink(full):
+                walk.symlinks += 1
+            elif rel != exclude:
+                keep.append(name)
+        dirnames[:] = keep  # top down: only these are entered
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            rel = rel_of(full)
+            if name.startswith("."):
+                continue
+            if not _utf8(name):
+                walk.bad_names.append(_escaped(rel))
+                continue
+            try:
+                mode = os.lstat(full).st_mode
+            except OSError as e:
+                walk.unreadable.append((rel, _reason(e)))
+                continue
+            if stat.S_ISLNK(mode):
+                walk.symlinks += 1
+            elif stat.S_ISREG(mode) and Path(name).suffix.lower() in PATH_FORMATS:
+                walk.files.append((rel, Path(full)))
+            else:
+                walk.unsupported += 1
+    walk.files.sort()
+    walk.bad_names.sort()
+    walk.unreadable.sort()
+    return walk
+
+
+def _utf8(name: str) -> bool:
+    try:
+        name.encode("utf-8")
+    except UnicodeEncodeError:  # undecodable bytes, kept as surrogate escapes
+        return False
+    return True
+
+
+def _store_inside(folder: Path, store: Path) -> str | None:
+    """The store's path relative to the folder when it is inside it (whether or not it
+    exists yet), else None; both resolved, so the spelling does not matter."""
+    rel = os.path.relpath(os.path.realpath(store), os.path.realpath(folder))
+    if rel == os.curdir:
+        raise _UsageError(f"{store}: the store cannot be the folder itself")
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        return None
+    return PurePath(rel).as_posix()
 
 
 def _ingest_path(a: argparse.Namespace) -> int:
     """Ingest the loose files of a folder like a corpus: `doc_id` is the SHA-256 of the bytes,
     the text is the harness's `extract_text`, the uri `file://<relative path>` and the source
     version `sha256:<doc_id[:12]>` (as the research corpus has them), no licence. Identical
-    files are ingested once, under the first relative path."""
+    files are ingested once, under the first relative path. Every file is read and its text
+    extracted before anything is written; any failure is reported, each on its own line, and
+    nothing is written. The snapshot holds every file's relative path (`paths`); a doc record
+    already in the store whose uri names an earlier path of the same bytes is kept."""
     t0 = time.perf_counter()
     folder = Path(a.path)
     if not folder.is_dir():
         raise _UsageError(f"{folder}: not a directory")
-    files, unsupported = loose_files(folder)
-    if not files:
+    store_rel = _store_inside(folder, a.store)
+    walk = loose_files(folder, exclude=store_rel)
+    for name in walk.bad_names:
+        print(f"warning: skipped {name}: the name is not UTF-8", file=sys.stderr)
+    if not walk.files and not walk.unreadable:
         raise _UsageError(f"{folder}: no supported files (extensions "
-                          f"{', '.join(sorted(PATH_FORMATS))}); {unsupported} unsupported")
-    store = Store.create(a.store)
-    added: list[Added] = []
-    failures: list[tuple[str, ConformanceError]] = []
+                          f"{', '.join(sorted(PATH_FORMATS))}); {walk.unsupported} "
+                          f"unsupported")
+    # read and extract everything first
+    failed = [(rel, f"cannot read {rel}: {reason}") for rel, reason in walk.unreadable]
+    cannot_read = len(failed)
+    docs: list[tuple[str, Document, bytes]] = []
+    paths: dict[str, str] = {}
     seen: set[str] = set()
     duplicates = 0
-    for rel, p in files:
+    for rel, p in walk.files:
         fmt = PATH_FORMATS[p.suffix.lower()]
         try:
             raw = p.read_bytes()
-        except Exception as e:  # unreadable: name the file, then stop
-            raise _Unexpected(rel, "", e) from e
+        except OSError as e:
+            failed.append((rel, f"cannot read {rel}: {_reason(e)}"))
+            cannot_read += 1
+            continue
         doc_id = sha256_bytes(raw)
+        paths[rel] = doc_id
         if doc_id in seen:
             duplicates += 1
             continue
@@ -237,25 +353,49 @@ def _ingest_path(a: argparse.Namespace) -> int:
         try:
             text = extract_text(raw, fmt)
         except Exception as e:  # as when a corpus is loaded
-            raise ExtractionError(f"{rel}: could not extract text ({fmt}): "
-                                  f"{type(e).__name__}: {e}") from e
-        doc = Document(doc_id, text, fmt, f"sha256:{doc_id[:12]}", f"file://{rel}")
+            failed.append((rel, f"{rel}: could not extract text ({fmt}): {_one_line(e)}"))
+            continue
+        held = stored_source(a.store, doc_id)
+        if held is not None and held.format != fmt:
+            failed.append((rel, f"{rel}: the store holds these bytes as {held.format} (from "
+                                f"{held.uri}); a store keeps one reading of a file: use a new "
+                                f"store or the earlier extension"))
+            continue
+        docs.append((rel, Document(doc_id, text, fmt, f"sha256:{doc_id[:12]}",
+                                   f"file://{rel}"), raw))
+    if failed:
+        for _, line in sorted(failed):
+            print(f"error: {line}", file=sys.stderr)
+        n = len(failed)
+        print(f"error: {n} {'entry' if n == 1 else 'entries'} could not be read or "
+              f"extracted; nothing written", file=sys.stderr)
+        return EXIT_UNEXPECTED if cannot_read else EXIT_LOAD_OR_STORE
+    store = Store.create(a.store)
+    added: list[Added] = []
+    failures: list[tuple[str, ConformanceError]] = []
+    for rel, doc, raw in docs:
         try:
-            added.append(store.add(doc, raw, license=None))
+            added.append(store.add(doc, raw, license=None, keep_uri=True))
         except ConformanceError as e:
             failures.append((rel, e))
         except StoreError:
             raise
         except Exception as e:  # a bug: name the document, then stop
-            raise _Unexpected(rel, doc_id, e) from e
+            raise _Unexpected(rel, doc.doc_id, e) from e
     if failures:
-        return _report_failures(failures, len(seen))
-    counts = {"found": len(files) + unsupported, "ingested": len(added),
-              "unsupported": unsupported, "duplicates": duplicates}
-    code = _commit(store, a.store, None, added, len(seen), t0,
-                   {"path": str(folder), "files": counts})
+        return _report_failures(failures, len(docs))
+    counts = {"found": len(walk.files) + walk.unsupported + walk.symlinks
+              + len(walk.bad_names),
+              "ingested": len(added), "unsupported": walk.unsupported,
+              "duplicates": duplicates, "symlinks": walk.symlinks,
+              "bad_names": len(walk.bad_names)}
+    code = _commit(store, a.store, str(folder), added, len(docs), t0, {"files": counts},
+                   paths=paths, corpus=None)
     print(f"  files {counts['found']}: ingested {counts['ingested']}, unsupported "
-          f"{unsupported}, duplicates {duplicates} (hidden files not read)")
+          f"{counts['unsupported']}, duplicates {duplicates}, symlinks {walk.symlinks}, "
+          f"bad names {counts['bad_names']} (hidden files not read, symlinks not followed)")
+    if store_rel is not None:
+        print(f"  store {store_rel} is inside the folder: not read")
     return code
 
 
@@ -388,8 +528,9 @@ def _parser() -> argparse.ArgumentParser:
     what = ing.add_mutually_exclusive_group(required=True)
     what.add_argument("corpus", nargs="?", choices=NAMES, help="a pinned corpus")
     what.add_argument("--path", type=Path, default=None,
-                      help="a folder of loose files (recursive; hidden files skipped; "
-                           f"extensions {' '.join(sorted(PATH_FORMATS))})")
+                      help="a folder of loose files (recursive; hidden files skipped, "
+                           "symlinks not followed; extensions "
+                           f"{' '.join(sorted(PATH_FORMATS))})")
     ing.add_argument("--store", required=True, type=Path, help="store directory")
     ing.set_defaults(fn=_ingest)
 

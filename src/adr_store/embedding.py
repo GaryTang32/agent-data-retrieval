@@ -15,7 +15,8 @@ of 1) is deleted and its text embedded again, counted as new.
 ONNX Runtime threads (0: ONNX Runtime's default, all cores), for speed only. The thread count
 is not part of the key: fastembed with bge-small-en-v1.5 gave bit-identical vectors with 1, 2
 and 4 threads (600 chunk texts of the research store, body and breadcrumb-prefix, in several
-batch compositions), and `test_two_threads_give_the_same_vectors_as_one` checks it.
+batch compositions), and `test_other_thread_counts_give_the_same_vectors_as_one` checks it
+(threads 2 and 0).
 """
 
 from __future__ import annotations

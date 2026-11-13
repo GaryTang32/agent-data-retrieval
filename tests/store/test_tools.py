@@ -139,6 +139,22 @@ def test_index_threads_reach_the_embedding_model_only(store, fakes, tmp_path, ca
     assert fakes["threads"][-2:] == [4, 1] and hits
 
 
+def test_lexical_only_ignores_threads_and_keeps_the_loaded_index(store, fakes, monkeypatch):
+    t = tools.Tools(store.path)
+    info = t.index("p1-struct", lexical_only=True, threads=2)
+    assert fakes["threads"] == [] and t._index is not None
+    loaded = t._index
+    assert tools.Tools(store.path).index("p1-struct", lexical_only=True,
+                                         threads=0).fingerprint == info.fingerprint
+
+    def no_load(*args, **kwargs):
+        raise AssertionError("the index was loaded again")
+
+    monkeypatch.setattr(StoreIndex, "load", no_load)
+    res = t.search(QUERY, top=3)
+    assert t._index is loaded and res.fingerprint == info.fingerprint and res.hits
+
+
 def test_index_refuses_a_negative_thread_count(store, capsys):
     with pytest.raises(SystemExit) as e:
         main(["index", str(store.path), "--system", "p1-struct", "--threads", "-1"])
@@ -977,7 +993,7 @@ def test_cli_read_grep_index_json_keys(store, capsys):
         "w_bc_from", "w", "w_from", "n_chunks", "source", "path", "tuning"}
     code, out, _ = run(capsys, "read", a_doc(store), "--store", s, "--end", 10, "--json")
     assert code == 0 and set(json.loads(out)) == {
-        "snapshot", "doc_id", "uri", "char_start", "char_end", "text_sha256", "element_id",
+        "snapshot", "doc_id", "uri", "path", "char_start", "char_end", "text_sha256", "element_id",
         "chunk_id", "text"}
     code, out, _ = run(capsys, "grep", "refund", "--store", s, "--json")
     gr = json.loads(out)

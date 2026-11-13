@@ -219,26 +219,16 @@ def test_a_negative_thread_count_is_refused(tmp_path):
         EmbeddingCache(tmp_path, threads=-1)
 
 
-def _model_offline(model_cache_dir: Path, model_name: str = "BAAI/bge-small-en-v1.5") -> bool:
-    from fastembed import TextEmbedding
-
-    desc = next(m for m in TextEmbedding.list_supported_models() if m["model"] == model_name)
-    repo = desc["sources"]["hf"].replace("/", "--")
-    return any(model_cache_dir.glob(f"models--{repo}/snapshots/*/{desc['model_file']}"))
-
-
 @pytest.mark.slow
-def test_two_threads_give_the_same_vectors_as_one(tmp_path):
-    model_cache_dir = Path(".cache/fastembed")
-    if not _model_offline(model_cache_dir):
-        pytest.skip(f"embedding model not in {model_cache_dir}")
+@pytest.mark.parametrize("threads", [2, 0])
+def test_other_thread_counts_give_the_same_vectors_as_one(tmp_path, threads):
+    """The model is fetched as for `test_vectors_equal_the_baseline_dense_index` (the default
+    model store, downloaded when it is not there)."""
     texts = ["Customers may request a refund within thirty days of purchase.",
              "Doc > Refunds\nThe cafeteria serves lunch between noon and two.",
              "Shipping rates depend on the destination country. " * 40,
              "x"]
-    one, n1 = EmbeddingCache(tmp_path / "one", model_cache_dir=model_cache_dir,
-                             threads=1).embed_texts(texts)
-    two, n2 = EmbeddingCache(tmp_path / "two", model_cache_dir=model_cache_dir,
-                             threads=2).embed_texts(texts)
-    assert n1 == n2 == 4 and one.dtype == two.dtype == np.float32
-    assert np.array_equal(one, two)
+    one, n1 = EmbeddingCache(tmp_path / "one", threads=1).embed_texts(texts)
+    other, n2 = EmbeddingCache(tmp_path / "other", threads=threads).embed_texts(texts)
+    assert n1 == n2 == 4 and one.dtype == other.dtype == np.float32
+    assert np.array_equal(one, other)

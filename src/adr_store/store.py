@@ -6,9 +6,14 @@
     <store>/snapshots/<snapshot_id>.json           sorted doc_ids with record hashes, versions
     <store>/HEAD                                   the current snapshot id
 
-A snapshot file holds its canonical JSON, so its id is the SHA-256 of the file. Every file is
-written once, atomically (temporary file, then rename); a file that already exists under the
-same id is left untouched, and one with different content is refused rather than replaced.
+A snapshot file holds its canonical JSON, so its id is the SHA-256 of the file. A snapshot of
+loose files (`adr ingest --path`) also holds `paths`, each file's relative path (POSIX
+separators) -> its doc_id, identical files included, so the folder's layout is part of the
+snapshot id; a corpus snapshot has no `paths` key. Every file is written once, atomically
+(temporary file, then rename); a file that already exists under the same id is left untouched,
+and one with different content is refused rather than replaced, except that `Store.add(...,
+keep_uri=True)` keeps an existing doc record that differs from the new one only in its `uri`
+(a renamed loose file: its current path is in the snapshot's `paths`).
 """
 
 from __future__ import annotations
@@ -94,6 +99,45 @@ def _write_once(path: Path, data: bytes) -> None:
     write_atomic(path, data)
 
 
+def snapshot_bytes(records: dict[str, str], paths: dict[str, str] | None = None) -> bytes:
+    """The canonical JSON of a snapshot: doc_id -> record hash, versions, and `paths` (only
+    when given) relative path -> doc_id."""
+    body = {
+        "format_version": FORMAT_VERSION,
+        "extractor": EXTRACTOR,
+        "parser": PARSER,
+        "documents": [{"doc_id": d, "record_sha256": records[d]} for d in sorted(records)],
+    }
+    if paths is not None:
+        missing = sorted(set(paths.values()) - set(records))
+        if missing:
+            raise ValueError(f"snapshot paths name {len(missing)} document(s) not in the "
+                             f"snapshot, e.g. {missing[0]}")
+        body["paths"] = dict(sorted(paths.items()))
+    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _same_but_uri(existing: bytes, source: SourceRecord, elements: list[Element]) -> bytes | None:
+    """`existing` if it is the doc record of `source` and `elements` but for its uri."""
+    try:
+        old = DocRecord.model_validate_json(existing)
+    except ValueError:
+        return None
+    same = canonical_json(DocRecord(source=source.model_copy(update={"uri": old.source.uri}),
+                                    elements=elements))
+    return existing if same == existing else None
+
+
+def stored_source(store: Path, doc_id: str) -> SourceRecord | None:
+    """The source record a store holds for `doc_id`, or None (no such file, or not a valid
+    record), read without creating anything."""
+    path = Path(store) / "docs" / doc_id[:2] / f"{doc_id}.json"
+    try:
+        return DocRecord.model_validate_json(path.read_bytes()).source
+    except (OSError, ValueError):
+        return None
+
+
 class Store:
     """One snapshot of a store: read its documents, add more, commit a new snapshot.
 
@@ -103,10 +147,12 @@ class Store:
     and moves HEAD to it.
     """
 
-    def __init__(self, path: Path, snapshot_id: str | None, records: dict[str, str]):
+    def __init__(self, path: Path, snapshot_id: str | None, records: dict[str, str],
+                 paths: dict[str, str] | None = None):
         self.path = Path(path)
         self.snapshot_id = snapshot_id
         self._records = dict(records)  # doc_id -> SHA-256 of its doc record file
+        self._paths_map = None if paths is None else dict(sorted(paths.items()))
         self._cache: OrderedDict[str, DocRecord] = OrderedDict()
 
     @classmethod
@@ -132,15 +178,31 @@ class Store:
             raise StoreError(f"{snap_path}: content does not hash to its snapshot id")
         body = json.loads(data)
         records = {d["doc_id"]: d["record_sha256"] for d in body["documents"]}
-        return cls(path, snapshot, records)
+        return cls(path, snapshot, records, body.get("paths"))
+
+    @property
+    def paths(self) -> dict[str, str] | None:
+        """Relative path -> doc_id of a loose-file snapshot, sorted by path; None for a
+        corpus snapshot."""
+        return None if self._paths_map is None else dict(self._paths_map)
+
+    def path_of(self, doc_id: str) -> str | None:
+        """The first relative path (in path order) of a document in a loose-file snapshot:
+        where it is in the folder now. None for a corpus snapshot."""
+        if self._paths_map is None:
+            return None
+        return next((p for p, d in self._paths_map.items() if d == doc_id), None)
 
     def _paths(self, doc_id: str) -> tuple[Path, Path, Path]:
         d = doc_id[:2]
         return (self.path / "blobs" / d / doc_id, self.path / "text" / d / f"{doc_id}.txt",
                 self.path / "docs" / d / f"{doc_id}.json")
 
-    def add(self, document: Document, raw: bytes, license: str | None = None) -> Added:
-        """Parse, check and store one document; it joins the next snapshot."""
+    def add(self, document: Document, raw: bytes, license: str | None = None, *,
+            keep_uri: bool = False) -> Added:
+        """Parse, check and store one document; it joins the next snapshot. With `keep_uri`
+        (loose files, whose uri is their path), a doc record already stored that differs from
+        this one only in its uri is kept as it is."""
         if _sha256(raw) != document.doc_id:
             raise ValueError(f"{document.uri}: raw bytes do not hash to doc_id {document.doc_id}"
                              f" (doc_id must be their SHA-256)")
@@ -153,21 +215,20 @@ class Store:
         blob_path, text_path, doc_path = self._paths(document.doc_id)
         _write_once(blob_path, raw)
         _write_once(text_path, document.text.encode("utf-8"))
+        if keep_uri and doc_path.is_file():
+            record = _same_but_uri(doc_path.read_bytes(), source, parsed.elements) or record
         _write_once(doc_path, record)
         self._records[document.doc_id] = _sha256(record)
         return Added(document.doc_id, document.format, parsed.elements,
                      parsed.headings_found, parsed.headings_aligned)
 
-    def commit(self) -> str:
-        """Write the snapshot of the current documents, move HEAD to it, return its id."""
-        body = {
-            "format_version": FORMAT_VERSION,
-            "extractor": EXTRACTOR,
-            "parser": PARSER,
-            "documents": [{"doc_id": d, "record_sha256": self._records[d]}
-                          for d in sorted(self._records)],
-        }
-        data = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    def commit(self, paths: dict[str, str] | None = None) -> str:
+        """Write the snapshot of the current documents, move HEAD to it, return its id.
+        `paths` (relative path -> doc_id, loose files only) replaces the paths of the snapshot
+        opened, if any."""
+        if paths is not None:
+            self._paths_map = dict(sorted(paths.items()))
+        data = snapshot_bytes(self._records, self._paths_map)
         snapshot_id = _sha256(data)
         _write_once(self.path / "snapshots" / f"{snapshot_id}.json", data)
         write_atomic(self.path / "HEAD", f"{snapshot_id}\n".encode())

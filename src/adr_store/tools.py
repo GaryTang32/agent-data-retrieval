@@ -175,6 +175,7 @@ class ReadResult(_Result):
     snapshot: str
     doc_id: str
     uri: str
+    path: str | None  # loose files: the document's path in the folder now (the snapshot's)
     char_start: int
     char_end: int
     text_sha256: str
@@ -439,7 +440,7 @@ class Tools:
               threads: int = 1) -> IndexInfo:
         """Build or load the index of `system` for the HEAD snapshot and make it active.
         `threads` is the embedding model's thread count while building (0: all cores); the
-        vectors, and so the index, do not depend on it."""
+        vectors, and so the index, do not depend on it. A lexical-only index ignores it."""
         args = {"system": system, "lexical_only": lexical_only, "w_bc": w_bc,
                 "weight": weight, "tuning": None if tuning is None else str(tuning),
                 "threads": threads}
@@ -536,9 +537,10 @@ class Tools:
                          path=str(final), tuning=tuning_info)
         write_atomic(self.index_root / "active.json",
                      (json.dumps(info.to_dict(), indent=2, sort_keys=True) + "\n").encode())
-        # queries are embedded single-threaded, as by the baseline: an index built with
-        # other threads is reloaded with the default cache on the next search
-        self._index = idx if threads == 1 else None
+        # queries are embedded single-threaded, as by the baseline: a dense index built with
+        # other threads is reloaded with the default cache on the next search (a lexical
+        # index has no embedding model, so `threads` does not apply to it)
+        self._index = idx if threads == 1 or lexical_only else None
         self._active, self._chunks = info.to_dict(), None
         return info
 
@@ -669,8 +671,9 @@ class Tools:
             raise ToolError(f"range {start}:{end} is out of range for document "
                             f"{_short(doc_id)} (length {len(text)})")
         part = text[start:end]
-        return ReadResult(self.snapshot, doc_id, self.store.source(doc_id).uri, start, end,
-                          sha256_text(part), element_id, chunk_id, part)
+        return ReadResult(self.snapshot, doc_id, self.store.source(doc_id).uri,
+                          self.store.path_of(doc_id), start, end, sha256_text(part),
+                          element_id, chunk_id, part)
 
     # -- grep -------------------------------------------------------------------------
 
