@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "description": "One stored document: where its bytes came from and how its text was made (spec §4.1).",
+  "properties": {
+    "byte_length": {
+      "minimum": 0,
+      "title": "Byte Length",
+      "type": "integer"
+    },
+    "doc_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "extractor": {
+      "title": "Extractor",
+      "type": "string"
+    },
+    "format": {
+      "enum": [
+        "md",
+        "txt",
+        "html",
+        "xml",
+        "pdf",
+        "json",
+        "csv"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "license": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "License"
+    },
+    "parser": {
+      "title": "Parser",
+      "type": "string"
+    },
+    "source_version": {
+      "title": "Source Version",
+      "type": "string"
+    },
+    "text_length": {
+      "minimum": 0,
+      "title": "Text Length",
+      "type": "integer"
+    },
+    "text_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Text Sha256",
+      "type": "string"
+    },
+    "uri": {
+      "title": "Uri",
+      "type": "string"
+    }
+  },
+  "required": [
+    "doc_id",
+    "uri",
+    "format",
+    "source_version",
+    "byte_length",
+    "text_sha256",
+    "text_length",
+    "extractor",
+    "parser",
+    "license"
+  ],
+  "title": "SourceRecord",
+  "type": "object"
+}
