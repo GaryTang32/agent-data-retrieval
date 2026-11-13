@@ -51,11 +51,15 @@ def writable_state(tmp_path_factory):
     return tmp_path_factory.mktemp("adr_eval_state")
 
 
-@pytest.fixture(autouse=True)
-def _isolate_writable_state(writable_state, monkeypatch):
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_writable_state(writable_state):
     """Keep tests from writing the repo's .cache/: the shipped config's index and LLM cache
     dirs and DenseIndex's default embedding cache point at the session directory instead.
-    The fastembed model store (.cache/fastembed) is only read."""
+    The fastembed model store (.cache/fastembed) is only read.
+
+    Session-scoped so the patches are in place before any module- or session-scoped
+    fixture runs (pytest sets up higher-scoped autouse fixtures first); a function-scoped
+    guard would come too late for e.g. a module-scoped HybridIndex.build()."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
 
@@ -65,10 +69,12 @@ def _isolate_writable_state(writable_state, monkeypatch):
         return {**real_load_config(path), "index_dir": str(writable_state / "index"),
                 "cache_dir": str(writable_state / "llm")}
 
-    monkeypatch.setattr(runner, "load_config", load_config)
     model_name, _, model_cache_dir = DenseIndex.__init__.__defaults__
-    monkeypatch.setattr(DenseIndex.__init__, "__defaults__",
-                        (model_name, writable_state / "emb", model_cache_dir))
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(runner, "load_config", load_config)
+        mp.setattr(DenseIndex.__init__, "__defaults__",
+                   (model_name, writable_state / "emb", model_cache_dir))
+        yield
 
 
 @pytest.fixture
