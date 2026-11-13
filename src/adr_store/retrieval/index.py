@@ -5,16 +5,23 @@ instead of the body) and `rerank` (cross-encoder over the top `RERANK_TOP` fused
 Fusion is the baseline's: min-max linear with a weight tuned on dev, or RRF. An index built
 with `dense=False` has the lexical channel only (no embedding); its ranking is BM25's.
 
-The fingerprint covers the store snapshot id, the chunker configuration, the settings, the
-tokenizer and BM25 configuration, the embedding and reranker model hashes, the per-channel
-candidate counts and the sorted chunk ids. `save(dir)` / `load(dir)` round-trip an index and
-refuse a stored fingerprint that does not match the one recomputed on load.
+The fingerprint covers the store snapshot id, the chunker configuration (with its
+`CHUNKER_VERSION`), the settings, the tokenizer and BM25 configuration, the embedding and
+reranker model hashes, the per-channel candidate counts, the sorted chunk ids and a SHA-256
+of the chunks' content (`chunk_content_sha256`: chunk id, breadcrumb and text), so a change
+in how the code chunks an unchanged snapshot changes it too. `save(dir)` writes the index
+into a temporary directory beside `dir` and renames it into place; `load(dir)` refuses a
+stored fingerprint that does not match the one recomputed on load.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
+import uuid
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
@@ -52,9 +59,23 @@ class Settings:
                 raise ValueError(f"{name} must be a bool, got {getattr(self, name)!r}")
 
 
+def chunk_content_sha256(chunks: Iterable[StoreChunk]) -> str:
+    """SHA-256 of the canonical JSON (compact, UTF-8) of the sorted
+    [chunk_id, breadcrumb, text] rows of `chunks`."""
+    rows = sorted((c.chunk_id, c.breadcrumb, c.text) for c in chunks)
+    h = hashlib.sha256(b"[")
+    for i, row in enumerate(rows):
+        if i:
+            h.update(b",")
+        h.update(json.dumps(list(row), ensure_ascii=False,
+                            separators=(",", ":")).encode("utf-8"))
+    h.update(b"]")
+    return h.hexdigest()
+
+
 def fingerprint(snapshot: str, chunker: dict, settings: Settings, lexical: FieldBM25,
                 embedding: tuple[str, str] | None, reranker: CrossEncoderReranker | None,
-                chunk_ids: list[str]) -> str:
+                chunks: list[StoreChunk]) -> str:
     """`embedding` is (model name, model hash), None for a lexical-only index."""
     payload = {
         "snapshot": snapshot,
@@ -66,10 +87,18 @@ def fingerprint(snapshot: str, chunker: dict, settings: Settings, lexical: Field
                                                      "model_hash": embedding[1]},
         "reranker": reranker.config() if reranker is not None else None,
         "channel_k": CHANNEL_K,
-        "chunk_ids": sorted(chunk_ids),
+        "chunk_ids": sorted(c.chunk_id for c in chunks),
+        "chunk_content_sha256": chunk_content_sha256(chunks),
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _fresh_dir(beside: Path, kind: str) -> Path:
+    """A new empty directory next to `beside` (mode from the umask, unlike mkdtemp's 0700)."""
+    path = beside.parent / f".{beside.name}.{os.getpid()}.{uuid.uuid4().hex}.{kind}"
+    path.mkdir()
+    return path
 
 
 def _default_cache() -> EmbeddingCache:
@@ -96,7 +125,7 @@ class StoreIndex:
         self.reranker = reranker if settings.rerank else None
         self.embedding = embedding
         self.fingerprint = fingerprint(snapshot, chunker, settings, lexical, embedding,
-                                       self.reranker, list(self.chunks))
+                                       self.reranker, list(self.chunks.values()))
 
     # -- building --------------------------------------------------------------------
 
@@ -138,7 +167,7 @@ class StoreIndex:
         chunks = chunk_store(store, max_tokens=max_tokens, min_tokens=min_tokens)
         return fingerprint(store.snapshot_id, chunker_config(max_tokens, min_tokens), settings,
                            FieldBM25(settings.w_bc), embedding,
-                           reranker if settings.rerank else None, [c.chunk_id for c in chunks])
+                           reranker if settings.rerank else None, chunks)
 
     def with_settings(self, *, w_bc: int | None = None, rerank: bool | None = None,
                       reranker: CrossEncoderReranker | None = None) -> StoreIndex:
@@ -191,8 +220,30 @@ class StoreIndex:
     # -- persistence -----------------------------------------------------------------
 
     def save(self, dir: Path) -> None:
+        """Write the index into a temporary directory beside `dir`, then rename it to `dir`
+        (replacing a previous index there); an interrupted save leaves `dir` as it was."""
         dir = Path(dir)
-        dir.mkdir(parents=True, exist_ok=True)
+        dir.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _fresh_dir(dir, "tmp")
+        old = None
+        try:
+            self._write(tmp)
+            if dir.exists():
+                old = _fresh_dir(dir, "old")
+                os.replace(dir, old)  # onto the empty directory just made
+            try:
+                os.replace(tmp, dir)
+            except OSError:
+                if old is not None:
+                    os.replace(old, dir)
+                    old = None
+                raise
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+            if old is not None:
+                shutil.rmtree(old, ignore_errors=True)
+
+    def _write(self, dir: Path) -> None:
         with open(dir / "chunks.jsonl", "w", encoding="utf-8") as f:
             for c in self.chunks.values():
                 f.write(json.dumps(asdict(c), ensure_ascii=False, sort_keys=True) + "\n")

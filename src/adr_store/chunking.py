@@ -41,6 +41,7 @@ from adr_store.records import Element, SourceRecord
 from adr_store.store import Store
 from adr_store.structure.text import collapse, trim
 
+CHUNKER_VERSION = 1  # bump on any change to how chunks or breadcrumbs are made
 BREADCRUMB_SEP = " > "
 BREADCRUMB_PART_CHARS = 80
 _SEPARATORS = list(CHUNKER_CONFIG["separators"])
@@ -55,8 +56,10 @@ class StoreChunk(Chunk):
 
 
 def chunker_config(max_tokens: int = 400, min_tokens: int = 40) -> dict:
-    """Every setting that shapes the chunks, for index fingerprints."""
-    return {"kind": "structure", "max_tokens": max_tokens, "min_tokens": min_tokens,
+    """Every setting that shapes the chunks, and the chunker's version, for index
+    fingerprints (which also hash the chunks' content)."""
+    return {"kind": "structure", "version": CHUNKER_VERSION, "max_tokens": max_tokens,
+            "min_tokens": min_tokens,
             "separators": _SEPARATORS, "overlap": 0, "breadcrumb_sep": BREADCRUMB_SEP,
             "breadcrumb_part_chars": BREADCRUMB_PART_CHARS}
 

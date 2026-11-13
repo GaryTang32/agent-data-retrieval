@@ -221,11 +221,35 @@ def test_the_saved_store_index_is_loaded_and_checked(mini, config, fakes):
     assert build("p1-struct-bc", mini, config, rebuild=True).source == "built"
 
 
+@pytest.mark.parametrize("change", ["breadcrumb", "version"])
+def test_an_index_saved_before_a_chunker_change_is_refused_then_rebuilt_from_the_cache(
+        change, mini, config, fakes, monkeypatch):
+    """The fingerprint covers what the chunks hold: a saved index from before a breadcrumb
+    change (or a CHUNKER_VERSION bump) is stale; rebuilding it embeds nothing new when the
+    embedded texts are unchanged (p1-struct embeds the body alone)."""
+    from adr_store import chunking
+
+    first = build("p1-struct", mini, config)
+    assert first.source == "built" and first.index.dense.n_new > 0
+    if change == "breadcrumb":
+        real = chunking.breadcrumb
+        monkeypatch.setattr(chunking, "breadcrumb",
+                            lambda title, path: "Z > " + real(title, path))
+    else:
+        monkeypatch.setattr(chunking, "CHUNKER_VERSION", chunking.CHUNKER_VERSION + 1)
+    with pytest.raises(runner.RunError, match="--rebuild"):
+        build("p1-struct", mini, config)
+    again = build("p1-struct", mini, config, rebuild=True)
+    assert again.source == "built" and again.fingerprint != first.fingerprint
+    assert again.index.dense.n_new == 0
+    assert build("p1-struct", mini, config).source == "loaded"
+
+
 def test_a_lexical_only_phase1_system_embeds_nothing(mini, config, fakes):
     full = build("p1-struct", mini, config)
-    n_calls = sum(len(c._embedder.calls) for c in fakes["caches"])
+    n_calls = sum(len(c._model.passage.calls) for c in fakes["caches"])
     lex = build("p1-struct", mini, config, lexical_only=True)
-    assert sum(len(c._embedder.calls) for c in fakes["caches"]) == n_calls
+    assert sum(len(c._model.passage.calls) for c in fakes["caches"]) == n_calls
     assert lex.fingerprint != full.fingerprint and lex.run_config()["lexical_only"] is True
     assert lex.run_config()["fusion"] is None and lex.w is None
     for item in mini[1]:

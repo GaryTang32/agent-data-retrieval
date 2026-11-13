@@ -11,13 +11,14 @@ import pytest
 from adr_eval.corpora.base import load_corpus
 from adr_eval.retrieval.fusion import linear, rrf
 from adr_eval.retrieval.lexical import BM25Index
-from adr_store.chunking import chunk_store, chunker_config
+from adr_store.chunking import CHUNKER_VERSION, chunk_store, chunker_config
 from adr_store.embedding import EmbeddingCache
 from adr_store.retrieval import Settings, StoreIndex
-from adr_store.retrieval.index import CHANNEL_K, fingerprint
+from adr_store.retrieval.index import CHANNEL_K, chunk_content_sha256, fingerprint
 from adr_store.retrieval.lexical import FieldBM25, indexed_text
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store
+from tests.store.test_embedding import FakeModel
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 MINI = FIXTURES / "mini"
@@ -41,7 +42,8 @@ class Recorder:
 
 
 def fake_cache(path: Path, model_hash: str = "a" * 64) -> EmbeddingCache:
-    return EmbeddingCache(path, "fake/model", embedder=Recorder(), model_hash=model_hash, dim=8)
+    return EmbeddingCache(path, "fake/model", model=FakeModel(Recorder()), model_hash=model_hash,
+                          dim=8)
 
 
 class FakeScorer:
@@ -140,10 +142,10 @@ def test_the_prefix_setting_embeds_breadcrumb_newline_body(mini_store, tmp_path)
     cache = fake_cache(tmp_path / "emb")
     build(mini_store, tmp_path, Settings(prefix=True), cache=cache)
     chunks = sorted(chunk_store(mini_store), key=lambda c: c.chunk_id)
-    assert cache._embedder.calls[0] == [f"{c.breadcrumb}\n{c.text}" for c in chunks]
+    assert cache._model.passage.calls[0] == [f"{c.breadcrumb}\n{c.text}" for c in chunks]
     plain = fake_cache(tmp_path / "emb")
     build(mini_store, tmp_path, Settings(), cache=plain)
-    assert plain._embedder.calls[0] == [c.text for c in chunks]
+    assert plain._model.passage.calls[0] == [c.text for c in chunks]
 
 
 def test_retrieve_is_the_baselines_fusion_of_both_channels(mini_store, tmp_path):
@@ -161,7 +163,7 @@ def test_retrieve_is_the_baselines_fusion_of_both_channels(mini_store, tmp_path)
 def test_a_lexical_only_index_embeds_nothing_and_ranks_by_bm25(mini_store, tmp_path):
     cache = fake_cache(tmp_path / "emb")
     idx = build(mini_store, tmp_path, Settings(w_bc=1), cache=cache, dense=False)
-    assert cache._embedder.calls == [] and idx.dense is None and idx.embedding is None
+    assert cache._model.passage.calls == [] and idx.dense is None and idx.embedding is None
     for q in QUERIES:
         assert idx.retrieve(q) == idx.lexical_hits(q)[:10]
     with pytest.raises(ValueError, match="dense"):
@@ -207,14 +209,15 @@ def test_the_reranker_is_a_pure_function_of_its_inputs():
 
 
 def test_fingerprint_changes_when_any_input_changes(mini_store, tmp_path):
-    chunks = [c.chunk_id for c in chunk_store(mini_store)]
+    chunks = chunk_store(mini_store)
     base = dict(snapshot="s" * 64, chunker=chunker_config(), settings=Settings(),
                 lexical=FieldBM25(0), embedding=("fake/model", "a" * 64), reranker=None,
-                chunk_ids=chunks)
+                chunks=chunks)
     variants = [
         dict(snapshot="t" * 64),
         dict(chunker=chunker_config(max_tokens=300)),
         dict(chunker=chunker_config(min_tokens=0)),
+        dict(chunker={**chunker_config(), "version": CHUNKER_VERSION + 1}),
         dict(settings=Settings(w_bc=1), lexical=FieldBM25(1)),
         dict(settings=Settings(prefix=True)),
         dict(settings=Settings(rerank=True), reranker=fake_reranker()),
@@ -223,7 +226,10 @@ def test_fingerprint_changes_when_any_input_changes(mini_store, tmp_path):
         dict(embedding=("fake/model", "b" * 64)),
         dict(embedding=("other/model", "a" * 64)),
         dict(embedding=None),
-        dict(chunk_ids=chunks[:-1]),
+        dict(chunks=chunks[:-1]),
+        dict(chunks=[replace(chunks[0], breadcrumb=chunks[0].breadcrumb + " > x"),
+                     *chunks[1:]]),
+        dict(chunks=[replace(chunks[0], text=chunks[0].text + " "), *chunks[1:]]),
     ]
     prints = {fingerprint(**base)} | {fingerprint(**{**base, **v}) for v in variants}
     assert len(prints) == 1 + len(variants)
@@ -231,7 +237,42 @@ def test_fingerprint_changes_when_any_input_changes(mini_store, tmp_path):
     a = fingerprint(**{**reranked, "reranker": fake_reranker("c" * 64)})
     b = fingerprint(**{**reranked, "reranker": fake_reranker("d" * 64)})
     assert a != b
-    assert fingerprint(**{**base, "chunk_ids": chunks[::-1]}) == fingerprint(**base)
+    assert fingerprint(**{**base, "chunks": chunks[::-1]}) == fingerprint(**base)
+    # what covers the content: chunk id, breadcrumb and text, not the element ids
+    moved = [replace(chunks[0], element_ids=()), *chunks[1:]]
+    assert fingerprint(**{**base, "chunks": moved}) == fingerprint(**base)
+
+
+def test_the_chunker_config_carries_the_chunker_version():
+    assert chunker_config()["version"] == CHUNKER_VERSION
+    assert isinstance(CHUNKER_VERSION, int)
+
+
+def test_chunk_content_hash_is_sha256_of_canonical_json_of_sorted_rows(mini_store):
+    chunks = chunk_store(mini_store)
+    rows = sorted([c.chunk_id, c.breadcrumb, c.text] for c in chunks)
+    blob = json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    assert chunk_content_sha256(chunks[::-1]) == hashlib.sha256(blob).hexdigest()
+
+
+def test_expected_fingerprint_follows_how_the_store_chunks_now(mini_store, tmp_path,
+                                                               monkeypatch):
+    from adr_store import chunking
+
+    before = {s: StoreIndex.expected_fingerprint(mini_store, s, fake_cache(tmp_path / "e"))
+              for s in (Settings(), Settings(prefix=True))}
+    lexical = StoreIndex.expected_fingerprint(mini_store, Settings(), dense=False)
+    real = chunking.breadcrumb
+    monkeypatch.setattr(chunking, "breadcrumb", lambda title, path: "Z > " + real(title, path))
+    for s, fp in before.items():
+        after = StoreIndex.expected_fingerprint(mini_store, s, fake_cache(tmp_path / "e"))
+        assert after != fp
+        assert after == build(mini_store, tmp_path, s).fingerprint
+    assert StoreIndex.expected_fingerprint(mini_store, Settings(), dense=False) != lexical
+    monkeypatch.setattr(chunking, "breadcrumb", real)
+    monkeypatch.setattr(chunking, "CHUNKER_VERSION", CHUNKER_VERSION + 1)
+    bumped = StoreIndex.expected_fingerprint(mini_store, Settings(), fake_cache(tmp_path / "e"))
+    assert bumped != before[Settings()]
 
 
 def test_index_fingerprint_follows_the_store_snapshot_and_settings(mini_store, tmp_path):
@@ -258,7 +299,7 @@ def test_expected_fingerprint_needs_no_embedding(mini_store, tmp_path):
         cache = fake_cache(tmp_path / "emb")
         rr = fake_reranker()
         expected = StoreIndex.expected_fingerprint(mini_store, settings, cache, rr)
-        assert cache._embedder.calls == [] and rr._scorer.calls == []
+        assert cache._model.passage.calls == [] and rr._scorer.calls == []
         assert expected == build(mini_store, tmp_path, settings, cache=cache,
                                  reranker=rr).fingerprint
     assert StoreIndex.expected_fingerprint(mini_store, Settings(), dense=False) == build(
@@ -303,10 +344,61 @@ def test_saved_chunks_keep_their_breadcrumbs_and_element_ids(mini_store, tmp_pat
     """Including text with Unicode line separators (PDF text can hold them)."""
     idx = build(mini_store, tmp_path)
     first = next(iter(idx.chunks))
-    idx.chunks[first] = replace(idx.chunks[first], text="a\u2028b", breadcrumb="x\u2029y")
+    chunks = [replace(c, text="a\u2028b", breadcrumb="x\u2029y") if c.chunk_id == first else c
+              for c in idx.chunks.values()]
+    lexical = FieldBM25(0)
+    lexical.build(chunks)
+    idx = StoreIndex(idx.snapshot, chunks, idx.settings, idx.chunker, lexical, idx.dense, None,
+                     idx.embedding)
     idx.save(tmp_path / "idx")
     loaded = StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
     assert loaded.chunks == idx.chunks and isinstance(loaded.chunks[first].element_ids, tuple)
+    assert loaded.fingerprint == idx.fingerprint
+
+
+def test_load_refuses_an_index_whose_chunk_text_or_breadcrumb_was_edited(mini_store, tmp_path):
+    idx = build(mini_store, tmp_path)
+    for field in ("text", "breadcrumb"):
+        idx.save(tmp_path / "idx")
+        path = tmp_path / "idx" / "chunks.jsonl"
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        rows[0][field] += " edited"
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        with pytest.raises(ValueError, match="fingerprint"):
+            StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
+
+
+def test_save_replaces_the_whole_directory(mini_store, tmp_path):
+    build(mini_store, tmp_path).save(tmp_path / "idx")
+    assert (tmp_path / "idx" / "dense.npy").is_file()
+    lex = build(mini_store, tmp_path, dense=False)
+    lex.save(tmp_path / "idx")
+    assert sorted(p.name for p in (tmp_path / "idx").iterdir()) == ["chunks.jsonl", "meta.json"]
+    assert StoreIndex.load(tmp_path / "idx").fingerprint == lex.fingerprint
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(".")) == []
+
+
+def test_an_interrupted_save_leaves_the_previous_index_intact(mini_store, tmp_path,
+                                                              monkeypatch):
+    idx = build(mini_store, tmp_path)
+    idx.save(tmp_path / "idx")
+    other = build(mini_store, tmp_path, Settings(prefix=True))
+
+    def boom(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(np, "save", boom)
+    with pytest.raises(OSError, match="disk full"):
+        other.save(tmp_path / "idx")
+    monkeypatch.undo()
+    loaded = StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
+    assert loaded.fingerprint == idx.fingerprint
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".")] == []
+    with pytest.raises(OSError, match="disk full"):  # a first save leaves nothing behind
+        monkeypatch.setattr(np, "save", boom)
+        other.save(tmp_path / "new")
+    assert not (tmp_path / "new").exists()
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".")] == []
 
 
 @pytest.mark.slow

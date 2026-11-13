@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -27,43 +27,28 @@ from adr_eval.retrieval.dense import _unit as unit
 
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
-Embedder = Callable[[list[str]], Iterable[np.ndarray]]
 NORM_TOLERANCE = 1e-3
-
-
-class _FakeModel:
-    """The two fastembed methods the dense path calls, over given embedder functions."""
-
-    def __init__(self, passage: Embedder, query: Embedder):
-        self._passage, self._query = passage, query
-
-    def passage_embed(self, texts, batch_size: int = _BATCH):
-        return self._passage(list(texts))
-
-    def query_embed(self, texts):
-        return self._query(list(texts))
 
 
 class EmbeddingCache:
     """`embed_texts(texts) -> (vectors, n_new)` over an on-disk cache.
 
-    `embedder`, `model_hash` and `dim` replace the fastembed model, the hash of its ONNX file
-    and its vector dimension (for tests; `query_embedder` embeds queries, default `embedder`);
-    by default they come from a `DenseIndex` with the same model name and fastembed's model
-    list, so the model is loaded only when a text is missing from the cache or a query is
-    embedded.
+    `model`, `model_hash` and `dim` replace the fastembed model (any object with fastembed's
+    `passage_embed(texts, batch_size)` and `query_embed(texts)`), the hash of its ONNX file and
+    its vector dimension (for tests); by default they come from a `DenseIndex` with the same
+    model name and fastembed's model list, so the model is loaded only when a text is missing
+    from the cache or a query is embedded.
     """
 
     def __init__(self, cache_dir: Path, model_name: str = DEFAULT_MODEL,
                  model_cache_dir: Path = Path(".cache/fastembed"),
-                 embedder: Embedder | None = None, model_hash: str | None = None,
-                 dim: int | None = None, query_embedder: Embedder | None = None):
+                 model: object | None = None, model_hash: str | None = None,
+                 dim: int | None = None):
         self.cache_dir = Path(cache_dir)
         self.model_name = model_name
         self._dense = DenseIndex(model_name, cache_dir=self.cache_dir,
                                  model_cache_dir=Path(model_cache_dir))
-        self._embedder = embedder
-        self._query_embedder = query_embedder
+        self._model = model
         self._model_hash = model_hash
         self._dim = dim
 
@@ -87,8 +72,8 @@ class EmbeddingCache:
 
     def model(self):
         """The embedding model (loaded on first use): `passage_embed` and `query_embed`."""
-        if self._embedder is not None:
-            return _FakeModel(self._embedder, self._query_embedder or self._embedder)
+        if self._model is not None:
+            return self._model
         return self._dense._get_model()
 
     def _embed(self, texts: list[str]) -> Iterable[np.ndarray]:

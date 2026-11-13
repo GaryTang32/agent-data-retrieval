@@ -26,9 +26,23 @@ class FakeEmbedder:
             yield np.random.default_rng(seed).normal(size=8) * 3.0
 
 
+class FakeModel:
+    """The two fastembed methods the dense path calls, over given embedder functions
+    (`query` defaults to `passage`)."""
+
+    def __init__(self, passage, query=None):
+        self.passage, self.query = passage, query or passage
+
+    def passage_embed(self, texts, batch_size: int = 32):
+        return self.passage(list(texts))
+
+    def query_embed(self, texts):
+        return self.query(list(texts))
+
+
 def fake_cache(path, model_hash="a" * 64) -> tuple[EmbeddingCache, FakeEmbedder]:
     fake = FakeEmbedder()
-    return EmbeddingCache(path, "fake/model", embedder=fake, model_hash=model_hash,
+    return EmbeddingCache(path, "fake/model", model=FakeModel(fake), model_hash=model_hash,
                           dim=8), fake
 
 
@@ -81,7 +95,7 @@ def test_empty_input(tmp_path):
 
 def test_the_embedder_must_return_one_vector_per_text(tmp_path):
     cache = EmbeddingCache(tmp_path, "fake/model", model_hash="a" * 64, dim=4,
-                           embedder=lambda texts: iter([np.ones(4)]))
+                           model=FakeModel(lambda texts: iter([np.ones(4)])))
     with pytest.raises(ValueError, match="2 texts"):
         cache.embed_texts(["alpha", "beta"])
 
