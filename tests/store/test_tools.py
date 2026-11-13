@@ -2,11 +2,17 @@
 bullet). Fake embedder and reranker, or lexical-only indexes; nothing reads `data/` or
 `.cache/`."""
 
+import gc
 import json
+import os
 import re
 import shutil
+import signal
+import subprocess
+import sys
 import threading
 import time
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -601,6 +607,11 @@ def damage(store: Store, how: str) -> None:
         (root / "active.json").write_text("{")
     elif how == "active.json incomplete":
         (root / "active.json").write_text("{}")
+    elif how == "active.json deeply nested":
+        (root / "active.json").write_text("[" * 100_000 + "]" * 100_000)
+    elif how.startswith("active.json "):  # "active.json <field>=<JSON value>"
+        name, value = how.removeprefix("active.json ").split("=", 1)
+        (root / "active.json").write_text(json.dumps({**active, name: json.loads(value)}))
     elif how == "fingerprint mismatch":
         meta = json.loads((fp / "meta.json").read_text())
         (fp / "meta.json").write_text(json.dumps({**meta, "fingerprint": "0" * 64}))
@@ -610,12 +621,15 @@ def damage(store: Store, how: str) -> None:
         raise AssertionError(how)
 
 
+DAMAGES = ("dir missing", "dir moved", "active.json corrupt", "active.json incomplete",
+           "fingerprint mismatch", "chunks.jsonl missing", "active.json deeply nested",
+           "active.json snapshot=5", "active.json system=null", "active.json fingerprint=7",
+           'active.json lexical_only="yes"', "active.json rerank=1")
+
+
 @pytest.mark.parametrize("command, how", [
-    *[("search", how) for how in ("dir missing", "dir moved", "active.json corrupt",
-                                  "active.json incomplete", "fingerprint mismatch",
-                                  "chunks.jsonl missing")],
-    *[("read", how) for how in ("dir missing", "dir moved", "active.json corrupt",
-                                "active.json incomplete", "chunks.jsonl missing")],
+    *[("search", how) for how in DAMAGES],
+    *[("read", how) for how in DAMAGES],
 ])
 def test_a_missing_or_damaged_active_index_is_refused_and_logged(store, capsys, command, how):
     hit = lexical_cli(store, capsys)
@@ -643,6 +657,18 @@ def test_an_unexpected_error_is_logged_and_exits_3(store, capsys, monkeypatch):
     lines = log_lines(store)
     assert len(lines) == 2 and all(ln["tool"] == "read" for ln in lines)
     assert all("RuntimeError: boom" in ln["error"] and ln["results"] == [] for ln in lines)
+
+
+def test_an_interrupted_call_is_logged_and_re_raised(store, monkeypatch):
+    def interrupted(*a, **kw):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(tools.Tools, "_read_impl", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        tools.Tools(store.path).read(a_doc(store))
+    lines = log_lines(store)
+    assert len(lines) == 1 and lines[0]["tool"] == "read"
+    assert lines[0]["error"] == "interrupted" and lines[0]["results"] == []
 
 
 BACKTRACK = r"(\w+\s?)+X"
@@ -683,6 +709,136 @@ def test_cli_grep_timeout(slow_store, capsys):
                          "--timeout", "0.5")
     assert code == 2 and out == "" and "longer than 0.5 s" in err
     assert len(log_lines(slow_store)) == 1
+
+
+def make_store(path: Path, texts: list[str]) -> Store:
+    s = Store.create(path)
+    for i, text in enumerate(texts):
+        s.add(*doc(text.encode(), "txt", f"file://d{i}.txt"))
+    s.commit()
+    return Store.open(path)
+
+
+def test_the_grep_deadline_is_cumulative_over_batches(tmp_path, monkeypatch):
+    rx, n = re.compile(r"\w*X", re.MULTILINE), 2000  # quadratic on a run of letters
+
+    def seconds(text):
+        t0 = time.monotonic()
+        rx.search(text)
+        return time.monotonic() - t0
+
+    while (per_doc := sorted(seconds("a" * n) for _ in range(3))[1]) < 0.2:
+        n = int(n * 1.5)
+    s = make_store(tmp_path / "s", [f"{i} {'a' * n}\n" for i in range(20)])
+    monkeypatch.setattr(tools, "GREP_BATCH_CHARS", 1)  # one document per request
+    batches = []
+
+    class Counted(tools._GrepWorker):
+        def scan(self, *a):
+            batches.append(1)
+            return super().scan(*a)
+
+    monkeypatch.setattr(tools, "_GrepWorker", Counted)
+    t, timeout = tools.Tools(s.path), 6 * per_doc  # each batch alone is well within it
+    t0 = time.monotonic()
+    with pytest.raises(tools.ToolError, match="longer than"):
+        t.grep(r"\w*X", timeout=timeout)
+    assert time.monotonic() - t0 < timeout + 1.5  # not up to timeout per batch
+    assert len(batches) >= 3
+
+
+ORPHAN_CHILD = r"""
+import os, sys
+from pathlib import Path
+from adr_store import tools
+
+class Announced(tools._GrepWorker):
+    def __enter__(self):
+        super().__enter__()
+        tmp = Path(sys.argv[2] + ".tmp")
+        tmp.write_text(str(self.proc.pid))
+        os.replace(tmp, sys.argv[2])
+        return self
+
+tools._GrepWorker = Announced
+tools.Tools(Path(sys.argv[1])).grep(sys.argv[3], timeout=60)
+"""
+
+
+def gone(pid: int) -> bool:
+    """No process `pid`, or only its zombie."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except FileNotFoundError:
+        return True
+    return stat.rsplit(")", 1)[1].split()[0] in ("Z", "X")
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux /proc and prctl")
+@pytest.mark.parametrize("sig", [signal.SIGKILL, signal.SIGTERM])
+def test_the_grep_worker_does_not_outlive_its_parent(slow_store, tmp_path, sig):
+    pid_file = tmp_path / "worker.pid"
+    child = subprocess.Popen([sys.executable, "-c", ORPHAN_CHILD, str(slow_store.path),
+                              str(pid_file), BACKTRACK], stdin=subprocess.DEVNULL)
+    worker = None
+    try:
+        deadline = time.monotonic() + 60
+        while not pid_file.exists():
+            assert child.poll() is None and time.monotonic() < deadline
+            time.sleep(0.05)
+        worker = int(pid_file.read_text())
+        limits = Path(f"/proc/{worker}/limits").read_text()
+        cpu = re.search(r"^Max cpu time\s+(\S+)\s+(\S+)", limits, re.MULTILINE).groups()
+        time.sleep(0.2)  # the worker is backtracking
+        assert not gone(worker)
+        child.send_signal(sig)
+        child.wait(30)
+        deadline = time.monotonic() + 5
+        while not gone(worker) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert gone(worker)
+        assert cpu == ("62", "63")  # ceil(60) + 2 s of CPU, then SIGKILL at 1 s more
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()
+        if worker is not None and not gone(worker):
+            os.kill(worker, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("script, start, match", [
+    ("import sys; sys.exit(7)", 60.0, r"stopped \(exit code 7\)"),
+    ("import time; time.sleep(60)", 0.5, r"did not start within 0.5 s"),
+])
+def test_a_grep_worker_that_fails_to_start_is_reaped(store, tmp_path, monkeypatch, script,
+                                                      start, match):
+    (tmp_path / "worker.py").write_text(script)
+    monkeypatch.setattr(tools, "GREP_WORKER", str(tmp_path / "worker.py"))
+    monkeypatch.setattr(tools, "WORKER_START", start)
+    workers = []
+
+    class Recorded(tools._GrepWorker):
+        def __init__(self, *a):
+            super().__init__(*a)
+            workers.append(self)
+
+    monkeypatch.setattr(tools, "_GrepWorker", Recorded)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        t0 = time.monotonic()
+        with pytest.raises(RuntimeError, match=match):
+            tools.Tools(store.path).grep("refund")
+        assert time.monotonic() - t0 < 30
+        (w,) = workers
+        assert w.proc.returncode is not None  # waited for: no zombie
+        assert w.requests.closed and w.responses.closed
+        pid = w.proc.pid
+        workers.clear()
+        del w
+        gc.collect()
+    assert not [c for c in caught if issubclass(c.category, ResourceWarning)]
+    assert gone(pid)
+    assert "grep worker" in log_lines(store)[0]["error"]
 
 
 @pytest.mark.parametrize("timeout", [0, -1, 60.5, True, "5"])

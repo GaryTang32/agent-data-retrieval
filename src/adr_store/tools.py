@@ -19,8 +19,9 @@ run's.
 
 Search returns the active index's ranking exactly (`StoreIndex.retrieve`: best score first,
 ties by chunk id); a reranked index scores its top `RERANK_TOP` (50) fused chunks only, so it
-refuses a larger `top`. A missing or damaged active index (its directory, `active.json`,
-`chunks.jsonl`, or a fingerprint that does not recompute) is refused with "run `adr index`".
+refuses a larger `top`. `search` and `read --chunk` load the active index the same way and
+refuse a missing or damaged one (its directory, `active.json` or a field of it of the wrong
+type, `chunks.jsonl`, or a fingerprint that does not recompute) with "run `adr index`".
 Read returns `store.text(doc_id)[start:end]` (the store checks the text's hash; an element's
 or chunk's range is checked against its own hash or text).
 
@@ -36,7 +37,10 @@ match's `\n`-delimited line, clipped to `CONTEXT_CHARS` on each side, with `\r`,
 every other control character (and U+2028, U+2029) shown as a space. The scan runs in a
 worker process (`adr_store.grep_worker`) with a deadline (`timeout`, default 10 s, at most
 60 s) on the time spent matching; a pattern that runs longer (catastrophic backtracking, as
-`(\w+\s?)+X`) is stopped and refused. Results are those of the same scan in process.
+`(\w+\s?)+X`) is stopped and refused. Results are those of the same scan in process. The
+worker limits its own CPU time and dies with its parent (see `adr_store.grep_worker`).
+Limits: the pattern is compiled in this process, outside the deadline; the worker is
+POSIX-only (it is handed its pipes as file descriptors).
 
 Document, element and chunk ids may be given as a unique prefix of at least 8 characters;
 results always carry full ids.
@@ -76,6 +80,7 @@ from adr_store.store import Store, StoreError, write_atomic
 GREP_MAX = 100
 GREP_TIMEOUT, GREP_TIMEOUT_MAX = 10.0, 60.0  # seconds a grep pattern may spend matching
 GREP_BATCH_CHARS = 4_000_000  # text sent to the grep worker per request
+GREP_WORKER = grep_worker.__file__  # the worker's script
 WORKER_START = 60.0  # seconds the grep worker may take to start
 SEARCH_TOP = 10
 CONTEXT_CHARS = 80  # characters of context on each side of a grep match
@@ -271,6 +276,11 @@ def _context(text: str, start: int, end: int) -> str:
     return _CONTROL.sub(" ", out)
 
 
+# the fields of active.json the tools use, with their types
+ACTIVE_FIELDS = {"system": str, "snapshot": str, "fingerprint": str, "lexical_only": bool,
+                 "rerank": bool, "w": float | int | type(None)}
+
+
 def _damaged(e: Exception | str) -> ToolError:
     reason = e if isinstance(e, str) else f"{type(e).__name__}: {e}"
     return ToolError(f"active index missing or damaged: {reason}; run `adr index`")
@@ -286,7 +296,8 @@ class _GrepWorker:
         r_res, w_res = os.pipe()
         try:
             self.proc = subprocess.Popen(
-                [sys.executable, "-I", grep_worker.__file__, str(r_req), str(w_res)],
+                [sys.executable, "-I", GREP_WORKER, str(r_req), str(w_res), repr(float(timeout)),
+                 str(os.getpid())],
                 pass_fds=(r_req, w_res), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         except BaseException:
             for fd in (r_req, w_req, r_res, w_res):
@@ -298,8 +309,15 @@ class _GrepWorker:
         self.responses = Connection(r_res, writable=False)
 
     def __enter__(self) -> _GrepWorker:
-        if self._receive(WORKER_START) != "ready":
-            raise RuntimeError("the grep worker did not start properly")
+        try:
+            ready = self._receive(WORKER_START)
+            if ready is None:
+                raise RuntimeError(f"the grep worker did not start within {WORKER_START:g} s")
+            if ready != "ready":
+                raise RuntimeError(f"the grep worker did not start properly ({ready!r})")
+        except BaseException:
+            self._stop()
+            raise
         return self
 
     def __exit__(self, *exc) -> None:
@@ -310,6 +328,11 @@ class _GrepWorker:
         except (OSError, subprocess.TimeoutExpired):
             pass
         finally:
+            self._stop()
+
+    def _stop(self) -> None:
+        """Stop the worker if it still runs, wait for it, close the pipes."""
+        try:
             if self.proc.poll() is None:
                 self.proc.terminate()
                 try:
@@ -317,6 +340,7 @@ class _GrepWorker:
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
                     self.proc.wait()
+        finally:
             self.requests.close()
             self.responses.close()
 
@@ -326,8 +350,11 @@ class _GrepWorker:
         try:
             return self.responses.recv()
         except EOFError:
-            raise RuntimeError(f"the grep worker stopped (exit code {self.proc.poll()})") \
-                from None
+            try:
+                code = self.proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                code = None
+            raise RuntimeError(f"the grep worker stopped (exit code {code})") from None
 
     def scan(self, pattern: str, flags: int, limit: int, docs: list[tuple[str, str]]):
         """`grep_worker.scan` of `docs` in the worker, within what is left of the deadline."""
@@ -389,9 +416,13 @@ class Tools:
                  "snapshot": self.snapshot}
         try:
             result, ids, extra = fn()
-        except Exception as e:  # refused (ToolError, StoreError) or unexpected: logged
-            known = isinstance(e, (ToolError, StoreError))
-            error = str(e) if known else f"unexpected {type(e).__name__}: {e}"
+        except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
+            if isinstance(e, (ToolError, StoreError)):
+                error = str(e)
+            elif isinstance(e, KeyboardInterrupt):
+                error = "interrupted"
+            else:
+                error = f"unexpected {type(e).__name__}: {e}"
             self._append_log({**entry, "results": [], "error": error})
             if isinstance(e, StoreError):
                 raise ToolError(str(e)) from e
@@ -511,13 +542,17 @@ class Tools:
             raise ToolError(f"{self.store_path}: no index; run `adr index` first")
         try:
             active = json.loads(path.read_text(encoding="utf-8"))
-            missing = [k for k in ("system", "snapshot", "fingerprint", "lexical_only",
-                                   "rerank", "w") if k not in active]
+            if not isinstance(active, dict):
+                raise TypeError(f"not an object: {type(active).__name__}")
+            missing = [k for k in ACTIVE_FIELDS if k not in active]
             if missing:
                 raise KeyError(", ".join(missing))
-            if not isinstance(active["fingerprint"], str) or not active["fingerprint"]:
-                raise ValueError(f"fingerprint {active['fingerprint']!r}")
-        except (OSError, ValueError, KeyError, TypeError) as e:
+            for k, kind in ACTIVE_FIELDS.items():
+                v = active[k]
+                if not isinstance(v, kind) or (kind is not bool and isinstance(v, bool)) or \
+                        (kind is str and not v):
+                    raise TypeError(f"{k} {_short(repr(v))}")
+        except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
             raise _damaged(f"{path}: {type(e).__name__}: {e}") from e
         if active["snapshot"] != self.snapshot:
             raise ToolError(f"the index ({active['system']}) is for snapshot "
@@ -535,7 +570,7 @@ class Tools:
             try:
                 idx = StoreIndex.load(self.index_root / active["fingerprint"], cache=cache,
                                       reranker=reranker)
-            except (OSError, ValueError, KeyError, TypeError) as e:
+            except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
                 raise _damaged(e) from e
             if idx.fingerprint != active["fingerprint"]:
                 raise _damaged(f"{self.index_root}: loaded index {idx.fingerprint} is not the "
@@ -544,22 +579,11 @@ class Tools:
         return self._index, active
 
     def _chunk_rows(self) -> dict[str, dict]:
-        """The active index's chunks (from its saved file; no BM25 or vectors needed)."""
-        if self._chunks is None and self._index is not None:
-            self._chunks = {cid: asdict(c) for cid, c in self._index.chunks.items()}
+        """The active index's chunks, from the index as `search` loads it (so its fingerprint
+        is checked the same way)."""
         if self._chunks is None:
-            active = self._active_record()
-            path = self.index_root / active["fingerprint"] / "chunks.jsonl"
-            rows = {}
-            try:
-                with open(path, encoding="utf-8") as f:
-                    for line in f:
-                        if line.strip():
-                            row = json.loads(line)
-                            rows[row["chunk_id"]] = row
-            except (OSError, ValueError, KeyError, TypeError) as e:
-                raise _damaged(e) from e
-            self._chunks = rows
+            idx, _ = self._active_index()
+            self._chunks = {cid: asdict(c) for cid, c in idx.chunks.items()}
         return self._chunks
 
     # -- search -----------------------------------------------------------------------

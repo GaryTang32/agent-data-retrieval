@@ -1,14 +1,23 @@
 """The scan behind `adr grep` (`adr_store.tools`), run in a worker process so that a pattern
 that backtracks for minutes can be stopped at a deadline. The tools start it as
-`python -I grep_worker.py <request fd> <response fd>`: a fresh interpreter that imports only
-the standard library, so it starts in a few hundredths of a second (a `multiprocessing` spawn
-child re-imports the parent's main module, which for `adr` is the whole command line, about
-1.5 s). `scan` is also what an in-process scan runs.
+`python -I grep_worker.py <request fd> <response fd> <timeout> <parent pid>`: a fresh
+interpreter that imports only the standard library, so it starts in a few hundredths of a
+second (a `multiprocessing` spawn child re-imports the parent's main module, which for `adr`
+is the whole command line, about 1.5 s). `scan` is also what an in-process scan runs.
+
+The worker does not outlive its parent: it limits its own CPU time to `timeout` + 2 s
+(`RLIMIT_CPU`, all requests together, as the parent's deadline; SIGKILL 1 s later), and on
+Linux asks to be killed when the parent dies (`PR_SET_PDEATHSIG`), then exits at once if the
+parent is already gone. POSIX only (the pipes are passed as file descriptors).
 """
 
 from __future__ import annotations
 
+import math
+import os
 import re
+import resource
+import signal
 import sys
 from multiprocessing.connection import Connection
 
@@ -53,6 +62,28 @@ def serve(requests: Connection, responses: Connection) -> None:
         responses.close()
 
 
+PR_SET_PDEATHSIG = 1  # <linux/prctl.h>
+
+
+def bound(timeout: float, parent: int) -> None:
+    """Limit the worker's CPU time to `timeout` (+ 2 s) and tie it to the `parent` process."""
+    soft, hard = math.ceil(timeout) + 2, math.ceil(timeout) + 3
+    limit = resource.getrlimit(resource.RLIMIT_CPU)[1]
+    if limit != resource.RLIM_INFINITY:  # an unprivileged process cannot raise it
+        soft, hard = min(soft, limit), min(hard, limit)
+    resource.setrlimit(resource.RLIMIT_CPU, (soft, hard))
+    if sys.platform.startswith("linux"):
+        try:
+            import ctypes
+
+            ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0)
+        except (OSError, AttributeError):  # best effort; the CPU limit still applies
+            pass
+    if os.getppid() != parent:  # the parent died before the death signal was set
+        sys.exit(1)
+
+
 if __name__ == "__main__":
+    bound(float(sys.argv[3]), int(sys.argv[4]))
     serve(Connection(int(sys.argv[1]), writable=False),
           Connection(int(sys.argv[2]), readable=False))
