@@ -1,9 +1,9 @@
 # agent-data-retrieval
 
 > **Status: work in progress.** This repository is under active development and is not
-> ready for use. So far it contains the research, the design, and the Phase 0 evaluation
-> harness. The toolkit itself (Phases 1–6 below) has not been built yet. Interfaces, file
-> formats and results may change without notice.
+> ready for use. So far it contains the research, the design, the Phase 0 evaluation
+> harness and a recorded baseline. The toolkit itself (Phases 1–6 below) is not built yet:
+> Phase 1 has started. Interfaces, file formats and results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -39,6 +39,57 @@ Two terms are used precisely:
   harness comes first: every later component is accepted only if it beats the recorded
   baseline on its track without breaking determinism.
 
+## Progress at a glance
+
+```mermaid
+flowchart LR
+    P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
+    P1["Phase 1<br/>Evidence store<br/>🔄 1 of 6 steps"]
+    P2["Phase 2<br/>Permissions and<br/>applicability"]
+    P3["Phase 3<br/>Typed database"]
+    P4["Phase 4<br/>Knowledge units"]
+    P5["Phase 5<br/>Graph and<br/>navigation"]
+    P6["Phase 6<br/>Closed loop and<br/>governance"]
+    P0 --> P1 --> P2
+    P2 --> P3 --> P5
+    P2 --> P4 --> P5
+    P5 --> P6
+    classDef done fill:#d8f0e3,stroke:#1d7a4f,color:#0b3d27
+    classDef active fill:#fff1cc,stroke:#a86b00,color:#4a3000
+    classDef todo fill:#eef0f4,stroke:#8a93a6,color:#3a4152
+    class P0 done
+    class P1 active
+    class P2,P3,P4,P5,P6 todo
+```
+
+| Phase | What it delivers | Status | Steps done | Progress |
+|---|---|---|---|---|
+| 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
+| 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | 🔄 In progress | 1 of 6 | `██░░░░░░░░` |
+| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data | Not started | – | `░░░░░░░░░░` |
+| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | Not started | – | `░░░░░░░░░░` |
+| 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
+| 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
+| 6. Closed loop and governance | Audits, gap mining, exporters, a public harness | Not started | – | `░░░░░░░░░░` |
+
+Phases 3 and 4 can run in parallel. "Steps" are the steps in each phase's implementation plan,
+so a bar shows work done, not quality reached: a phase counts as done only when its exit
+criteria pass.
+
+### Phase 1 steps
+
+| # | Step | Purpose | Status |
+|---|---|---|---|
+| 1 | Metric definitions version 2 | Scoring rules that do not reward the wrong thing, settled before anything is measured against them | ✅ Merged ([`results/README.md`](results/README.md)) |
+| 2 | Record format, structure parsers, store | A lossless, content-addressed record of every document and its sections | 🔄 Building |
+| 3 | Structure-led chunks | Chunks that follow headings and carry a breadcrumb | Not started |
+| 4 | Retrieval over the store | Breadcrumb-weighted keyword search, dense search, an optional reranker | Not started |
+| 5 | `search`, `read` and `grep` tools | The interface agents call, with a retrieval log | Not started |
+| 6 | Measure against the baseline | Keep each component only if it beats the baseline | Not started |
+
+Design: [`docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md`](docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md).
+Plan: [`docs/superpowers/plans/2026-11-13-phase1-evidence-store.md`](docs/superpowers/plans/2026-11-13-phase1-evidence-store.md).
+
 ## Plan
 
 The roadmap runs from Phase 0 to Phase 6, and each phase is gated. The order follows one principle: build what is hard to
@@ -48,14 +99,14 @@ design targets taken from the research, not results.
 | Phase | Scope | Status |
 |---|---|---|
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
-| **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **In progress**: the scoring rules are settled (metric definitions version 2); the evidence store is next |
+| **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **In progress**: metric definitions version 2 merged; the evidence store is being built |
 | **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | Not started |
 | **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | Not started |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
 | **5. Graph and navigation layers** | Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy. Each layer is kept only if it beats the earlier phases on accuracy or tokens. | Not started |
 | **6. Closed loop, interoperability and governance** | Gap mining and audits, spec v1.0, exporters to external catalogs and graph stores, a public neutral harness. | Not started |
 
-Phases 3 and 4 can run in parallel. The full roadmap with exit criteria is in
+The full roadmap with exit criteria is in
 [`reports/Agent data retrieval research summary.md`](reports/Agent%20data%20retrieval%20research%20summary.md).
 
 ### Phase 0 status
