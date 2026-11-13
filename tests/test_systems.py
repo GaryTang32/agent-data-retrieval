@@ -69,14 +69,21 @@ def test_the_registry_names_every_system():
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["baseline-rrf", "baseline-linear"])
 def test_baselines_through_the_registry_give_the_recorded_ranked_lists(name, mini, config):
-    """Recorded with the code before the registry (tests/fixtures/baseline_rankings_mini.json)."""
+    """Recorded with the code before the registry (tests/fixtures/baseline_rankings_mini.json).
+
+    The ranked chunk ids must match exactly. Scores are compared to 2e-3: the fixture was
+    recorded on one machine, and the dense vectors (ONNX on CPU) differ in the fourth decimal
+    on CPUs with other instruction sets, as CI runners do. Determinism on one machine is
+    tested elsewhere (identical rankings run to run)."""
     s = build(name, mini, config)
     assert s.fingerprint == RECORDED["fingerprint"]
     assert s.fingerprint == runner.expected_fingerprint(mini[0])
     assert s.w == (RECORDED["linear_w"] if name == "baseline-linear" else None)
     for item in mini[1]:
-        got = [[c, sc] for c, sc in s.retrieve(item.question)]
-        assert got == RECORDED["rankings"][item.id][name], item.id
+        got = list(s.retrieve(item.question))
+        want = RECORDED["rankings"][item.id][name]
+        assert [c for c, _ in got] == [c for c, _ in want], item.id
+        assert [sc for _, sc in got] == pytest.approx([sc for _, sc in want], abs=2e-3), item.id
     assert set(s.chunks) >= {c for r in RECORDED["rankings"].values() for c, _ in r[name]}
 
 
