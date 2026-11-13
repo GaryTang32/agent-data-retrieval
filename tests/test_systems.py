@@ -243,6 +243,48 @@ def test_the_saved_store_index_is_loaded_and_checked(mini, config, fakes):
     assert build("p1-struct-bc", mini, config, rebuild=True).source == "built"
 
 
+def test_a_saved_index_that_load_refuses_is_a_run_error_through_the_cli(
+        tmp_path, fakes, monkeypatch, capsys):
+    """An edited chunk text keeps meta.json's fingerprint (so the quick staleness check
+    passes) but fails load's recomputation: exit 2 with the fix, no traceback."""
+    conftest_config = runner.load_config
+    index_dir = tmp_path / "index"
+    monkeypatch.setattr(runner, "load_config", lambda *a: {**conftest_config(*a),
+                                                           "index_dir": str(index_dir)})
+    args = ["retrieval", "mini", "--system", "p1-struct-bc", "--split", "test", "--out",
+            str(tmp_path / "runs")]
+    assert main(args) == 0
+    chunks = index_dir / "mini-store-prefix" / "chunks.jsonl"
+    rows = [json.loads(line) for line in chunks.read_text().splitlines()]
+    rows[0]["text"] += " edited"
+    chunks.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    capsys.readouterr()
+    assert main(args) == 2
+    err = capsys.readouterr().err
+    assert "fingerprint mismatch" in err and "fix: rerun with --rebuild" in err
+    assert "Traceback" not in err
+    assert main([*args, "--rebuild"]) == 0
+
+
+def test_an_index_replaced_between_check_and_load_is_a_run_error(mini, config, fakes,
+                                                                 monkeypatch):
+    """Another run may save a different index after the staleness check; the loaded index
+    must still be the expected one."""
+    from adr_store.retrieval import StoreIndex
+
+    build("p1-struct-bc", mini, config)
+    real = StoreIndex.load.__func__
+
+    def load(cls, dir, **kw):
+        idx = real(cls, dir, **kw)
+        idx.fingerprint = "f" * 64
+        return idx
+
+    monkeypatch.setattr(StoreIndex, "load", classmethod(load))
+    with pytest.raises(runner.RunError, match="--rebuild"):
+        build("p1-struct-bc", mini, config)
+
+
 @pytest.mark.parametrize("change", ["breadcrumb", "version"])
 def test_an_index_saved_before_a_chunker_change_is_refused_then_rebuilt_from_the_cache(
         change, mini, config, fakes, monkeypatch):

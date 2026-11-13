@@ -11,17 +11,23 @@ reranker model hashes, the per-channel candidate counts, the sorted chunk ids an
 of the chunks' content (`chunk_content_sha256`: chunk id, breadcrumb and text), so a change
 in how the code chunks an unchanged snapshot changes it too. `save(dir)` writes the index
 into a temporary directory beside `dir` and renames it into place; `load(dir)` refuses a
-stored fingerprint that does not match the one recomputed on load.
+stored fingerprint that does not match the one recomputed on load, and a chunk whose id is
+not `make_chunk_id` of its document and offsets. Saves and loads of one index directory are
+serialized by `flock` on a sibling lock file (POSIX only).
 """
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
+import re
 import shutil
+import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
@@ -29,7 +35,7 @@ from typing import Literal
 import numpy as np
 
 from adr_eval.models import jsonl_lines
-from adr_eval.retrieval.chunker import TOKENIZER_CONFIG
+from adr_eval.retrieval.chunker import TOKENIZER_CONFIG, make_chunk_id
 from adr_eval.retrieval.fusion import linear, rrf
 from adr_store.chunking import StoreChunk, chunk_store, chunker_config
 from adr_store.embedding import EmbeddingCache
@@ -99,6 +105,56 @@ def _fresh_dir(beside: Path, kind: str) -> Path:
     path = beside.parent / f".{beside.name}.{os.getpid()}.{uuid.uuid4().hex}.{kind}"
     path.mkdir()
     return path
+
+
+def _siblings(dir: Path, before: float) -> list[Path]:
+    """The `.<name>.<pid>.<hex>.tmp|old` directories beside `dir` older than `before`."""
+    pattern = re.compile(rf"\.{re.escape(dir.name)}\.\d+\.[0-9a-f]{{32}}\.(tmp|old)")
+    found = []
+    for p in dir.parent.iterdir():
+        if pattern.fullmatch(p.name):
+            try:
+                if p.lstat().st_mtime < before:
+                    found.append(p)
+            except FileNotFoundError:
+                pass
+    return found
+
+
+@contextmanager
+def _locked(dir: Path, exclusive: bool) -> Iterator[None]:
+    """Hold `flock` on `.<name>.lock` beside `dir`: exclusive for a save, shared for a load.
+    The lock file stays (removing it would let two holders lock different files). A load
+    from a directory where the lock file cannot be opened goes ahead unlocked."""
+    lock = dir.parent / f".{dir.name}.lock"
+    try:
+        fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o666)
+    except OSError:
+        if exclusive:
+            raise
+        try:
+            fd = os.open(lock, os.O_RDONLY)
+        except OSError:
+            yield
+            return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        yield
+    finally:
+        os.close(fd)  # releases the lock
+
+
+def _check_position(dir: Path, n: int, row: dict) -> None:
+    """Refuse a stored chunk whose offsets are not a non-empty span or whose id is not
+    `make_chunk_id` of its doc id and offsets (the fingerprint does not hash positions)."""
+    start, end = row.get("char_start"), row.get("char_end")
+    if not all(type(v) is int for v in (start, end)) or not 0 <= start < end:
+        raise ValueError(f"{dir}: chunks.jsonl line {n}: offsets [{start!r}, {end!r}) are not "
+                         f"a non-empty span of non-negative integers; rebuild the index")
+    if row.get("chunk_id") != make_chunk_id(row.get("doc_id"), start, end):
+        raise ValueError(f"{dir}: chunks.jsonl line {n}: chunk_id {row.get('chunk_id')!r} is "
+                         f"not the id of {row.get('doc_id')!r} [{start}, {end}); rebuild the "
+                         f"index")
 
 
 def _default_cache() -> EmbeddingCache:
@@ -220,28 +276,40 @@ class StoreIndex:
     # -- persistence -----------------------------------------------------------------
 
     def save(self, dir: Path) -> None:
-        """Write the index into a temporary directory beside `dir`, then rename it to `dir`
-        (replacing a previous index there); an interrupted save leaves `dir` as it was."""
+        """Write the index to `dir`, replacing a previous index there.
+
+        The index is written into `.<name>.<pid>.<hex>.tmp` beside `dir`; the previous index
+        is renamed to `.<name>.<pid>.<hex>.old` and the new one renamed into place. Linux
+        cannot swap two directories in one rename, so between the two renames there is a
+        brief window with no index at `dir`. A save that fails or is interrupted by any
+        exception (KeyboardInterrupt included) leaves the previous index at `dir`, or no
+        index if there was none. A process killed between the renames may leave `dir`
+        missing; the next run then rebuilds the index (the embedding cache keeps the
+        vectors), and the next save removes what the killed one left beside `dir`.
+
+        The whole save holds an exclusive `flock` on `.<name>.lock` beside `dir` (loads hold
+        it shared), so concurrent saves of one directory take turns and a load sees either
+        the previous index or the new one, never a mix. POSIX only."""
+        started = time.time()
         dir = Path(dir)
         dir.parent.mkdir(parents=True, exist_ok=True)
-        tmp = _fresh_dir(dir, "tmp")
-        old = None
-        try:
-            self._write(tmp)
-            if dir.exists():
-                old = _fresh_dir(dir, "old")
-                os.replace(dir, old)  # onto the empty directory just made
+        with _locked(dir, exclusive=True):
+            for stale in _siblings(dir, started):
+                shutil.rmtree(stale, ignore_errors=True)
+            tmp = _fresh_dir(dir, "tmp")
+            old = dir.parent / f".{dir.name}.{os.getpid()}.{uuid.uuid4().hex}.old"
             try:
+                self._write(tmp)
+                if dir.exists():
+                    os.replace(dir, old)
                 os.replace(tmp, dir)
-            except OSError:
-                if old is not None:
+            finally:
+                if not dir.exists() and old.exists():
                     os.replace(old, dir)
-                    old = None
-                raise
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-            if old is not None:
-                shutil.rmtree(old, ignore_errors=True)
+                if dir.exists() and old.exists():
+                    shutil.rmtree(old, ignore_errors=True)
+                if tmp.exists():
+                    shutil.rmtree(tmp, ignore_errors=True)
 
     def _write(self, dir: Path) -> None:
         with open(dir / "chunks.jsonl", "w", encoding="utf-8") as f:
@@ -260,20 +328,25 @@ class StoreIndex:
     def load(cls, dir: Path, cache: EmbeddingCache | None = None,
              reranker: CrossEncoderReranker | None = None) -> StoreIndex:
         """Read a saved index; BM25 is rebuilt from the stored chunks, vectors are read back,
-        and the recomputed fingerprint must equal the stored one."""
+        each chunk id must match its document and offsets, and the recomputed fingerprint
+        must equal the stored one. Refusals are `ValueError`s. The files are read under a
+        shared `flock` (see `save`)."""
         dir = Path(dir)
-        meta = json.loads((dir / "meta.json").read_text(encoding="utf-8"))
+        with _locked(dir, exclusive=False):
+            meta = json.loads((dir / "meta.json").read_text(encoding="utf-8"))
+            text = (dir / "chunks.jsonl").read_text(encoding="utf-8")
+            vectors = np.load(dir / "dense.npy") if meta["dense"] else None
         settings = Settings(**meta["settings"])
         cache, reranker, embedding = cls._parts(settings, cache, reranker, meta["dense"])
         chunks = []
-        for line in jsonl_lines((dir / "chunks.jsonl").read_text(encoding="utf-8")):
+        for n, line in enumerate(jsonl_lines(text), 1):
             row = json.loads(line)
+            _check_position(dir, n, row)
             chunks.append(StoreChunk(**{**row, "element_ids": tuple(row["element_ids"])}))
         lexical = FieldBM25(settings.w_bc, **meta["bm25"])
         lexical.build(chunks)
         dense = None
-        if meta["dense"]:
-            vectors = np.load(dir / "dense.npy")
+        if vectors is not None:
             if vectors.ndim != 2 or vectors.shape[0] != len(chunks):
                 rows = vectors.shape[0] if vectors.ndim else 0
                 raise ValueError(f"{dir}: dense.npy has {rows} rows but chunks.jsonl has "

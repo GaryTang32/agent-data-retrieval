@@ -274,6 +274,15 @@ def tune_store(index, items: list[GoldenItem], groups: Groups, name: str,
     return best[0], best[1], record
 
 
+def _saved_fingerprint(d: Path) -> str | None:
+    """The fingerprint in `d/meta.json`, None when there is none (a save of `d` by another
+    run can briefly leave no index there)."""
+    try:
+        return json.loads((d / "meta.json").read_text(encoding="utf-8"))["fingerprint"]
+    except FileNotFoundError:
+        return None
+
+
 def _store_system(name: str):
     spec = SPECS[name]
 
@@ -289,15 +298,22 @@ def _store_system(name: str):
             cache = make_embedding_cache(config)
             d = runner.REPO_ROOT / config.get("index_dir", ".cache/index") / (
                 f"{corpus}-store-{'prefix' if spec.prefix else 'body'}")
-            meta = d / "meta.json"
-            if meta.is_file() and not rebuild:
-                saved = json.loads(meta.read_text(encoding="utf-8"))["fingerprint"]
+            saved = None if rebuild else _saved_fingerprint(d)
+            if saved is not None:
                 expected = StoreIndex.expected_fingerprint(store, base_settings, cache)
                 if saved != expected:
                     raise runner.RunError(
                         f"{d}: saved index fingerprint {saved[:12]} differs from the current "
                         f"store and configuration ({expected[:12]})\nfix: rerun with --rebuild")
-                index, source = StoreIndex.load(d, cache=cache), "loaded"
+                try:
+                    index, source = StoreIndex.load(d, cache=cache), "loaded"
+                except ValueError as e:
+                    raise runner.RunError(f"{e}\nfix: rerun with --rebuild") from e
+                if index.fingerprint != expected:  # replaced by another run since the check
+                    raise runner.RunError(
+                        f"{d}: loaded index fingerprint {index.fingerprint[:12]} differs from "
+                        f"the current store and configuration ({expected[:12]})\nfix: rerun "
+                        f"with --rebuild")
             else:
                 index, source = StoreIndex.build(store, base_settings, cache), "built"
                 index.save(d)

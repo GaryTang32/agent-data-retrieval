@@ -2,6 +2,9 @@
 
 import hashlib
 import json
+import os
+import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -9,6 +12,7 @@ import numpy as np
 import pytest
 
 from adr_eval.corpora.base import load_corpus
+from adr_eval.retrieval.chunker import make_chunk_id
 from adr_eval.retrieval.fusion import linear, rrf
 from adr_eval.retrieval.lexical import BM25Index
 from adr_store.chunking import CHUNKER_VERSION, chunk_store, chunker_config
@@ -79,6 +83,12 @@ def build(store, tmp_path, settings: Settings | None = None, **kw) -> StoreIndex
     if settings.rerank:
         kw.setdefault("reranker", fake_reranker())
     return StoreIndex.build(store, settings, **kw)
+
+
+def hidden(parent: Path) -> list[str]:
+    """Hidden siblings an index save left in `parent`, except its lock files (they stay)."""
+    return sorted(p.name for p in parent.iterdir()
+                  if p.name.startswith(".") and not p.name.endswith(".lock"))
 
 
 # --- lexical -------------------------------------------------------------------------------
@@ -375,7 +385,7 @@ def test_save_replaces_the_whole_directory(mini_store, tmp_path):
     lex.save(tmp_path / "idx")
     assert sorted(p.name for p in (tmp_path / "idx").iterdir()) == ["chunks.jsonl", "meta.json"]
     assert StoreIndex.load(tmp_path / "idx").fingerprint == lex.fingerprint
-    assert sorted(p.name for p in tmp_path.iterdir() if p.name.startswith(".")) == []
+    assert hidden(tmp_path) == []
 
 
 def test_an_interrupted_save_leaves_the_previous_index_intact(mini_store, tmp_path,
@@ -393,12 +403,165 @@ def test_an_interrupted_save_leaves_the_previous_index_intact(mini_store, tmp_pa
     monkeypatch.undo()
     loaded = StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
     assert loaded.fingerprint == idx.fingerprint
-    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".")] == []
+    assert hidden(tmp_path) == []
     with pytest.raises(OSError, match="disk full"):  # a first save leaves nothing behind
         monkeypatch.setattr(np, "save", boom)
         other.save(tmp_path / "new")
     assert not (tmp_path / "new").exists()
-    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".")] == []
+    assert hidden(tmp_path) == []
+
+
+def _edit_first_row(path: Path, **fields) -> None:
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    rows[0].update(fields)
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+@pytest.mark.parametrize("field", ["char_start", "char_end", "doc_id"])
+def test_load_refuses_a_chunk_whose_id_does_not_match_its_position(mini_store, tmp_path,
+                                                                   field):
+    """The fingerprint hashes chunk ids, breadcrumbs and text, not the positions; load checks
+    that each id is `make_chunk_id` of the row's doc id and offsets."""
+    idx = build(mini_store, tmp_path)
+    idx.save(tmp_path / "idx")
+    path = tmp_path / "idx" / "chunks.jsonl"
+    row = json.loads(path.read_text().splitlines()[0])
+    _edit_first_row(path, **{field: row[field] + ("x" if field == "doc_id" else 1)})
+    with pytest.raises(ValueError, match="chunk_id"):
+        StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
+
+
+@pytest.mark.parametrize("start,end", [(5, 5), (6, 5), (-1, 5), ("0", 5), (0, True)])
+def test_load_refuses_empty_reversed_negative_or_non_integer_offsets(mini_store, tmp_path,
+                                                                     start, end):
+    """Even when the chunk id is recomputed to match them."""
+    idx = build(mini_store, tmp_path, dense=False)
+    idx.save(tmp_path / "idx")
+    path = tmp_path / "idx" / "chunks.jsonl"
+    row = json.loads(path.read_text().splitlines()[0])
+    _edit_first_row(path, char_start=start, char_end=end,
+                    chunk_id=make_chunk_id(row["doc_id"], start, end))
+    with pytest.raises(ValueError, match="offsets"):
+        StoreIndex.load(tmp_path / "idx")
+
+
+@pytest.mark.parametrize("error", [OSError("rename failed"), KeyboardInterrupt()])
+def test_a_save_interrupted_between_the_renames_restores_the_previous_index(
+        mini_store, tmp_path, monkeypatch, error):
+    idx = build(mini_store, tmp_path)
+    idx.save(tmp_path / "idx")
+    other = build(mini_store, tmp_path, Settings(prefix=True))
+    real, calls = os.replace, []
+
+    def replace_(src, dst):
+        calls.append((Path(src).name, Path(dst).name))
+        if len(calls) == 2:  # tmp -> idx, after idx -> old
+            raise error
+        return real(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace_)
+    with pytest.raises(type(error)):
+        other.save(tmp_path / "idx")
+    monkeypatch.undo()
+    assert calls[1][1] == "idx" and calls[2][1] == "idx"  # the restore
+    loaded = StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
+    assert loaded.fingerprint == idx.fingerprint
+    assert hidden(tmp_path) == []
+
+
+def test_save_sweeps_stale_siblings_of_this_index_only(mini_store, tmp_path):
+    """What a killed save left behind (its process gone): `.idx.<pid>.<hex>.tmp|old`."""
+    stale = [f".idx.{n}.{'a' * 32}.{kind}" for n, kind in ((1, "tmp"), (2, "old"))]
+    keep = [f".idx2.1.{'b' * 32}.tmp", f".idx.x.1.{'c' * 32}.old", ".idx.notes"]
+    for name in stale + keep:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "f").write_text("x")
+        os.utime(tmp_path / name, (time.time() - 60, time.time() - 60))
+    build(mini_store, tmp_path, dense=False).save(tmp_path / "idx")
+    assert hidden(tmp_path) == sorted(keep)
+
+
+def _serialized_writes(monkeypatch, delay: float):
+    """Patch `StoreIndex._write` to take `delay` seconds; returns the most writes seen at once."""
+    real, state, lock = StoreIndex._write, {"now": 0, "max": 0}, threading.Lock()
+
+    def write(self, dir):
+        with lock:
+            state["now"] += 1
+            state["max"] = max(state["max"], state["now"])
+        try:
+            time.sleep(delay)
+            real(self, dir)
+        finally:
+            with lock:
+                state["now"] -= 1
+
+    monkeypatch.setattr(StoreIndex, "_write", write)
+    return state
+
+
+def _run_threads(*fns):
+    errors, results = [], [None] * len(fns)
+    barrier = threading.Barrier(len(fns))
+
+    def run(i, fn):
+        try:
+            barrier.wait()
+            results[i] = fn()
+        except BaseException as e:  # reported below
+            errors.append(e)
+
+    threads = [threading.Thread(target=run, args=(i, fn)) for i, fn in enumerate(fns)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    assert errors == [] and not any(t.is_alive() for t in threads)
+    return results
+
+
+def test_concurrent_saves_of_one_index_both_succeed_one_at_a_time(mini_store, tmp_path,
+                                                                 monkeypatch):
+    """Runs of p1-struct-bc and p1-struct-bc-rr share `<corpus>-store-prefix`."""
+    a = build(mini_store, tmp_path)
+    b = build(mini_store, tmp_path, Settings(prefix=True))
+    a.save(tmp_path / "idx")
+    state = _serialized_writes(monkeypatch, 0.2)
+    _run_threads(lambda: a.save(tmp_path / "idx"), lambda: b.save(tmp_path / "idx"))
+    assert state["max"] == 1
+    loaded = StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))
+    assert loaded.fingerprint in (a.fingerprint, b.fingerprint)
+    assert hidden(tmp_path) == [] and (tmp_path / ".idx.lock").is_file()
+
+
+def test_load_waits_for_a_save_in_progress(mini_store, tmp_path, monkeypatch):
+    old = build(mini_store, tmp_path)
+    new = build(mini_store, tmp_path, Settings(prefix=True))
+    old.save(tmp_path / "idx")
+    writing, release = threading.Event(), threading.Event()
+    real = StoreIndex._write
+
+    def write(self, dir):
+        real(self, dir)
+        writing.set()
+        assert release.wait(30)
+
+    monkeypatch.setattr(StoreIndex, "_write", write)
+    saver = threading.Thread(target=new.save, args=(tmp_path / "idx",))
+    saver.start()
+    assert writing.wait(30)
+    got = []
+    loader = threading.Thread(target=lambda: got.append(
+        StoreIndex.load(tmp_path / "idx", cache=fake_cache(tmp_path / "emb"))))
+    loader.start()
+    try:
+        loader.join(0.5)
+        assert loader.is_alive() and got == []  # held off while the save is under way
+    finally:
+        release.set()
+    saver.join(30)
+    loader.join(30)
+    assert got[0].fingerprint == new.fingerprint
 
 
 @pytest.mark.slow
