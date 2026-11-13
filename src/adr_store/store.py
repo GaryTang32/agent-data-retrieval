@@ -73,7 +73,7 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _write_atomic(path: Path, data: bytes) -> None:
+def write_atomic(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
@@ -91,7 +91,7 @@ def _write_once(path: Path, data: bytes) -> None:
                              f"parser or extractor version, or the same bytes with another uri, "
                              f"version or licence); use a new store")
         return
-    _write_atomic(path, data)
+    write_atomic(path, data)
 
 
 class Store:
@@ -170,7 +170,7 @@ class Store:
         data = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
         snapshot_id = _sha256(data)
         _write_once(self.path / "snapshots" / f"{snapshot_id}.json", data)
-        _write_atomic(self.path / "HEAD", f"{snapshot_id}\n".encode())
+        write_atomic(self.path / "HEAD", f"{snapshot_id}\n".encode())
         self.snapshot_id = snapshot_id
         return snapshot_id
 

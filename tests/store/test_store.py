@@ -211,3 +211,65 @@ def test_doc_record_file_is_a_valid_doc_record(tmp_path, mini):
     data = (tmp_path / "s" / "docs" / doc_id[:2] / f"{doc_id}.json").read_bytes()
     rec = DocRecord.model_validate_json(data)
     assert rec.source.doc_id == doc_id and rec.format_version == "0.1"
+
+
+# `adr ingest` (src/adr_store/cli.py)
+
+def test_ingest_mini_writes_a_snapshot_and_compile_figures(tmp_path, capsys, mini):
+    from adr_store import cli
+
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 0
+    s = Store.open(tmp_path / "s")
+    assert s.doc_ids() == sorted(mini.docs)
+    assert s.source(s.doc_ids()[0]).license == "fixture-original"
+    figures = json.loads((tmp_path / "s" / "compile" / f"{s.snapshot_id}.json").read_text())
+    assert figures["corpus"] == "mini" and figures["snapshot"] == s.snapshot_id
+    assert figures["documents"] == len(mini.docs)
+    assert figures["conformance"] == {"documents": 7, "failures": 0, "pass_rate": 1.0}
+    assert figures["leaves_with_span"] == 1.0
+    assert figures["elements"] == figures["leaves"] + figures["sections"]
+    by_format = figures["by_format"]
+    assert sorted(by_format) == ["html", "json", "md", "pdf", "xml"]
+    assert by_format["md"]["documents"] == 2 and by_format["md"]["share_with_sections"] == 1.0
+    assert by_format["md"]["headings_found"] == by_format["md"]["headings_aligned"] == 5
+    assert by_format["json"]["alignment_rate"] is None
+    assert by_format["pdf"]["share_leaves_with_page"] == 1.0
+    assert by_format["md"]["share_leaves_with_page"] is None
+    out = capsys.readouterr().out
+    assert s.snapshot_id in out and "conformance failures: 0" in out
+
+
+def test_ingest_is_repeatable(tmp_path, mini):
+    from adr_store import cli
+
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "a")]) == 0
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "a")]) == 0
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "b")]) == 0
+    assert _files(tmp_path / "a") == _files(tmp_path / "b")
+
+
+def test_ingest_fails_clearly_on_a_conformance_violation(tmp_path, capsys, monkeypatch):
+    from adr_store import cli
+
+    def broken(fmt, raw, text, doc_id):
+        parsed = parse_document(fmt, raw, text, doc_id)
+        return type(parsed)(parsed.elements[1:], 0, 0)
+
+    monkeypatch.setattr(store_mod, "parse_document", broken)
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 1
+    err = capsys.readouterr().err
+    assert "7 of 7 documents fail conformance" in err and "rule 1:" in err
+    assert "refund_policy.md" in err
+    assert not (tmp_path / "s" / "HEAD").exists()
+
+
+def test_ingest_reports_a_corpus_that_cannot_load(tmp_path, capsys, monkeypatch):
+    from adr_eval import runner
+    from adr_store import cli
+
+    def missing(name):
+        raise runner.RunError("corpora/x/manifest.json: not found; run `adr-eval fetch x`")
+
+    monkeypatch.setattr(cli, "load_checked_corpus", missing)
+    assert cli.main(["ingest", "mini", "--store", str(tmp_path / "s")]) == 2
+    assert "not found" in capsys.readouterr().err
