@@ -11,8 +11,14 @@ A built system has `retrieve(question) -> [(chunk_id, score)]` (the top 10, best
   `<store_dir>/<corpus>` when it is missing or stale; the index over it is saved under
   `<index_dir>/<corpus>-store-<body|prefix>` and checked by fingerprint like the baseline's.
 
-With `lexical_only=True` a system keeps only its BM25 channel (no embedding): a cheap
-diagnostic, recorded as such in the run config; its fingerprint differs from the full system's.
+Tuning (dev split, nDCG@10 of metrics version 2 over evidence groups): `baseline-linear` and
+`p1-struct` tune the fusion weight; `p1-struct-bc` tunes `w_bc` in {0, 1, 2, 3} with the
+fusion weight; `p1-struct-bc-rr` is tuned exactly as `p1-struct-bc` (without the reranker) and
+then reranks. Ties keep the smallest `w_bc`, then the smallest weight.
+
+With `lexical_only=True` a system keeps only its BM25 channel (no embedding, no reranker; a
+Phase 1 system still tunes `w_bc` on BM25 alone): a cheap diagnostic, recorded as such in the
+run config; its fingerprint differs from the full system's.
 
 This module is the harness's only entry to `adr_store` (plan, shared rules).
 """
