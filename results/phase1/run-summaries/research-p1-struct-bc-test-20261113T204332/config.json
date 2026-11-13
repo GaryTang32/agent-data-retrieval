@@ -1,0 +1,114 @@
+{
+  "calls": 382,
+  "concurrency": 4,
+  "corpus": "research",
+  "fingerprint": "d3902b136e26732774bdfe4ffdcf6919f01308d5ede930baa79d9eaefac7f0a3",
+  "finished": "2026-11-13T20:54:23.648547+00:00",
+  "generator": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-sonnet-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_sonnet",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-sonnet-5-5"
+    ]
+  },
+  "golden": "golden/research/v0.1/items.jsonl",
+  "golden_sha256": "fdebe3f0b207df3278c6d44b2aba1060fd7fab5beec7dae22c2d978df6dd5dd4",
+  "judge": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-opus-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_opus",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-opus-5-5"
+    ]
+  },
+  "max_calls": null,
+  "max_dollars": null,
+  "metrics_version": 2,
+  "n_items": 222,
+  "n_rows": 222,
+  "price_table_as_of": {
+    "claude-opus-5-5": "2026-11-09",
+    "claude-sonnet-5-5": "2026-11-09"
+  },
+  "prompt_hashes": {
+    "answer": "291ed9cc8d09274d0cfcce9f29ba16f7f61b33eac2eb10c9f0f9f082457d2943",
+    "judge": "fc9ac3a40405d5fbdacdb950026fae35cb79c4fbcfe7737020a95e8508c3d7f2",
+    "query_gen": "249b0449466325d45b4c05813b8fbff7bf108070bb816feaf72cffc88d5997c6"
+  },
+  "repeats": 1,
+  "retrieval": {
+    "channel_k": 100,
+    "chunker": {
+      "breadcrumb_part_chars": 80,
+      "breadcrumb_sep": " > ",
+      "kind": "structure",
+      "max_tokens": 400,
+      "min_tokens": 40,
+      "overlap": 0,
+      "separators": [
+        "\n\n",
+        "\n",
+        ". ",
+        " "
+      ],
+      "version": 1
+    },
+    "fusion": "linear",
+    "lexical_only": false,
+    "linear_w": 0.9,
+    "prefix": true,
+    "rerank": false,
+    "rerank_top": null,
+    "rrf_k": null,
+    "store": ".cache/store/research",
+    "store_snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "top_n": 10,
+    "tuning": {
+      "best_ndcg@10": 0.7685821330167534,
+      "best_w": 0.9,
+      "best_w_bc": 3,
+      "grid_w": {
+        "from": 0.0,
+        "step": 0.05,
+        "to": 1.0
+      },
+      "grid_w_bc": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "metric": "ndcg@10",
+      "metrics_version": 2,
+      "n_items": 45,
+      "split": "dev"
+    },
+    "w_bc": 3
+  },
+  "run_id": "research-p1-struct-bc-test-20261113T204332",
+  "same_family_judge": true,
+  "seed": 20261108,
+  "served_model_mismatch": false,
+  "snapshot": "23ad670175b7fa58f4ba5464842f512adabc53821b44d86a3cb9426dc74099d1",
+  "spent_usd": 0.0,
+  "split": "test",
+  "started": "2026-11-13T20:43:32.620067+00:00",
+  "status": "complete",
+  "stub": false,
+  "system": "p1-struct-bc",
+  "t_values": [
+    0.5,
+    0.75,
+    0.9
+  ],
+  "w": 0.9
+}

@@ -1,0 +1,66 @@
+{
+  "allow_mixed": false,
+  "corpus": "research",
+  "difference": "run_b - run_a",
+  "golden_sha256": "fdebe3f0b207df3278c6d44b2aba1060fd7fab5beec7dae22c2d978df6dd5dd4",
+  "lexical_only_a": false,
+  "lexical_only_b": false,
+  "metrics": {
+    "coverage@10": {
+      "a": 0.8464646464646465,
+      "b": 0.7896584332020724,
+      "ci95": [
+        -0.1366466251591613,
+        0.014982795153818583
+      ],
+      "mean_diff": -0.056806213262573985,
+      "n": 45,
+      "p": 0.1296,
+      "p_holm": 0.2592
+    },
+    "mrr": {
+      "a": 0.6620987654320988,
+      "b": 0.7370370370370369,
+      "ci95": [
+        -0.004320987654320987,
+        0.16222222222222224
+      ],
+      "mean_diff": 0.07493827160493827,
+      "n": 45,
+      "p": 0.0636,
+      "p_holm": 0.19080000000000003
+    },
+    "ndcg@10": {
+      "a": 0.6974257931959177,
+      "b": 0.7685821330167534,
+      "ci95": [
+        0.005746090821093464,
+        0.14838670309519605
+      ],
+      "mean_diff": 0.0711563398208357,
+      "n": 45,
+      "p": 0.031,
+      "p_holm": 0.124
+    },
+    "recall@10": {
+      "a": 0.8464646464646465,
+      "b": 0.8717171717171717,
+      "ci95": [
+        -0.044444444444444446,
+        0.1111111111111111
+      ],
+      "mean_diff": 0.02525252525252525,
+      "n": 45,
+      "p": 0.5124,
+      "p_holm": 0.5124
+    }
+  },
+  "metrics_version": 2,
+  "n_pairs": 45,
+  "n_resamples": 10000,
+  "run_a": "research-baseline-linear-dev-retrieval-20261113T184131",
+  "run_b": "research-p1-struct-bc-dev-retrieval-20261113T190354",
+  "split": "dev",
+  "system_a": "baseline-linear",
+  "system_b": "p1-struct-bc"
+}

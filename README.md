@@ -134,7 +134,7 @@ Measured on the test split of all three corpora against `baseline-linear`
 | Is re-indexing after an edit cheap? | Yes: editing 1% of documents re-embeds 0.03–0.55% of chunks |
 | How long until 100 PDFs are searchable? | 8.4 minutes on a 4-core machine with all cores embedding |
 | Is retrieval repeatable? | Yes: identical rankings across runs and rebuilds |
-| Does it retrieve better than the baseline? | Only on gov (Recall@10 0.771 → 0.802, significant); level on research and bench |
+| Does it retrieve better than the baseline? | Only on gov (Recall@10 0.771 → 0.802, significant in its own test but fragile: part of it comes from turning off dense search); level on research and bench |
 | Are the answers better? | No significant difference on any corpus (accuracy 0.731 vs 0.752 on gov, 0.779 vs 0.806 on research, 0.813 vs 0.801 on bench) |
 | Did the reranker help? | No: it lowered quality on every corpus and is switched off |
 

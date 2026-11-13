@@ -1,0 +1,23 @@
+{
+  "empty_docs": [],
+  "evidence_copies": {
+    "copies": 201,
+    "spans": 711,
+    "spans_with_copies": 111
+  },
+  "fingerprint": "54c12a3c29170005fd046a56a12b07a80a3fe63a86b80c762c0cffabbd9c0aec",
+  "index_source": "loaded",
+  "n_chunks": 6783,
+  "n_docs": 180,
+  "span_containment": 0.9288702928870293,
+  "text_fidelity": {
+    "checked": 0,
+    "formats_na": [
+      "html",
+      "json",
+      "xml"
+    ],
+    "matching": 0,
+    "share": null
+  }
+}
