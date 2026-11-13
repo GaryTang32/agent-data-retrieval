@@ -6,6 +6,14 @@ chunk's token count, counted as the baseline chunker counts it, stays within `ma
 leaf longer than that is cut with the baseline's recursive splitter and its pieces are packed
 like leaves. A chunk's range runs from its first leaf (or piece) to its last, so it re-slices
 the canonical text exactly; `chunk_id` is the baseline's. Deterministic, no model calls.
+
+Short sections. A section whose own leaves total fewer than `min_tokens` is carried forward
+into the first chunk of the section that follows it, when that one is its next sibling (same
+parent; the region before the first heading counts as a top-level sibling) or its own first
+subsection (a heading with no text of its own). The carried leaves are packed ahead of the
+next section's leaves under the same `max_tokens` limit, and carrying continues while the
+carried leaves still total fewer than `min_tokens`. A merged chunk therefore never leaves the
+parent of the first short section, and its breadcrumb is that of its last leaf's section.
 """
 
 from __future__ import annotations
@@ -93,6 +101,37 @@ def _runs(leaves: list[Element], counts: dict[str, int]) -> list[_Run]:
     return runs
 
 
+def _carries_into(short: str | None, nxt: str | None, sections: dict[str, Element]) -> bool:
+    """May a short run in section `short` merge into the run that follows, in `nxt`: its next
+    sibling, or a section inside it?"""
+    if nxt is None:  # the region before the first heading follows nothing
+        return False
+    parent = sections[short].parent_id if short is not None else None
+    if sections[nxt].parent_id == parent:
+        return True
+    up = sections[nxt].parent_id
+    while up is not None and short is not None:
+        if up == short:
+            return True
+        up = sections[up].parent_id
+    return False
+
+
+def _groups(runs: list[_Run], sections: dict[str, Element], min_tokens: int) -> list[list[_Run]]:
+    """Runs to be packed together: a short run joins the run after it (see the module doc)."""
+    groups: list[list[_Run]] = []
+    total = 0
+    for run in runs:
+        if groups and total < min_tokens and _carries_into(groups[-1][-1].section_id,
+                                                           run.section_id, sections):
+            groups[-1].append(run)
+            total += run.tokens
+        else:
+            groups.append([run])
+            total = run.tokens
+    return groups
+
+
 def _pack(text: str, leaves: list[Element], counts: dict[str, int],
           max_tokens: int) -> list[tuple[int, int]]:
     """Greedy packing of leaves (an over-long leaf as the baseline's pieces) into ranges."""
@@ -122,11 +161,13 @@ def chunk_elements(source: SourceRecord, elements: list[Element], text: str,
     """The chunks of one document, in text order."""
     leaves = sorted((e for e in elements if e.is_leaf), key=lambda e: e.char_start)
     counts = {e.element_id: count_tokens(text[e.char_start:e.char_end]) for e in leaves}
+    sections = {e.element_id: e for e in elements if e.type == "section"}
     title = document_title(source, elements, text)
     chunks = []
-    for run in _runs(leaves, counts):
-        for s, e in _pack(text, run.leaves, counts, max_tokens):
-            covered = [x for x in run.leaves if x.char_start < e and s < x.char_end]
+    for group in _groups(_runs(leaves, counts), sections, min_tokens):
+        members = [leaf for run in group for leaf in run.leaves]
+        for s, e in _pack(text, members, counts, max_tokens):
+            covered = [x for x in members if x.char_start < e and s < x.char_end]
             chunks.append(StoreChunk(
                 make_chunk_id(source.doc_id, s, e), source.doc_id, s, e, text[s:e],
                 breadcrumb(title, covered[-1].section_path),

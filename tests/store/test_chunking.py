@@ -9,7 +9,7 @@ import pytest
 from adr_eval.corpora.base import Document, load_corpus
 from adr_eval.corpora.extract import extract_text
 from adr_eval.retrieval.chunker import chunk_document, make_chunk_id, tokenize
-from adr_store.chunking import StoreChunk, chunk_store, document_title
+from adr_store.chunking import StoreChunk, breadcrumb, chunk_store, document_title
 from adr_store.store import Store
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
@@ -200,6 +200,84 @@ def test_the_pieces_of_an_oversized_leaf_pack_with_its_heading(tmp_path):
     s = make_store(tmp_path / "s", doc(f"# Title\n\n{body}\n".encode(), "md"))
     first = in_text_order(chunk_store(s, max_tokens=20, min_tokens=0))[0]
     assert first.text.startswith("# Title\n\nw0 ") and n_tokens(first.text) == 20
+
+
+# --- short sections ------------------------------------------------------------------------
+
+
+def chunk_texts(tmp_path, md: str, **kw) -> list[tuple[str, str]]:
+    s = make_store(tmp_path / "s", doc(md.encode(), "md"))
+    return [(c.text, c.breadcrumb) for c in in_text_order(chunk_store(s, **kw))]
+
+
+def test_a_short_section_merges_into_the_next_siblings_first_chunk(tmp_path):
+    md = ("# Doc\n\nIntro has enough words here.\n\n## Short\n\nTiny.\n\n"
+          "## Long\n\nLong section body words.\n\n## Parent\n\n### Child\n\n"
+          "Child body text here.\n\n## Last\n\nEnd.\n")
+    assert chunk_texts(tmp_path, md, min_tokens=4) == [
+        ("# Doc\n\nIntro has enough words here.", "Doc"),
+        ("## Short\n\nTiny.\n\n## Long\n\nLong section body words.", "Doc > Long"),
+        # a heading with no text of its own goes with its first subsection
+        ("## Parent\n\n### Child\n\nChild body text here.", "Doc > Parent > Child"),
+        ("## Last\n\nEnd.", "Doc > Last"),  # nothing follows: it stays on its own
+    ]
+
+
+def test_merging_cascades_down_but_not_to_a_section_with_another_parent(tmp_path):
+    md = ("# Doc\n\n## A\n\n### A1\n\nBody of a1 enough words.\n\n### A2\n\nTiny.\n\n"
+          "## B\n\nBody of b enough words.\n")
+    assert chunk_texts(tmp_path, md, min_tokens=4) == [
+        ("# Doc\n\n## A\n\n### A1\n\nBody of a1 enough words.", "Doc > A > A1"),
+        ("### A2\n\nTiny.", "Doc > A > A2"),
+        ("## B\n\nBody of b enough words.", "Doc > B"),
+    ]
+
+
+def test_a_merged_group_stops_once_it_reaches_min_tokens(tmp_path):
+    md = ("# Doc\n\nIntro has enough words here.\n\n## S1\n\nOne.\n\n## S2\n\nTwo.\n\n"
+          "## S3\n\nBody three enough words.\n")
+    assert chunk_texts(tmp_path, md, min_tokens=4) == [
+        ("# Doc\n\nIntro has enough words here.", "Doc"),
+        ("## S1\n\nOne.\n\n## S2\n\nTwo.", "Doc > S2"),
+        ("## S3\n\nBody three enough words.", "Doc > S3"),
+    ]
+
+
+def test_a_short_preamble_merges_into_the_first_section(tmp_path):
+    md = "Preamble.\n\n# Doc\n\nIntro has enough words here.\n"
+    assert chunk_texts(tmp_path, md, min_tokens=4) == [(md.strip(), "Doc")]
+    assert len(chunk_texts(tmp_path, md, min_tokens=0)) == 2
+
+
+def _within(section_id, container, els) -> bool:
+    while section_id is not None and section_id != container:
+        section_id = els[section_id].parent_id
+    return container is None or section_id == container
+
+
+@pytest.mark.parametrize("max_tokens,min_tokens", [(400, 40), (12, 5), (8, 4)])
+def test_a_chunk_spans_sections_only_to_carry_short_ones_forward(mini_store, fixture_store,
+                                                                 max_tokens, min_tokens):
+    """Leaves of other sections come before the last section's leaves, total fewer than
+    `min_tokens`, and stay inside the parent of the first one's section; the breadcrumb is
+    the last section's."""
+    merged = 0
+    for s in stores(mini_store, fixture_store):
+        for c in chunk_store(s, max_tokens=max_tokens, min_tokens=min_tokens):
+            els = {e.element_id: e for e in s.elements(c.doc_id)}
+            text = s.text(c.doc_id)
+            covered = [els[i] for i in c.element_ids]
+            last = covered[-1].parent_id
+            before = [e for e in covered if e.parent_id != last]
+            assert all(e.parent_id == last for e in covered[len(before):])
+            assert sum(n_tokens(text[e.char_start:e.char_end]) for e in before) < min_tokens
+            first = covered[0].parent_id
+            container = els[first].parent_id if first else None
+            assert all(_within(e.parent_id, container, els) for e in covered)
+            title = document_title(s.source(c.doc_id), list(els.values()), text)
+            assert c.breadcrumb == breadcrumb(title, covered[-1].section_path)
+            merged += bool(before)
+    assert merged
 
 
 # --- breadcrumbs ---------------------------------------------------------------------------
