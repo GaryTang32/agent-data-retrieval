@@ -170,3 +170,75 @@ def test_vectors_equal_the_baseline_dense_index(tmp_path):
     assert cache.model_hash == dense.model_hash()
     vecs2, n_new2 = EmbeddingCache(tmp_path / "store-emb", dense.model_name).embed_texts(texts)
     assert n_new2 == 0 and np.array_equal(vecs2, vecs)
+
+
+# -- threads (`adr index --threads`) -------------------------------------------------------
+
+
+class RecordingTextEmbedding:
+    """Stands in for fastembed's TextEmbedding: records how it was made."""
+
+    made: list[dict] = []
+
+    def __init__(self, model_name, cache_dir=None, threads=None):
+        RecordingTextEmbedding.made.append({"model": model_name, "cache_dir": cache_dir,
+                                            "threads": threads})
+
+
+@pytest.mark.parametrize(("threads", "passed"), [(2, 2), (4, 4), (0, None)])
+def test_threads_other_than_one_load_a_model_with_that_setting(tmp_path, monkeypatch,
+                                                               threads, passed):
+    import fastembed
+
+    RecordingTextEmbedding.made = []
+    monkeypatch.setattr(fastembed, "TextEmbedding", RecordingTextEmbedding)
+    cache = EmbeddingCache(tmp_path, "BAAI/bge-small-en-v1.5", model_cache_dir=tmp_path / "m",
+                           threads=threads)
+    m = cache.model()
+    assert cache.model() is m  # loaded once
+    assert RecordingTextEmbedding.made == [{"model": "BAAI/bge-small-en-v1.5",
+                                            "cache_dir": str(tmp_path / "m"),
+                                            "threads": passed}]
+
+
+def test_one_thread_uses_the_baseline_model(tmp_path, monkeypatch):
+    sentinel = object()
+    monkeypatch.setattr(DenseIndex, "_get_model", lambda self: sentinel)
+    assert EmbeddingCache(tmp_path, "BAAI/bge-small-en-v1.5").model() is sentinel
+    assert EmbeddingCache(tmp_path, "BAAI/bge-small-en-v1.5", threads=1).model() is sentinel
+
+
+def test_threads_do_not_change_the_cache_key(tmp_path):
+    one = EmbeddingCache(tmp_path, "fake/model", model_hash="a" * 64, dim=8, threads=1)
+    four = EmbeddingCache(tmp_path, "fake/model", model_hash="a" * 64, dim=8, threads=4)
+    assert one.path("some text") == four.path("some text")
+
+
+def test_a_negative_thread_count_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="threads"):
+        EmbeddingCache(tmp_path, threads=-1)
+
+
+def _model_offline(model_cache_dir: Path, model_name: str = "BAAI/bge-small-en-v1.5") -> bool:
+    from fastembed import TextEmbedding
+
+    desc = next(m for m in TextEmbedding.list_supported_models() if m["model"] == model_name)
+    repo = desc["sources"]["hf"].replace("/", "--")
+    return any(model_cache_dir.glob(f"models--{repo}/snapshots/*/{desc['model_file']}"))
+
+
+@pytest.mark.slow
+def test_two_threads_give_the_same_vectors_as_one(tmp_path):
+    model_cache_dir = Path(".cache/fastembed")
+    if not _model_offline(model_cache_dir):
+        pytest.skip(f"embedding model not in {model_cache_dir}")
+    texts = ["Customers may request a refund within thirty days of purchase.",
+             "Doc > Refunds\nThe cafeteria serves lunch between noon and two.",
+             "Shipping rates depend on the destination country. " * 40,
+             "x"]
+    one, n1 = EmbeddingCache(tmp_path / "one", model_cache_dir=model_cache_dir,
+                             threads=1).embed_texts(texts)
+    two, n2 = EmbeddingCache(tmp_path / "two", model_cache_dir=model_cache_dir,
+                             threads=2).embed_texts(texts)
+    assert n1 == n2 == 4 and one.dtype == two.dtype == np.float32
+    assert np.array_equal(one, two)

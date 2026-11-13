@@ -108,9 +108,11 @@ SYSTEMS = {
 }
 
 
-def make_embedding_cache(cache_dir: Path = DEFAULT_EMB_CACHE) -> EmbeddingCache:
-    """The embedding cache of a dense index (tests replace this function)."""
-    return EmbeddingCache(Path(cache_dir))
+def make_embedding_cache(cache_dir: Path = DEFAULT_EMB_CACHE, *,
+                         threads: int = 1) -> EmbeddingCache:
+    """The embedding cache of a dense index (tests replace this function); `threads` sets
+    how the model runs, not the vectors (`EmbeddingCache`)."""
+    return EmbeddingCache(Path(cache_dir), threads=threads)
 
 
 def make_reranker() -> CrossEncoderReranker:
@@ -433,13 +435,17 @@ class Tools:
     # -- index ------------------------------------------------------------------------
 
     def index(self, system: str, *, lexical_only: bool = False, w_bc: int | None = None,
-              weight: float | None = None, tuning: Path | None = None) -> IndexInfo:
-        """Build or load the index of `system` for the HEAD snapshot and make it active."""
+              weight: float | None = None, tuning: Path | None = None,
+              threads: int = 1) -> IndexInfo:
+        """Build or load the index of `system` for the HEAD snapshot and make it active.
+        `threads` is the embedding model's thread count while building (0: all cores); the
+        vectors, and so the index, do not depend on it."""
         args = {"system": system, "lexical_only": lexical_only, "w_bc": w_bc,
-                "weight": weight, "tuning": None if tuning is None else str(tuning)}
+                "weight": weight, "tuning": None if tuning is None else str(tuning),
+                "threads": threads}
 
         def run():
-            info = self._index_impl(system, lexical_only, w_bc, weight, tuning)
+            info = self._index_impl(system, lexical_only, w_bc, weight, tuning, threads)
             return info, [info.fingerprint], {}
 
         return self._call("index", args, run)
@@ -489,11 +495,12 @@ class Tools:
                             rerank=spec.rerank and not lexical_only)
         return settings, w_bc_from, w, w_from, rec
 
-    def _index_impl(self, system, lexical_only, w_bc, weight, tuning) -> IndexInfo:
+    def _index_impl(self, system, lexical_only, w_bc, weight, tuning,
+                    threads: int = 1) -> IndexInfo:
         settings, w_bc_from, w, w_from, rec = self._settings(system, lexical_only, w_bc,
                                                              weight, tuning)
         dense = not lexical_only
-        cache = make_embedding_cache(self.emb_cache) if dense else None
+        cache = make_embedding_cache(self.emb_cache, threads=threads) if dense else None
         reranker = make_reranker() if settings.rerank else None
         expected = StoreIndex.expected_fingerprint(self.store, settings, cache, reranker,
                                                    dense=dense)
@@ -529,7 +536,10 @@ class Tools:
                          path=str(final), tuning=tuning_info)
         write_atomic(self.index_root / "active.json",
                      (json.dumps(info.to_dict(), indent=2, sort_keys=True) + "\n").encode())
-        self._index, self._active, self._chunks = idx, info.to_dict(), None
+        # queries are embedded single-threaded, as by the baseline: an index built with
+        # other threads is reloaded with the default cache on the next search
+        self._index = idx if threads == 1 else None
+        self._active, self._chunks = info.to_dict(), None
         return info
 
     # -- the active index -------------------------------------------------------------

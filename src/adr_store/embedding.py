@@ -10,6 +10,12 @@ interrupted run keeps what it finished and concurrent writers of the same key do
 re-embedding an unchanged text set computes nothing. A cached file that does not hold a valid
 vector (unreadable, not 1-D float32 of the model's dimension, not finite, norm not within 1e-3
 of 1) is deleted and its text embedded again, counted as new.
+
+`threads` other than 1 (`adr index --threads`) loads a second copy of the model with that many
+ONNX Runtime threads (0: ONNX Runtime's default, all cores), for speed only. The thread count
+is not part of the key: fastembed with bge-small-en-v1.5 gave bit-identical vectors with 1, 2
+and 4 threads (600 chunk texts of the research store, body and breadcrumb-prefix, in several
+batch compositions), and `test_two_threads_give_the_same_vectors_as_one` checks it.
 """
 
 from __future__ import annotations
@@ -37,15 +43,20 @@ class EmbeddingCache:
     `passage_embed(texts, batch_size)` and `query_embed(texts)`), the hash of its ONNX file and
     its vector dimension (for tests); by default they come from a `DenseIndex` with the same
     model name and fastembed's model list, so the model is loaded only when a text is missing
-    from the cache or a query is embedded.
+    from the cache or a query is embedded. `threads` (default 1, the baseline's; 0 for all
+    cores) only sets how the model runs; it does not change the vectors or their keys.
     """
 
     def __init__(self, cache_dir: Path, model_name: str = DEFAULT_MODEL,
                  model_cache_dir: Path = Path(".cache/fastembed"),
                  model: object | None = None, model_hash: str | None = None,
-                 dim: int | None = None):
+                 dim: int | None = None, threads: int = 1):
+        if threads < 0:
+            raise ValueError(f"threads must be 0 (all cores) or more, got {threads}")
         self.cache_dir = Path(cache_dir)
         self.model_name = model_name
+        self.model_cache_dir = Path(model_cache_dir)
+        self.threads = threads
         self._dense = DenseIndex(model_name, cache_dir=self.cache_dir,
                                  model_cache_dir=Path(model_cache_dir))
         self._model = model
@@ -74,7 +85,13 @@ class EmbeddingCache:
         """The embedding model (loaded on first use): `passage_embed` and `query_embed`."""
         if self._model is not None:
             return self._model
-        return self._dense._get_model()
+        if self.threads == 1:
+            return self._dense._get_model()
+        from fastembed import TextEmbedding
+
+        self._model = TextEmbedding(self.model_name, cache_dir=str(self.model_cache_dir),
+                                    threads=self.threads or None)
+        return self._model
 
     def _embed(self, texts: list[str]) -> Iterable[np.ndarray]:
         return self.model().passage_embed(texts, batch_size=_BATCH)

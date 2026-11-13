@@ -293,7 +293,8 @@ def _index(a: argparse.Namespace) -> int:
     else:
         store = Path(a.target)
     info = tools.Tools(store, emb_cache=a.emb_cache).index(
-        a.system, lexical_only=a.lexical_only, w_bc=a.w_bc, weight=a.weight, tuning=a.tuning)
+        a.system, lexical_only=a.lexical_only, w_bc=a.w_bc, weight=a.weight, tuning=a.tuning,
+        threads=a.threads)
     if a.json:
         _print_json(info)
         return 0
@@ -351,6 +352,13 @@ def _grep(a: argparse.Namespace) -> int:
     return 0
 
 
+def _non_negative(s: str) -> int:
+    v = int(s)
+    if v < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {v}")
+    return v
+
+
 def _positive(s: str) -> int:
     v = int(s)
     if v < 1:
@@ -399,6 +407,9 @@ def _parser() -> argparse.ArgumentParser:
                                                             "--tuning)")
     idx.add_argument("--weight", type=float, default=None,
                      help="linear fusion weight in [0, 1] (overrides --tuning)")
+    idx.add_argument("--threads", type=_non_negative, default=1,
+                     help="threads of the embedding model while building (default 1, as the "
+                          "baseline; 0 = all cores); the vectors do not depend on it")
 
     se = _tool_parser(sub, "search", "ranked chunks for a query from the active index",
                       _search)

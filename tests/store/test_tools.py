@@ -51,11 +51,12 @@ def store(tmp_path) -> Store:
 @pytest.fixture
 def fakes(monkeypatch, tmp_path):
     """Fake embedding cache and cross-encoder behind the tools' factories."""
-    made = {"caches": [], "rerankers": []}
+    made = {"caches": [], "rerankers": [], "threads": []}
 
-    def cache(path=None):
+    def cache(path=None, *, threads=1):
         c = fake_cache(tmp_path / "emb")
         made["caches"].append(c)
+        made["threads"].append(threads)
         return c
 
     def reranker():
@@ -117,6 +118,31 @@ def test_a_dense_index_uses_the_embedding_cache_and_needs_a_weight(store, fakes,
     want = StoreIndex.build(store, Settings(w_bc=0, prefix=False), fake_cache(tmp_path / "emb"))
     assert info.fingerprint == want.fingerprint and info.w == 0.4 and not info.lexical_only
     assert fakes["caches"]
+
+
+def test_index_threads_reach_the_embedding_model_only(store, fakes, tmp_path, capsys):
+    one = tools.Tools(store.path).index("p1-struct", weight=0.4)
+    assert fakes["threads"] == [1]
+    code, out, _ = run(capsys, "index", store.path, "--system", "p1-struct", "--weight", 0.4,
+                       "--threads", 2, "--json")
+    assert code == 0 and fakes["threads"] == [1, 2]
+    info = json.loads(out)
+    assert info["fingerprint"] == one.fingerprint and info["source"] == "loaded"
+    run(capsys, "index", store.path, "--system", "p1-struct", "--weight", 0.4, "--threads", 0)
+    assert fakes["threads"] == [1, 2, 0]
+    assert [ln["args"]["threads"] for ln in log_lines(store)] == [1, 2, 0]
+    code, out, _ = run(capsys, "search", QUERY, "--store", store.path, "--json")
+    assert code == 0 and fakes["threads"][-1] == 1  # queries: the baseline setting
+    t = tools.Tools(store.path)
+    t.index("p1-struct", weight=0.4, threads=4)
+    hits = t.search(QUERY, top=3).hits
+    assert fakes["threads"][-2:] == [4, 1] and hits
+
+
+def test_index_refuses_a_negative_thread_count(store, capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["index", str(store.path), "--system", "p1-struct", "--threads", "-1"])
+    assert e.value.code == 2 and "--threads" in capsys.readouterr().err
 
 
 def test_breadcrumb_systems_need_a_w_bc(store):
@@ -458,7 +484,7 @@ def test_every_call_appends_exactly_one_log_line(store):
         assert "error" not in ln
     idx, srch, rdl, grl = lines
     assert idx["args"] == {"system": "p1-struct", "lexical_only": True, "w_bc": None,
-                           "weight": None, "tuning": None}
+                           "weight": None, "tuning": None, "threads": 1}
     assert idx["results"] == [info.fingerprint]
     assert srch["args"] == {"query": QUERY, "top": 3}
     assert srch["results"] == [h.chunk_id for h in res.hits]
