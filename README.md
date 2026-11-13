@@ -65,7 +65,7 @@ Phases 3 and 4 can run in parallel. The full roadmap with exit criteria is in
 | Evaluation harness (`adr-eval`): corpora, chunking, BM25 + dense index, golden generation and verification, scoring, statistics, runner, reports | Built; tests run in CI on Python 3.12 and 3.13 |
 | Model backends: Claude Code subscription now; Anthropic, OpenAI-compatible, Gemini, DeepSeek, OpenRouter and self-hosted profiles ready for when API keys are added | Built ([`docs/eval/providers.md`](docs/eval/providers.md)) |
 | Golden sets v0.1: `gov` 297 items, `research` 275 items, `bench` 728 items | Generated and verified automatically; 9 `gov` items removed after review ([`golden/gov/v0.1/README.md`](golden/gov/v0.1/README.md)). `gov` is committed; `research` and `bench` items stay local, pinned by hash in [`golden/research/v0.1/README.md`](golden/research/v0.1/README.md) and [`golden/bench/v0.1/README.md`](golden/bench/v0.1/README.md) |
-| Baseline recorded (RRF and linear fusion, all five tracks) | Recorded with 1 repeat: [`results/README.md`](results/README.md). The 5-repeat run, which adds answer agreement, is not yet run |
+| Baseline recorded (RRF and linear fusion, all five tracks) | Recorded with 1 repeat under version 2 of the metric definitions: [`results/README.md`](results/README.md). The version 1 numbers are kept in `results/v1/`. The 5-repeat run, which adds answer agreement, is not yet run |
 | Judge agreement with human labels | Open: needs a human-labelled sample |
 | Judge from a different model family than the generator | Open: needs a second provider |
 | Human-vetted golden items | Open: items are model-drafted and code-checked only |
