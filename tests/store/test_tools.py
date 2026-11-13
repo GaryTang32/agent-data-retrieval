@@ -811,7 +811,7 @@ def gone(pid: int) -> bool:
     """No process `pid`, or only its zombie."""
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):  # reaped between open and read
         return True
     return stat.rsplit(")", 1)[1].split()[0] in ("Z", "X")
 
