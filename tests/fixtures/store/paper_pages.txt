@@ -1,0 +1,30 @@
+arXiv:2401.00001v1 [cs.IR] 1 Jan 2024
+A Study of Test Retrieval
+Ada Lovelace1 and Alan Turing2
+1 University of Somewhere
+2 Institute of Things
+Abstract
+We study the retrieval of tests in a small
+collection. The method is simple.
+1 Introduction
+Retrieval matters for agents. Section 2
+reviews prior work.
+
+2 Related Work
+Prior work is extensive.
+
+2.1 Sparse Methods
+BM25 is a sparse method [1].
+2019. Okapi at TREC-3 is a year, not a heading
+3 We do not normalise scores because it is not needed.
+2.2 Dense Methods
+Dense methods embed text.
+1 Table row that is out of sequence
+
+4 Method
+We skip a number, which is allowed once.
+Results
+The numbers are good.
+Introduction
+References
+[1] S. Robertson. The probabilistic relevance framework. 2009.
