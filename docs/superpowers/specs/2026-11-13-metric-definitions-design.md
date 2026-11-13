@@ -177,7 +177,7 @@ Run on the pinned corpora and the recorded runs, without model calls.
 - **Query understanding.** The largest causes of version 1 misses are conventions: gold `lookup`
   against generated `explain` for facts in prose (97, 42 and 310 rows on gov, research and
   bench), `abstain` gold for questions that are not answerable (29, 42, 55), and empty gold
-  entity lists (367 bench rows). With those removed, route accuracy is 0.82, 0.63 and 0.86.
+  entity lists (367 bench rows). With those removed and the route rule of section 6, route accuracy is 0.84, 0.66 and 0.87.
 
 Limits: the chunk-size tests used BM25 only; the answer-prediction and disagreement tests rest
 on bench, the only corpus where the nDCG variants differ today; the identifier test has only
