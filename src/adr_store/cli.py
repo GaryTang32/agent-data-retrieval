@@ -5,8 +5,10 @@
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
 `--json` prints the result as JSON, otherwise a short table; every result names its snapshot.
-A refused call (unknown id, range out of bounds, bad pattern, missing index) exits 2 with a
-message on stderr.
+A refused call (unknown id, range out of bounds, bad pattern, a pattern that runs past
+`adr grep --timeout`, a missing or damaged index) exits 2 with a message on stderr; every tool
+call, refused or not, writes one line to the store's retrieval log, and an unexpected error
+(exit 3) is logged too.
 
 Ingest reads a pinned corpus through the harness (the manifest is verified, the canonical text
 is the harness's), parses and checks every document, and commits one snapshot. Any
@@ -232,7 +234,8 @@ def _read(a: argparse.Namespace) -> int:
 
 
 def _grep(a: argparse.Namespace) -> int:
-    res = _tools(a).grep(a.pattern, doc=a.doc, max=a.max, ignore_case=a.ignore_case)
+    res = _tools(a).grep(a.pattern, doc=a.doc, max=a.max, ignore_case=a.ignore_case,
+                         timeout=a.timeout)
     if a.json:
         _print_json(res)
         return 0
@@ -304,11 +307,15 @@ def _parser() -> argparse.ArgumentParser:
 
     gr = _tool_parser(sub, "grep", "regular-expression matches in (doc_id, offset) order",
                       _grep)
-    gr.add_argument("pattern", help="a Python regular expression (multi-line mode)")
+    gr.add_argument("pattern", help="a Python regular expression (multi-line mode: ^ and $ "
+                                    "match around \\n only)")
     gr.add_argument("--doc", default=None, help="search one document only")
     gr.add_argument("--max", type=_positive, default=tools.GREP_MAX,
                     help=f"at most this many matches (default {tools.GREP_MAX})")
     gr.add_argument("--ignore-case", action="store_true")
+    gr.add_argument("--timeout", type=float, default=tools.GREP_TIMEOUT,
+                    help=f"seconds the pattern may spend matching (default "
+                         f"{tools.GREP_TIMEOUT:g}, at most {tools.GREP_TIMEOUT_MAX:g})")
     return ap
 
 

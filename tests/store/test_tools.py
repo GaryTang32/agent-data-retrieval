@@ -4,7 +4,9 @@ bullet). Fake embedder and reranker, or lexical-only indexes; nothing reads `dat
 
 import json
 import re
+import shutil
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -12,7 +14,7 @@ import pytest
 
 from adr_eval import runner, systems
 from adr_eval.corpora.base import load_corpus
-from adr_store import tools
+from adr_store import cli, grep_worker, tools
 from adr_store.cli import main
 from adr_store.records import sha256_text
 from adr_store.retrieval import Settings, StoreIndex
@@ -457,7 +459,8 @@ def test_every_call_appends_exactly_one_log_line(store):
     assert srch["index"] == info.fingerprint
     assert rdl["args"] == {"doc_id": d, "start": 2, "end": 9, "element": None, "chunk": None}
     assert rdl["results"] == [[d, rd.char_start, rd.char_end]]
-    assert grl["args"] == {"pattern": "refund", "doc": None, "max": 2, "ignore_case": False}
+    assert grl["args"] == {"pattern": "refund", "doc": None, "max": 2, "ignore_case": False,
+                           "timeout": tools.GREP_TIMEOUT}
     assert grl["results"] == [[m.doc_id, m.char_start, m.char_end] for m in gr.matches]
 
 
@@ -542,9 +545,9 @@ def test_cli_tables_are_short(store, capsys):
 
 
 def test_cli_store_defaults_from_the_corpus_name(store, capsys, monkeypatch, tmp_path):
-    (tmp_path / ".cache" / "store").mkdir(parents=True)
-    store.path.rename(tmp_path / ".cache" / "store" / "mini")
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "STORE_ROOT", tmp_path / "stores")
+    (tmp_path / "stores").mkdir()
+    store.path.rename(tmp_path / "stores" / "mini")
     code, out, _ = run(capsys, "index", "mini", "--system", "p1-struct", "--lexical-only",
                        "--json")
     assert code == 0 and json.loads(out)["snapshot"] == store.snapshot_id
@@ -571,3 +574,246 @@ def test_cli_errors_exit_2_with_a_clear_message(store, capsys, argv, match):
 def test_cli_without_a_store_exits_2(tmp_path, capsys):
     code, _, err = run(capsys, "grep", "x", "--store", tmp_path / "none")
     assert code == 2 and "no store" in err
+
+
+# -- fix round 1 ------------------------------------------------------------------------------
+
+
+def lexical_cli(store: Store, capsys) -> dict:
+    """A lexical-only index made by `adr index`, and a hit of `adr search` (log cleared)."""
+    s = store.path
+    assert run(capsys, "index", s, "--system", "p1-struct", "--lexical-only")[0] == 0
+    code, out, _ = run(capsys, "search", QUERY, "--store", s, "--json")
+    assert code == 0
+    (s / "log" / "retrieval.jsonl").unlink()
+    return json.loads(out)["hits"][0]
+
+
+def damage(store: Store, how: str) -> None:
+    root = store.path / "index"
+    active = json.loads((root / "active.json").read_text())
+    fp = root / active["fingerprint"]
+    if how == "dir missing":
+        shutil.rmtree(fp)
+    elif how == "dir moved":
+        fp.rename(root / "elsewhere")
+    elif how == "active.json corrupt":
+        (root / "active.json").write_text("{")
+    elif how == "active.json incomplete":
+        (root / "active.json").write_text("{}")
+    elif how == "fingerprint mismatch":
+        meta = json.loads((fp / "meta.json").read_text())
+        (fp / "meta.json").write_text(json.dumps({**meta, "fingerprint": "0" * 64}))
+    elif how == "chunks.jsonl missing":
+        (fp / "chunks.jsonl").unlink()
+    else:
+        raise AssertionError(how)
+
+
+@pytest.mark.parametrize("command, how", [
+    *[("search", how) for how in ("dir missing", "dir moved", "active.json corrupt",
+                                  "active.json incomplete", "fingerprint mismatch",
+                                  "chunks.jsonl missing")],
+    *[("read", how) for how in ("dir missing", "dir moved", "active.json corrupt",
+                                "active.json incomplete", "chunks.jsonl missing")],
+])
+def test_a_missing_or_damaged_active_index_is_refused_and_logged(store, capsys, command, how):
+    hit = lexical_cli(store, capsys)
+    damage(store, how)
+    argv = ["search", QUERY] if command == "search" else \
+        ["read", hit["doc_id"], "--chunk", hit["chunk_id"]]
+    code, out, err = run(capsys, *argv, "--store", store.path)
+    assert code == 2 and out == "" and err.startswith("error:")
+    assert "active index missing or damaged" in err and "adr index" in err
+    lines = log_lines(store)
+    assert len(lines) == 1 and lines[0]["tool"] == command
+    assert "active index missing or damaged" in lines[0]["error"]
+    assert lines[0]["results"] == []
+
+
+def test_an_unexpected_error_is_logged_and_exits_3(store, capsys, monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tools.Tools, "_read_impl", boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        tools.Tools(store.path).read(a_doc(store))
+    code, out, err = run(capsys, "read", a_doc(store), "--store", store.path)
+    assert code == 3 and out == "" and "RuntimeError" in err
+    lines = log_lines(store)
+    assert len(lines) == 2 and all(ln["tool"] == "read" for ln in lines)
+    assert all("RuntimeError: boom" in ln["error"] and ln["results"] == [] for ln in lines)
+
+
+BACKTRACK = r"(\w+\s?)+X"
+
+
+@pytest.fixture
+def slow_store(tmp_path) -> Store:
+    """One document on which `BACKTRACK` runs for a very long time."""
+    s = Store.create(tmp_path / "slow")
+    s.add(*doc(("word " * 40 + "\n").encode(), "txt", "file://slow.txt"))
+    s.commit()
+    return Store.open(tmp_path / "slow")
+
+
+def test_grep_stops_a_pattern_at_the_deadline(slow_store, monkeypatch):
+    workers = []
+
+    class Recorded(tools._GrepWorker):
+        def __init__(self, *a):
+            super().__init__(*a)
+            workers.append(self)
+
+    monkeypatch.setattr(tools, "_GrepWorker", Recorded)
+    t = tools.Tools(slow_store.path)
+    t0 = time.monotonic()
+    with pytest.raises(tools.ToolError, match=r"longer than 1 s; simplify it"):
+        t.grep(BACKTRACK, timeout=1)
+    assert time.monotonic() - t0 < 30
+    assert len(workers) == 1 and workers[0].proc.returncode is not None  # stopped
+    lines = log_lines(slow_store)
+    assert len(lines) == 1 and "longer than 1 s" in lines[0]["error"]
+    assert lines[0]["args"]["timeout"] == 1
+    assert t.grep(r"word", max=3).matches  # the tools still work after a stopped worker
+
+
+def test_cli_grep_timeout(slow_store, capsys):
+    code, out, err = run(capsys, "grep", BACKTRACK, "--store", slow_store.path,
+                         "--timeout", "0.5")
+    assert code == 2 and out == "" and "longer than 0.5 s" in err
+    assert len(log_lines(slow_store)) == 1
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 60.5, True, "5"])
+def test_grep_timeout_is_bounded(store, timeout):
+    with pytest.raises(tools.ToolError, match="timeout"):
+        tools.Tools(store.path).grep("refund", timeout=timeout)
+
+
+def test_grep_default_and_largest_timeout():
+    assert (tools.GREP_TIMEOUT, tools.GREP_TIMEOUT_MAX) == (10, 60)
+
+
+@pytest.mark.parametrize("pattern, kw", [
+    (r"refund\w*", {}),
+    (r"\bthe\b", {"ignore_case": True}),
+    (r"\bthe\b", {"ignore_case": True, "max": 7}),
+    (r"^#+ .*$", {}),
+    (r"e", {"max": 1000}),
+])
+@pytest.mark.parametrize("batch_chars", [None, 1])
+def test_grep_in_the_worker_equals_the_in_process_scan(store, monkeypatch, pattern, kw,
+                                                       batch_chars):
+    if batch_chars is not None:  # one document per request to the worker
+        monkeypatch.setattr(tools, "GREP_BATCH_CHARS", batch_chars)
+    res = tools.Tools(store.path).grep(pattern, **kw)
+    flags = re.MULTILINE | (re.IGNORECASE if kw.get("ignore_case") else 0)
+    limit = kw.get("max", tools.GREP_MAX)
+    docs = [(d, store.text(d)) for d in store.doc_ids()]
+    want, status = grep_worker.scan(re.compile(pattern, flags), docs, limit)
+    assert status != grep_worker.EMPTY
+    assert [(m.doc_id, m.char_start, m.char_end, m.line) for m in res.matches] == want
+    assert res.truncated == (status == grep_worker.MORE)
+    assert res.matches
+
+
+@pytest.mark.parametrize("pattern", ["the|(?=Federal)", "(?=QQQZZZ)", r"x?(?=\n)"])
+@pytest.mark.parametrize("max_", [1, 100, 10**6])
+def test_grep_refuses_a_pattern_of_minimum_width_zero_before_scanning(store, monkeypatch,
+                                                                      pattern, max_):
+    def no_scan(*a, **kw):
+        raise AssertionError("scanned")
+
+    monkeypatch.setattr(tools, "_GrepWorker", no_scan)
+    with pytest.raises(tools.ToolError, match="empty string"):
+        tools.Tools(store.path).grep(pattern, max=max_)
+    assert len(log_lines(store)) == 1
+
+
+def test_grep_line_ends_and_control_characters_in_the_context(tmp_path):
+    raw = b"alpha\r\nbeta NEEDLE\x0cgamma\x01 delta\tend\r\nomega\n"
+    s = Store.create(tmp_path / "s")
+    s.add(*doc(raw, "txt", "file://crlf.txt"))
+    s.commit()
+    t = tools.Tools(tmp_path / "s")
+    m = t.grep("NEEDLE").matches[0]
+    assert m.line == 2
+    assert m.context == "beta NEEDLE gamma  delta end "
+    assert not re.search(r"[\x00-\x1f\x7f-\x9f]", m.context)
+    assert t.grep("alpha$").matches == []  # `$` is before the `\n`, after the `\r`
+    assert [x.match for x in t.grep("alpha\r$").matches] == ["alpha\r"]
+    assert [x.line for x in t.grep("^beta").matches] == [2]
+    assert t.grep("^gamma").matches == []  # `\f` is not a line break
+    assert [x.line for x in t.grep("omega").matches] == [3]
+
+
+def test_cli_grep_context_has_no_control_characters(tmp_path, capsys):
+    s = Store.create(tmp_path / "s")
+    s.add(*doc(b"one\r\ntwo NEEDLE\x0bthree\x1bfour\r\n", "txt", "file://c.txt"))
+    s.commit()
+    code, out, _ = run(capsys, "grep", "NEEDLE", "--store", tmp_path / "s", "--json")
+    assert code == 0
+    assert json.loads(out)["matches"][0]["context"] == "two NEEDLE three four "
+
+
+def test_a_reranked_index_refuses_top_above_the_reranked_depth(store, fakes, capsys):
+    tools.Tools(store.path).index("p1-struct-bc-rr", w_bc=1, weight=0.5)
+    t = tools.Tools(store.path)
+    assert len(t.search(QUERY, top=50).hits) <= 50
+    with pytest.raises(tools.ToolError, match="top 50"):
+        t.search(QUERY, top=51)
+    code, out, err = run(capsys, "search", QUERY, "--store", store.path, "--top", 51)
+    assert code == 2 and out == "" and "top 50" in err
+    assert len(log_lines(store)) == 4  # index, search, and two refused searches
+
+
+def test_a_lexical_index_of_the_reranked_system_allows_top_100(store):
+    t = lexical(store, "p1-struct-bc-rr", w_bc=1)
+    t.search(QUERY, top=100)
+
+
+def test_the_corpus_default_store_is_redirected_during_tests(capsys):
+    repo = Path(__file__).resolve().parents[2]
+    assert not cli.STORE_ROOT.resolve().is_relative_to(repo)
+    gov = repo / ".cache" / "store" / "gov"
+    watched = [gov / "log" / "retrieval.jsonl", gov / "index" / "active.json"]
+    before = [(p.stat().st_size, p.stat().st_mtime_ns) if p.exists() else None for p in watched]
+    code, _, err = run(capsys, "grep", "x", "--corpus", "gov")
+    assert code == 2 and str(cli.STORE_ROOT / "gov") in err
+    code, _, err = run(capsys, "index", "gov", "--system", "p1-struct", "--lexical-only")
+    assert code == 2 and str(cli.STORE_ROOT / "gov") in err
+    after = [(p.stat().st_size, p.stat().st_mtime_ns) if p.exists() else None for p in watched]
+    assert after == before
+
+
+def test_cli_read_grep_index_json_keys(store, capsys):
+    s = store.path
+    code, out, _ = run(capsys, "index", s, "--system", "p1-struct", "--lexical-only", "--json")
+    assert code == 0 and set(json.loads(out)) == {
+        "system", "snapshot", "fingerprint", "lexical_only", "prefix", "rerank", "w_bc",
+        "w_bc_from", "w", "w_from", "n_chunks", "source", "path", "tuning"}
+    code, out, _ = run(capsys, "read", a_doc(store), "--store", s, "--end", 10, "--json")
+    assert code == 0 and set(json.loads(out)) == {
+        "snapshot", "doc_id", "uri", "char_start", "char_end", "text_sha256", "element_id",
+        "chunk_id", "text"}
+    code, out, _ = run(capsys, "grep", "refund", "--store", s, "--json")
+    gr = json.loads(out)
+    assert code == 0 and set(gr) == {"pattern", "ignore_case", "doc", "max", "snapshot",
+                                     "truncated", "matches"}
+    assert set(gr["matches"][0]) == {"doc_id", "char_start", "char_end", "line", "match",
+                                     "context", "snapshot"}
+
+
+def test_an_ambiguous_eight_character_prefix_is_refused(store):
+    with pytest.raises(tools.ToolError, match="ambiguous"):
+        tools._resolve("abcdef01", ["abcdef01" + "0" * 56, "abcdef01" + "1" * 56], "document",
+                       "here")
+    t = tools.Tools(store.path)
+    real = t.store.doc_ids()
+    twin = real[0][:8] + ("0" if real[0][8] != "0" else "1") + real[0][9:]
+    t.store.doc_ids = lambda: sorted([*real, twin])
+    with pytest.raises(tools.ToolError, match="ambiguous"):
+        t.read(real[0][:8])
+    assert t.read(real[0][:9]).doc_id == real[0]
+    assert len(log_lines(store)) == 2

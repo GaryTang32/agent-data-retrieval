@@ -1,4 +1,4 @@
-"""The retrieval tools over one store (spec §9): `index`, `search`, `read`, `grep`, and the
+r"""The retrieval tools over one store (spec §9): `index`, `search`, `read`, `grep`, and the
 retrieval log. A plain Python API (`Tools`) returning dataclasses, so the command line
 (`adr_store.cli`) and a later MCP wrapper call the same code.
 
@@ -18,17 +18,33 @@ harness's `--lexical-only`; with the same snapshot and values its fingerprint is
 run's.
 
 Search returns the active index's ranking exactly (`StoreIndex.retrieve`: best score first,
-ties by chunk id). Read returns `store.text(doc_id)[start:end]` (the store checks the text's
-hash; an element's or chunk's range is checked against its own hash or text). Grep runs a
-Python regular expression (multi-line mode, so `^` and `$` match at line ends) over every
-document of the snapshot in doc-id order, matches in offset order, at most `max`; a pattern
-that is empty or can match the empty string is refused. Document, element and chunk ids may
-be given as a unique prefix of at least 8 characters; results always carry full ids.
+ties by chunk id); a reranked index scores its top `RERANK_TOP` (50) fused chunks only, so it
+refuses a larger `top`. A missing or damaged active index (its directory, `active.json`,
+`chunks.jsonl`, or a fingerprint that does not recompute) is refused with "run `adr index`".
+Read returns `store.text(doc_id)[start:end]` (the store checks the text's hash; an element's
+or chunk's range is checked against its own hash or text).
 
-Every call, including a refused one, appends one JSON line to the log (UTC time, tool,
-arguments, snapshot id, result ids, and the error for a refused call) with a single
-`O_APPEND` write, after the result is computed; the log is never read, so it cannot change
-a result. Every result names the snapshot it came from.
+Grep runs a Python regular expression over every document of the snapshot in doc-id order,
+matches in offset order, at most `max`. A pattern that is empty, or whose shortest match is
+empty (`a*`, `^`, `\b`, `x|(?=y)`: the parser's minimum width is 0), is refused before
+anything is scanned. Multi-line mode is Python's: `^` matches at the start of the text and
+after each `\n`, `$` at the end and before each `\n`, and nothing else is a line break. On a
+`\r\n` line, `$` is between the `\r` and the `\n` (`abc$` does not match "abc\r\n", `abc\r$`
+does); a `\r` alone, a form feed `\f` (PDF page breaks) and the Unicode line separators are
+not line breaks. `line` is 1 plus the number of `\n` before the match. `context` is the
+match's `\n`-delimited line, clipped to `CONTEXT_CHARS` on each side, with `\r`, `\f`, tabs and
+every other control character (and U+2028, U+2029) shown as a space. The scan runs in a
+worker process (`adr_store.grep_worker`) with a deadline (`timeout`, default 10 s, at most
+60 s) on the time spent matching; a pattern that runs longer (catastrophic backtracking, as
+`(\w+\s?)+X`) is stopped and refused. Results are those of the same scan in process.
+
+Document, element and chunk ids may be given as a unique prefix of at least 8 characters;
+results always carry full ids.
+
+Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
+tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
+single `O_APPEND` write, after the result is computed; the log is never read, so it cannot
+change a result. Every result names the snapshot it came from.
 """
 
 from __future__ import annotations
@@ -38,20 +54,29 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from multiprocessing.connection import Connection
 from pathlib import Path
+from re import _parser as re_parser
 
+from adr_store import grep_worker
 from adr_store.embedding import EmbeddingCache
 from adr_store.records import sha256_text
 from adr_store.retrieval import Settings, StoreIndex
 from adr_store.retrieval.index import CHANNEL_K
 from adr_store.retrieval.lexical import check_w_bc
-from adr_store.retrieval.rerank import CrossEncoderReranker
+from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store, StoreError, write_atomic
 
 GREP_MAX = 100
+GREP_TIMEOUT, GREP_TIMEOUT_MAX = 10.0, 60.0  # seconds a grep pattern may spend matching
+GREP_BATCH_CHARS = 4_000_000  # text sent to the grep worker per request
+WORKER_START = 60.0  # seconds the grep worker may take to start
 SEARCH_TOP = 10
 CONTEXT_CHARS = 80  # characters of context on each side of a grep match
 MIN_PREFIX = 8
@@ -227,8 +252,12 @@ def _load_tuning(path: Path, system: str, snapshot: str) -> dict:
     return rec
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+
+
 def _context(text: str, start: int, end: int) -> str:
-    """The line around a match, clipped to `CONTEXT_CHARS` on each side, on one line."""
+    r"""The `\n`-delimited line around a match, clipped to `CONTEXT_CHARS` on each side, with
+    every control character (and U+2028, U+2029) shown as a space."""
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", end)
     line_end = len(text) if line_end < 0 else line_end
@@ -239,7 +268,79 @@ def _context(text: str, start: int, end: int) -> str:
         match = f"{match[:CONTEXT_CHARS]}…{match[-CONTEXT_CHARS:]}"
     out = ("…" if left > line_start else "") + text[left:start] + match + text[end:right] + \
         ("…" if right < line_end else "")
-    return out.replace("\r", " ").replace("\n", " ")
+    return _CONTROL.sub(" ", out)
+
+
+def _damaged(e: Exception | str) -> ToolError:
+    reason = e if isinstance(e, str) else f"{type(e).__name__}: {e}"
+    return ToolError(f"active index missing or damaged: {reason}; run `adr index`")
+
+
+class _GrepWorker:
+    """A worker process answering scan requests (`grep_worker.serve`), with a deadline on the
+    time spent waiting for its answers; stopped when the `with` block ends."""
+
+    def __init__(self, timeout: float):
+        self.timeout, self.left = timeout, timeout
+        r_req, w_req = os.pipe()
+        r_res, w_res = os.pipe()
+        try:
+            self.proc = subprocess.Popen(
+                [sys.executable, "-I", grep_worker.__file__, str(r_req), str(w_res)],
+                pass_fds=(r_req, w_res), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        except BaseException:
+            for fd in (r_req, w_req, r_res, w_res):
+                os.close(fd)
+            raise
+        os.close(r_req)
+        os.close(w_res)
+        self.requests = Connection(w_req, readable=False)
+        self.responses = Connection(r_res, writable=False)
+
+    def __enter__(self) -> _GrepWorker:
+        if self._receive(WORKER_START) != "ready":
+            raise RuntimeError("the grep worker did not start properly")
+        return self
+
+    def __exit__(self, *exc) -> None:
+        try:
+            if exc[0] is None:
+                self.requests.send(None)
+                self.proc.wait(5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        finally:
+            if self.proc.poll() is None:
+                self.proc.terminate()
+                try:
+                    self.proc.wait(5)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+                    self.proc.wait()
+            self.requests.close()
+            self.responses.close()
+
+    def _receive(self, seconds: float):
+        if not self.responses.poll(seconds):
+            return None
+        try:
+            return self.responses.recv()
+        except EOFError:
+            raise RuntimeError(f"the grep worker stopped (exit code {self.proc.poll()})") \
+                from None
+
+    def scan(self, pattern: str, flags: int, limit: int, docs: list[tuple[str, str]]):
+        """`grep_worker.scan` of `docs` in the worker, within what is left of the deadline."""
+        self.requests.send((pattern, flags, limit, docs))
+        t0 = time.monotonic()
+        answer = self._receive(max(self.left, 0.0))
+        self.left -= time.monotonic() - t0
+        if answer is None:
+            raise ToolError(f"pattern took longer than {self.timeout:g} s; simplify it")
+        status, value = answer
+        if status != "ok":
+            raise RuntimeError(f"grep worker: {value}")
+        return value
 
 
 # -- the tools ------------------------------------------------------------------------------
@@ -288,8 +389,10 @@ class Tools:
                  "snapshot": self.snapshot}
         try:
             result, ids, extra = fn()
-        except (ToolError, StoreError) as e:
-            self._append_log({**entry, "results": [], "error": str(e)})
+        except Exception as e:  # refused (ToolError, StoreError) or unexpected: logged
+            known = isinstance(e, (ToolError, StoreError))
+            error = str(e) if known else f"unexpected {type(e).__name__}: {e}"
+            self._append_log({**entry, "results": [], "error": error})
             if isinstance(e, StoreError):
                 raise ToolError(str(e)) from e
             raise
@@ -406,7 +509,16 @@ class Tools:
         path = self.index_root / "active.json"
         if not path.is_file():
             raise ToolError(f"{self.store_path}: no index; run `adr index` first")
-        active = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            active = json.loads(path.read_text(encoding="utf-8"))
+            missing = [k for k in ("system", "snapshot", "fingerprint", "lexical_only",
+                                   "rerank", "w") if k not in active]
+            if missing:
+                raise KeyError(", ".join(missing))
+            if not isinstance(active["fingerprint"], str) or not active["fingerprint"]:
+                raise ValueError(f"fingerprint {active['fingerprint']!r}")
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise _damaged(f"{path}: {type(e).__name__}: {e}") from e
         if active["snapshot"] != self.snapshot:
             raise ToolError(f"the index ({active['system']}) is for snapshot "
                             f"{_short(active['snapshot'])}, the store is at "
@@ -420,11 +532,14 @@ class Tools:
             dense = not active["lexical_only"]
             cache = make_embedding_cache(self.emb_cache) if dense else None
             reranker = make_reranker() if active["rerank"] else None
-            idx = StoreIndex.load(self.index_root / active["fingerprint"], cache=cache,
-                                  reranker=reranker)
+            try:
+                idx = StoreIndex.load(self.index_root / active["fingerprint"], cache=cache,
+                                      reranker=reranker)
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                raise _damaged(e) from e
             if idx.fingerprint != active["fingerprint"]:
-                raise StoreError(f"{self.index_root}: loaded index {idx.fingerprint} is not the "
-                                 f"active one {active['fingerprint']}")
+                raise _damaged(f"{self.index_root}: loaded index {idx.fingerprint} is not the "
+                               f"active one {active['fingerprint']}")
             self._index = idx
         return self._index, active
 
@@ -436,11 +551,14 @@ class Tools:
             active = self._active_record()
             path = self.index_root / active["fingerprint"] / "chunks.jsonl"
             rows = {}
-            with open(path, encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        row = json.loads(line)
-                        rows[row["chunk_id"]] = row
+            try:
+                with open(path, encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            row = json.loads(line)
+                            rows[row["chunk_id"]] = row
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                raise _damaged(e) from e
             self._chunks = rows
         return self._chunks
 
@@ -451,6 +569,10 @@ class Tools:
         def run():
             if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
                 raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
+            active = self._active_record()
+            if active["rerank"] and top > RERANK_TOP:
+                raise ToolError(f"the index ({active['system']}) reranks its top {RERANK_TOP} "
+                                f"chunks only; ask for --top {RERANK_TOP} or fewer")
             idx, active = self._active_index()
             hits = []
             for rank, (cid, score) in enumerate(
@@ -519,49 +641,58 @@ class Tools:
     # -- grep -------------------------------------------------------------------------
 
     def grep(self, pattern: str, doc: str | None = None, max: int = GREP_MAX,
-             ignore_case: bool = False) -> GrepResult:
-        """Regular-expression matches in (doc_id, offset) order, at most `max`."""
-        args = {"pattern": pattern, "doc": doc, "max": max, "ignore_case": ignore_case}
+             ignore_case: bool = False, timeout: float = GREP_TIMEOUT) -> GrepResult:
+        """Regular-expression matches in (doc_id, offset) order, at most `max`, within
+        `timeout` seconds of matching."""
+        args = {"pattern": pattern, "doc": doc, "max": max, "ignore_case": ignore_case,
+                "timeout": timeout}
 
         def run():
-            res = self._grep_impl(pattern, doc, max, ignore_case)
+            res = self._grep_impl(pattern, doc, max, ignore_case, timeout)
             return res, [[m.doc_id, m.char_start, m.char_end] for m in res.matches], {}
 
         return self._call("grep", args, run)
 
-    def _grep_impl(self, pattern, doc, max_, ignore_case) -> GrepResult:
+    def _grep_impl(self, pattern, doc, max_, ignore_case, timeout) -> GrepResult:
         if isinstance(max_, bool) or not isinstance(max_, int) or max_ < 1:
             raise ToolError(f"max must be a positive integer, got {max_!r}")
+        if isinstance(timeout, bool) or not isinstance(timeout, int | float) or \
+                not 0 < timeout <= GREP_TIMEOUT_MAX:
+            raise ToolError(f"timeout must be more than 0 and at most {GREP_TIMEOUT_MAX:g} "
+                            f"seconds, got {timeout!r}")
         if not pattern:
             raise ToolError("empty pattern; give a regular expression that matches some text")
         flags = re.MULTILINE | (re.IGNORECASE if ignore_case else 0)
         try:
             rx = re.compile(pattern, flags)
+            min_width = re_parser.parse(pattern, flags).getwidth()[0]
         except re.error as e:
             raise ToolError(f"bad regular expression {pattern!r}: {e}") from e
         empty = (f"pattern {pattern!r} can match the empty string, which would give a match "
                  f"at every position; make it match at least one character")
-        if rx.search("") is not None:
+        if min_width == 0 or rx.search("") is not None:
             raise ToolError(empty)
         doc_ids = self.store.doc_ids()
         if doc is not None:
             doc = _resolve(doc, doc_ids, "document", f"snapshot {_short(self.snapshot)}")
             doc_ids = [doc]
         matches: list[GrepMatch] = []
-        truncated = False
-        for d in doc_ids:
-            text = self.store.text(d)
-            line, counted = 1, 0  # line number at offset `counted`
-            for m in rx.finditer(text):
-                if len(matches) == max_:
-                    truncated = True
-                    break
-                if m.start() == m.end():
-                    raise ToolError(empty)
-                line += text.count("\n", counted, m.start())
-                counted = m.start()
-                matches.append(GrepMatch(d, m.start(), m.end(), line, m.group(0),
-                                         _context(text, m.start(), m.end()), self.snapshot))
-            if truncated:
-                break
-        return GrepResult(pattern, ignore_case, doc, max_, self.snapshot, truncated, matches)
+        status = grep_worker.DONE
+        with _GrepWorker(timeout) as worker:
+            i = 0
+            while i < len(doc_ids) and status == grep_worker.DONE:
+                batch, size = [], 0  # documents in order, up to GREP_BATCH_CHARS (at least one)
+                while i < len(doc_ids) and (not batch or size < GREP_BATCH_CHARS):
+                    text = self.store.text(doc_ids[i])
+                    batch.append((doc_ids[i], text))
+                    size += len(text)
+                    i += 1
+                found, status = worker.scan(pattern, flags, max_ - len(matches), batch)
+                texts = dict(batch)
+                matches += [GrepMatch(d, start, end, line, texts[d][start:end],
+                                      _context(texts[d], start, end), self.snapshot)
+                            for d, start, end, line in found]
+        if status == grep_worker.EMPTY:  # the minimum-width check should have caught it
+            raise ToolError(empty)
+        return GrepResult(pattern, ignore_case, doc, max_, self.snapshot,
+                          status == grep_worker.MORE, matches)
