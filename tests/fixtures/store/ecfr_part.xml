@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<DIV5 N="99" TYPE="PART">
+<HEAD>PART 99&#x2014;TEST RULES
+</HEAD>
+<AUTH>
+<HED>Authority:</HED><PSPACE>1 U.S.C. 1.
+</PSPACE></AUTH>
+<DIV6 N="A" TYPE="SUBPART">
+<HEAD>Subpart A&#x2014;General</HEAD>
+<DIV8 N="99.1" TYPE="SECTION">
+<HEAD>&#xA7; 99.1 Scope.</HEAD>
+<P>This part applies to <I>test</I> vessels.</P>
+<P>(a) A second paragraph.</P>
+<CITA TYPE="N">[1 FR 1, Jan. 1, 2000]
+</CITA>
+</DIV8>
+<DIV8 N="99.2" TYPE="SECTION">
+<HEAD>&#xA7; 99.2 Definitions with <E T="03">emphasis</E>.</HEAD>
+<P><I>Vessel.</I> Anything that floats.</P>
+</DIV8>
+<DIV8 N="99.3" TYPE="SECTION">
+<HEAD>&#xA7; 99.3 Long<PRTPAGE P="5"/> title.</HEAD>
+<P>Text after a page marker.</P>
+</DIV8>
+</DIV6>
+<DIV6 N="B" TYPE="SUBPART">
+<HEAD>Subpart B&#x2014;Drawbridges</HEAD>
+<DIV7 N="99.10" TYPE="SUBJGRP">
+<HEAD>Specific Requirements</HEAD>
+<DIV8 N="99.10" TYPE="SECTION">
+<HEAD>&#xA7; 99.10 Alpha River.</HEAD>
+<P>The draw opens on signal.</P>
+</DIV8>
+</DIV7>
+</DIV6>
+<DIV9 N="Appendix A" TYPE="APPENDIX">
+<HEAD>Appendix A to Part 99&#x2014;Figures</HEAD>
+<P>Figure 1.</P>
+</DIV9>
+</DIV5>
