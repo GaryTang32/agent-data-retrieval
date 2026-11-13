@@ -161,7 +161,9 @@ def test_rule4_element_id_must_follow_the_spec():
 def test_rule4_duplicate_ids():
     els = _elements()
     els = els + [els[2].model_copy(update={"order": 6})]
-    assert "rule 4" in _rules(check(_source(), els, TEXT, RAW))
+    problems = check(_source(), els, TEXT, RAW)
+    assert "rule 4" in _rules(problems)
+    assert any(p.startswith("rule 4:") and "element_id is not unique" in p for p in problems)
 
 
 def test_rule4_element_belongs_to_the_source():
@@ -173,3 +175,50 @@ def test_rule4_order_follows_start_then_longest_first():
     els = _elements()
     els = _with(_with(els, 1, order=2), 2, order=1)
     assert _rules(check(_source(), els, TEXT, RAW)) == {"rule 4"}
+
+
+def test_rule2_every_element_range_lies_in_the_text():
+    n = len(TEXT)
+    # the slice is cut at the text's end, so the hash of the slice still matches
+    els = _with(_elements(), 0, char_end=n + 5, text_sha256=sha256_text(TEXT))
+    problems = check(_source(), els, TEXT, RAW)
+    assert any(p.startswith("rule 2:") and "outside the text" in p for p in problems)
+
+
+def test_rule2_start_after_end_is_reported():
+    els = _with(_elements(), 3, char_start=20, char_end=19)
+    assert any(p.startswith("rule 2:") and "outside the text" in p
+               for p in check(_source(), els, TEXT, RAW))
+
+
+def test_rule3_section_level_is_its_depth():
+    els = _with(_elements(), 0, level=2)  # top-level section T
+    problems = check(_source(), els, TEXT, RAW)
+    assert _rules(problems) == {"rule 3"}
+    assert any("level 2" in p and "depth 1" in p for p in problems)
+
+
+def test_rule3_heading_level_is_its_section_level():
+    els = _with(_elements(), 4, level=1)  # heading of section S (level 2)
+    problems = check(_source(), els, TEXT, RAW)
+    assert _rules(problems) == {"rule 3"}
+    assert any("heading" in p and "level 1" in p for p in problems)
+
+
+def test_rule3_a_heading_belongs_to_a_section():
+    els = _with(_elements(), 1, parent_id=None, section_path=[])
+    assert any(p.startswith("rule 3:") and "not inside a section" in p
+               for p in check(_source(), els, TEXT, RAW))
+
+
+@pytest.mark.parametrize("update", [{"level": 1}, {"title": "Hello"}])
+def test_leaves_other_than_headings_have_no_level_or_title(update):
+    els = _with(_elements(), 2, **update)  # the paragraph "Hello world."
+    problems = check(_source(), els, TEXT, RAW)
+    assert _rules(problems) == {"record"}
+
+
+def test_page_is_null_outside_pdf():
+    els = _with(_elements(), 2, page=1)
+    assert _rules(check(_source(), els, TEXT, RAW)) == {"record"}
+    assert check(_source(format="pdf"), els, TEXT, RAW) == []
