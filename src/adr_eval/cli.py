@@ -196,7 +196,7 @@ def _retrieval_dir(name: str, out: Path) -> Path:
 
 def _retrieval_compare(a: argparse.Namespace) -> int:
     run_a, run_b = _retrieval_dir(a.run_a, a.out), _retrieval_dir(a.run_b, a.out)
-    c = compare_retrieval(run_a, run_b)
+    c = compare_retrieval(run_a, run_b, allow_mixed=a.allow_mixed)
     (run_a / f"compare-{run_b.name}.json").write_text(
         json.dumps(c, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     md = render_retrieval_compare_markdown(c)
@@ -309,6 +309,8 @@ def _parser() -> argparse.ArgumentParser:
                        help="paired comparison of two retrieval runs (run_b minus run_a)")
     p.add_argument("run_a")
     p.add_argument("run_b")
+    p.add_argument("--allow-mixed", action="store_true",
+                   help="compare a lexical-only run with a full run (marked in the output)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.set_defaults(fn=_retrieval_compare)
 

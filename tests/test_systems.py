@@ -199,6 +199,28 @@ def test_a_stale_store_is_ingested_again(mini, config, fakes):
     assert how == "ingested" and store.snapshot_id == full.snapshot_id
 
 
+def test_a_store_whose_text_differs_from_the_corpus_is_refused(mini, config, fakes):
+    """Same documents (doc ids are the raw bytes' hashes) but text extracted otherwise, as
+    after a change to a corpus adapter: the store is stale, and as its files are addressed by
+    doc id it cannot take the new text in place, so it is refused like a store from another
+    parser (remove it and it is ingested again)."""
+    import shutil
+    from dataclasses import replace
+
+    loaded = mini[0]
+    first, _ = systems.ensure_store("mini", loaded, config)
+    doc_id = first.doc_ids()[0]
+    changed = replace(loaded, docs={**loaded.docs, doc_id: replace(
+        loaded.docs[doc_id], text=loaded.docs[doc_id].text + "\n")})
+    with pytest.raises(runner.RunError, match=f"(?s)1 document.*{doc_id[:12]}.*remove"):
+        systems.ensure_store("mini", changed, config)
+    shutil.rmtree(first.path)
+    store, how = systems.ensure_store("mini", changed, config)
+    assert how == "ingested" and store.snapshot_id != first.snapshot_id
+    assert store.text(doc_id) == changed.docs[doc_id].text
+    assert systems.ensure_store("mini", changed, config)[1] == "loaded"
+
+
 def test_a_store_from_another_parser_is_refused(mini, config, fakes, monkeypatch):
     systems.ensure_store("mini", mini[0], config)
     monkeypatch.setattr("adr_store.structure.PARSER", "adr_store.structure/0")
@@ -254,6 +276,30 @@ def test_a_lexical_only_phase1_system_embeds_nothing(mini, config, fakes):
     assert lex.run_config()["fusion"] is None and lex.w is None
     for item in mini[1]:
         assert lex.retrieve(item.question) == lex.index.lexical_hits(item.question)[:10]
+
+
+def test_rerank_top_comes_from_the_reranker_module(mini, config, fakes, monkeypatch):
+    monkeypatch.setattr("adr_store.retrieval.rerank.RERANK_TOP", 7)
+    assert build("p1-struct-bc-rr", mini, config).run_config()["rerank_top"] == 7
+    assert build("p1-struct-bc", mini, config).run_config()["rerank_top"] is None
+
+
+def test_a_reranker_model_that_cannot_be_loaded_is_a_run_error(tmp_path, fakes, monkeypatch,
+                                                               capsys):
+    from adr_store.retrieval import rerank
+
+    def offline(model_name, cache_dir):
+        raise ValueError("Could not load model from any source")
+
+    monkeypatch.setattr(rerank, "load_cross_encoder", offline)
+    monkeypatch.setattr(systems, "make_reranker", lambda config: rerank.CrossEncoderReranker(
+        model_cache_dir=tmp_path / "no-models"))
+    assert main(["retrieval", "mini", "--system", "p1-struct-bc-rr", "--split", "test",
+                 "--out", str(tmp_path / "runs")]) == 2
+    err = capsys.readouterr().err
+    assert "Xenova/ms-marco-MiniLM-L-6-v2" in err and "not available offline" in err
+    assert "run once online or drop the reranked system" in err
+    assert "Traceback" not in err
 
 
 # -- `adr-eval run` and the retrieval track ---------------------------------------------
@@ -316,6 +362,17 @@ def test_the_retrieval_track_makes_no_model_client_and_writes_its_files(tmp_path
     assert {"recall@10", "ndcg@10", "mrr", "coverage@10", "tokens@10"} <= set(r["metrics"])
     pooled = data["summary"]["pooled"]
     assert pooled["n"] == 6 and pooled["ci"]["ndcg@10"]["n"] == 6
+    tokens = pooled["ci"]["tokens@10"]
+    assert tokens["n"] == 6 and tokens["mean"] == pytest.approx(pooled["tokens@10"])
+    assert tokens["ci95"][0] <= pooled["tokens@10"] <= tokens["ci95"][1]
+    for stratum in (*data["summary"]["by_rarity"].values(),
+                    *data["summary"]["by_qtype"].values()):
+        assert set(stratum["ci"]) == {"recall@10", "ndcg@10", "mrr", "coverage@10",
+                                      "tokens@10"}
+    md = (data["dir"] / "retrieval.md").read_text()
+    pooled_row = next(line for line in md.splitlines() if line.startswith("| pooled |"))
+    lo, hi = tokens["ci95"]
+    assert f"{pooled['tokens@10']:.1f} [{lo:.1f}, {hi:.1f}]" in pooled_row
     assert set(data["summary"]) == {"pooled", "by_rarity", "by_qtype", "by_rarity_qtype"}
 
 
@@ -332,16 +389,58 @@ def test_the_retrieval_track_of_a_baseline_makes_no_model_client(tmp_path, monke
 
 def test_retrieval_compare_gives_paired_holm_corrected_differences(tmp_path, fakes, capsys):
     a = _retrieval(tmp_path, "p1-struct")
-    b = _retrieval(tmp_path, "p1-struct-bc", "test", "--lexical-only")
+    b = _retrieval(tmp_path, "p1-struct-bc")
     capsys.readouterr()
     assert main(["retrieval-compare", a["dir"].name, b["dir"].name,
                  "--out", str(tmp_path / "runs")]) == 0
-    assert "Retrieval comparison" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert out.startswith("# Retrieval comparison: p1-struct-bc minus p1-struct\n")
+    assert "Warning" not in out
     c = json.loads((a["dir"] / f"compare-{b['dir'].name}.json").read_text())
     assert set(c["metrics"]) == {"recall@10", "ndcg@10", "mrr", "coverage@10"}
     assert c["n_pairs"] == 6 and c["difference"] == "run_b - run_a"
+    assert (c["lexical_only_a"], c["lexical_only_b"]) == (False, False)
     for m in c["metrics"].values():
         assert m["p_holm"] >= m["p"] and m["mean_diff"] == pytest.approx(m["b"] - m["a"])
+
+
+def test_retrieval_compare_carries_lexical_only_and_refuses_mixed_runs(tmp_path, fakes,
+                                                                        capsys):
+    a = _retrieval(tmp_path, "p1-struct")
+    b = _retrieval(tmp_path, "p1-struct-bc", "test", "--lexical-only")
+    c = _retrieval(tmp_path, "p1-struct", "test", "--lexical-only")
+    out = str(tmp_path / "runs")
+    capsys.readouterr()
+    assert main(["retrieval-compare", a["dir"].name, b["dir"].name, "--out", out]) == 2
+    err = capsys.readouterr().err
+    assert "lexical-only" in err and "--allow-mixed" in err
+    assert not (a["dir"] / f"compare-{b['dir'].name}.json").exists()
+    assert main(["retrieval-compare", a["dir"].name, b["dir"].name, "--out", out,
+                 "--allow-mixed"]) == 0
+    md = capsys.readouterr().out
+    first, heading = [line for line in md.splitlines() if line][:2]
+    assert first.startswith("> **Warning:**") and "lexical-only" in first
+    assert heading == "# Retrieval comparison: p1-struct-bc (lexical only) minus p1-struct"
+    data = json.loads((a["dir"] / f"compare-{b['dir'].name}.json").read_text())
+    assert (data["lexical_only_a"], data["lexical_only_b"]) == (False, True)
+    assert data["allow_mixed"] is True
+    assert main(["retrieval-compare", c["dir"].name, b["dir"].name, "--out", out]) == 0
+    md = capsys.readouterr().out
+    assert md.startswith("# Retrieval comparison: p1-struct-bc (lexical only) minus "
+                         "p1-struct (lexical only)\n") and "Warning" not in md
+
+
+def test_retrieval_compare_refuses_runs_on_other_golden_sets(tmp_path, fakes, capsys):
+    a = _retrieval(tmp_path, "p1-struct")
+    b = _retrieval(tmp_path, "p1-struct-bc")
+    path = b["dir"] / "retrieval.json"
+    data = json.loads(path.read_text())
+    data["config"]["golden_sha256"] = "0" * 64
+    path.write_text(json.dumps(data))
+    capsys.readouterr()
+    assert main(["retrieval-compare", a["dir"].name, b["dir"].name,
+                 "--out", str(tmp_path / "runs")]) == 2
+    assert "golden" in capsys.readouterr().err
 
 
 def test_retrieval_compare_refuses_other_metrics_versions_and_splits(tmp_path, fakes, capsys):

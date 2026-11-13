@@ -4,7 +4,8 @@ fastembed's `TextCrossEncoder` with `Xenova/ms-marco-MiniLM-L-6-v2` (ONNX, CPU, 
 Each (query, passage) pair is scored on its own (batch size 1), so a passage's score does not
 depend on the other candidates (no shared padding), and candidates are scored in chunk-id
 order: the result is a function of the query and the set of (chunk id, text) pairs only.
-Scores are rounded to six decimals; ties go to the smaller chunk id.
+Scores are rounded to six decimals; ties go to the smaller chunk id. A model that cannot be
+loaded (not in the fastembed cache and no network) raises `RerankerUnavailable`.
 """
 
 from __future__ import annotations
@@ -19,6 +20,17 @@ _BATCH = 1
 
 Scorer = Callable[[str, list[str]], Iterable[float]]
 Hits = list[tuple[str, float]]
+
+
+class RerankerUnavailable(RuntimeError):
+    """The cross-encoder model could not be loaded (e.g. not cached and offline)."""
+
+
+def load_cross_encoder(model_name: str, cache_dir: Path):
+    """fastembed's `TextCrossEncoder` (downloads the model when it is not cached)."""
+    from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+    return TextCrossEncoder(model_name, cache_dir=str(cache_dir), threads=1)
 
 
 def _file_sha256(path: Path) -> str:
@@ -47,11 +59,19 @@ class CrossEncoderReranker:
 
     def _get_model(self):
         if self._model is None:
-            from fastembed.rerank.cross_encoder import TextCrossEncoder
-
-            self._model = TextCrossEncoder(self.model_name, cache_dir=str(self.model_cache_dir),
-                                           threads=1)
+            try:
+                self._model = load_cross_encoder(self.model_name, self.model_cache_dir)
+            except Exception as e:  # fastembed / huggingface_hub raise many kinds
+                raise RerankerUnavailable(
+                    f"reranker model {self.model_name} not available offline in "
+                    f"{self.model_cache_dir} ({type(e).__name__}: {e})") from e
         return self._model
+
+    def load(self) -> None:
+        """Load the model now (nothing to load with a given scorer), so that a missing model
+        fails before any query; raises `RerankerUnavailable`."""
+        if self._scorer is None:
+            self._get_model()
 
     def _score(self, query: str, texts: list[str]) -> list[float]:
         if self._scorer is not None:

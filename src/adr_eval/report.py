@@ -28,6 +28,7 @@ COMPARE_T = 0.75
 PROXY_NOTE = "proxy, not human κ: judge vs the exact scorer on number/set/id items"
 G2_FIELDS = ("store", "op", "filters", "entities", "as_of")
 G3_KEYS = ("recall@10", "ndcg@10", "mrr", "coverage@10")
+RETRIEVAL_CI_KEYS = (*G3_KEYS, "tokens@10")  # the retrieval report gives tokens@10 a CI too
 RECOVERY_STAGES = ("query", "answer", "judge", "judge_check")
 
 
@@ -92,23 +93,24 @@ def _metric(rows: list[dict], key: str) -> list[float]:
     return [r["metrics"][key] for r in rows if r["metrics"].get(key) is not None]
 
 
-def _g3_block(rows: list[dict]) -> dict:
+def _g3_block(rows: list[dict], ci_keys: tuple[str, ...] = G3_KEYS) -> dict:
     multi = [r["metrics"]["full_coverage"] for r in rows if r["metrics"]["n_spans"] > 1]
     return {"n": len(rows),
             **{k: _mean(_metric(rows, k)) for k in G3_KEYS},
             "tokens@10": _mean(_metric(rows, "tokens@10")),
             "full_coverage": _mean(multi), "n_multi_span": len(multi),
-            "ci": {k: _ci(_metric(rows, k)) for k in G3_KEYS}}
+            "ci": {k: _ci(_metric(rows, k)) for k in ci_keys}}
 
 
-def _g3(rows: list[dict]) -> dict:
+def _g3(rows: list[dict], ci_keys: tuple[str, ...] = G3_KEYS) -> dict:
     """Over repeat 0 (retrieval is deterministic); `insufficient` items carry no metrics."""
     r0 = [r for r in rows if r["repeat"] == 0 and r["metrics"] is not None]
     return {
-        "pooled": _g3_block(r0),
-        "by_rarity": {k: _g3_block(v) for k, v in _group(r0, _rarity).items()},
-        "by_qtype": {k: _g3_block(v) for k, v in _group(r0, lambda r: r["qtype"]).items()},
-        "by_rarity_qtype": {k: _g3_block(v) for k, v in
+        "pooled": _g3_block(r0, ci_keys),
+        "by_rarity": {k: _g3_block(v, ci_keys) for k, v in _group(r0, _rarity).items()},
+        "by_qtype": {k: _g3_block(v, ci_keys)
+                     for k, v in _group(r0, lambda r: r["qtype"]).items()},
+        "by_rarity_qtype": {k: _g3_block(v, ci_keys) for k, v in
                             _group(r0, _rarity_qtype).items()},
     }
 
@@ -298,6 +300,15 @@ def _with_ci(value, ci: dict | None) -> str:
     return f"{_fmt(value)} [{ci['ci95'][0]:.3f}, {ci['ci95'][1]:.3f}]"
 
 
+def _tokens_with_ci(value, ci: dict | None) -> str:
+    """tokens@10 (a count of tokens) with one decimal, and its CI when there is one."""
+    if value is None:
+        return _fmt(value)
+    if ci is None:
+        return f"{value:.1f}"
+    return f"{value:.1f} [{ci['ci95'][0]:.1f}, {ci['ci95'][1]:.1f}]"
+
+
 def _penalised_cells(block: dict) -> list[str]:
     return [_with_ci(v, block["ci"]["penalised"][t]) for t, v in block["penalised"].items()]
 
@@ -477,9 +488,10 @@ def render_compare_markdown(c: dict) -> str:
 
 
 def retrieval_summary(rows: list[dict]) -> dict:
-    """G3 figures of a retrieval-track run: pooled and per rarity / qtype, with 95% CIs
-    (items without metrics, i.e. `insufficient`, are left out)."""
-    return _g3([{**r, "repeat": 0} for r in rows])
+    """G3 figures of a retrieval-track run: pooled and per rarity / qtype, with 95% CIs of
+    the four metrics and of tokens@10 (items without metrics, i.e. `insufficient`, are left
+    out)."""
+    return _g3([{**r, "repeat": 0} for r in rows], RETRIEVAL_CI_KEYS)
 
 
 def load_retrieval(run_dir: Path) -> dict:
@@ -505,7 +517,8 @@ def render_retrieval_markdown(data: dict) -> str:
     out += _table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "coverage@10", "tokens@10",
                    "full coverage"],
                   [[k, v["n"], *(_with_ci(v.get(m), v["ci"].get(m)) for m in G3_KEYS),
-                    v.get("tokens@10"), v["full_coverage"]]
+                    _tokens_with_ci(v.get("tokens@10"), v["ci"].get("tokens@10")),
+                    v["full_coverage"]]
                    for k, v in [("pooled", g3["pooled"]),
                                 *((f"rarity {k}", v) for k, v in g3["by_rarity"].items()),
                                 *((f"qtype {k}", v) for k, v in g3["by_qtype"].items())]])
@@ -515,12 +528,15 @@ def render_retrieval_markdown(data: dict) -> str:
     return "\n".join(out)
 
 
-def compare_retrieval(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> dict:
+def compare_retrieval(run_a: Path, run_b: Path, n_resamples: int = 10_000,
+                      allow_mixed: bool = False) -> dict:
     """Paired differences (run_b - run_a) of the retrieval metrics over shared items, with
     paired bootstrap CIs and Holm-adjusted p across the four metrics. Refuses runs of other
-    metrics versions, corpora or splits."""
+    metrics versions, corpora, splits or golden sets, and a lexical-only run against a full
+    one unless `allow_mixed`."""
     a, b = load_retrieval(run_a), load_retrieval(run_b)
     ca, cb = a["config"], b["config"]
+    lex_a, lex_b = bool(ca.get("lexical_only")), bool(cb.get("lexical_only"))
     if ca["metrics_version"] != cb["metrics_version"]:
         raise RunError(f"cannot compare runs with different metrics versions: "
                        f"{Path(run_a).name} is metrics version {ca['metrics_version']}, "
@@ -528,6 +544,14 @@ def compare_retrieval(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> di
     for key in ("corpus", "split"):
         if ca[key] != cb[key]:
             raise RunError(f"cannot compare runs of different {key}s: {ca[key]} and {cb[key]}")
+    if ca.get("golden_sha256") != cb.get("golden_sha256"):
+        raise RunError(f"cannot compare runs on different golden sets: {Path(run_a).name} has "
+                       f"golden_sha256 {ca.get('golden_sha256')}, {Path(run_b).name} has "
+                       f"{cb.get('golden_sha256')}")
+    if lex_a != lex_b and not allow_mixed:
+        lexical, full = (run_a, run_b) if lex_a else (run_b, run_a)
+        raise RunError(f"cannot compare a lexical-only run ({Path(lexical).name}) with a full "
+                       f"run ({Path(full).name}); pass --allow-mixed to compare them anyway")
     seed = ca.get("seed") or DEFAULT_SEED
     ra = {r["item_id"]: r for r in a["rows"] if r["metrics"] is not None}
     rb = {r["item_id"]: r for r in b["rows"] if r["metrics"] is not None}
@@ -545,18 +569,32 @@ def compare_retrieval(run_a: Path, run_b: Path, n_resamples: int = 10_000) -> di
     for k, m in metrics.items():
         m["p_holm"] = adjusted[k]
     return {"run_a": Path(run_a).name, "run_b": Path(run_b).name,
-            "system_a": ca["system"], "system_b": cb["system"], "corpus": ca["corpus"],
-            "split": ca["split"], "metrics_version": ca["metrics_version"],
+            "system_a": ca["system"], "system_b": cb["system"],
+            "lexical_only_a": lex_a, "lexical_only_b": lex_b,
+            "allow_mixed": allow_mixed and lex_a != lex_b, "corpus": ca["corpus"],
+            "split": ca["split"], "golden_sha256": ca.get("golden_sha256"),
+            "metrics_version": ca["metrics_version"],
             "n_pairs": len(shared), "n_resamples": n_resamples, "difference": "run_b - run_a",
             "metrics": metrics}
 
 
+def _system_label(c: dict, side: str) -> str:
+    return c[f"system_{side}"] + (" (lexical only)" if c.get(f"lexical_only_{side}") else "")
+
+
 def render_retrieval_compare_markdown(c: dict) -> str:
     bound = 2 / c["n_resamples"]
-    out = [f"# Retrieval comparison: {c['run_b']} minus {c['run_a']}", "",
-           f"`{c['system_b']}` minus `{c['system_a']}` on `{c['corpus']}` / `{c['split']}`, "
-           f"paired over {c['n_pairs']} shared items; paired bootstrap 95% CIs; Holm-adjusted "
-           f"p across the four metrics. Metrics version {c['metrics_version']}.", ""]
+    out = []
+    if c.get("lexical_only_a") != c.get("lexical_only_b"):
+        lexical = "B" if c.get("lexical_only_b") else "A"
+        out += [f"> **Warning:** run {lexical} is lexical-only (BM25 alone) and the other is a "
+                f"full run (--allow-mixed): the difference mixes the systems with the channels "
+                f"used", ""]
+    out += [f"# Retrieval comparison: {_system_label(c, 'b')} minus {_system_label(c, 'a')}",
+            "",
+            f"Run `{c['run_b']}` minus run `{c['run_a']}` on `{c['corpus']}` / `{c['split']}`, "
+            f"paired over {c['n_pairs']} shared items; paired bootstrap 95% CIs; Holm-adjusted "
+            f"p across the four metrics. Metrics version {c['metrics_version']}.", ""]
     out += _table(["metric", "n", "A", "B", "mean diff", "95% CI", "p", "p (Holm)"],
                   [[k, m["n"], m["a"], m["b"], m["mean_diff"],
                     f"[{m['ci95'][0]:.3f}, {m['ci95'][1]:.3f}]", _p_cell(m["p"], bound),

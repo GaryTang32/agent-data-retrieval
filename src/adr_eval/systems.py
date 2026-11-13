@@ -125,14 +125,34 @@ def make_reranker(config: dict):
     return CrossEncoderReranker()
 
 
+def _loaded_reranker(config: dict, name: str):
+    """`make_reranker(config)` with its model loaded and hashed; a model that cannot be
+    loaded is a `RunError` naming the fix."""
+    from adr_store.retrieval.rerank import RerankerUnavailable
+
+    reranker = make_reranker(config)
+    try:
+        reranker.load()
+        reranker.model_hash  # noqa: B018 (hashes the model file now)
+    except (RerankerUnavailable, FileNotFoundError) as e:
+        raise runner.RunError(f"{e}\nfix: run once online or drop the reranked system "
+                              f"({name})") from e
+    return reranker
+
+
 def store_dir(config: dict, corpus: str) -> Path:
     return runner.REPO_ROOT / config.get("store_dir", ".cache/store") / corpus
 
 
 def ensure_store(corpus: str, loaded: LoadedCorpus, config: dict):
     """The corpus's evidence store, ingested (through the `adr_store` API) when it is missing
-    or its snapshot does not hold exactly the corpus's documents; returns (store, how)."""
+    or its snapshot does not hold exactly the corpus's documents; returns (store, how).
+
+    A store made by another parser or extractor, or holding a document whose text differs
+    from the text the corpus gives it (text SHA-256; the store's files are addressed by doc
+    id, so it cannot take the new text in place), is refused with the fix: remove it."""
     from adr_store.cli import UNKNOWN_LICENSES, compile_figures
+    from adr_store.records import sha256_text
     from adr_store.store import EXTRACTOR, ConformanceError, Store, write_atomic
     from adr_store.structure import PARSER
 
@@ -145,6 +165,14 @@ def ensure_store(corpus: str, loaded: LoadedCorpus, config: dict):
             raise runner.RunError(
                 f"{path}: store made by {snap['parser']} / {snap['extractor']}, the code is "
                 f"{PARSER} / {EXTRACTOR}\nfix: remove {path} so that it is ingested again")
+        held = set(store.doc_ids())
+        differ = [d for d in want if d in held
+                  and store.source(d).text_sha256 != sha256_text(loaded.docs[d].text)]
+        if differ:
+            raise runner.RunError(
+                f"{path}: the stored text of {len(differ)} document(s) differs from the "
+                f"corpus's (e.g. {differ[0]}); the corpus's text extraction changed\nfix: "
+                f"remove {path} so that it is ingested again")
         if store.doc_ids() == want:
             return store, "loaded"
     store = Store.create(path)
@@ -204,12 +232,14 @@ class StoreSystem:
         return self.index.retrieve(question, fusion="linear", w=self.w)
 
     def run_config(self) -> dict:
+        from adr_store.retrieval.rerank import RERANK_TOP
+
         s = self.index.settings
         lexical_only = self.index.dense is None
         return {"fusion": None if lexical_only else "linear", "rrf_k": None,
                 "channel_k": _CHANNEL_K, "top_n": TOP_N, "linear_w": self.w,
                 "w_bc": s.w_bc, "prefix": s.prefix, "rerank": s.rerank,
-                "rerank_top": 50 if s.rerank else None, "lexical_only": lexical_only,
+                "rerank_top": RERANK_TOP if s.rerank else None, "lexical_only": lexical_only,
                 "chunker": self.index.chunker, "store": runner._display_path(self.store_path),
                 "store_snapshot": self.index.snapshot, "tuning": self.tuning}
 
@@ -273,7 +303,7 @@ def _store_system(name: str):
                 index.save(d)
         w_bc, w, tuning = tune_store(index, items, groups, name,
                                      W_BC_GRID if spec.tune_w_bc else (0,))
-        reranker = make_reranker(config) if spec.rerank and not lexical_only else None
+        reranker = _loaded_reranker(config, name) if spec.rerank and not lexical_only else None
         index = index.with_settings(w_bc=w_bc, rerank=reranker is not None, reranker=reranker)
         return StoreSystem(name, index, w, source, store.path, tuning)
 
