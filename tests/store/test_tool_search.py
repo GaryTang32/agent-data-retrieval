@@ -438,6 +438,30 @@ def test_tools_index_needs_a_weight_for_a_dense_index(store, fake_models):
     assert t.search_tools("git status").w == 0.3
 
 
+@pytest.mark.parametrize("dense,lie,where", [
+    (True, {"lexical_only": True, "w": None}, "meta.json"),
+    (False, {"lexical_only": False, "w": 0.5}, "meta.json"),
+    (False, {"w_name": 3}, "meta.json"),
+    (True, {"lexical_only": True}, "with w 0.5"),  # contradicts itself
+])
+def test_active_json_that_contradicts_the_index_metadata_is_damaged(tmp_path, config,
+                                                                    fake_models, monkeypatch,
+                                                                    dense, lie, where):
+    store = make(tmp_path / "store", config, dense=dense)
+    path = store / "tools" / "index" / "active.json"
+    active = json.loads(path.read_text())
+    path.write_text(json.dumps({**active, **lie}))
+
+    def no_model(*a, **kw):
+        raise AssertionError("an embedder was loaded for a damaged active.json")
+
+    monkeypatch.setattr(tools, "make_embedding_cache", no_model)
+    for t in (tools.Tools(store), as_(store, "user:auditor")):
+        e = err(t.search_tools, "git status")
+        assert "active tool index missing or damaged" in str(e) and where in str(e)
+    assert "damaged" in str(err(tools.Tools(store).active_tool_index))
+
+
 # -- log fields ---------------------------------------------------------------------------------
 
 def test_log_fields_of_the_tool_tools(store):

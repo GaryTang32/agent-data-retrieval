@@ -1504,8 +1504,27 @@ class Tools:
             raise ToolError(f"the tool index is for tool snapshot "
                             f"{_short(active['tool_snapshot'])}, the tool catalog is at "
                             f"{_short(catalog.snapshot_id)}; {fix} again")
+        if active["lexical_only"] != (active["w"] is None):
+            raise ToolError(f"active tool index missing or damaged: {path}: lexical_only "
+                            f"{active['lexical_only']} with w {active['w']!r}; {fix}")
         idx = self._tool_index
-        if idx is None or idx.fingerprint != active["fingerprint"]:
+        if idx is not None and idx.fingerprint == active["fingerprint"]:
+            self._check_tool_meta(active, {"fingerprint": idx.fingerprint,
+                                           "tool_snapshot": idx.tool_snapshot,
+                                           "w_name": idx.w_name,
+                                           "dense": idx.dense is not None}, "the loaded index")
+        else:
+            # active.json against the index's meta.json before any embedder is made, so a
+            # damaged record never loads (or downloads) a model
+            meta_path = self.tool_index_root / active["fingerprint"] / "meta.json"
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                if not isinstance(meta, dict):
+                    raise TypeError(f"not an object: {type(meta).__name__}")
+            except (OSError, ValueError, TypeError, RecursionError) as e:
+                raise ToolError(f"active tool index missing or damaged: {meta_path}: "
+                                f"{type(e).__name__}: {e}; {fix}") from e
+            self._check_tool_meta(active, meta, str(meta_path))
             cache = None if active["lexical_only"] else make_embedding_cache(self.emb_cache)
             try:
                 idx = ToolIndex.load(self.tool_index_root / active["fingerprint"], cache)
@@ -1518,6 +1537,18 @@ class Tools:
                                 f"{_short(idx.fingerprint)} is not the active one; {fix}")
             self._tool_index = idx
         return idx, active
+
+    @staticmethod
+    def _check_tool_meta(active: dict, meta: dict, what: str) -> None:
+        """ToolError ("damaged") when `active.json` contradicts the index's metadata."""
+        want = {"fingerprint": active["fingerprint"], "tool_snapshot": active["tool_snapshot"],
+                "w_name": active["w_name"], "dense": not active["lexical_only"]}
+        differ = [f"{k} {active_v!r} in active.json, {meta.get(k)!r} in {what}"
+                  for k, active_v in want.items() if meta.get(k) != active_v]
+        if differ:
+            name = "meta.json" if what.endswith("meta.json") else "meta.json (as loaded)"
+            raise ToolError(f"active tool index missing or damaged: active.json contradicts "
+                            f"the index's {name}: {'; '.join(differ)}; run `adr tools index`")
 
     def active_tool_index(self) -> ToolIndex:
         """The active tool index, loaded and checked as `search_tools` loads it (not
