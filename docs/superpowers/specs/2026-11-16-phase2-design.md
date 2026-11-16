@@ -538,7 +538,9 @@ The alternatives are in §11.
 **Adapters.**
 
 - **MCP:** a `tools/list` result.
-- **OpenAPI 3.x:** one record per operation. Local `$ref`s are resolved, depth-capped at 8.
+- **OpenAPI 3.x:** one record per operation. Local `$ref`s are resolved: a `$ref` already on
+  the current expansion branch (a cycle) is cut to `{}`, at most 8 are nested on one branch,
+  and past 10,000 expanded nodes per operation further `$ref`s become `{}`.
 - **ToolRet:** ToolBench-style documentation (`category_name`, `name`, `description`,
   `method`, `required_parameters`, `optional_parameters`). Parameters become an object schema
   with `required`.
@@ -574,7 +576,7 @@ subset:
 
 | | |
 |---|---|
-| Tools | 14,059 real RapidAPI endpoint descriptions from ToolBench (ids `toolbench_tool_*` in `mangopy/ToolRet-Tools`, revision `e06c38c75612b6536bd959e08cdd345894aba6a7`, config `web`) |
+| Tools | 14,059 real RapidAPI endpoint descriptions from ToolBench in `mangopy/ToolRet-Tools`, revision `e06c38c75612b6536bd959e08cdd345894aba6a7`: the 13,862 ids `toolbench_tool_*` of config `web` and the 197 ids `toolbench_sam_tool_*` of config `customized` (corrected in Task 9: the counts below were measured on this pool; the first wording named `web` alone) |
 | Queries | 1,100 (`mangopy/ToolRet-Queries`, revision `b8c76ad3349ff17497b6bdb28bb5b8f61a0f6445`, config `toolbench`); 2.39 gold tools per query; every gold tool is in the 14,059 |
 | Size | 1,227,462 tokens of raw documentation (mean 87, median 58 per tool) |
 | Splits | dev = the queries whose SHA-256 of the id is 0 mod 5 (about 220), test = the rest; fixed before any tuning |

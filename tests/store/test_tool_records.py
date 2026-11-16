@@ -42,7 +42,7 @@ def by_name(recs: list[ToolRecord]) -> dict[str, ToolRecord]:
 def sample_tools() -> list[dict]:
     rows = [json.loads(line) for line in
             (FIX / "toolret_sample.jsonl").read_text(encoding="utf-8").splitlines()]
-    return [r["row"] for r in rows if r["table"] == "tools"]
+    return [r["row"] for r in rows if r["table"].startswith("tools")]
 
 
 def toolret_record(row: dict) -> ToolRecord:
@@ -432,7 +432,7 @@ def test_toolret_operation_is_null_without_api_fields():
 
 def test_toolret_records_conform():
     for row in sample_tools():
-        if row["id"].startswith("toolbench_tool_"):
+        if row["id"].startswith(("toolbench_tool_", "toolbench_sam_tool_")):
             assert tool_records.conformance(toolret_record(row)) == []
 
 

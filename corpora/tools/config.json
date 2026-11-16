@@ -1,20 +1,34 @@
 {
   "corpus": "tools",
-  "name": "ToolRet, toolbench subset",
+  "name": "ToolRet, toolbench pool (toolbench and toolbench-sam tools)",
   "paper": "https://arxiv.org/abs/2503.01763",
   "license": "Apache-2.0",
   "license_summary": "ToolBench data (RapidAPI endpoint documentation): Apache-2.0 per the ToolBench README; ToolRet code: Apache-2.0; the ToolRet dataset cards declare no licence (Phase 2 spec Q2). Local-only: never committed",
-  "tool_prefix": "toolbench_tool_",
+  "tool_files": [
+    "tools_web",
+    "tools_customized"
+  ],
   "dev_modulus": 5,
   "files": {
-    "tools": {
+    "tools_web": {
       "repo": "mangopy/ToolRet-Tools",
       "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
       "config": "web",
       "path": "web/tools-00000-of-00001.parquet",
       "sha256": "57faceebd778b2cb74571dca0e71e8bc8078c11ba05dce0efc562e818d3950e6",
       "bytes": 8143446,
-      "local": "ToolRet-Tools/web/tools-00000-of-00001.parquet"
+      "local": "ToolRet-Tools/web/tools-00000-of-00001.parquet",
+      "prefix": "toolbench_tool_"
+    },
+    "tools_customized": {
+      "repo": "mangopy/ToolRet-Tools",
+      "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
+      "config": "customized",
+      "path": "customized/tools-00000-of-00001.parquet",
+      "sha256": "e3d0cf64f5d5321751401677c820c5e8c7df79bfd67a85c01e275fe573cbde41",
+      "bytes": 384413,
+      "local": "ToolRet-Tools/customized/tools-00000-of-00001.parquet",
+      "prefix": "toolbench_sam_tool_"
     },
     "queries": {
       "repo": "mangopy/ToolRet-Queries",

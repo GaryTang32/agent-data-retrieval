@@ -1,17 +1,18 @@
 """The tool corpus: ToolRet's `toolbench` subset, local-only (Phase 2 spec §8.3, ruling R13).
 
-`corpora/tools/config.json` pins two parquet files of the Hugging Face Hub by repository,
+`corpora/tools/config.json` pins three parquet files of the Hugging Face Hub by repository,
 revision, path and SHA-256 (the paths at each revision were found once with the Hub tree
-API): the tools of `mangopy/ToolRet-Tools` (config `web`) and the queries of
-`mangopy/ToolRet-Queries` (config `toolbench`). `fetch` downloads them with `PoliteFetcher`
+API): the tools of `mangopy/ToolRet-Tools` in configs `web` and `customized`, and the queries
+of `mangopy/ToolRet-Queries` (config `toolbench`). `fetch` downloads them with `PoliteFetcher`
 from `https://huggingface.co/datasets/<repo>/resolve/<revision>/<path>` into `data/tools/`
 (git-ignored), verifies each SHA-256, and writes `corpora/tools/manifest.json`: SHA-256 and
 size per file plus the corpus counts (`stats`); no timestamps, so a re-fetch writes the same
 bytes. Nothing from ToolRet is committed but revisions, hashes and counts.
 
-- `tools(root)`: the ToolRet rows whose id starts with the configured prefix
-  (`toolbench_tool_`), as `{"id", "documentation"}` (the raw ToolBench JSON string), sorted by
-  id.
+- `tools(root)`: the tool pool of spec §8.3, 14,059 tools: of each tools file (`tool_files`),
+  the rows whose id starts with that file's prefix (`toolbench_tool_` in `web`,
+  `toolbench_sam_tool_` in `customized`), as `{"id", "documentation", "repo", "revision",
+  "config"}` (`documentation` is the raw JSON string), sorted by id.
 - `queries(root)`: `ToolQuery(id, query, gold, split)` sorted by id; `gold` are the ToolRet
   ids of the labels with relevance > 0, in label order without repeats. The query field is
   used; ToolRet's `instruction` is not.
@@ -40,7 +41,6 @@ CONFIG_PATH = REPO_ROOT / "corpora" / "tools" / "config.json"
 MANIFEST_PATH = REPO_ROOT / "corpora" / "tools" / "manifest.json"
 DATA_DIR = REPO_ROOT / "data" / "tools"
 HUB = "https://huggingface.co/datasets"
-FILE_KEYS = ("tools", "queries")
 
 Split = Literal["dev", "test"]
 
@@ -77,6 +77,11 @@ def split_of(query_id: str) -> Split:
         else "test"
 
 
+def file_keys(config: dict) -> list[str]:
+    """The pinned files in fetch order: the tools files, then the queries."""
+    return [*config["tool_files"], "queries"]
+
+
 def _file(root: Path | None, config: dict, key: str) -> Path:
     entry = config["files"][key]
     path = Path(root or DATA_DIR) / entry["local"]
@@ -96,11 +101,18 @@ def _read(root: Path | None, config: dict, key: str) -> list[dict]:
 
 
 def tools(root: Path | None = None, config_path: Path | None = None) -> list[dict]:
-    """The configured ToolRet tools, `{"id", "documentation"}`, sorted by id."""
+    """The tool pool: `{"id", "documentation", "repo", "revision", "config"}`, sorted by
+    id (module docstring)."""
     config = load_config(config_path)
-    prefix = config["tool_prefix"]
-    rows = [{"id": r["id"], "documentation": r["documentation"]}
-            for r in _read(root, config, "tools") if r["id"].startswith(prefix)]
+    rows = []
+    for key in config["tool_files"]:
+        entry = config["files"][key]
+        rows += [{"id": r["id"], "documentation": r["documentation"], "repo": entry["repo"],
+                  "revision": entry["revision"], "config": entry["config"]}
+                 for r in _read(root, config, key) if r["id"].startswith(entry["prefix"])]
+    ids = [r["id"] for r in rows]
+    if len(set(ids)) != len(ids):
+        raise ValueError("a ToolRet tool id appears in two tools files")
     return sorted(rows, key=lambda r: r["id"])
 
 
@@ -153,7 +165,7 @@ def fetch(root: Path | None = None, config_path: Path | None = None,
     root = Path(root or DATA_DIR)
     fetcher = fetcher or make_fetcher()
     files = []
-    for key in FILE_KEYS:
+    for key in file_keys(config):
         entry = config["files"][key]
         dest = root / entry["local"]
         fetcher.download(file_url(entry), dest, entry["sha256"])
@@ -163,7 +175,10 @@ def fetch(root: Path | None = None, config_path: Path | None = None,
                       "bytes": dest.stat().st_size, "sha256": sha256_file(dest)})
     manifest = {"corpus": config["corpus"], "license": config["license"],
                 "license_summary": config["license_summary"],
-                "tool_prefix": config["tool_prefix"], "files": files,
+                "tool_selection": [{"file": k, "config": config["files"][k]["config"],
+                                    "prefix": config["files"][k]["prefix"]}
+                                   for k in config["tool_files"]],
+                "files": files,
                 "counts": stats(root, config_path)}
     path = Path(manifest_path or MANIFEST_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)

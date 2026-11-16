@@ -756,7 +756,6 @@ def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.Tool
     from adr_eval.corpora import toolret
 
     cfg = toolret.load_config(toolret.CONFIG_PATH)
-    entry = cfg["files"]["tools"]
     rows = toolret.tools(a.root if a.root is not None else toolret.DATA_DIR,
                          toolret.CONFIG_PATH)
     recs = []
@@ -768,12 +767,13 @@ def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.Tool
                               f"{_one_line(e)}") from e
         try:
             recs.append(tool_records.from_toolret(
-                doc, tool_records.toolret_uri(entry["repo"], entry["revision"],
-                                              entry["config"], r["id"]),
-                entry["revision"], cfg["license"], toolret_id=r["id"]))
+                doc, tool_records.toolret_uri(r["repo"], r["revision"], r["config"], r["id"]),
+                r["revision"], cfg["license"], toolret_id=r["id"]))
         except tool_records.AdapterError as e:
             raise _UsageError(f"ToolRet tool {r['id']}: {e}") from e
-    return f"toolret {entry['repo']}@{entry['revision'][:12]}/{entry['config']}", recs
+    files = [cfg["files"][k] for k in cfg["tool_files"]]
+    return (f"toolret {files[0]['repo']}@{files[0]['revision'][:12]} "
+            f"({', '.join(f['config'] for f in files)})", recs)
 
 
 def _tool_source(a: argparse.Namespace, refs: dict

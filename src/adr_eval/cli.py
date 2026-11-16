@@ -56,7 +56,8 @@ def _tools_fetch(a: argparse.Namespace) -> int:
     for f in m["files"]:
         print(f"{f['name']}: {f['repo']}@{f['revision'][:12]} {f['path']} ({f['bytes']} bytes, "
               f"sha256 {f['sha256'][:12]})")
-    print(f"tools: {c['tools']} tools ({m['tool_prefix']}*), {c['queries']} queries, mean "
+    pool = " + ".join(f"{t['prefix']}* ({t['config']})" for t in m["tool_selection"])
+    print(f"tools: {c['tools']} tools ({pool}), {c['queries']} queries, mean "
           f"{c['gold_mean']:.2f} gold tools ({c['gold_distinct']} distinct, "
           f"{c['gold_missing']} missing from the tools), {c['doc_tokens']} documentation "
           f"tokens (mean {c['doc_tokens_mean']:.1f}, median {c['doc_tokens_median']:g}), "

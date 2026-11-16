@@ -11,16 +11,19 @@ Fixtures for the tool adapters (`adr_store.tool_records`) and the ToolRet corpus
   parameters (path, query, header; a `$ref` parameter), a request body with JSON and XML media
   types, a `$ref` cycle (`Node.children[] -> Node`, cut at depth 8), the same parameter name
   in path and query, an operation without `operationId`, and an array (non-object) response.
-- `toolret_sample.jsonl`: **synthetic** rows in the shape of ToolRet's two parquet files, one
-  JSON object per line, `{"table": "tools" | "queries", "row": {...}}`. Tool rows have
-  ToolRet's `id` and `documentation` (a ToolBench JSON string: `category_name`, `name`,
-  `description`, `method`, `required_parameters`, `optional_parameters`, optional
-  `template_response`); query rows have `id`, `query`, `instruction`, `labels` (a JSON string
-  of `{"id", "doc", "relevance"}`) and `category`. Every name, description and query is
-  invented: no ToolRet or ToolBench text is committed (Phase 2 spec Q2, ruling R13). It
-  includes a `toolbench_sam_tool_*` and a `toolACE_tool_*` row, which the `toolbench_tool_`
-  prefix leaves out, duplicate parameter names, every parameter type spelling seen in the real
-  data, and `toolbench_query_18`, the one dev-split query.
+- `toolret_sample.jsonl`: **synthetic** rows in the shape of ToolRet's three parquet files,
+  one JSON object per line, `{"table": "tools_web" | "tools_customized" | "queries", "row":
+  {...}}`. Tool rows have ToolRet's `id` and `documentation` (a JSON string: for
+  `toolbench_tool_*`, ToolBench's `category_name`, `name`, `description`, `method`,
+  `required_parameters`, `optional_parameters`, optional `template_response`; for
+  `toolbench_sam_tool_*`, only `name` and `description`); query rows have `id`, `query`,
+  `instruction`, `labels` (a JSON string of `{"id", "doc", "relevance"}`) and `category`.
+  Every name, description and query is invented: no ToolRet or ToolBench text is committed
+  (Phase 2 spec Q2, ruling R13). It includes a `toolACE_tool_*` row in `web` and a
+  `toolalpaca_tool_*` row in `customized`, which the prefixes leave out, a `toolbench_sam`
+  tool with an empty name (as `toolbench_sam_tool_95` upstream), duplicate parameter names,
+  every parameter type spelling seen in the real data, and `toolbench_query_18`, the one
+  dev-split query.
 
 ## MCP reference servers (MIT), captured 2026-11-16
 
