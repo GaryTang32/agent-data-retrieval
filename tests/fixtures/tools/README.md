@@ -10,7 +10,8 @@ Fixtures for the tool adapters (`adr_store.tool_records`) and the ToolRet corpus
 - `openapi/handmade.json`: an invented OpenAPI 3.0.3 document with path-item and operation
   parameters (path, query, header; a `$ref` parameter), a request body with JSON and XML media
   types, a `$ref` cycle (`Node.children[] -> Node`, cut at depth 8), the same parameter name
-  in path and query, an operation without `operationId`, and an array (non-object) response.
+  in path and query, path parameters marked `required: false` or not marked (they are required
+  all the same), an operation without `operationId`, and an array (non-object) response.
 - `toolret_sample.jsonl`: **synthetic** rows in the shape of ToolRet's three parquet files,
   one JSON object per line, `{"table": "tools_web" | "tools_customized" | "queries", "row":
   {...}}`. Tool rows have ToolRet's `id` and `documentation` (a JSON string: for

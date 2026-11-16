@@ -749,7 +749,7 @@ def _acl_show(a: argparse.Namespace) -> int:
     return 0
 
 
-TOOL_STORE = Path(".cache/store-p2/toolret")
+TOOL_STORE = REPO_ROOT / ".cache" / "store-p2" / "toolret"
 
 
 def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolRecord]]:
@@ -827,15 +827,9 @@ def _tools_ingest(a: argparse.Namespace) -> int:
         print(f"error: {len(failed)} of {len(recs)} tools from {source} fail conformance; "
               f"nothing written", file=sys.stderr)
         return EXIT_CONFORMANCE
-    tool_catalog.ensure_store(store)
-    cat = (tool_catalog.ToolCatalog.open(store) if tool_catalog.has_catalog(store)
-           else tool_catalog.ToolCatalog.create(store))
-    before = len(cat)
-    for r in recs:
-        cat.add(r)
-    sid = cat.commit()
+    sid, before, after = tool_catalog.ingest(store, recs)
     res = {"store": str(store), "source": source, "records": len(recs),
-           "added": len(cat) - before, "tools": len(cat), "tool_snapshot": sid,
+           "added": after - before, "tools": after, "tool_snapshot": sid,
            "content_snapshot": Store.open(store).snapshot_id, "conformance": 1.0,
            "definition_tokens": sum(r.definition_tokens for r in recs),
            "refs": refs or None}
@@ -843,7 +837,7 @@ def _tools_ingest(a: argparse.Namespace) -> int:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return 0
     print(f"tools: {len(recs)} tools from {source}: conformance 100%, {res['added']} new; "
-          f"catalog {sid[:12]} holds {len(cat)} tools")
+          f"catalog {sid[:12]} holds {after} tools")
     print(f"  store {store} (content snapshot {res['content_snapshot'][:12]}); definitions "
           f"{res['definition_tokens']} tokens")
     if refs:

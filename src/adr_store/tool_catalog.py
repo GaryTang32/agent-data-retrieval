@@ -12,20 +12,27 @@ once (temporary file, then rename); an existing file under the same name with ot
 refused (`StoreError`). `add` refuses a record that fails `tool_records.conformance`
 (`ToolConformanceError`) before writing anything.
 
+`ingest` adds records and commits under an exclusive `flock` on `tools/ingest.lock` (as
+`acl.sync` serializes on `acl/sync.lock`), from reading `tools/HEAD` to moving it, so two
+concurrent ingests cannot drop each other's tools.
+
 A tools-only store (`ensure_store`) is a store whose content snapshot is empty
 (`Store.create(path).commit()`), so the ACL layer (`acl.sync`, F2) works on it unchanged.
 """
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_store.records import canonical_json
-from adr_store.store import Store, StoreError, _write_once, write_atomic
+from adr_store.store import Store, StoreError, write_atomic
 from adr_store.tool_records import ToolRecord, conformance
 
 FORMAT_VERSION = "0.1"
@@ -59,6 +66,16 @@ class ToolConformanceError(StoreError):
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _write_once(path: Path, data: bytes, what: str) -> None:
+    """Write `data` unless the file exists; refuse if it exists with other bytes."""
+    if path.exists():
+        if path.read_bytes() != data:
+            raise StoreError(f"{path} already holds a different {what} under the same id; "
+                             f"it is not replaced")
+        return
+    write_atomic(path, data)
 
 
 def tools_dir(store_path: Path) -> Path:
@@ -120,7 +137,7 @@ class ToolCatalog:
         if problems:
             raise ToolConformanceError(rec, problems)
         data = canonical_json(rec)
-        _write_once(self._path(rec.tool_id), data)
+        _write_once(self._path(rec.tool_id), data, f"tool record for {rec.tool_id}")
         self._records[rec.tool_id] = _sha256(data)
 
     def snapshot_bytes(self) -> bytes:
@@ -132,7 +149,7 @@ class ToolCatalog:
         data = self.snapshot_bytes()
         sid = _sha256(data)
         tdir = tools_dir(self.store_path)
-        _write_once(tdir / "snapshots" / f"{sid}.json", data)
+        _write_once(tdir / "snapshots" / f"{sid}.json", data, f"tool snapshot {sid}")
         write_atomic(tdir / "HEAD", f"{sid}\n".encode())
         self.snapshot_id = sid
         return sid
@@ -156,3 +173,29 @@ class ToolCatalog:
         if _sha256(data) != self._records[tool_id]:
             raise StoreError(f"{path}: tool record does not match the snapshot's record hash")
         return ToolRecord.model_validate_json(data)
+
+
+@contextmanager
+def lock(store_path: Path) -> Iterator[None]:
+    """An exclusive `flock` on `<store>/tools/ingest.lock` for the block."""
+    tdir = tools_dir(store_path)
+    tdir.mkdir(parents=True, exist_ok=True)
+    with open(tdir / "ingest.lock", "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def ingest(store_path: Path, records: list[ToolRecord]) -> tuple[str, int, int]:
+    """Add `records` to the store's catalog (made a tools-only store if new) and commit, under
+    the catalog lock; returns (tool snapshot id, tools before, tools after)."""
+    ensure_store(store_path)
+    with lock(store_path):
+        cat = ToolCatalog.open(store_path) if has_catalog(store_path) \
+            else ToolCatalog.create(store_path)
+        before = len(cat)
+        for rec in records:
+            cat.add(rec)
+        return cat.commit(), before, len(cat)

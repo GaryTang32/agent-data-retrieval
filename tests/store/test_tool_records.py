@@ -106,6 +106,15 @@ def test_conformance_is_structural():
     assert broken(input_schema={"type": "object", "properties": {"a": {}},
                                 "required": ["b"]})
     assert broken(input_schema={"type": "object", "properties": []})
+    assert broken(input_schema={"type": "object", "properties": {"q": {}},
+                                "required": ["q", "q"]})  # a name twice
+    assert not broken(input_schema={"type": "object", "properties": {"q": {}},
+                                    "required": ["q"]}, definition_tokens=_count(
+        tool_records.canonical({"name": rec.name, "description": rec.description,
+                                "inputSchema": {"type": "object", "properties": {"q": {}},
+                                                "required": ["q"]}})),
+        tool_id=tool_records.tool_id(rec.source_uri, rec.name, {
+            "type": "object", "properties": {"q": {}}, "required": ["q"]}))
     assert broken(output_schema={"type": "array"})
     assert broken(definition_tokens=rec.definition_tokens + 1)
     assert broken(tool_id="0" * 64)
@@ -192,6 +201,8 @@ def test_openapi_path_query_and_header_parameters():
 
 
 def test_openapi_same_name_in_two_locations():
+    """Also: path parameters are required though the spec marks `id` required: false and
+    leaves `treeId` unmarked."""
     s = by_name(handmade_openapi())["delete_trees_treeId_nodes_id"].input_schema
     assert s["properties"]["id"] == {"type": "string"}
     assert s["properties"]["id__query"]["type"] == "boolean"
@@ -491,6 +502,56 @@ def test_catalog_is_write_once(tmp_path):
         cat.add(other)
 
 
+def test_catalog_write_once_names_tools_not_parsers(tmp_path):
+    rec = handmade_openapi()[0]
+    cat = ToolCatalog.create(tmp_path / "s")
+    cat.add(rec)
+    with pytest.raises(StoreError) as e:
+        cat.add(rec.model_copy(update={"license": "other"}))
+    msg = str(e.value)
+    assert "tool record" in msg and rec.tool_id in msg
+    assert "parser" not in msg and "extractor" not in msg
+
+
+def test_tool_snapshot_is_write_once(tmp_path):
+    rec = handmade_openapi()[0]
+    cat = ToolCatalog.create(tmp_path / "s")
+    cat.add(rec)
+    sid = hashlib.sha256(cat.snapshot_bytes()).hexdigest()
+    snap = tmp_path / "s" / "tools" / "snapshots" / f"{sid}.json"
+    snap.parent.mkdir(parents=True)
+    snap.write_bytes(b"other bytes")
+    with pytest.raises(StoreError, match="tool snapshot"):
+        cat.commit()
+    assert snap.read_bytes() == b"other bytes"
+    assert not (tmp_path / "s" / "tools" / "HEAD").exists()
+
+
+def test_concurrent_ingests_do_not_drop_tools(tmp_path):
+    """`ingest` holds the catalog lock from reading tools/HEAD to moving it, so an ingest
+    that waits for another sees that one's tools."""
+    import threading
+
+    store = tool_catalog.ensure_store(tmp_path / "s")
+    first = mcp_records(FIX / "mcp" / "handmade.json")
+    second = handmade_openapi()
+    result: dict = {}
+    with tool_catalog.lock(store):
+        t = threading.Thread(target=lambda: result.update(
+            sid=tool_catalog.ingest(store, second)[0]))
+        t.start()
+        t.join(0.5)
+        assert t.is_alive()  # waits for the lock
+        cat = ToolCatalog.create(store)
+        for r in first:
+            cat.add(r)
+        cat.commit()
+    t.join(30)
+    final = ToolCatalog.open(store)
+    assert final.snapshot_id == result["sid"]
+    assert set(final.ids()) == {r.tool_id for r in first + second}
+
+
 def test_catalog_open_checks_hashes(tmp_path):
     rec = handmade_openapi()[0]
     cat = ToolCatalog.create(tmp_path / "s")
@@ -571,6 +632,26 @@ def test_sync_without_a_catalog_keeps_tools_empty(tmp_path, config):
     res = acl.sync(path, *config)
     _, snap = acl.read_head(path)
     assert snap.tool_snapshot is None and snap.tools == {} and res.tools == 0
+
+
+def test_tool_attributes_are_the_uri_only(tmp_path, config):
+    """A format rule never matches a tool (a tool has no format); a uri_prefix rule does."""
+    path, recs = _tool_store(tmp_path / "t")
+    policy = json.loads(config[1].read_text())
+    formats = ["md", "txt", "html", "xml", "pdf", "json", "csv"]
+    policy["rules"] = [{"match": {"format": f}, "access": []} for f in formats]
+    config[1].write_text(json.dumps(policy))
+    res = acl.sync(path, *config)
+    assert res.tool_kinds["rule"] == 0
+    _, snap = acl.read_head(path)
+    assert all(snap.tools[r.tool_id] for r in recs)  # no tool got the rules' empty list
+    policy["rules"] = [{"match": {"uri_prefix": "fixture:mcp/"}, "access": ["tenant:acme"]}]
+    config[1].write_text(json.dumps(policy))
+    res = acl.sync(path, *config)
+    _, snap = acl.read_head(path)
+    mcp = [r for r in recs if r.source_kind == "mcp"]
+    assert res.tool_kinds["rule"] == len(mcp) == 3
+    assert all(snap.tools[r.tool_id] == ["tenant:acme"] for r in mcp)
 
 
 def test_access_resolves_visible_tools(tmp_path, config):
@@ -656,3 +737,13 @@ def test_cli_ingest_reports_missing_refs(tmp_path, capsys):
     assert res["refs"]["missing_refs"] == 2 and res["refs"]["cycle_cuts"] == 0
     assert cli.main(base) == 0
     assert "2 missing $refs" in capsys.readouterr().out
+
+
+def test_default_tool_store_is_under_the_repo_root_whatever_the_cwd(tmp_path):
+    import subprocess
+    import sys
+
+    out = subprocess.run([sys.executable, "-c", "from adr_store import cli; "
+                          "print(cli.TOOL_STORE)"], cwd=tmp_path, capture_output=True,
+                         text=True, check=True).stdout.strip()
+    assert Path(out) == REPO / ".cache" / "store-p2" / "toolret"

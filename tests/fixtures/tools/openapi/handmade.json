@@ -46,8 +46,8 @@
     "/trees/{treeId}/nodes/{id}": {
       "delete": {
         "parameters": [
-          {"name": "treeId", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "treeId", "in": "path", "schema": {"type": "string"}},
+          {"name": "id", "in": "path", "required": false, "schema": {"type": "string"}},
           {"name": "id", "in": "query", "schema": {"type": "boolean"},
            "description": "A query parameter with the same name as a path parameter"}
         ],
