@@ -848,6 +848,51 @@ def _tools_ingest(a: argparse.Namespace) -> int:
     return 0
 
 
+def _tools_index(a: argparse.Namespace) -> int:
+    """Build or load the tool index of the store's tool catalog and make it active."""
+    store = a.store if a.store is not None else TOOL_STORE
+    info = tools.Tools(store, emb_cache=a.emb_cache).tools_index(
+        a.w_name, weight=a.weight, lexical_only=a.lexical_only, threads=a.threads)
+    if a.json:
+        _print_json(info)
+        return 0
+    mode = "lexical only" if info.lexical_only else f"fusion weight {info.w}"
+    print(f"tool index {info.fingerprint[:12]} ({info.source}) for tool snapshot "
+          f"{info.tool_snapshot[:12]}")
+    print(f"  tools {info.n_tools}; w_name {info.w_name}; {mode}")
+    return 0
+
+
+def _search_tools(a: argparse.Namespace) -> int:
+    filters = None if not a.source_kind else {"source_kind": a.source_kind}
+    res = _tools(a).search_tools(a.query, top=a.top, filters=filters)
+    if a.json:
+        _print_json(res)
+        return 0
+    lex = ", lexical only" if res.lexical_only else ""
+    kinds = res.filters["source_kind"]
+    only = "" if kinds is None else f"; source_kind {','.join(kinds)} ({res.excluded_by_filter}" \
+                                    f" excluded)"
+    print(f"tool snapshot {res.tools_snapshot[:12]}  tool index {res.fingerprint[:12]}{lex}  "
+          f"{len(res.hits)} hit(s){only}")
+    print(f"{'rank':>4}  {'score':>10}  {'tool':<12}  {'kind':<8}  {'name':<32}  summary")
+    for h in res.hits:
+        print(f"{h.rank:>4}  {h.score:>10.4f}  {h.tool_id[:12]}  {h.source_kind:<8}  "
+              f"{_cut(h.name, 32):<32}  {_cut(h.summary)}")
+    return 0
+
+
+def _load_tool(a: argparse.Namespace) -> int:
+    res = _tools(a).load_tool(a.tool_id)
+    if a.json:
+        _print_json(res)
+        return 0
+    print(f"# tool {res.tool_id[:12]} ({res.source_kind}, {res.source_uri}) tool snapshot "
+          f"{res.tools_snapshot[:12]}; {res.definition_tokens} tokens")
+    print(json.dumps(res.definition, indent=2, ensure_ascii=False))
+    return 0
+
+
 def _non_negative(s: str) -> int:
     v = int(s)
     if v < 0:
@@ -966,6 +1011,18 @@ def _parser() -> argparse.ArgumentParser:
                          f"{tools.GREP_TIMEOUT:g}, at most {tools.GREP_TIMEOUT_MAX:g})")
     _filter_flags(gr)
 
+    st = _tool_parser(sub, "search-tools", "ranked tools of the store's tool catalog for a query "
+                                           "(Phase 2)", _search_tools)
+    st.add_argument("query")
+    st.add_argument("--top", type=_positive, default=tools.SEARCH_TOP,
+                    help=f"number of tools (default {tools.SEARCH_TOP})")
+    st.add_argument("--source-kind", action="append", default=None, metavar="K",
+                    choices=tools.SOURCE_KINDS, help="keep tools of this source kind "
+                                                     "(repeatable)")
+    lt = _tool_parser(sub, "load-tool", "the MCP Tool definition of one tool (Phase 2)",
+                      _load_tool)
+    lt.add_argument("tool_id", help="tool id (or a unique prefix of 8+ characters)")
+
     app = sub.add_parser("applicability", help="the applicability overlay (Phase 2)")
     app_sub = app.add_subparsers(dest="action", required=True)
     der = app_sub.add_parser("derive", help="derive the applicability overlay of the store's "
@@ -1049,6 +1106,25 @@ def _parser() -> argparse.ArgumentParser:
     ti.add_argument("--license", default=None, help="the records' licence")
     ti.add_argument("--json", action="store_true", help="print the result as JSON")
     ti.set_defaults(fn=_tools_ingest)
+    tx = tl_sub.add_parser("index", help="build or load the tool index of the store's tool "
+                                         "catalog (tools/HEAD) and make it the active one")
+    tx.add_argument("--store", type=Path, default=None,
+                    help=f"store directory (default {TOOL_STORE})")
+    tx.add_argument("--w-name", type=_non_negative, required=True,
+                    help="times the split tool name is repeated in the BM25 text (tuned by "
+                         "`adr-eval tools-retrieval`)")
+    mode = tx.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--weight", type=float, default=None,
+                      help="linear fusion weight in [0, 1] on BM25 (tuned)")
+    mode.add_argument("--lexical-only", action="store_true",
+                      help="BM25 channel only: no embedding, no fusion")
+    tx.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                    help="embedding cache directory (dense index only)")
+    tx.add_argument("--threads", type=_non_negative, default=1,
+                    help="threads of the embedding model while building (default 1; 0 = all "
+                         "cores); the vectors do not depend on it")
+    tx.add_argument("--json", action="store_true", help="print the result as JSON")
+    tx.set_defaults(fn=_tools_index)
     return ap
 
 

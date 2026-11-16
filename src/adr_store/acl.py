@@ -504,7 +504,8 @@ def view_id(docs) -> str:
 class Access:
     """What one call may see: the caller's resolved principals under one ACL snapshot, the
     documents and tools whose access list meets them (no entry or an empty list: no one),
-    and the view id (`view_id` of `docs`)."""
+    the view id (`view_id` of `docs`) and the tool snapshot the ACL snapshot was synced
+    with (None: it covers no tool catalog)."""
 
     acl_snapshot: str
     caller: str
@@ -512,6 +513,7 @@ class Access:
     docs: frozenset[str]
     tools: frozenset[str]
     view: str
+    tool_snapshot: str | None = None
 
 
 def _visible(entries: dict[str, list[str]], principals: frozenset[str]) -> frozenset[str]:
@@ -592,7 +594,8 @@ def resolve(store_path: Path, caller: str | None, content_snapshot: str, *,
     ps = frozenset(principals)
     docs = _visible(snap.docs, ps)
     return Access(acl_snapshot=sid, caller=caller, principals=principals, docs=docs,
-                  tools=_visible(snap.tools, ps), view=view_id(docs))
+                  tools=_visible(snap.tools, ps), view=view_id(docs),
+                  tool_snapshot=snap.tool_snapshot)
 
 
 # -- the sync cycle --------------------------------------------------------------------------

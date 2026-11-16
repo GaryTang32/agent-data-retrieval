@@ -119,6 +119,39 @@ change a result. Every line carries `caller` (as given), `principals`, `acl_snap
 `acl_decision` (`allowed`, `denied:F1`…`denied:F5`, or `off` without the ACL layer), `view`
 and `not_visible` (the invisible ids a read or doc-scoped grep named, for audit only; [] when
 none), null when not resolved. Every result names the snapshot it came from.
+
+Tools as data (Phase 2 spec §8.2, §5.4). `search_tools(query, top, filters)` ranks the tools of
+the store's tool catalog (`<store>/tools`, `adr_store.tool_catalog`) with the active tool index
+(`tools_index(w_name, weight=, lexical_only=)` builds or loads a `ToolIndex` for `tools/HEAD`
+under `<store>/tools/index/<fingerprint>/` and writes `<store>/tools/index/active.json`; an
+operator call, refused with the ACL layer); a hit carries `rank`, `tool_id`, `name`, `summary`
+(the first sentence of the description, at most 200 characters), `source_kind`, `source_uri`,
+`score` and `tools_snapshot`, never the schema. `filters` is `{"source_kind": [...]}` (mcp,
+openapi, toolret): a mask within the caller's tool view, like the applicability filters (it
+changes no statistic; `excluded_by_filter` counts the view's tools it excluded).
+`load_tool(tool_id)` returns the MCP Tool definition (`tool_records.definition`), the source
+fields and `tools_snapshot`; a unique prefix of at least 8 characters resolves among the
+caller's visible tools only. With the ACL layer:
+- both see only the tools whose access list meets the caller's principals; an invisible tool
+  does not exist (byte for byte the message of a nonexistent id; the invisible ids named are
+  logged in `not_visible`);
+- search scores with BM25 statistics over the caller's tool view (an LRU of `VIEW_CACHE` by
+  (tool index fingerprint, tool view id), the tool view id being the SHA-256 of the sorted
+  visible tool ids: `Access.view` hashes documents only, so two callers with one document view
+  and different tool views never share statistics; a view of every indexed tool uses the
+  index's own BM25) and the row-exact dense kernel, so results equal those of a catalog of the
+  view's tools only;
+- fail closed on the catalog (planner's call: code F2, the rule for content snapshots): the
+  ACL snapshot's `tool_snapshot` must be `tools/HEAD` (a catalog changed since the last sync,
+  a missing, unreadable or malformed `tools/HEAD` while the ACL names a tool snapshot, or an
+  ACL snapshot without a tool snapshot while a catalog exists, all deny), and the tool
+  snapshot file must read and hash to its id. With neither a catalog nor a tool snapshot the
+  call is refused ("no tool catalog"); nothing is hidden there.
+- a tool the ACL lists but the catalog lacks, or whose record does not match its snapshot
+  hash, is "not found" with exactly the message of a nonexistent id (the reason is logged in
+  `tool_error`, never returned).
+Log lines of the tool tools carry `tools_snapshot`, `tool_index`, `tool_view`, `filters` and
+`tool_error` beside the fields above.
 """
 
 from __future__ import annotations
@@ -160,7 +193,10 @@ from adr_store.retrieval import Settings, StoreIndex
 from adr_store.retrieval.index import CHANNEL_K, chunk_content_sha256
 from adr_store.retrieval.lexical import FieldBM25, check_w_bc, doc_mask
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
+from adr_store.retrieval.tool_index import ToolIndex, tool_view_id
 from adr_store.store import Store, StoreError, write_atomic
+from adr_store.tool_catalog import ToolCatalog
+from adr_store.tool_records import definition as tool_definition
 
 GREP_MAX = 100
 GREP_TIMEOUT, GREP_TIMEOUT_MAX = 10.0, 60.0  # seconds a grep pattern may spend matching
@@ -175,6 +211,8 @@ NO_OVERLAY = "no applicability overlay; run `adr applicability derive`"
 VIEW_CACHE = 32  # per-view BM25 indexes kept in memory (LRU by index fingerprint and view)
 _VIEW_LEXICAL: OrderedDict[tuple[str, str], FieldBM25] = OrderedDict()
 _VIEW_LOCK = threading.Lock()
+_TOOL_VIEW_LEXICAL: OrderedDict[tuple[str, str], FieldBM25] = OrderedDict()
+SOURCE_KINDS = ("mcp", "openapi", "toolret")
 CHAIN_CACHE = 8  # chain maps kept in memory, by content snapshot id
 _CHAINS: OrderedDict[str, dict[str, tuple[str, ...]]] = OrderedDict()
 OPERATOR_UNDER_ACL = ("{} is an operator call (the whole index, unfiltered) and does not run "
@@ -321,6 +359,57 @@ class GrepResult(_Result):
     applicability: str | None = None
     filters: dict = field(default_factory=lambda: Filters().to_dict())
     excluded_by_filter: int = 0
+
+
+@dataclass(frozen=True)
+class ToolIndexInfo(_Result):
+    tool_snapshot: str
+    fingerprint: str
+    w_name: int
+    w: float | None
+    lexical_only: bool
+    n_tools: int
+    source: str  # "built" or "loaded"
+    path: str
+
+
+@dataclass(frozen=True)
+class ToolHit(_Result):
+    rank: int
+    tool_id: str
+    name: str
+    summary: str
+    source_kind: str
+    source_uri: str
+    score: float
+    tools_snapshot: str
+
+
+@dataclass(frozen=True)
+class SearchToolsResult(_Result):
+    query: str
+    top: int
+    tools_snapshot: str
+    fingerprint: str
+    lexical_only: bool
+    w_name: int
+    w: float | None
+    hits: list[ToolHit] = field(default_factory=list)
+    filters: dict = field(default_factory=lambda: {"source_kind": None})
+    excluded_by_filter: int = 0
+
+
+@dataclass(frozen=True)
+class LoadToolResult(_Result):
+    tool_id: str
+    definition: dict
+    source_kind: str
+    source_uri: str
+    source_version: str
+    operation: dict | None
+    license: str
+    definition_tokens: int
+    tools_snapshot: str
 
 
 # -- helpers ------------------------------------------------------------------------------
@@ -596,6 +685,9 @@ class Tools:
         self._access_now: Access | None = None  # the access of the call running
         self._not_visible: list[str] | None = None  # requested ids that were invisible
         self._in_call = False
+        self._tool_index: ToolIndex | None = None
+        self._tool_catalog: tuple[tuple, ToolCatalog] | None = None  # (file key, catalog)
+        self._catalog_now: ToolCatalog | None = None  # the checked catalog of the call
 
     @property
     def index_root(self) -> Path:
@@ -624,11 +716,12 @@ class Tools:
         return c if c is None or isinstance(c, str) else repr(c)
 
     def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]],
-              fields: dict | None = None):
+              fields: dict | None = None, *, tool_call: bool = False):
         """Run one tool call and log it; `fn` returns (result, result ids, extra fields).
         `fields` are logged on every line, refused or not: `fn` fills in what it learns.
         On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access,
-        which `fn` sees as `self._access_now`."""
+        which `fn` sees as `self._access_now` (`tool_call`: and checks the tool catalog
+        against it, `_check_tools`)."""
         with self._lock:
             when = datetime.now(UTC).isoformat()
             fields = {} if fields is None else fields
@@ -636,11 +729,12 @@ class Tools:
                           "acl_snapshot": None, "acl_decision": None if self.acl else "off",
                           "view": None, "not_visible": None}
             self._memo, self._access_now, self._not_visible = {}, None, None
+            self._catalog_now = None
             self._in_call = True
             try:
                 self._refresh()
                 if self.acl:
-                    self._enter(acl_fields)
+                    self._enter(acl_fields, tool_call)
                 result, ids, extra = fn()
             except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
                 if isinstance(e, (ToolError, StoreError)):
@@ -658,6 +752,7 @@ class Tools:
                 raise
             finally:
                 self._access_now, self._memo, self._in_call = None, {}, False
+                self._catalog_now = None
             acl_fields["not_visible"] = self._not_visible
             self._append_log({"time": when, "tool": tool, "args": args,
                               "snapshot": self.snapshot, **fields, **acl_fields, **extra,
@@ -705,10 +800,13 @@ class Tools:
                             access.acl_snapshot)
         return access
 
-    def _enter(self, acl_fields: dict) -> None:
-        """Resolve the call's access; a denial is an AccessDenied, logged with its code."""
+    def _enter(self, acl_fields: dict, tool_call: bool = False) -> None:
+        """Resolve the call's access (and for a tool tool, check the catalog against it); a
+        denial is an AccessDenied, logged with its code."""
         try:
             access = self._resolve_access()
+            if tool_call:
+                self._catalog_now = self._check_tools(access)
         except AclDenied as e:
             acl_fields.update(acl_decision=f"denied:{e.code}", acl_snapshot=e.acl_snapshot)
             raise AccessDenied(e.code, str(e)) from e
@@ -1261,3 +1359,303 @@ class Tools:
         return GrepResult(pattern, ignore_case, doc, max_, self.snapshot,
                           status == grep_worker.MORE, matches, **applied.fields(),
                           excluded_by_filter=excluded)
+
+    # -- tools as data ----------------------------------------------------------------
+
+    @property
+    def tool_index_root(self) -> Path:
+        return self.store_path / "tools" / "index"
+
+    def _tool_head(self) -> str | None:
+        """`tools/HEAD` as written (stripped), None when there is no such file; one that
+        cannot be read is a string that names no snapshot."""
+        try:
+            return (self.store_path / "tools" / "HEAD").read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as e:
+            return f"<tools/HEAD unreadable: {type(e).__name__}>"
+
+    def _open_catalog(self, snapshot: str) -> ToolCatalog:
+        """The tool catalog at `snapshot` (StoreError when its file is missing or does not
+        hash to its id), the parse reused while the snapshot file is unchanged."""
+        path = self.store_path / "tools" / "snapshots" / f"{snapshot}.json"
+        key = (snapshot, _stat_key(path))
+        if self._tool_catalog is not None and self._tool_catalog[0] == key:
+            return self._tool_catalog[1]
+        try:
+            cat = ToolCatalog.open(self.store_path, snapshot)
+        except (OSError, ValueError) as e:  # a schema-invalid file (pydantic) or unreadable
+            raise StoreError(f"{self.store_path}: tool snapshot {_short(snapshot)} unreadable "
+                             f"({type(e).__name__})") from e
+        self._tool_catalog = (key, cat)
+        return cat
+
+    def _check_tools(self, access: Access) -> ToolCatalog | None:
+        """The tool catalog the call may read, checked against the ACL snapshot (AclDenied F2
+        otherwise, module docstring); None when there is neither a catalog nor a tool
+        snapshot."""
+        head, synced = self._tool_head(), access.tool_snapshot
+        sid = access.acl_snapshot
+        if head is None and synced is None:
+            return None
+        if synced is None:
+            raise AclDenied("F2", f"the ACL snapshot {sid[:12]} covers no tool catalog, the "
+                                  f"store has one; run `adr acl sync`", sid)
+        if head != synced:
+            now = "none" if head is None else _short(head)
+            raise AclDenied("F2", f"the ACL snapshot {sid[:12]} is for tool snapshot "
+                                  f"{synced[:12]}, the tool catalog is at {now}; run "
+                                  f"`adr acl sync`", sid)
+        try:
+            return self._open_catalog(synced)
+        except StoreError as e:
+            raise AclDenied("F2", f"tool snapshot {synced[:12]} of the ACL snapshot "
+                                  f"{sid[:12]} cannot be read ({type(e).__name__}); fix the "
+                                  f"tool catalog and run `adr acl sync`", sid) from e
+
+    def _catalog(self) -> ToolCatalog:
+        """The call's tool catalog: the one `_check_tools` checked, or without the ACL layer
+        the one at `tools/HEAD`."""
+        if self._access_now is not None:
+            cat = self._catalog_now
+        else:
+            head = self._tool_head()
+            cat = None if head is None else self._open_catalog(head)
+        if cat is None:
+            raise ToolError(f"{self.store_path}: no tool catalog here (no tools/HEAD); run "
+                            f"`adr tools ingest` first")
+        return cat
+
+    def tools_index(self, w_name: int, *, weight: float | None = None,
+                    lexical_only: bool = False, threads: int = 1) -> ToolIndexInfo:
+        """Build or load the tool index of `tools/HEAD` with name weight `w_name` and fusion
+        weight `weight` (none for a lexical-only index) and make it the active tool index.
+        An operator call: refused with the ACL layer. `threads` as for `index`."""
+        args = {"w_name": w_name, "weight": weight, "lexical_only": lexical_only,
+                "threads": threads}
+
+        def run():
+            if self.acl:
+                raise ToolError(INDEX_UNDER_ACL.replace("index is", "tools_index is")
+                                .replace("`adr index`", "`adr tools index`"))
+            info = self._tools_index_impl(w_name, weight, lexical_only, threads)
+            return info, [info.fingerprint], {}
+
+        return self._call("tools_index", args, run)
+
+    def _tools_index_impl(self, w_name, weight, lexical_only, threads) -> ToolIndexInfo:
+        if isinstance(w_name, bool) or not isinstance(w_name, int) or w_name < 0:
+            raise ToolError(f"w_name must be an integer >= 0, got {w_name!r}")
+        if lexical_only and weight is not None:
+            raise ToolError("a lexical-only tool index has no fusion; drop --weight")
+        if not lexical_only:
+            if weight is None:
+                raise ToolError("a hybrid tool index needs a tuned fusion weight: pass "
+                                "--weight W (from `adr-eval tools-retrieval`), or use "
+                                "--lexical-only")
+            if isinstance(weight, bool) or not isinstance(weight, int | float) or \
+                    not 0.0 <= float(weight) <= 1.0:
+                raise ToolError(f"the fusion weight must be between 0 and 1, got {weight!r}")
+        cat = self._catalog()
+        dense = not lexical_only
+        cache = make_embedding_cache(self.emb_cache, threads=threads) if dense else None
+        expected = ToolIndex.expected_fingerprint(cat, w_name, cache, dense=dense)
+        final = self.tool_index_root / expected
+        if (final / "meta.json").is_file():
+            idx, source = ToolIndex.load(final, cache), "loaded"
+        else:
+            idx, source = ToolIndex.build(cat, w_name, cache, dense=dense), "built"
+            if idx.fingerprint != expected:
+                raise StoreError(f"built tool index fingerprint {idx.fingerprint} differs "
+                                 f"from the expected {expected}")
+            idx.save(final)
+        info = ToolIndexInfo(tool_snapshot=cat.snapshot_id, fingerprint=idx.fingerprint,
+                             w_name=w_name, w=None if lexical_only else float(weight),
+                             lexical_only=lexical_only, n_tools=len(idx.rows), source=source,
+                             path=str(final))
+        write_atomic(self.tool_index_root / "active.json",
+                     (json.dumps(info.to_dict(), indent=2, sort_keys=True) + "\n").encode())
+        self._tool_index = idx if threads == 1 or lexical_only else None
+        return info
+
+    _TOOL_ACTIVE_FIELDS = {"tool_snapshot": str, "fingerprint": str, "w_name": int,
+                           "lexical_only": bool, "w": float | int | type(None)}
+
+    def _tool_active(self, catalog: ToolCatalog) -> tuple[ToolIndex, dict]:
+        """The active tool index (checked: for the catalog's snapshot, its fingerprint)."""
+        path = self.tool_index_root / "active.json"
+        if not path.is_file():
+            raise ToolError(f"{self.store_path}: no tool index; run `adr tools index` first")
+        fix = "run `adr tools index`"
+        try:
+            active = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(active, dict):
+                raise TypeError(f"not an object: {type(active).__name__}")
+            for k, kind in self._TOOL_ACTIVE_FIELDS.items():
+                v = active[k]
+                if not isinstance(v, kind) or (kind is not bool and isinstance(v, bool)):
+                    raise TypeError(f"{k} {_short(repr(v))}")
+        except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
+            raise ToolError(f"active tool index missing or damaged: {path}: "
+                            f"{type(e).__name__}: {e}; {fix}") from e
+        if active["tool_snapshot"] != catalog.snapshot_id:
+            raise ToolError(f"the tool index is for tool snapshot "
+                            f"{_short(active['tool_snapshot'])}, the tool catalog is at "
+                            f"{_short(catalog.snapshot_id)}; {fix} again")
+        idx = self._tool_index
+        if idx is None or idx.fingerprint != active["fingerprint"]:
+            cache = None if active["lexical_only"] else make_embedding_cache(self.emb_cache)
+            try:
+                idx = ToolIndex.load(self.tool_index_root / active["fingerprint"], cache)
+            except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
+                raise ToolError(f"active tool index missing or damaged: {type(e).__name__}: "
+                                f"{e}; {fix}") from e
+            if idx.fingerprint != active["fingerprint"] or \
+                    idx.tool_snapshot != catalog.snapshot_id:
+                raise ToolError(f"active tool index missing or damaged: the loaded index "
+                                f"{_short(idx.fingerprint)} is not the active one; {fix}")
+            self._tool_index = idx
+        return idx, active
+
+    def active_tool_index(self) -> ToolIndex:
+        """The active tool index, loaded and checked as `search_tools` loads it (not
+        logged). An operator call: refused with the ACL layer."""
+        if self.acl:
+            raise ToolError(OPERATOR_UNDER_ACL.format("active_tool_index"))
+        with self._lock:
+            head = self._tool_head()
+            if head is None:
+                raise ToolError(f"{self.store_path}: no tool catalog here (no tools/HEAD); "
+                                f"run `adr tools ingest` first")
+            try:
+                cat = self._open_catalog(head)
+            except StoreError as e:
+                raise ToolError(str(e)) from e
+            return self._tool_active(cat)[0]
+
+    @staticmethod
+    def _tool_filters(filters: object) -> list[str] | None:
+        """The `source_kind` values of `{"source_kind": [...]}` (sorted, distinct), None for
+        no filter; ToolError for anything else."""
+        if filters is None:
+            return None
+        if not isinstance(filters, dict) or set(filters) - {"source_kind"}:
+            raise ToolError(f"bad filters: expected {{\"source_kind\": [...]}} with kinds "
+                            f"{', '.join(SOURCE_KINDS)}, got {_filters_arg(filters)!r}")
+        kinds = filters.get("source_kind")
+        if kinds is None:
+            return None
+        if not isinstance(kinds, list) or not kinds or \
+                any(k not in SOURCE_KINDS for k in kinds):
+            raise ToolError(f"bad filters: source_kind must be a non-empty list of "
+                            f"{', '.join(SOURCE_KINDS)}, got {kinds!r}")
+        return sorted(set(kinds))
+
+    @staticmethod
+    def _tool_view_lexical(idx: ToolIndex, view: frozenset[str], view_id: str) -> FieldBM25:
+        """BM25 over the tools of the caller's view (§6.2), from an LRU of `VIEW_CACHE` by
+        (tool index fingerprint, tool view id); the index's own when the view holds every
+        indexed tool."""
+        if len(view) == len(idx.rows):
+            return idx.lexical
+        key = (idx.fingerprint, view_id)
+        with _VIEW_LOCK:
+            if key in _TOOL_VIEW_LEXICAL:
+                _TOOL_VIEW_LEXICAL.move_to_end(key)
+                return _TOOL_VIEW_LEXICAL[key]
+        lex = idx.view_lexical(view)
+        with _VIEW_LOCK:
+            _TOOL_VIEW_LEXICAL[key] = lex
+            _TOOL_VIEW_LEXICAL.move_to_end(key)
+            while len(_TOOL_VIEW_LEXICAL) > VIEW_CACHE:
+                _TOOL_VIEW_LEXICAL.popitem(last=False)
+        return lex
+
+    @staticmethod
+    def _tool_fields() -> dict:
+        return {"filters": None, "tools_snapshot": None, "tool_index": None,
+                "tool_view": None, "tool_error": None}
+
+    def search_tools(self, query: str, top: int = SEARCH_TOP, *,
+                     filters: dict | None = None) -> SearchToolsResult:
+        """The top tools of the active tool index for `query` among the caller's visible
+        tools that the filters admit (module docstring)."""
+        fields = self._tool_fields()
+
+        def run():
+            if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
+                raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
+            if not isinstance(query, str):
+                raise ToolError(f"query must be a string, got {type(query).__name__}")
+            kinds = self._tool_filters(filters)
+            fields["filters"] = {"source_kind": kinds}
+            cat = self._catalog()
+            fields["tools_snapshot"] = cat.snapshot_id
+            idx, active = self._tool_active(cat)
+            fields["tool_index"] = idx.fingerprint
+            access = self._access_now
+            lexical = view = None
+            if access is not None:
+                fields["tool_view"] = tool_view_id(access.tools)
+                view = frozenset(t for t in access.tools if t in idx.rows)
+                lexical = self._tool_view_lexical(idx, view, fields["tool_view"])
+                lexical = None if lexical is idx.lexical else lexical
+            pool = idx.rows.keys() if view is None else view
+            admitted = pool if kinds is None else frozenset(
+                t for t in pool if idx.rows[t].source_kind in kinds)
+            excluded = len(pool) - len(admitted)
+            allowed = None if view is None and kinds is None else frozenset(admitted)
+            ranked = idx.retrieve(query, active["w"], top, allowed=allowed, lexical=lexical,
+                                  exact=access is not None)
+            hits = []
+            for rank, (tid, score) in enumerate(ranked, start=1):
+                r = idx.rows[tid]
+                hits.append(ToolHit(rank, tid, r.name, r.summary, r.source_kind,
+                                    r.source_uri, score, cat.snapshot_id))
+            res = SearchToolsResult(query, top, cat.snapshot_id, idx.fingerprint,
+                                    active["lexical_only"], idx.w_name, active["w"], hits,
+                                    {"source_kind": kinds}, excluded)
+            return res, [h.tool_id for h in hits], {}
+
+        return self._call("search_tools", {"query": query, "top": top,
+                                           "filters": _filters_arg(filters)}, run, fields,
+                          tool_call=True)
+
+    def load_tool(self, tool_id: str) -> LoadToolResult:
+        """The MCP Tool definition of a visible tool (full id or a unique prefix of at least
+        8 characters), its source fields and the tool snapshot (module docstring)."""
+        fields = self._tool_fields()
+
+        def run():
+            if not isinstance(tool_id, str):
+                raise ToolError(f"tool_id must be a string, got {type(tool_id).__name__}")
+            cat = self._catalog()
+            fields["tools_snapshot"] = cat.snapshot_id
+            where = f"tool snapshot {_short(cat.snapshot_id)}"
+            everything = cat.ids()
+            access = self._access_now
+            if access is None:
+                visible = everything
+            else:
+                fields["tool_view"] = tool_view_id(access.tools)
+                visible = sorted(access.tools)
+                everything = sorted(set(everything) | access.tools)
+            tid = self._find(tool_id, visible, everything, "tool", where)
+            try:
+                rec = cat.get(tid)
+            except (KeyError, StoreError, OSError, ValueError) as e:
+                # an inconsistent store: exactly what a nonexistent id gets; the reason is
+                # for the operator's log only
+                fields["tool_error"] = f"{type(e).__name__}: {e}"
+                try:
+                    _resolve(tool_id, [], "tool", where)
+                except ToolError as nf:
+                    raise ToolError(str(nf)) from None
+                raise AssertionError("unreachable") from None
+            res = LoadToolResult(rec.tool_id, tool_definition(rec), rec.source_kind,
+                                 rec.source_uri, rec.source_version, rec.operation, rec.license,
+                                 rec.definition_tokens, cat.snapshot_id)
+            return res, [rec.tool_id], {}
+
+        return self._call("load_tool", {"tool_id": tool_id}, run, fields, tool_call=True)
