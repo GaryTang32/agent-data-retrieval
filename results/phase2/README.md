@@ -1,14 +1,94 @@
 # Phase 2 results: applicability, permissions, tools as data and an MCP server
 
-> **Work in progress.** Parts 2A (applicability and duplicates), 2B (permissions, for the
-> content tools), 2C (tools as data, with B1, B3 and B4 completed for the tool tools) and 2D
-> (the MCP server, completing B1, B3 and B5 through it) are measured. These numbers were
-> recorded on 16 November 2026 under version 2 of the metric definitions, with golden sets
-> v0.1. The determinism criterion X1 and the overall verdict follow.
+> **Work in progress.** These are the measured numbers for Phase 2 of the roadmap, recorded on
+> 16 November 2026 under version 2 of the metric definitions, with golden sets v0.1. They
+> measure retrieval and access only: Phase 2 makes no model calls (ruling R1), so answer
+> accuracy is not measured.
+
+**Verdict.** All 16 exit criteria of the design (§13) pass, with the thresholds fixed before any result.
+- **Applicability (A1–A6).** Default search returns no superseded chunk, and `as_of` returns only documents in force on that date. Dated gov questions gain +0.254 nDCG@10; the other gov questions gain +0.023 Recall@10 and +0.035 nDCG@10. With every Phase 2 layer off, Phase 1 is reproduced bit for bit, and dedup leaves no repeated passage in a top 10.
+- **Permissions (B1–B5).** No leak in 1,053 leak probes over the five tools through the Python API, nor in the seeded 300 through the MCP server. Filtering equals an index built from the caller's documents alone in 12,000 of 12,000 checks. A revocation takes effect within one sync, also in an MCP server that was already running. None of 350 fail-closed probes returned content, and every log line written carries its principals.
+- **Tools as data (C1–C3).** 14,059 real tool records were ingested. Loading the top 10 tools takes 99.846% fewer tokens than loading the catalog, and the hybrid tool search is at least as complete as BM25 over the raw documentation (Completeness@10 0.411 against 0.384).
+- **MCP server (D1).** `adr mcp` serves the five tools over stdio as one caller. Every result carries a snapshot handle, and a replay with it is identical.
+- **Determinism (X1).** Every configuration, tool system and probe set, run twice in fresh processes, gave identical results, and the same as the runs recorded in Tasks 5, 8 and 11. The overlays derived twice are byte-identical, and every sync of a store gave the same access entries.
+
+Four results need care when reading these numbers:
+- **21 gov test questions lose all their evidence by design** (ruling R3). Their gold passage exists only in superseded versions, and the question carries no date. They are reported apart, not counted in A4. With them, gov Recall@10 falls from 0.802 to 0.735.
+- **Dedup is not a retrieval gain here.** It matters on gov only when superseded versions are kept; under the default filters it changed 2 gov rankings and no quality metric.
+- **The C3 margin is thin.** The lower bound of the interval is +0.002, against a margin of −0.02.
+- **The permissions are synthetic.** Three tenants, twelve groups and twenty users give 20 views per corpus; this is not a real organisation's shape.
 
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](../../docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](../../docs/superpowers/plans/2026-11-16-phase2.md).
 Phase 1 results: [`results/phase1/README.md`](../phase1/README.md).
+
+## What was run
+
+- **No model calls** (R1), and nothing downloaded: every command ran with `HF_HUB_OFFLINE=1`. The only model was the local embedding model, `BAAI/bge-small-en-v1.5`, through the store's embedding cache.
+- **Scratch stores.** Everything ran on copies under `.cache/store-p2/`, never on the Phase 1 stores. `.cache/store` and `.cache/index` were only read: the SHA-256 and modification time of all 7,320 files were unchanged after each task, this one included.
+- **One machine:** a 4-core Intel Xeon at 2.10 GHz, 15 GB of memory, Python 3.13.18.
+
+| Store | Content snapshot | Index (`p1-struct-bc`) | Applicability overlay | Dedup overlay | ACL `entries_sha256` |
+|---|---|---|---|---|---|
+| `.cache/store-p2/gov` | `f002821f2cb3…` | `54c12a3c2917…` | `4c81d25fe905…` | `6fb05917038e…` | `053acb4a6d76…` |
+| `.cache/store-p2/research` | `97c415b1aa71…` | `d3902b136e26…` | `5b91123ae2d3…` | `4aedcea37803…` | `7f8fb0e62d37…` |
+| `.cache/store-p2/bench` | `7d8d1f8adda6…` | `8c7bb39d032b…` | `2709180fbeef…` | `94a90b9859e0…` | `e1ca0a6ae0f1…` |
+| `.cache/store-p2/toolret` | `de13b4a8eeac…` (empty) | tool snapshot `a0dcedeff9ab…`; tool indexes `2b74e22b473c…` (`tools-bm25f`), `c7d17539c08d…` (`tools-hybrid`) | – | – | `3906197e26ef…` |
+
+- **ACL.** Every store syncs from the committed directory and policy (`config/acl/`, `directory_sha256` `d83f6043cffc…`, `policy_sha256` `0e3024f237fc…`). An ACL snapshot id changes with every sync (it records the sequence and time), so the table gives the access entries' hash, which was the same on every sync of a store. The ACL snapshot each run used is in its summary.
+- **Callers.** The measured harness caller is `user:auditor`, who sees everything; `p2-identity` searches with every Phase 2 layer off. The probes call as the directory's users, `user:ghost` and malformed or unknown callers.
+- **The parts:**
+
+  | Part | What | Criteria | Section |
+  |---|---|---|---|
+  | 2A | Five configurations (§10.1) × 3 corpora × dev and test with `adr-eval retrieval`; 18 comparisons with `adr-eval p2-compare`; temporal probes T1–T5 | A1–A6 | [2A](#2a-applicability-and-duplicates) |
+  | 2B | The 2A runs as `user:auditor`; equivalence probes (B2), leak and fail-closed probes (B1, B4), revocation tests (B3), log scans (B5) | B1–B5 (content tools) | [2B](#2b-permissions-content-tools) |
+  | 2C | Three tool systems on ToolRet dev, the chosen one and the baseline on test; tool probes; tool revocation tests | C1–C3; B1, B3–B5 (tool tools) | [2C](#2c-tools-as-data) |
+  | 2D | The MCP tests; the seeded 300 leak probes through `adr mcp` servers | D1; B1, B3, B5 (MCP) | [2D](#2d-the-mcp-server) |
+  | X1 | Everything above run twice in fresh processes; overlays derived twice; syncs compared | X1 | [X1](#x1-determinism) |
+
+**To reproduce** (after `adr-eval fetch` and `adr-eval index` of each corpus, `adr-eval tools-fetch`, and the Phase 2 copies made as in each part):
+
+```
+adr applicability derive --store .cache/store-p2/gov && adr dedup build --store .cache/store-p2/gov
+adr acl sync --store .cache/store-p2/gov
+adr-eval retrieval gov --system p2-default --split test          # and the other configurations, corpora and splits
+adr-eval p2-compare <p1-struct-bc run> <p2-default run> --store .cache/store-p2/gov
+adr-eval probes temporal gov --store .cache/store-p2/gov          # also --no-dedup
+adr-eval probes equivalence gov --store .cache/store-p2/gov --keep-views
+adr-eval probes acl gov --store .cache/store-p2/gov
+adr tools ingest --toolret && adr acl sync --store .cache/store-p2/toolret
+adr-eval tools-retrieval --system tools-hybrid --split test --store .cache/store-p2/toolret --sync --threads 0
+adr-eval tools-probes --store .cache/store-p2/toolret --index c7d17539c08d
+adr-eval mcp-probes --tool-index c7d17539c08d
+pytest tests/store/test_mcp.py tests/store/test_handles.py tests/store/test_revocation.py
+```
+
+## Exit criteria
+
+Thresholds as fixed in spec §13 (ruling R10). A3, A4 and C3 use the paired bootstrap of
+`adr_eval.scoring.stats` (10,000 resamples, seed 20261108); each is one pre-declared comparison
+per corpus, so there is no Holm correction. Every number is in the named file under
+`run-summaries/`.
+
+| # | Criterion | Threshold (§13) | Result | Pass | Summary files |
+|---|---|---|---|---|---|
+| A1 | No superseded unit in default top-k | 0 superseded chunks in any default top 10 | gov: T2 default 189/189, T3 default 145/145, T4 297/297 probes with 0 superseded chunks. research and bench: 0 of 2,750 and 0 of 7,280 slots over every golden item (0 by construction: no successor versions) | **Pass** | `probes-temporal-gov-20261116T070327`, `…T070706`; `p2-compare-*-p2-default-*` |
+| A2 | `as_of` selects the version in force | 0 chunks from documents not in force on `as_of` | gov: T1 40/40, T2 `as_of` 189/189, T3 `as_of` 145/145, T5 171/171. research and bench hold no dated documents (R6) | **Pass** | `probes-temporal-gov-20261116T070327`, `…T070706` |
+| A3 | Dated questions served at least as well | Lower bound of the 95% paired interval > −0.02 on Recall@10 and nDCG@10, `p2-default` against `p1-struct-bc`, 34 `policy_asof` test items | Recall@10 +0.000 [+0.000, +0.000]; nDCG@10 +0.254 [+0.182, +0.325] (predicted +0.000 and +0.254) | **Pass** | `p2-compare-gov-p1-struct-bc-test-…T055136--gov-p2-default-test-…T060721` |
+| A4 | Applicability does not lower non-as-of items | As A3, per corpus, test, non-as-of items with every evidence group visible under the default filters | gov (158 items): Recall@10 +0.023 [+0.004, +0.048], nDCG@10 +0.035 [+0.021, +0.051]; research (180) and bench (517): +0.000 [+0.000, +0.000] on both. The 21 gov superseded-only items reported apart (R3) | **Pass** | `p2-compare-<corpus>-p1-struct-bc-test-…--<corpus>-p2-default-test-…` |
+| A5 | Regression guard | `p2-identity` identical to the recorded `p1-struct-bc` runs: ranked chunk ids and scores, every item, dev and test, 3 corpora | 1,300 of 1,300 items identical (gov 297, research 275, bench 728), with every Phase 2 layer off; again in both X1 rounds | **Pass** | `acl-2b-checks/auditor-reruns.json`; `<corpus>-p2-identity-<split>-retrieval-*T11*`; `x1-checks/x1.json` |
+| A6 | Dedup does what it says | 0 top-10 slots holding two members of one cluster; clusters and parameters recorded; effect reported | 0 duplicate, cluster and exact-copy slots for `p2-dedup` and `p2-default` on every corpus and split (Phase 1 gov test: 1,076 = 44.5%) | **Pass** | `p2-compare-*-p2-dedup-*`, `p2-compare-*-p2-default-*` |
+| B1 | Zero leaks | 0 leaks; at least 500 probes; at least 100 in each family; all through the API and 300 through MCP; `search`, `grep`, `read`, `search_tools`, `load_tool` | API: 1,053 leak probes, 0 leaks (search 463, grep 210, read 180, `search_tools`/`load_tool` 200). MCP: the seeded 300, 0 leaks, 0 invalid (search 135, grep 65, read 48, `search_tools`/`load_tool` 52; at least 20 per spec family) | **Pass** | `probes-acl-<corpus>-*`, `probes-tools-20261116T175249`, `probes-mcp-20261116T191633` |
+| B2 | Filtering equals an allowed-only index | Identical ids and scores, 3 corpora × 20 views × 50 queries, against subset stores | 12,000 of 12,000 checks identical (`search` and `grep`, Phase 1 view and `p2-default` view), at full float precision | **Pass** | `probes-equivalence-<corpus>-*` |
+| B3 | Revocation within one sync cycle | All revocation tests pass, including the already-running MCP server | 13 of 13: 5 content, 5 tool, 3 MCP-server tests (the three change kinds, each in-process, in a new process and in a process or server started before the change; F2 and F3) | **Pass** | `acl-2b-checks/checks.json`, `tools-2c-checks/checks.json`, `2d-checks/checks.json` |
+| B4 | Fail closed | No content returned in any case, F1–F5 and "no entry" × 5 tools | 350 of 350 probes returned no content (270 content-tool probes on three corpora, 80 tool-tool probes) | **Pass** | `probes-acl-<corpus>-*`, `probes-tools-20261116T175249` |
+| B5 | Every log line carries its principals | 100% of the log lines written during B1–B4 have `caller`, `principals`, `acl_snapshot`, `acl_decision` | 26,575 of 26,575 API lines (content 26,114, tools 461); through MCP 382 calls and exactly 382 lines, all complete (rejected MCP calls never reach the tools and are not logged) | **Pass** | `acl-2b-checks/checks.json`, `probes-tools-20261116T175249`, `probes-mcp-20261116T191633` |
+| C1 | At least 1,000 real tool records | 14,059 records ingested, 100% adapter conformance | 14,059 records, 100% conformance; the same tool snapshot on both ingests (`a0dcedeff9ab…`) | **Pass** | `tools-2c-checks/reingest.json` |
+| C2 | Tool-context reduction | Mean over the test queries ≥ 80% (expected > 99%) | 99.846% (lowest per query 99.376%): 1,256 tokens loaded per query against 816,284 | **Pass** | `tools-2c-checks/reingest.json`, `tools-tools-hybrid-test-20261116T174246` |
+| C3 | Tool search at least as complete as BM25 | Completeness@10 on test, best Phase 2 system against `tools-bm25-raw`: point estimate ≥ the baseline's and paired lower bound > −0.02 | `tools-hybrid` 0.411 against 0.384: +0.027 [+0.002, +0.053] | **Pass** (thin margin) | `tools-2c-checks/reingest.json` |
+| D1 | MCP server with snapshot handles | The MCP tests of §12 pass; every result carries a handle | 73 of 73: 16 MCP tests, 44 handle tests, 13 revocation tests | **Pass** | `2d-checks/checks.json` |
+| X1 | Determinism | Every §10.1 configuration, the tool systems and the probe sets twice in fresh processes; overlays twice; two syncs from the same inputs: identical results, byte-identical overlays, equal `entries_sha256` | 30 of 30 retrieval configurations, 5 of 5 tool runs and 10 of 10 probe sets identical in two fresh-process rounds (and equal to the runs recorded in Tasks 5, 8 and 11); overlays byte-identical; one `entries_sha256` per store over 38 syncs | **Pass** | `x1-checks/x1.json` |
 
 ## 2A: applicability and duplicates
 
@@ -268,7 +348,7 @@ the 2024-06-27 version), was a defect of the probe, not a retrieval miss:
 Gov `p2-default` test was re-run in a fresh process. It gave identical rows (items, ranked ids
 and exact scores) and an identical summary.
 
-The full determinism criterion X1 is measured in the final write-up.
+The full determinism criterion X1 is measured in [X1](#x1-determinism): all 30 retrieval configurations, run twice more, gave identical rows.
 
 ### Exit criteria (2A)
 
@@ -370,9 +450,9 @@ is off, the ACL layer included.**
 
 | # | Criterion | Threshold | Result |
 |---|---|---|---|
-| B1 | Zero leaks (content tools; completed in 2C (tools) and 2D (MCP)) | 0 leaks; ≥ 500 probes; ≥ 100 per family | **Pass for `search`, `grep`, `read`:** 853 probes, 0 leaks, 0 invalid. Families: search 450 (+13 `alternate-cross-view`), grep 210, read 180. The `search_tools`/`load_tool` family (200) and the 300 MCP probes follow in 2C and 2D |
+| B1 | Zero leaks (content tools; completed in 2C (tools) and 2D (MCP)) | 0 leaks; ≥ 500 probes; ≥ 100 per family | **Pass for `search`, `grep`, `read`:** 853 probes, 0 leaks, 0 invalid. Families: search 450 (+13 `alternate-cross-view`), grep 210, read 180. The `search_tools`/`load_tool` family (200) and the 300 MCP probes are in 2C and 2D |
 | B2 | Filtering equals an allowed-only index | Identical ids and scores | **Pass:** 12,000 of 12,000 identical (3 corpora × 20 views × 50 questions × `search` and `grep` × Phase 1 view and `p2-default` view) |
-| B3 | Revocation within one sync cycle (content tools; completed in 2C (tools) and 2D (MCP)) | All revocation tests pass | **Pass for `search`, `grep`, `read`:** 5 of 5. The three change kinds were checked in-process, in a new process and in a `tools_proc` process started before the change, plus F2 and F3. The already-running MCP server leg follows in 2D |
+| B3 | Revocation within one sync cycle (content tools; completed in 2C (tools) and 2D (MCP)) | All revocation tests pass | **Pass for `search`, `grep`, `read`:** 5 of 5. The three change kinds were checked in-process, in a new process and in a `tools_proc` process started before the change, plus F2 and F3. The already-running MCP server leg is in 2D |
 | B4 | Fail closed (content tools; completed in 2C (tools) and 2D (MCP)) | No content in any case | **Pass for `search`, `grep`, `read`:** 270 of 270 (90 per corpus: F1–F5 and "no entry" × 3 tools × 5 callers), 0 with content. "No entry" precondition met for 45 of 45 probes: the target was visible and ranked 1 for each caller beforehand |
 | B5 | Every log line carries its principals | 100% | **Pass:** 26,114 of 26,114 lines: B2 24,000, B1 and B4 2,007, B3 107. 0 allowed lines on disk with a null `caller`, `principals`, `acl_snapshot` or `view` |
 
@@ -564,7 +644,7 @@ The same machine as 2A: 4-core Intel Xeon at 2.10 GHz, 15 GB of memory, Python 3
 
 ### Limits
 
-- **Content tools only.** B1, B3 and B4 do not yet cover `search_tools`, `load_tool` or the MCP server (2C, 2D). B1's 300-probe MCP subset is also 2D.
+- **Content tools only.** B1, B3 and B4 here cover the three content tools; `search_tools`, `load_tool` and the MCP server are covered in 2C and 2D, including B1's 300-probe MCP subset.
 - **Two dense kernels, one per path (the ruling).** `p2-identity` keeps the Phase 1 matrix product, because it is every Phase 2 layer off, the ACL layer included. So A5 holds bit for bit against the recorded runs. The configurations searching as a caller use the ACL layer's row-exact kernel, because B2 requires scores independent of the other rows: a full view of a reference store is not a full view of the source when a document has an empty list. Their scores therefore differ from the 2A runs in the 6th decimal on 66 research and 165 bench items per configuration, with no ranked id or metric changed.
 - **The leak probes judge what the content tools return,** not timing or resource side channels. Per-view BM25 removes the IDF channel by construction (§6.2). B2 checks that within the scores.
 - **The fail-closed probes use one target per corpus.** The F1–F5 decision is made per call before any document is touched, so the target matters only for "no entry".
@@ -611,7 +691,7 @@ Three results need care when reading these numbers:
 **Re-ingest (Task 13).** The numbers in this section are from a re-ingest made in Task 13, after each ToolRet tools file got its own licence (`corpora/tools/config.json`: `web` Apache-2.0, `customized` NOASSERTION; see "Licence"). The re-ingest gave the tool snapshot `a0dcedeff9ab…` (Task 11: `51536a400bba…`), reproduced by a second ingest. All 14,059 `tool_id`s are the same; only the `license` field of the 197 `customized` records differs. The indexes were rebuilt on it (`tools-bm25f` `2b74e22b473c…`, `tools-hybrid` `c7d17539c08d…`; the dense vectors came from the embedding cache), and dev tuning chose `w_name` 3 and `w` 0.6 again. How the numbers moved from Task 11:
 - **Every ranked tool id, score and retrieval metric is the same** as in Task 11, on dev and test, for all three systems. The tuning tables are equal.
 - **Only the loaded context changed,** and only through the page: each `search_tools` result now carries the snapshot handle of 2D (Task 12), 15–16 more tokens per query (16 on every test query). C2 moved from 99.848% to 99.846%, mean loaded tokens from 1,240 to 1,256 (median 1,082 → 1,098), the page from 494 to 510 tokens, and the gold share from 0.0635 to 0.0626. The definitions (746 tokens) are unchanged.
-- **The probes gave the same rows:** the tool probes' `probes.json` and `results.json` are byte-identical to Task 11's (2D, X1).
+- **The probes gave the same rows:** the tool probes' `probes.json` and `results.json` are byte-identical to Task 11's (see X1).
 
 ### What was run
 
@@ -628,7 +708,7 @@ Three results need care when reading these numbers:
   2. **Tuning, dev runs and test runs.** Both systems were tuned on dev nDCG@10 (planner's call 15), over the grid the plan fixes (Task 10): `w_name` ∈ {0, 1, 2, 3}, and for `tools-hybrid` also `w` ∈ {0, 0.05, …, 1}. Ties go to the smallest values. All three systems ran on dev. The best Phase 2 system on dev Completeness@10, `tools-hybrid`, ran on test, and so did `tools-bm25-raw`. Each run was `adr-eval tools-retrieval … --sync`, searching through `Tools.search_tools` and `load_tool` as `user:auditor`.
   3. **C2 and C3** were computed from the two test runs' per-query rows (`tools-2c-checks/reingest.json`; Task 11's in `tools-2c-checks/checks.json`). C3 uses the paired bootstrap of `adr_eval.scoring.stats`: 10,000 resamples, seed 20261108, chosen minus baseline.
   4. **Probes.** The probes ran with `adr-eval tools-probes --index c7d17539c08d` (Task 11: `c93ceea6fae2`), after `adr acl sync`, against the chosen system's index, which was active since its runs. That covered B1 (200 leak probes), B4 (80 fail-closed probes; F1, F2, F3, "no entry", `F2-tools` and `no-tool-snapshot` on `cp -a` clones, each removed afterwards, and F4 and F5 on the store itself) and B5 (their log lines). B3 ran with `pytest tests/store/test_revocation.py`.
-  5. **Determinism.** In Task 11 the `tools-hybrid` test run was repeated in a fresh process; in Task 13 the whole round (three systems, dev and test, and the probes) ran twice on the re-ingested store (2D, X1).
+  5. **Determinism.** In Task 11 the `tools-hybrid` test run was repeated in a fresh process; in Task 13 the whole round (three systems, dev and test, and the probes) ran twice on the re-ingested store (see X1).
 - **Active tool index.** `tools-retrieval` makes the tuned index active and records the change in each run. On the re-ingested store the records read `none → 2b74e22b473c` (bm25f dev), `2b74e22b473c → c7d17539c08d` (hybrid dev), then `c7d17539c08d → c7d17539c08d` (hybrid test). The probes and the MCP probes ran on `c7d17539c08d`. Task 11's latency measurement ran on `c93ceea6fae2`.
 - **ACL freshness.** Each store run's `--sync` and the sync before the probes kept the snapshot within `max_sync_age_s`, with no access change (`entries_sha256` `3906197e26ef…` on every sync).
 
@@ -777,7 +857,7 @@ The definitions follow spec §8.4 and `adr_eval.tools_eval`. Tokens are counted 
 - **Task 11: the `tools-hybrid` test run, repeated in a fresh process, gave identical rows, summary and tuning table** (`…T153716` and `…T154432`).
 - **Only two config fields differ.** One is `started`. The other is `acl_snapshot`, because each `--sync` writes a new snapshot: sequences 7 and 8, with the same `entries_sha256` `3906197e26ef…` and no access change.
 - **Both test runs loaded the same tool index** (`c93ceea6fae2…`), built once in the dev run.
-- **Task 13** repeated every tool run and the tool probes on the re-ingested store; that comparison is part of X1 (2D).
+- **Task 13** repeated every tool run and the tool probes on the re-ingested store; that comparison is part of X1.
 
 ### Latency
 
@@ -980,3 +1060,114 @@ adr acl sync --store .cache/store-p2/gov        # and research, bench, toolret
 adr-eval mcp-probes --tool-index c7d17539c08d --keep-views
 pytest tests/store/test_mcp.py tests/store/test_handles.py tests/store/test_revocation.py
 ```
+
+## X1: determinism
+
+**Verdict.** X1 passes. Every item compared was identical in both rounds: the 30 retrieval configurations (6,500 item rankings per round, ids and exact scores), the 5 tool runs, and all 10 probe sets (their probe lists and per-probe results byte for byte). The overlays were byte-identical, and every sync of a store gave the same `entries_sha256`. Each round A run of a set that existed before this task also equals the run recorded in its own task (the tool runs up to the handle's tokens), so nothing changed between Tasks 5–11 and now.
+
+X1 asks for every configuration of §10.1, the three tool systems and every probe set to be run
+twice in fresh processes, the overlays derived twice, and two syncs from the same inputs. In
+this task each was run twice (rounds A and B), each round in fresh processes. Each round A run
+was also compared with the run of the same configuration recorded in its own task (Tasks 5, 8
+and 11), whose per-item rows are still local; so each comparison below is in effect three runs.
+
+### What was compared
+
+| Item | Runs | How compared | Result |
+|---|---|---|---|
+| §10.1 retrieval: 5 configurations × 3 corpora × dev and test (30 runs) | Round A (17:39–18:10 UTC) and round B (18:10–18:39) | `phase2.identical` (items, ranked chunk ids, exact scores), whole rows and summary, A against B. Round A also against the local rows of the run whose summary was committed (Tasks 5 and 8) and against that committed summary | **Identical**, 30 of 30: 6,500 item rankings per round. Rows equal the recorded runs' and summaries the committed ones in all 30 |
+| Tool systems: `tools-bm25-raw` dev and test, `tools-bm25f` dev, `tools-hybrid` dev and test (5 runs) | r1 (17:37–17:52) and r2 (17:55–18:10), on the re-ingested store | Rows, summary and tuning table | **Identical**, 5 of 5. Against Task 11: rows equal except the `context` page (+15 or +16 tokens, the handle) |
+| Temporal probes T1–T5 on gov, dedup on and off (2 sets) | A and B | `probes.json` byte for byte (configuration, probes, results and summary in one file) | **Identical**, and byte-identical to Task 5's runs (`…T070327`, `…T070706`) |
+| Equivalence probes (B2), 3 corpora × 4,000 checks | A (20 reference stores per corpus built and kept) and B (20 built afresh, then removed) | `probes.json` and `results.json` byte for byte | **Identical**, and byte-identical to Task 8's runs |
+| ACL leak and fail-closed probes (B1, B4), 3 corpora (370, 370 and 383 probes) | A and B (both reusing the reference stores that equivalence A built; B removed them) | `probes.json` and `results.json` byte for byte | **Identical**, and byte-identical to Task 8's runs |
+| Tool probes (200 leak, 80 fail-closed) | r1 and r2 | `probes.json` and `results.json` byte for byte | **Identical**, and byte-identical to Task 11's run on the old tool snapshot |
+| MCP probes (300) | A and B | `probes.json` and `results.json` byte for byte | **Identical** |
+| Overlays, 3 corpora × applicability and dedup | Two derivations in fresh copies | SHA-256 of every file | **Byte-identical**, and equal to the p2 stores' files |
+| ACL syncs of the four stores | Every sync from 17:30 to 20:35 UTC | `entries_sha256` per store and inputs (content snapshot, tool snapshot, directory, policy) | **Equal** in every group (below) |
+
+**What differs, and only that.** Between two runs of the same thing, only fields that record
+when or under which ACL snapshot a run happened differ:
+- retrieval runs: `run_id`, `started`, `finished`, `wall_clock_s`, and for the configurations that search as `user:auditor` the ACL snapshot they resolved (`settings.acl.acl_snapshot`, `sequence`, `synced_at`). Every sync writes a new ACL snapshot with the same entries;
+- tool runs: `started`, the ACL snapshot (`--sync` before each run), and the active tool index before the run (`active_tool_index.before`, which records what the previous run left active);
+- probe runs: in `summary.json` only, the ACL snapshot and sequence of the store and of each reference store. The equivalence summaries also differ from Task 8's in two log-scan fields, `allowed` and `allowed_unresolved`, which the scan gained in Task 8's fix round after those runs; every other count is equal. The ACL summaries record whether each reference store was `built` or `reused`, and the second runs list the reference stores they removed.
+
+The new handle and cursor keys of Task 12 changed none of the compared rows: the retrieval rows hold the ranked ids and scores, not the tool results that carry handles, and the probe results record outcomes and judged kinds. The tool runs' `context` rows did change, by the handle's tokens; that is 2C's re-ingest note, and both rounds on the re-ingested store agree.
+
+### Overlays
+
+Each corpus's overlays were derived twice, each time in a fresh copy of its p2 store with the overlays and log removed (`adr applicability derive`, then `adr dedup build`). All files were byte-identical between the two derivations and to the p2 store's own files, so the overlay ids are reproduced:
+
+| Corpus | Applicability overlay | Dedup overlay | Derivation wall time (each) |
+|---|---|---|---|
+| gov | `4c81d25fe905…` | `6fb05917038e…` | 14 s |
+| research | `5b91123ae2d3…` | `4aedcea37803…` | 20–21 s |
+| bench | `2709180fbeef…` | `94a90b9859e0…` | 14–16 s |
+
+The applicability report files (`envelope-1.report.json`) were also byte-identical. The copies were removed afterwards.
+
+### Syncs
+
+Every `adr acl sync` of the four Phase 2 stores during this task's runs (17:30–20:35 UTC) came from the same directory and policy (`d83f6043cffc…`, `0e3024f237fc…`) and, per store, the same content snapshot:
+
+| Store | Syncs | Sequences | `entries_sha256` | Access changed | Duration |
+|---|---|---|---|---|---|
+| gov | 9 | 6–14 | `053acb4a6d76…` on every sync | 0 | 0.86–1.31 s |
+| research | 9 | 8–16 | `7f8fb0e62d37…` | 0 | 0.25–0.47 s |
+| bench | 9 | 8–16 | `e1ca0a6ae0f1…` | 0 | 0.50–0.72 s |
+| toolret | 11 | 1–11 | `3906197e26ef…` | 1 (the first sync of the re-ingested store) | 0.75–1.73 s |
+
+The syncs were made by hand before each step, by each `tools-retrieval --sync`, and by a loop that re-synced the content stores and every finished reference store every 20 minutes, so that no ACL snapshot grew older than `max_sync_age_s` (3,600 s) during the long runs. Every earlier sync of the three content stores, back to the first (Task 6, 06:59 UTC; 14, 16 and 16 syncs in all), had the same entries too.
+
+### Machine and wall times
+
+| Step | Wall time | Notes |
+|---|---|---|
+| Retrieval round A (30 runs) | 31.3 min | Three at a time; per run 48–456 s |
+| Retrieval round B (30 runs) | 29.0 min | Three at a time, beside the gov and bench probe chains of round A; per run 50–337 s |
+| Tool rounds r1, r2 (5 runs each, with syncs) | 15.5 min, 14.8 min | Both beside retrieval round A |
+| Tool probes r1, r2 | 149 s, 136 s | |
+| Temporal probes (4 runs) | 199–220 s each | |
+| Equivalence A: gov, bench, research | 36.5, 46.5, 31.4 min | Including building 20 reference stores each; overlapping with each other and with round B |
+| Equivalence B: gov, bench, research | 27.5, 35.2, 25.5 min | The three in parallel, building fresh reference stores |
+| ACL probes A: gov, bench, research | 6.8, 6.1, 5.4 min | Reusing the reference stores |
+| ACL probes B: gov, bench, research | 7.0, 5.8, 6.0 min | The three in parallel, then removing the reference stores |
+| MCP probes A, B | 18.5, 17.5 min | |
+| Overlay derivations (6 per round) | 14–21 s each | |
+
+### Files
+
+- **`x1-checks/x1.json`:** every comparison above: run ids, return codes and wall times of both rounds, byte equality and SHA-256 of each probe file, the differing paths of each `summary.json`, the retrieval row and summary comparisons for all 30 configurations, the tool run comparisons, the overlay file hashes, and the syncs. It holds no per-item rows, queries or corpus text.
+- **The probe run summaries of both rounds** (`summary.json`, `summary.md`, or the temporal `probes.json` without the probe list), named in `x1.json`. The 60 retrieval runs of rounds A and B are not committed: their summaries equal the committed ones, and their configurations differ from them only in the fields listed above, which `x1.json` records.
+
+## Limits
+
+Each part lists its own limits above. Across Phase 2:
+
+- **Retrieval and access only.** No model calls (R1), so answer accuracy under `as_of`, under ACLs or with loaded tools is not measured.
+- **eCFR snapshot intervals** (R4). Version chains are document-level, and an eCFR version is in force from its snapshot date until the next pinned snapshot. A date between two snapshots gets the earlier one, which may predate an amendment.
+- **IRM current pages.** The IRM chapters are the pages as fetched, with their own dates; earlier IRM versions are not in the corpus, so `as_of` before a chapter's date finds nothing (T5).
+- **Dated questions only on gov.** A2 and A3 rest on gov alone (34 dated test questions); research and bench have no dated documents, and under `as_of` they return nothing (R6).
+- **21 gov test questions** have evidence only in superseded versions and no date (R3). They need dates in golden set v0.2 to be scored fairly.
+- **Dedup's small effect.** Dedup removes every repeated passage from the top 10, but under the default filters it changed 2 gov rankings and no quality metric; it matters only when superseded versions are kept. It is not presented as a retrieval gain.
+- **Synthetic tenants** (R9). Three tenants, twelve groups and twenty users, with access keyed by chain, give 20 views per corpus. That is not a real organisation's shape and says nothing about very many views. B2 compares exactly those 20 views per corpus.
+- **The ToolRet licence** (R13, Q2). ToolRet stays local; nothing from it is committed. The 13,862 `web` tools are Apache-2.0 (ToolBench). For the 197 `customized` (`toolbench_sam`) tools no source states a licence or an upstream, and their records now say NOASSERTION. None of them is gold, so C3 says nothing about them.
+- **stdio only** (R12). The MCP server serves one caller per process over stdio; HTTP and OAuth are out of scope.
+- **Rejected MCP calls are not logged.** A call the server's input schema rejects never reaches `Tools`, so B5 covers every call that reached the tools, not every request.
+- **Handle parameters are requests, not attestations.** A handle names the components a call asks for; the server checks that they exist and runs on them, but nothing signs a result.
+- **Probe total: 1,403 against the spec's 1,190.** The leak probes are 1,053 (the spec's 1,040, plus 13 `alternate-cross-view` probes for bench's one cross-view cluster). The fail-closed probes are 350, not 150: the content set ran on each of the three corpora (90 each, where the spec counted 90 once), and the tool set has two more tool-snapshot conditions (`F2-tools`, `no-tool-snapshot`, 20 probes). See 2C, "B totals".
+- **The thin C3 margin.** `tools-hybrid` beats `tools-bm25-raw` by +0.027 Completeness@10 [+0.002, +0.053]: the lower bound clears the −0.02 margin by 0.022, on one test split, with the system chosen on a 212-query dev split. Both Phase 2 tool systems chose the edge of the name-weight grid.
+- **One machine;** most wall times were taken while other runs shared it.
+
+## Files
+
+`run-summaries/` holds, without per-item rows, probe lists, queries or corpus text:
+
+| Part | Files |
+|---|---|
+| 2A | 31 retrieval runs (`<corpus>-<config>-<split>-retrieval-*T05*`/`T06*`), 18 `p2-compare-*` records, 2 temporal probe runs (`probes-temporal-gov-*T0703*`, `*T0707*`) |
+| 2B | 24 re-runs as the auditor and with the ACL layer off (`…T08*`, `T09*`, `T11*`), `probes-equivalence-<corpus>-*`, `probes-acl-<corpus>-*`, `acl-2b-checks/` |
+| 2C | 6 Task 11 tool runs and 10 runs on the re-ingested store (`tools-tools-*`), 3 tool probe runs (`probes-tools-*`), `tools-2c-checks/` (`checks.json`, `reingest.json`) |
+| 2D | `probes-mcp-20261116T191633`, `probes-mcp-20261116T193500`, `2d-checks/checks.json` |
+| X1 | the probe runs of rounds A and B (temporal, equivalence, ACL), `x1-checks/x1.json` |
+
+Per-item rows, probe sets and per-probe results stay local in `runs/`, as in Phase 1.

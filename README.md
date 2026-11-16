@@ -2,8 +2,9 @@
 
 > **Status: work in progress.** This repository is under active development and is not
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
-> harness, a recorded baseline and the Phase 1 evidence store with its `adr` tools. Phases 2–6
-> are not built yet. Interfaces, file formats and results may change without notice.
+> harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, and Phase 2:
+> applicability filters, permissions, tools as data and an MCP server. Phases 3–6 are not built
+> yet. Interfaces, file formats and results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -45,7 +46,7 @@ Two terms are used precisely:
 flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
     P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
-    P2["Phase 2<br/>Permissions and<br/>applicability"]
+    P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ built and measured"]
     P3["Phase 3<br/>Typed database"]
     P4["Phase 4<br/>Knowledge units"]
     P5["Phase 5<br/>Graph and<br/>navigation"]
@@ -57,15 +58,15 @@ flowchart LR
     classDef done fill:#d8f0e3,stroke:#1d7a4f,color:#0b3d27
     classDef active fill:#fff1cc,stroke:#a86b00,color:#4a3000
     classDef todo fill:#eef0f4,stroke:#8a93a6,color:#3a4152
-    class P0,P1 done
-    class P2,P3,P4,P5,P6 todo
+    class P0,P1,P2 done
+    class P3,P4,P5,P6 todo
 ```
 
 | Phase | What it delivers | Status | Steps done | Progress |
 |---|---|---|---|---|
 | 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
 | 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | ✅ Built and measured ([results](results/phase1/README.md)) | 6 of 6 | `██████████` |
-| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data | Next | – | `░░░░░░░░░░` |
+| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Built and measured ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
 | 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | Not started | – | `░░░░░░░░░░` |
 | 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
 | 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
@@ -89,6 +90,27 @@ criteria pass.
 Design: [`docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md`](docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md).
 Plan: [`docs/superpowers/plans/2026-11-13-phase1-evidence-store.md`](docs/superpowers/plans/2026-11-13-phase1-evidence-store.md).
 
+### Phase 2 steps
+
+| # | Step | Purpose | Status |
+|---|---|---|---|
+| 1 | Applicability overlay and deriver | Every document's version chain, validity dates and status, derived from the corpus alone | ✅ Built (`adr applicability derive`) |
+| 2 | Filters in the index and the tools | Default search drops superseded versions; `as_of`, status, jurisdiction and tier filters | ✅ Built |
+| 3 | Dedup overlay and collapse | Exact and near copies (MinHash, Jaccard ≥ 0.90) shown once, with their alternates | ✅ Built (`adr dedup build`) |
+| 4 | Harness `as_of`, Phase 2 configurations, temporal probes | Dated questions searched as of their date; the five configurations of the design | ✅ Built |
+| 5 | Measure A1–A6 | Applicability and dedup against Phase 1 | ✅ All six pass ([2A](results/phase2/README.md#2a-applicability-and-duplicates)) |
+| 6 | Directory, policy and ACL sync | Synthetic tenants, groups and users; a versioned ACL snapshot synced apart from content | ✅ Built (`adr acl sync`) |
+| 7 | Projection, per-view BM25, fail-closed rules, log fields | Each caller searches only their view, with statistics of that view; a broken ACL denies everything | ✅ Built |
+| 8 | Leak, equivalence and fail-closed probes; measure B1–B5 | No leak; filtering equals an allowed-only store | ✅ Pass for `search`, `grep`, `read` ([2B](results/phase2/README.md#2b-permissions-content-tools)) |
+| 9 | Tool records, adapters, ToolRet catalog | Tools as data: MCP and OpenAPI definitions and 14,059 real tools | ✅ Built (`adr tools ingest`) |
+| 10 | Tool index, `search_tools`, `load_tool` | Find and load a few tools instead of the whole catalog, under the same ACL | ✅ Built (`adr tools index`, `adr search-tools`, `adr load-tool`) |
+| 11 | Measure C1–C3; B1, B3, B4 for the tool tools | Tool search at least as complete as BM25, with 99.8% less tool context | ✅ All three pass ([2C](results/phase2/README.md#2c-tools-as-data)) |
+| 12 | Snapshot handles and the MCP server | Replayable results; the five tools over MCP, one caller per server | ✅ Built (`adr mcp`) |
+| 13 | MCP probes, determinism, write-up | B1 through MCP, X1, the Phase 2 results | ✅ Measured ([`results/phase2/README.md`](results/phase2/README.md)) |
+
+Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](docs/superpowers/specs/2026-11-16-phase2-design.md).
+Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](docs/superpowers/plans/2026-11-16-phase2.md).
+
 ## Plan
 
 The roadmap runs from Phase 0 to Phase 6, and each phase is gated. The order follows one principle: build what is hard to
@@ -99,7 +121,7 @@ design targets taken from the research, not results.
 |---|---|---|
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
 | **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **Built and measured.** Three exit criteria met, one partly (no bounding boxes), one deferred (parse routing needs layout models), one not applicable. Retrieval is level with the baseline, which stays the reference ([results](results/phase1/README.md)) |
-| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | Not started |
+| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Built and measured.** All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
 | **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | Not started |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
 | **5. Graph and navigation layers** | Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy. Each layer is kept only if it beats the earlier phases on accuracy or tokens. | Not started |
@@ -141,6 +163,28 @@ Measured on the test split of all three corpora against `baseline-linear`
 So the baseline stays the reference for later phases; the store, its spans and its tools are
 what Phases 2–5 build on.
 
+### Phase 2 results
+
+Measured with no model calls, against Phase 1's `p1-struct-bc` with its Phase 1 weights
+([`results/phase2/README.md`](results/phase2/README.md)). All 16 exit criteria pass, with
+margins fixed before any result:
+
+| Question | Answer |
+|---|---|
+| Does default search hide superseded versions? | Yes: 0 superseded chunks in any default top 10 (Phase 1 filled 52.9% of gov test slots with them) |
+| Does `as_of` give the version in force? | Yes: 0 chunks from documents not in force on the date, over 545 gov probes |
+| Are dated questions served better? | Yes: on the 34 dated gov test questions nDCG@10 rises from 0.567 to 0.820 (+0.254 [+0.182, +0.325]); Recall@10 is unchanged |
+| Are other questions served worse? | No: gov +0.023 Recall@10 and +0.035 nDCG@10 on in-force questions; research and bench unchanged. 21 gov questions whose evidence is only superseded are reported apart |
+| Does dedup help? | It removes every repeated passage from the top 10, but under the default filters it changes no quality metric |
+| Can a caller see what they should not? | No leak in 1,053 leak probes through the Python API and 300 through the MCP server; filtering equals an allowed-only index in 12,000 of 12,000 checks; 350 fail-closed probes returned nothing |
+| Does a revocation take effect? | Yes, within one sync, also in an MCP server that was already running |
+| How much tool context does search save? | 99.846%: an agent loads 1,256 tokens instead of the 816,284-token catalog of 14,059 real tools |
+| Is tool search as complete as BM25? | Yes, by a thin margin: Completeness@10 0.411 against 0.384 (+0.027 [+0.002, +0.053]) |
+| Is it deterministic? | Yes: every configuration, tool system and probe set gave identical results when run again in fresh processes |
+
+The permissions are synthetic (3 tenants, 12 groups, 20 users), the MCP server is stdio only,
+and eCFR dates come from pinned snapshots; the write-up lists every limit.
+
 ## What is in the repository
 
 | Path | Contents |
@@ -148,13 +192,13 @@ what Phases 2–5 build on.
 | `reports/` | Five research reports, two methods catalogs, a combined summary and an HTML brief. |
 | `research_notes/` | Working notes behind the reports. |
 | `papers/` | Catalog of about 2,570 sources (`README.md`, `manifest.csv`). The PDFs are kept local only; rebuild them with `scripts/download_papers.py` (see the warning below). |
-| `docs/superpowers/` | The Phase 0 design spec and implementation plan. |
+| `docs/superpowers/` | The design specs and implementation plans of Phases 0, 1 and 2. |
 | `src/adr_eval/`, `tests/` | The evaluation harness and its tests. |
-| `src/adr_store/` | The Phase 1 evidence store: record format, structure parsers, content-addressed store, structure-led chunks, retrieval and the `adr` tools. |
-| `config/` | Run settings, model profiles and price table. No API keys are stored here. |
-| `corpora/` | Pinned manifests (SHA-256 per file) and notes for the three corpora. Corpus files download into `data/`, which is not committed. |
+| `src/adr_store/` | The evidence store: record format, structure parsers, content-addressed store, structure-led chunks, retrieval and the `adr` tools (Phase 1); applicability and dedup overlays, the ACL snapshot and its enforcement, tool records and the tool index, snapshot handles and the MCP server (Phase 2). |
+| `config/` | Run settings, model profiles and price table; the synthetic ACL directory and policy (`config/acl/`). No API keys are stored here. |
+| `corpora/` | Pinned manifests (SHA-256 per file) and notes for the three corpora and the ToolRet tool catalog (`corpora/tools/`). Corpus files download into `data/`, which is not committed. |
 | `golden/` | Golden question sets: `gov` committed; `research` and `bench` items local only, with READMEs that pin their hashes and counts. |
-| `results/` | Recorded baseline runs and their summary; Phase 1 results in `results/phase1/`. |
+| `results/` | Recorded baseline runs and their summary; Phase 1 results in `results/phase1/`, Phase 2 results in `results/phase2/`. |
 
 ## Evaluation harness
 
@@ -240,6 +284,24 @@ adr grep "<pattern>" --store <store> --max 20
 `adr ingest <corpus>` ingests a pinned corpus instead. `p1-struct-bc` needs its breadcrumb weight and fusion weight: give them with `--w-bc` and `--weight`, or with `--tuning <run>` to take the values an `adr-eval retrieval` run tuned on the dev split. `--json` gives machine-readable output, and
 every call appends one line to `<store>/log/retrieval.jsonl`. `--threads 0` embeds on all cores;
 the vectors are identical to single-threaded ones.
+
+Phase 2 adds, for a store:
+
+```bash
+adr applicability derive --store <store>        # version chains and validity dates
+adr dedup build --store <store>                 # exact and near-duplicate clusters
+adr acl sync --store <store>                    # the ACL snapshot from config/acl/
+adr search "<question>" --store <store> --as user:acme-0 --as-of 2024-01-01
+adr tools ingest --toolret                      # the ToolRet tool catalog (local only)
+adr search-tools "<task>" --store <store> --as user:acme-0
+adr mcp --store <store> --as user:acme-0        # the five tools over MCP (stdio); needs the [mcp] extra
+```
+
+Search hides superseded versions by default; `--include-superseded` restores the Phase 1 view.
+`--as` enforces the caller's view and fails closed when the ACL snapshot is missing, stale or
+does not know the caller. `adr` itself is not a security boundary: the enforcement point is
+the Tools API, served over MCP, one caller per server process. Every result carries a snapshot
+handle that replays it exactly.
 
 ## License
 
