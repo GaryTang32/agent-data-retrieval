@@ -45,6 +45,14 @@ of the canonical JSON of `tools_list`, checked by the tests).
 | `mcp-server-fetch-2026.10.28.json` | 1 | `b339038f5942ce9a2b067f8e9466447c88433296ba2589321bec20d533a4d2c5` | `24616d483e93c2086b60935a3090508ca6ffdb145d2ffca3a3eb5ace4d299dc0` |
 | `mcp-server-git-2026.10.28.json` | 12 | `3c4a908d0f13731229bccd52b640147747413461d171297e9cdbc855783a9119` | `2ef64fc8faffd52542a8cf33007cf7144ca1db531e6218ccbeb1d7483528fbac` |
 
+Licence notices: the `mcp-server-fetch` and `mcp-server-git` wheels carry
+`dist-info/licenses/LICENSE`, the MIT License with "Copyright (c) 2024 Anthropic, PBC.". The
+`mcp-server-time` wheel and its sdist (SHA-256 `b2b62b442bb8…`) carry no licence file; its
+metadata declares `License: MIT` (author Mariusz Korzekwa, repository
+`modelcontextprotocol/servers`). On 2026-11-16 that repository's top-level `LICENSE` describes
+a transition from MIT to Apache-2.0 for new contributions, while contributions under the MIT
+License stay MIT; the pinned packages declare MIT.
+
 Tool descriptions are the servers' own text, kept verbatim. They are untrusted data (the
 `fetch` description, for one, addresses the model); the store returns them as data.
 
@@ -63,7 +71,11 @@ the commit whose preferred version is OpenAPI 3.x with a `.../openapi.json` URL 
 ordered by `SHA-256("adr-tools-openapi\n" + <api key>)`, fetched in that order, kept when
 under 200,000 bytes, valid JSON with `openapi` 3.x and at least one operation, until 20 were
 kept. The adapter's result played no part in the selection. All 20 (129 operations) ingest at
-100% structural conformance.
+100% structural conformance. With cycles cut where a `$ref` repeats on its branch (plus depth
+8 and a 10,000-node budget per operation) their records hold 60,629 definition tokens
+(63,933 with the first depth-8-only rule; `amazonaws.com:runtime.lex.v2` went from 8,836 to
+5,532). The largest record, `mybusinesslodging.locations.updateLodging` (27,768 tokens),
+is unchanged: its schema has no cycle and expands to 1,652 nodes of long descriptions.
 
 | File | API | Version | OpenAPI | Bytes | SHA-256 (prefix) |
 |---|---|---|---|---|---|

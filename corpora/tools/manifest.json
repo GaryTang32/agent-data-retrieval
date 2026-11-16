@@ -2,28 +2,39 @@
   "corpus": "tools",
   "counts": {
     "dev": 212,
-    "doc_tokens": 1218889,
-    "doc_tokens_mean": 87.9302,
-    "doc_tokens_median": 58.0,
+    "doc_tokens": 1227462,
+    "doc_tokens_mean": 87.3079,
+    "doc_tokens_median": 58,
     "gold_distinct": 1632,
     "gold_mean": 2.39,
     "gold_missing": 0,
     "gold_total": 2629,
     "queries": 1100,
     "test": 888,
-    "tools": 13862
+    "tools": 14059
   },
   "files": [
     {
       "bytes": 8143446,
       "config": "web",
       "local": "ToolRet-Tools/web/tools-00000-of-00001.parquet",
-      "name": "tools",
+      "name": "tools_web",
       "path": "web/tools-00000-of-00001.parquet",
       "repo": "mangopy/ToolRet-Tools",
       "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
       "sha256": "57faceebd778b2cb74571dca0e71e8bc8078c11ba05dce0efc562e818d3950e6",
       "url": "https://huggingface.co/datasets/mangopy/ToolRet-Tools/resolve/e06c38c75612b6536bd959e08cdd345894aba6a7/web/tools-00000-of-00001.parquet"
+    },
+    {
+      "bytes": 384413,
+      "config": "customized",
+      "local": "ToolRet-Tools/customized/tools-00000-of-00001.parquet",
+      "name": "tools_customized",
+      "path": "customized/tools-00000-of-00001.parquet",
+      "repo": "mangopy/ToolRet-Tools",
+      "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
+      "sha256": "e3d0cf64f5d5321751401677c820c5e8c7df79bfd67a85c01e275fe573cbde41",
+      "url": "https://huggingface.co/datasets/mangopy/ToolRet-Tools/resolve/e06c38c75612b6536bd959e08cdd345894aba6a7/customized/tools-00000-of-00001.parquet"
     },
     {
       "bytes": 922485,
@@ -39,5 +50,16 @@
   ],
   "license": "Apache-2.0",
   "license_summary": "ToolBench data (RapidAPI endpoint documentation): Apache-2.0 per the ToolBench README; ToolRet code: Apache-2.0; the ToolRet dataset cards declare no licence (Phase 2 spec Q2). Local-only: never committed",
-  "tool_prefix": "toolbench_tool_"
+  "tool_selection": [
+    {
+      "config": "web",
+      "file": "tools_web",
+      "prefix": "toolbench_tool_"
+    },
+    {
+      "config": "customized",
+      "file": "tools_customized",
+      "prefix": "toolbench_sam_tool_"
+    }
+  ]
 }
