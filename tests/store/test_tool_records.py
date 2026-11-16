@@ -106,15 +106,11 @@ def test_conformance_is_structural():
     assert broken(input_schema={"type": "object", "properties": {"a": {}},
                                 "required": ["b"]})
     assert broken(input_schema={"type": "object", "properties": []})
-    assert broken(input_schema={"type": "object", "properties": {"q": {}},
-                                "required": ["q", "q"]})  # a name twice
-    assert not broken(input_schema={"type": "object", "properties": {"q": {}},
-                                    "required": ["q"]}, definition_tokens=_count(
-        tool_records.canonical({"name": rec.name, "description": rec.description,
-                                "inputSchema": {"type": "object", "properties": {"q": {}},
-                                                "required": ["q"]}})),
-        tool_id=tool_records.tool_id(rec.source_uri, rec.name, {
-            "type": "object", "properties": {"q": {}}, "required": ["q"]}))
+    twice = tool_records.make_record(
+        name="t", title=None, description="", source_kind="mcp", source_uri="u",
+        source_version="1", operation=None, license="x", output_schema=None,
+        input_schema={"type": "object", "properties": {"q": {}}, "required": ["q", "q"]})
+    assert tool_records.conformance(twice) == ["inputSchema required repeats a name"]
     assert broken(output_schema={"type": "array"})
     assert broken(definition_tokens=rec.definition_tokens + 1)
     assert broken(tool_id="0" * 64)
@@ -288,8 +284,9 @@ def test_openapi_budget_is_per_operation():
         for i in range(7)}
     schemas["S7"] = {"type": "string"}
     spec = _openapi_body(schemas, "S0")
-    spec["paths"]["/b"] = spec["paths"]["/a"]
+    spec["paths"]["/a"]["put"] = spec["paths"]["/a"]["post"]  # two operations of one path
     a, b = tool_records.from_openapi(spec, "u", "1", "x")
+    assert (a.operation["method"], b.operation["method"]) == ("PUT", "POST")
     assert a.input_schema == b.input_schema
 
 
