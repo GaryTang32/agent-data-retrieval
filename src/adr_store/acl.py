@@ -27,7 +27,10 @@ the tenant's sorted groups, where `H(x) = int(SHA-256(salt + "\\n" + x + "\\n" +
 A sync cycle (`sync`) reads and validates the directory and the policy, computes the access
 list of every document of the store's HEAD content snapshot (tool records arrive with the tool
 catalog in Task 9: until then `tool_snapshot` is null and `tools` empty), writes the snapshot
-and atomically replaces `acl/HEAD`. A failure at any step leaves the old HEAD and is logged.
+and atomically replaces `acl/HEAD`. Every failure is logged and raised as `SyncError`; one
+before the swap leaves the old HEAD, and the error says whether HEAD moved (after the swap
+only reading the clock or appending the sync log can fail). The snapshot file is written
+once: an existing file under its id with other bytes is refused.
 The snapshot id is the SHA-256 of its file; it includes `synced_at`, so every sync is a new
 version, and `entries_sha256` (directory, docs and tools) is equal for equal inputs. Besides
 the fields of §5.3 the snapshot carries the policy's `max_sync_age_s` and `future_skew_s`, so
@@ -35,9 +38,12 @@ the freshness check (F3) needs the snapshot alone (planner's call).
 
 Reading (`read_head`) refuses with `AclDenied("F1", ...)` a missing, unreadable, unparsable
 or schema-invalid snapshot, or one whose file does not hash to its id. `check_fresh` (F3, the
-only clock-dependent decision; the clock is injectable), `caller_principals` (F4, F5) and
-`check_principals` (F5) are the other checks a tool call makes on entry; enforcement in the
-tools is not here.
+only clock-dependent decision; the clock is injectable, and a clock that fails or gives a
+naive time denies), `caller_principals` (F4, F5) and `check_principals` (F5) are the other
+checks. `resolve` is the one entry a tool call makes: it runs every check in that order
+(F1, F5 of the snapshot, F2, F3, then F4/F5 of the caller) and returns the caller's `Access`
+(the visible documents and tools, and the view id); the tools (`adr_store.tools`) enforce it.
+The snapshot file is read and hashed on every call, its parse is cached by id (`cache`).
 """
 
 from __future__ import annotations
@@ -48,7 +54,7 @@ import json
 import re
 import sys
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -366,15 +372,23 @@ class AclSnapshot(BaseModel):
 
 
 class AclDenied(Exception):
-    """No access for the whole call, for one of the fail-closed reasons F1–F5 of §5.4."""
+    """No access for the whole call, for one of the fail-closed reasons F1–F5 of §5.4.
+    `acl_snapshot` is the snapshot that was read (None for F1)."""
 
-    def __init__(self, code: Literal["F1", "F2", "F3", "F4", "F5"], reason: str):
+    def __init__(self, code: Literal["F1", "F2", "F3", "F4", "F5"], reason: str,
+                 acl_snapshot: str | None = None):
         super().__init__(f"access denied ({code}): {reason}")
-        self.code, self.reason = code, reason
+        self.code, self.reason, self.acl_snapshot = code, reason, acl_snapshot
 
 
 class SyncError(StoreError):
-    """A sync cycle failed; `acl/HEAD` is unchanged."""
+    """A sync cycle failed. `head_moved` says whether `acl/HEAD` was replaced before the
+    failure (only a failure after the swap: reading the clock, or appending the sync log);
+    otherwise `acl/HEAD` is unchanged. The message says which."""
+
+    def __init__(self, message: str, head_moved: bool = False):
+        super().__init__(message)
+        self.head_moved = head_moved
 
 
 def acl_dir(store_path: Path) -> Path:
@@ -385,9 +399,10 @@ def snapshot_path(store_path: Path, acl_snapshot: str) -> Path:
     return acl_dir(store_path) / "snapshots" / f"{acl_snapshot}.json"
 
 
-def read_head(store_path: Path) -> tuple[str, AclSnapshot]:
+def read_head(store_path: Path, cache: dict | None = None) -> tuple[str, AclSnapshot]:
     """(id, snapshot) of `acl/HEAD`; AclDenied F1 if it is missing, unreadable, unparsable,
-    schema-invalid, or its file does not hash to its id."""
+    schema-invalid, or its file does not hash to its id. The file is read and hashed every
+    time; with `cache` (id -> snapshot) a snapshot already parsed under that id is reused."""
     head = acl_dir(store_path) / "HEAD"
     try:
         text = head.read_text(encoding="utf-8")
@@ -404,9 +419,11 @@ def read_head(store_path: Path) -> tuple[str, AclSnapshot]:
         raise AclDenied("F1", f"ACL snapshot {sid[:12]} unreadable ({type(e).__name__})") from e
     if hashlib.sha256(data).hexdigest() != sid:
         raise AclDenied("F1", f"ACL snapshot {sid[:12]}: the file's hash is not its id")
+    if cache is not None and sid in cache:
+        return sid, cache[sid]
     try:
         json.loads(data)
-    except ValueError as e:
+    except (ValueError, RecursionError) as e:
         raise AclDenied("F1", f"ACL snapshot {sid[:12]} unparsable ({type(e).__name__})") from e
     try:
         snap = AclSnapshot.model_validate_json(data)
@@ -415,13 +432,23 @@ def read_head(store_path: Path) -> tuple[str, AclSnapshot]:
         where = ".".join(str(x) for x in err["loc"]) or "(root)"
         raise AclDenied("F1", f"ACL snapshot {sid[:12]} schema-invalid: {where}: "
                               f"{err['msg']}") from e
+    if cache is not None:
+        cache[sid] = snap
     return sid, snap
 
 
 def check_fresh(snapshot: AclSnapshot, *, clock: Callable[[], datetime] = utc_now) -> None:
     """AclDenied F3 when `now - synced_at` exceeds `max_sync_age_s` or `synced_at` is more
-    than `future_skew_s` in the future."""
-    age = (clock() - snapshot.synced_at).total_seconds()
+    than `future_skew_s` in the future; also F3 when the clock fails or gives anything but a
+    timezone-aware datetime (no time, no freshness)."""
+    try:
+        now = clock()
+    except Exception as e:  # any failure of the clock denies
+        raise AclDenied("F3", f"the clock failed ({type(e).__name__}); freshness unknown") from e
+    if not isinstance(now, datetime) or now.utcoffset() is None:
+        raise AclDenied("F3", f"the clock gave {type(now).__name__} {str(now)[:40]!r}, not a "
+                              f"timezone-aware datetime; freshness unknown")
+    age = (now - snapshot.synced_at).total_seconds()
     if age > snapshot.max_sync_age_s:
         raise AclDenied("F3", f"the ACL snapshot is {age:.0f} s old, older than "
                               f"max_sync_age_s {snapshot.max_sync_age_s}; run `adr acl sync`")
@@ -456,6 +483,75 @@ def check_principals(snapshot: AclSnapshot) -> None:
             for p in principals:
                 if not is_principal(p):
                     raise AclDenied("F5", f"off-grammar principal {p[:40]!r} in {what}")
+
+
+# -- a tool call's access ---------------------------------------------------------------------
+
+def view_id(docs) -> str:
+    """The id of a view: SHA-256 of the sorted visible doc ids joined by newlines."""
+    return hashlib.sha256("\n".join(sorted(docs)).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class Access:
+    """What one call may see: the caller's resolved principals under one ACL snapshot, the
+    documents and tools whose access list meets them (no entry or an empty list: no one),
+    and the view id (`view_id` of `docs`)."""
+
+    acl_snapshot: str
+    caller: str
+    principals: tuple[str, ...]
+    docs: frozenset[str]
+    tools: frozenset[str]
+    view: str
+
+
+def _visible(entries: dict[str, list[str]], principals: frozenset[str]) -> frozenset[str]:
+    return frozenset(k for k, ps in entries.items() if not principals.isdisjoint(ps))
+
+
+SNAPSHOT_CACHE = 4  # parsed snapshots `resolve` keeps per cache
+
+
+def resolve(store_path: Path, caller: str | None, content_snapshot: str, *,
+            clock: Callable[[], datetime] = utc_now, cache: OrderedDict | None = None
+            ) -> Access:
+    """The access of one call by `caller` to the store at `store_path` whose HEAD content
+    snapshot is `content_snapshot`, or AclDenied: F1 (`read_head`), F5 (`check_principals`),
+    F2 (the snapshot is for another content snapshot), F3 (`check_fresh`), F4/F5
+    (`caller_principals`), in that order. `cache` (an OrderedDict kept by the caller) holds
+    the last `SNAPSHOT_CACHE` parsed snapshots and their F5 verdict, by id."""
+    parsed: dict = {} if cache is None else {k: v[0] for k, v in cache.items()}
+    sid, snap = read_head(store_path, parsed)
+    if cache is not None and sid in cache:
+        cache.move_to_end(sid)
+        f5 = cache[sid][1]
+    else:
+        try:
+            check_principals(snap)
+            f5 = None
+        except AclDenied as e:
+            f5 = e
+        if cache is not None:
+            cache[sid] = (snap, f5)
+            while len(cache) > SNAPSHOT_CACHE:
+                cache.popitem(last=False)
+    try:
+        if f5 is not None:
+            raise AclDenied(f5.code, f5.reason)
+        if snap.content_snapshot != content_snapshot:
+            raise AclDenied("F2", f"the ACL snapshot {sid[:12]} is for content snapshot "
+                                  f"{snap.content_snapshot[:12]}, the store is at "
+                                  f"{str(content_snapshot)[:12]}; run `adr acl sync`")
+        check_fresh(snap, clock=clock)
+        principals = caller_principals(snap, caller)
+    except AclDenied as e:
+        e.acl_snapshot = sid
+        raise
+    ps = frozenset(principals)
+    docs = _visible(snap.docs, ps)
+    return Access(acl_snapshot=sid, caller=caller, principals=principals, docs=docs,
+                  tools=_visible(snap.tools, ps), view=view_id(docs))
 
 
 # -- the sync cycle --------------------------------------------------------------------------
@@ -533,11 +629,24 @@ def _append(path: Path, line: dict) -> None:
         f.write((json.dumps(line, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
+def write_once(path: Path, data: bytes) -> None:
+    """Write `data` to `path` unless the file exists; an existing file with other bytes is
+    refused (StoreError), the same bytes are a no-op (the shared write-once rule)."""
+    path = Path(path)
+    if path.exists():
+        if path.read_bytes() != data:
+            raise StoreError(f"{path} already holds other bytes under this snapshot id; it is "
+                             f"not replaced")
+        return
+    write_atomic(path, data)
+
+
 def sync(store_path: Path, directory_path: Path = DIRECTORY_PATH,
          policy_path: Path = POLICY_PATH, *, clock: Callable[[], datetime] = utc_now
          ) -> SyncResult:
-    """One sync cycle over the store's HEAD content snapshot (module docstring). Raises
-    SyncError (HEAD unchanged, the failure logged) or StoreError (no store)."""
+    """One sync cycle over the store's HEAD content snapshot (module docstring), serialized
+    by an exclusive `flock` on `acl/sync.lock`. Raises SyncError (the failure logged; HEAD
+    unchanged unless `head_moved`) or StoreError (no store)."""
     store_path = Path(store_path)
     store = Store.open(store_path)
     adir = acl_dir(store_path)
@@ -550,13 +659,14 @@ def sync(store_path: Path, directory_path: Path = DIRECTORY_PATH,
 def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Path,
                  clock: Callable[[], datetime]) -> SyncResult:
     t0 = time.perf_counter()
-    started = _aware(clock())
-    line: dict = {"started": _iso(started), "finished": None, "duration_s": None,
+    line: dict = {"started": None, "finished": None, "duration_s": None,
                   "lag_s": None, "sequence": None, "acl_snapshot": None, "previous": None,
                   "content_snapshot": store.snapshot_id, "tool_snapshot": None,
                   "directory_sha256": None, "policy_sha256": None, "entries_sha256": None,
                   "changed": None, "outcome": "error", "error": None}
+    sid = None  # set once acl/HEAD names the new snapshot
     try:
+        line["started"] = _iso(_aware(clock()))
         directory, dir_sha, dir_mtime = _read_config(directory_path, parse_directory,
                                                      "directory")
         line["directory_sha256"] = dir_sha
@@ -584,21 +694,28 @@ def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Pa
         line.update(sequence=snap.sequence, entries_sha256=entries,
                     changed=entries != prev_entries)
         data = canonical_json(snap)
-        sid = hashlib.sha256(data).hexdigest()
-        path = snapshot_path(store.path, sid)
-        if not path.is_file():  # named by its hash: an existing file holds these bytes
-            write_atomic(path, data)
-        write_atomic(adir / "HEAD", f"{sid}\n".encode())
+        new_sid = hashlib.sha256(data).hexdigest()
+        path = snapshot_path(store.path, new_sid)
+        write_once(path, data)
+        write_atomic(adir / "HEAD", f"{new_sid}\n".encode())
+        sid = new_sid
         swapped = _aware(clock())
-    except (OSError, ValueError, StoreError) as e:
+    except Exception as e:  # every failure is logged and named; HEAD moved only if sid is set
         msg = str(e) if isinstance(e, SyncError) else f"{type(e).__name__}: {e}"
-        line.update(finished=_iso(_aware(clock())),
-                    duration_s=round(time.perf_counter() - t0, 6), error=msg)
+        try:
+            finished = _iso(_aware(clock()))
+        except Exception:  # the clock itself may be what failed
+            finished = None
+        line.update(finished=finished, duration_s=round(time.perf_counter() - t0, 6),
+                    error=msg, acl_snapshot=sid)
         try:
             _append(adir / "sync.jsonl", line)
         except OSError:
             pass
-        raise SyncError(f"ACL sync failed, acl/HEAD unchanged: {msg}") from e
+        if sid is None:
+            raise SyncError(f"ACL sync failed, acl/HEAD unchanged: {msg}") from e
+        raise SyncError(f"ACL sync failed after acl/HEAD moved to {sid[:12]} (the new snapshot "
+                        f"is in force): {msg}", head_moved=True) from e
     duration = round(time.perf_counter() - t0, 6)
     lag = round(swapped.timestamp() - max(dir_mtime, pol_mtime), 6)
     line.update(finished=_iso(swapped), duration_s=duration, lag_s=lag, acl_snapshot=sid,
@@ -606,8 +723,9 @@ def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Pa
     try:
         _append(adir / "sync.jsonl", line)
     except OSError as e:
-        raise SyncError(f"acl/HEAD moved to {sid[:12]}, but the sync log could not be "
-                        f"written: {type(e).__name__}: {e}") from e
+        raise SyncError(f"acl/HEAD moved to {sid[:12]} (the new snapshot is in force), but the "
+                        f"sync log could not be written: {type(e).__name__}: {e}",
+                        head_moved=True) from e
     return SyncResult(acl_snapshot=sid, sequence=snap.sequence, entries_sha256=entries,
                       changed=line["changed"], duration_s=duration, lag_s=lag,
                       previous=previous, content_snapshot=store.snapshot_id,

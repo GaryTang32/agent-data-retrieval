@@ -607,3 +607,209 @@ def test_cli_help_says_adr_is_not_a_security_boundary(capsys):
         cli.main(["acl", "--help"])
     out = " ".join(capsys.readouterr().out.split())
     assert "not a security boundary" in out
+
+
+# -- pinned assignment: the salts and the sorted-tenants rule ---------------------------------
+
+PINNED_ACCESS = {  # default policy and directory; a changed salt or tenant order changes these
+    "public": {"key-0": ["public"], "key-6": ["public"]},
+    "two_tenants": {"key-27": ["tenant:acme", "tenant:globex"],
+                    "key-41": ["tenant:acme", "tenant:initech"],
+                    "key-47": ["tenant:acme", "tenant:globex"],
+                    "key-54": ["tenant:acme", "tenant:globex"],
+                    "key-58": ["tenant:acme", "tenant:initech"],
+                    "key-62": ["tenant:globex", "tenant:initech"]},
+    "tenant": {"key-2": ["tenant:initech"], "key-4": ["tenant:initech"],
+               "key-5": ["tenant:globex"], "key-8": ["tenant:initech"],
+               "key-9": ["tenant:acme"], "key-11": ["tenant:globex"]},
+    "group": {"key-1": ["group:acme/0"], "key-3": ["group:initech/3"],
+              "key-7": ["group:acme/0"], "key-10": ["group:initech/3"],
+              "key-13": ["group:acme/1"], "key-14": ["group:acme/0"]},
+}
+
+
+@pytest.mark.parametrize("kind", sorted(PINNED_ACCESS))
+def test_access_lists_are_pinned_for_fixed_keys(kind):
+    d, p = acl.default_directory(), acl.default_policy()
+    for key, want in PINNED_ACCESS[kind].items():
+        assert acl.assign(key, {}, p, d) == (kind, want), key
+
+
+def test_the_tenants_are_taken_in_sorted_order():
+    d, p = acl.default_directory(), acl.default_policy()
+    reordered = d.model_copy(update={"tenants": list(reversed(d.tenants))})
+    for kind in PINNED_ACCESS:
+        for key, want in PINNED_ACCESS[kind].items():
+            assert acl.assign(key, {}, p, reordered) == (kind, want), key
+
+
+# -- the sync lock ---------------------------------------------------------------------------
+
+def test_the_sync_cycle_runs_under_the_exclusive_lock(store, config, monkeypatch):
+    import fcntl
+
+    real = acl._sync_locked
+    held = []
+
+    def probe(store_, adir, *rest):
+        with open(adir / "sync.lock", "a") as other:  # another open file description
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held.append(True)
+            else:
+                fcntl.flock(other, fcntl.LOCK_UN)
+                held.append(False)
+        return real(store_, adir, *rest)
+
+    monkeypatch.setattr(acl, "_sync_locked", probe)
+    sync(store, config, clock=fixed())
+    assert held == [True]
+
+
+def test_concurrent_syncs_get_gapless_unique_sequences(store, config):
+    import threading
+
+    results, errors = [], []
+
+    def work():
+        try:
+            for _ in range(3):
+                results.append(sync(store, config, clock=fixed()).sequence)
+        except Exception as e:  # pragma: no cover - reported below
+            errors.append(e)
+
+    threads = [threading.Thread(target=work) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert not errors
+    assert sorted(results) == list(range(1, 13))
+    assert acl.read_head(store.path)[1].sequence == 12
+
+
+# -- sync errors say whether HEAD moved; the snapshot file is write-once ----------------------
+
+def test_a_failing_log_after_the_swap_says_head_moved(store, config, monkeypatch):
+    def failing(path, line):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(acl, "_append", failing)
+    with pytest.raises(acl.SyncError, match="moved") as e:
+        sync(store, config, clock=fixed())
+    assert e.value.head_moved and "unchanged" not in str(e.value)
+    sid, _ = acl.read_head(store.path)
+    assert sid[:12] in str(e.value)
+
+
+def test_a_clock_failing_after_the_swap_says_head_moved(store, config):
+    calls = []
+
+    def clock():
+        calls.append(1)
+        if len(calls) == 3:  # started, synced_at, then the swap time
+            raise RuntimeError("clock broke")
+        return T0
+
+    with pytest.raises(acl.SyncError, match="moved") as e:
+        sync(store, config, clock=clock)
+    assert e.value.head_moved and "clock broke" in str(e.value)
+    sid, _ = acl.read_head(store.path)
+    last = _log(store)[-1]
+    assert last["outcome"] == "error" and last["acl_snapshot"] == sid
+
+
+def test_a_clock_failing_before_the_swap_leaves_head(store, config):
+    sync(store, config, clock=fixed())
+    before = _head(store)
+
+    def naive():
+        return datetime(2026, 11, 16, 12, 0, 0)
+
+    with pytest.raises(acl.SyncError, match="unchanged") as e:
+        sync(store, config, clock=naive)
+    assert not e.value.head_moved and _head(store) == before
+    assert _log(store)[-1]["outcome"] == "error"
+
+
+def test_an_existing_snapshot_file_with_other_bytes_is_refused(tmp_path, config):
+    twin = make_gov_store(tmp_path / "twin")
+    sid = acl.sync(twin.path, *config, clock=fixed()).acl_snapshot
+    s = make_gov_store(tmp_path / "s")
+    path = s.path / "acl" / "snapshots" / f"{sid}.json"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"not the snapshot\n")
+    with pytest.raises(acl.SyncError, match="other bytes"):
+        acl.sync(s.path, *config, clock=fixed())
+    assert not (s.path / "acl" / "HEAD").exists()
+    assert path.read_bytes() == b"not the snapshot\n"
+
+
+# -- resolve: the one entry of a tool call -----------------------------------------------------
+
+def test_resolve_returns_the_callers_access(store, config):
+    sync(store, config, clock=fixed())
+    sid, snap = acl.read_head(store.path)
+    a = acl.resolve(store.path, "user:acme-4", store.snapshot_id, clock=fixed())
+    ps = set(acl.principals_of(acl.default_directory(), "user:acme-4"))
+    assert (a.acl_snapshot, a.caller, a.principals) == (sid, "user:acme-4", tuple(sorted(ps)))
+    assert a.docs == {d for d, v in snap.docs.items() if ps & set(v)}
+    assert a.tools == frozenset()
+    assert a.view == hashlib.sha256("\n".join(sorted(a.docs)).encode()).hexdigest()
+
+
+@pytest.mark.parametrize("clock", [
+    lambda: datetime(2026, 11, 16, 12, 0, 0),                # naive
+    lambda: "2026-11-16T12:00:00Z",                          # not a datetime
+    lambda: (_ for _ in ()).throw(RuntimeError("no time")),  # raises
+])
+def test_a_bad_clock_denies_f3(store, config, clock):
+    sync(store, config, clock=fixed())
+    with pytest.raises(AclDenied) as e:
+        acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=clock)
+    assert e.value.code == "F3" and e.value.acl_snapshot is not None
+
+
+def test_resolve_runs_every_check(store, config):
+    with pytest.raises(AclDenied) as e:
+        acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=fixed())
+    assert (e.value.code, e.value.acl_snapshot) == ("F1", None)
+    sync(store, config, clock=fixed())
+    sid, snap = acl.read_head(store.path)
+    cases = [("user:acme-0", "0" * 64, fixed(), "F2"),
+             ("user:acme-0", store.snapshot_id, fixed(T0 + timedelta(hours=2)), "F3"),
+             ("user:ghost", store.snapshot_id, fixed(), "F4"),
+             (None, store.snapshot_id, fixed(), "F4"),
+             ("user:Ghost", store.snapshot_id, fixed(), "F5")]
+    for caller, content, clock, code in cases:
+        with pytest.raises(AclDenied) as e:
+            acl.resolve(store.path, caller, content, clock=clock)
+        assert (e.value.code, e.value.acl_snapshot) == (code, sid), caller
+    bad = snap.model_copy(update={"docs": {**snap.docs, sorted(snap.docs)[0]: ["tenant:Acme"]}})
+    bad = bad.model_copy(update={"entries_sha256": acl.entries_sha256(bad.directory, bad.docs,
+                                                                      bad.tools)})
+    _put(store, records.canonical_json(bad))
+    with pytest.raises(AclDenied) as e:
+        acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=fixed())
+    assert e.value.code == "F5"
+
+
+def test_resolve_caches_the_parse_by_id_but_rereads_the_file(store, config, monkeypatch):
+    from collections import OrderedDict
+
+    sync(store, config, clock=fixed())
+    cache = OrderedDict()
+    acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=fixed(), cache=cache)
+    calls = []
+    real = acl.AclSnapshot.model_validate_json
+    monkeypatch.setattr(acl.AclSnapshot, "model_validate_json",
+                        lambda data: calls.append(1) or real(data))
+    acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=fixed(), cache=cache)
+    assert calls == []
+    sid, _ = acl.read_head(store.path)
+    path = store.path / "acl" / "snapshots" / f"{sid}.json"
+    path.write_bytes(path.read_bytes() + b" ")
+    with pytest.raises(AclDenied) as e:  # the hash is checked on every call
+        acl.resolve(store.path, "user:acme-0", store.snapshot_id, clock=fixed(), cache=cache)
+    assert e.value.code == "F1"
