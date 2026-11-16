@@ -235,7 +235,8 @@ def identical(run_a: dict, run_b: dict) -> dict:
 
 
 def _store_view(store_path: Path, settings: dict):
-    """(store, chunks by id, applicability, dedup) of a store for a run's chunker."""
+    """(store, chunks by id, applicability, dedup, notes) of a store for a run's chunker;
+    `notes` says which overlay is missing and so which counts are None."""
     from adr_store import applicability, dedup
     from adr_store.chunking import chunk_store, chunker_config
     from adr_store.retrieval.index import chunk_content_sha256
@@ -260,7 +261,18 @@ def _store_view(store_path: Path, settings: dict):
                                 chunk_content_sha256(chunks.values()))
     except StoreError as e:
         raise runner.RunError(str(e)) from e
-    return store, chunks, app, dd
+    notes = []
+    if app is None:
+        notes.append(f"no applicability overlay in {store_path}: superseded and "
+                     f"wrong-version slots are not counted (None); run `adr applicability "
+                     f"derive --store {store_path}`")
+    if dd is None:
+        why = dedup.missing(store.path, store.snapshot_id, chunker,
+                            chunk_content_sha256(chunks.values()))
+        fix = f"`adr dedup build --store {store_path}`"
+        notes.append(f"{why.replace('`adr dedup build`', fix)}: duplicate slots are not "
+                     f"counted (None)")
+    return store, chunks, app, dd, notes
 
 
 def _filters_of(settings: dict) -> Filters | None:
@@ -285,7 +297,7 @@ def compare(run_a: Path, run_b: Path, store_path: Path, margin: float = MARGIN,
     sa, sb = ca.get("settings") or {}, cb.get("settings") or {}
     if sa.get("chunker") != sb.get("chunker"):
         raise runner.RunError("cannot compare runs of different chunkers")
-    store, chunks, app, dd = _store_view(store_path, sa)
+    store, chunks, app, dd, notes = _store_view(store_path, sa)
     for name, s in ((Path(run_a).name, sa), (Path(run_b).name, sb)):
         if s.get("store_snapshot") != store.snapshot_id:
             raise runner.RunError(
@@ -324,7 +336,7 @@ def compare(run_a: Path, run_b: Path, store_path: Path, margin: float = MARGIN,
         "dedup": None if dd is None else dd.overlay_id,
         "dedup_params": None if dd is None else dd.overlay.params,
         "dedup_clusters": None if dd is None else len(dd.overlay.clusters),
-        "margin": margin, "n_resamples": n, "seed": seed,
+        "notes": notes, "margin": margin, "n_resamples": n, "seed": seed,
         "subset_sizes": {k: len(v) for k, v in subsets.items()},
         "subsets": out_subsets,
         "criteria": {c: {"subset": s, "pass": out_subsets[s]["pass"], "n": out_subsets[s]["n"]}
@@ -350,7 +362,8 @@ def render_compare_markdown(c: dict) -> str:
            f"`{_fmt(c['applicability'] and c['applicability'][:12])}`, dedup overlay "
            f"`{_fmt(c['dedup'] and c['dedup'][:12])}`. Paired bootstrap 95% CIs "
            f"({c['n_resamples']} resamples, seed {c['seed']}); non-inferiority margin "
-           f"{c['margin']}: a metric passes when the lower bound is above -{c['margin']}.", ""]
+           f"{c['margin']}: a metric passes when the lower bound is above -{c['margin']}.", "",
+           *(line for note in c.get("notes", []) for line in (f"> **Note:** {note}", ""))]
     rows = []
     for name, s in c["subsets"].items():
         if not s["keys"]:

@@ -872,3 +872,30 @@ def test_the_recorded_corpora_need_a_committed_phase1_summary(monkeypatch, tmp_p
     for corpus in systems.RECORDED_CORPORA:  # the committed summaries are there
         assert list(systems.PHASE1_SUMMARIES.glob(
             f"{corpus}-p1-struct-bc-*-retrieval-*/retrieval.json"))
+
+
+def test_p2_compare_says_when_the_store_has_no_overlay(tmp_path, p2fakes):
+    """Without a dedup or applicability overlay the counts that need it are None, and the
+    comparison says why (not silently)."""
+    import shutil
+
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-identity")
+    store = tmp_path / "store-copy"
+    shutil.copytree(systems.p2_store_dir(runner.load_config(), "mini"), store)
+    shutil.rmtree(store / "dedup")
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["dedup"] is None and c["slots"]["a"]["all"]["duplicate_slots"] is None
+    assert any("no dedup overlay" in n and "adr dedup build" in n for n in c["notes"])
+    md = phase2.render_compare_markdown(c)
+    assert "no dedup overlay" in md and "duplicate" in md
+    shutil.rmtree(store / "applicability")
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["applicability"] is None and c["slots"]["a"]["all"]["superseded_slots"] is None
+    assert any("no applicability overlay" in n for n in c["notes"])
+    # with both overlays there is nothing to say
+    full = phase2.compare(a["dir"], b["dir"], systems.p2_store_dir(runner.load_config(),
+                                                                   "mini"))
+    assert full["notes"] == []

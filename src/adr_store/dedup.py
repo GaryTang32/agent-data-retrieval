@@ -340,11 +340,28 @@ def overlay_path(store_path: Path, snapshot: str, chunker: dict,
 
 
 def missing(store_path: Path, snapshot: str, chunker: dict, chunk_content_sha256: str) -> str:
-    """Why these chunks have no overlay: `NO_OVERLAY` when the snapshot has none, else a
-    line naming the chunks' content and how many overlays there are for other chunks or
-    settings (the remedy is the same: `adr dedup build`)."""
-    others = sorted(p.name for p in (Path(store_path) / OVERLAY_DIR / snapshot).glob("*.json")
-                    if p.name != _file_name(chunker, PARAMS, chunk_content_sha256))
+    """Why these chunks have no overlay: `NO_OVERLAY` when the snapshot has no other dedup
+    overlay (only files that parse as one count), a line naming an overlay of these very
+    chunks under an older version's name (`<overlay_key>.json`, before the name carried the
+    content), else a line naming the chunks' content and how many overlays there are for
+    other chunks or settings (the remedy is the same: `adr dedup build`)."""
+    ours = _file_name(chunker, PARAMS, chunk_content_sha256)
+    older_name = f"{overlay_key(chunker, PARAMS)}.json"
+    others, older = [], []
+    for path in sorted((Path(store_path) / OVERLAY_DIR / snapshot).glob("*.json")):
+        if path.name == ours:
+            continue
+        try:
+            ov = DedupOverlay.model_validate_json(path.read_bytes())
+        except (OSError, ValidationError):
+            continue
+        same = (ov.snapshot, ov.chunker, ov.params, ov.chunk_content_sha256) == (
+            snapshot, chunker, PARAMS, chunk_content_sha256)
+        (older if same and path.name == older_name else others).append(path.name)
+    if older:
+        return (f"no dedup overlay under this version's name ({ours}); an overlay from an "
+                f"older version exists for the index's chunks ({older[0]}); run `adr dedup "
+                f"build`")
     if not others:
         return NO_OVERLAY
     return (f"no dedup overlay for the index's chunks (content "
@@ -389,16 +406,22 @@ def load_overlay(store_path: Path, snapshot: str, chunker: dict, chunk_content_s
     if canonical_json(overlay) != data:
         raise StoreError(f"{path}: not canonical JSON (sorted keys, compact, one newline)")
     if overlay.snapshot != snapshot:
-        raise StoreError(f"{path}: describes snapshot {overlay.snapshot[:12]}, not "
-                         f"{snapshot[:12]}")
+        raise StoreError(f"{path}: describes snapshot {overlay.snapshot}, not "
+                         f"{snapshot}{_rebuild(path)}")
     if overlay.chunker != chunker or overlay.params != PARAMS:
         raise StoreError(f"{path}: built with another chunker or other parameters than "
-                         f"its name says")
+                         f"its name says{_rebuild(path)}")
     if overlay.chunk_content_sha256 != chunk_content_sha256:
-        raise StoreError(f"{path}: built over other chunks (content "
-                         f"{overlay.chunk_content_sha256[:12]}) than its name says (the "
-                         f"index's {chunk_content_sha256[:12]})")
+        raise StoreError(f"{path}: built over other chunks (chunk_content_sha256 "
+                         f"{overlay.chunk_content_sha256}) than its name says (the index's "
+                         f"chunks: {chunk_content_sha256}){_rebuild(path)}")
     return Dedup(oid, overlay)
+
+
+def _rebuild(path: Path) -> str:
+    """The remedy for a file under an overlay's name that is not that overlay (it is
+    write-once, so `adr dedup build` alone refuses to replace it)."""
+    return f"\nfix: delete {path}, then run `adr dedup build`"
 
 
 class Dedup:

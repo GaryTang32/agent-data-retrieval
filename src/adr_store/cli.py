@@ -594,7 +594,8 @@ def _applicability_derive(a: argparse.Namespace) -> int:
     return 0
 
 
-_DEDUP_COLUMNS = [("chunks", 7), ("exact clusters (chunks)", 23), ("redundant (tokens)", 30),
+# widths fit 5-digit counts and 100.0% shares ("99999 = 100.0% (100.0% of tokens)": 33)
+_DEDUP_COLUMNS = [("chunks", 7), ("exact clusters (chunks)", 23), ("redundant (tokens)", 33),
                   ("near pairs (clusters)", 21), ("redundant at {t}", 17)]
 
 

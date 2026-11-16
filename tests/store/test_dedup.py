@@ -448,6 +448,51 @@ def test_load_refuses_a_damaged_overlay(gov, damage, match):
         dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, ov.chunk_content_sha256)
 
 
+def test_an_overlay_of_other_chunks_under_this_name_names_both_hashes_and_a_fix(gov, capsys):
+    """The refusal prints both content hashes in full and a remedy that works: delete the
+    named file, then `adr dedup build`."""
+    _, ov = build_for(gov)
+    idx = active_index(gov)
+    path = opath(gov)
+    data = json.loads(path.read_bytes())
+    data["chunk_content_sha256"] = "8" * 64
+    path.write_bytes((json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    with pytest.raises(StoreError) as e:
+        dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, ov.chunk_content_sha256)
+    msg = str(e.value)
+    assert "8" * 64 in msg and ov.chunk_content_sha256 in msg
+    assert f"delete {path}" in msg and "adr dedup build" in msg
+    path.unlink()  # the remedy
+    code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
+    assert code == 0 and "(written" in out
+    assert dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker,
+                              ov.chunk_content_sha256) is not None
+
+
+def test_missing_counts_only_overlays_and_names_an_overlay_of_an_older_version(gov):
+    idx = active_index(gov)
+    content = chunk_content_sha256(idx.chunks.values())
+    d = gov.path / "dedup" / gov.snapshot_id
+    d.mkdir(parents=True)
+    (d / "notes.json").write_text("{}\n")  # not an overlay
+    (d / "stray.json").write_text("not json")
+    assert dedup.missing(gov.path, gov.snapshot_id, idx.chunker, content) == dedup.NO_OVERLAY
+    # an overlay of these chunks under the name of an older version (<key>.json)
+    ov = dedup.build(list(idx.chunks.values()), idx.snapshot, idx.chunker)
+    old = d / f"{dedup.overlay_key(idx.chunker, dedup.PARAMS)}.json"
+    old.write_bytes(canonical_json(ov))
+    why = dedup.missing(gov.path, gov.snapshot_id, idx.chunker, content)
+    assert "older version" in why and old.name in why and "adr dedup build" in why
+    t = tools.Tools(gov.path)
+    res = t.search(COPIED, top=20, filters={"include_superseded": True})
+    assert res.dedup is None and res.dedup_note == why
+    with pytest.raises(tools.ToolError, match="older version"):
+        t.search(COPIED, dedup=True)
+    # of other chunks, the older name is just another overlay
+    assert "older version" not in dedup.missing(gov.path, gov.snapshot_id, idx.chunker,
+                                                "0" * 64)
+
+
 def test_load_refuses_non_canonical_bytes(gov):
     _, ov = build_for(gov)
     idx = active_index(gov)
@@ -642,13 +687,7 @@ def test_cli_search_dedup_flags(gov, capsys):
     assert code == 0 and "dedup" in out and "alt" in out
 
 
-def test_cli_dedup_build_table_columns_line_up(gov, capsys):
-    code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
-    lines = out.splitlines()
-    head = next(i for i, line in enumerate(lines) if line.strip().startswith("view"))
-    table = lines[head:head + 3]
-    assert code == 0 and len(table) == 3 and "default view" in table[2]
-
+def _assert_lined_up(table: list[str]) -> None:
     def cells(line):  # cells are separated by two or more spaces
         return [(m.start(), m.end()) for m in re.finditer(r"\S+(?: \S+)*", line)]
 
@@ -658,6 +697,26 @@ def test_cli_dedup_build_table_columns_line_up(gov, capsys):
         assert len(got) == len(header)
         assert got[0][0] == header[0][0]  # the view column is left-aligned
         assert [e for _, e in got[1:]] == [e for _, e in header[1:]]  # the others right-aligned
+
+
+def test_cli_dedup_build_table_columns_line_up(gov, capsys):
+    code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
+    lines = out.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.strip().startswith("view"))
+    table = lines[head:head + 3]
+    assert code == 0 and len(table) == 3 and "default view" in table[2]
+    _assert_lined_up(table)
+
+
+def test_the_dedup_table_fits_five_digit_counts():
+    from adr_store import cli
+
+    wide = {"chunks": 99999, "exact_clusters": 99999, "exact_chunks": 99999,
+            "exact_redundant": 99999, "exact_redundant_share": 1.0,
+            "exact_redundant_token_share": 1.0, "near_pairs": 99999, "clusters": 99999,
+            "redundant_share": 1.0}
+    _assert_lined_up([cli._dedup_header(0.9), cli._dedup_row("all chunks", wide),
+                      cli._dedup_row("default view", {**wide, "exact_redundant_share": 0.512})])
 
 
 # -- deepening: collapse never comes back short while admitted chunks are left ---------------
