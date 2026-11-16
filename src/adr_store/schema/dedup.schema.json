@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "Cluster": {
+      "additionalProperties": false,
+      "description": "Chunks that are copies of each other: sorted `members`, every qualifying edge\n`(i, j, jaccard)` with `i < j` member indices, sorted.",
+      "properties": {
+        "cluster_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cluster Id",
+          "type": "string"
+        },
+        "edges": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Edges",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "exact",
+            "near"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Members",
+          "type": "array"
+        },
+        "min_jaccard": {
+          "title": "Min Jaccard",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cluster_id",
+        "members",
+        "kind",
+        "min_jaccard",
+        "edges"
+      ],
+      "title": "DedupCluster",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `<store>/dedup/<snapshot>/<overlay_key>.json`.",
+  "properties": {
+    "chunk_content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Chunk Content Sha256",
+      "type": "string"
+    },
+    "chunker": {
+      "additionalProperties": true,
+      "title": "Chunker",
+      "type": "object"
+    },
+    "clusters": {
+      "items": {
+        "$ref": "#/$defs/Cluster"
+      },
+      "title": "Clusters",
+      "type": "array"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "snapshot": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot",
+      "type": "string"
+    },
+    "stats": {
+      "additionalProperties": true,
+      "title": "Stats",
+      "type": "object"
+    }
+  },
+  "required": [
+    "format_version",
+    "snapshot",
+    "chunker",
+    "chunk_content_sha256",
+    "params",
+    "clusters",
+    "stats"
+  ],
+  "title": "DedupOverlay",
+  "type": "object"
+}

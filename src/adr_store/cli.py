@@ -1,8 +1,9 @@
 """`adr` command line: `adr ingest <corpus> --store <dir>` and `adr ingest --path <folder>
 --store <dir>` (below), and the retrieval tools `adr index`, `adr search`, `adr read` and
 `adr grep` (spec §9; the code is in `adr_store.tools`, this module only parses arguments and
-prints), and `adr applicability derive` (Phase 2 spec §4.2: the applicability overlay of the
-store's HEAD snapshot, code in `adr_store.applicability`).
+prints), `adr applicability derive` (Phase 2 spec §4.2: the applicability overlay of the
+store's HEAD snapshot, code in `adr_store.applicability`) and `adr dedup build` (Phase 2 spec
+§4.5: the dedup overlay of the active index's chunks, code in `adr_store.dedup`).
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
@@ -10,7 +11,9 @@ The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `adr search`, `adr grep` and `adr read` take the applicability filters (Phase 2 spec §4.4):
 `--include-superseded`, `--as-of YYYY-MM-DD`, `--status S` and `--jurisdiction J`
 (repeatable) and `--max-tier N`; with none given the call passes no filters (the default:
-superseded documents excluded when the store has an applicability overlay).
+superseded documents excluded when the store has an applicability overlay). `adr search
+--dedup/--no-dedup` turns collapse on or off (default: on when the active index's chunks have
+a dedup overlay).
 A refused call (unknown id, range out of bounds, bad pattern, a pattern that runs past
 `adr grep --timeout`, a missing or damaged index) exits 2 with a message on stderr; every tool
 call, refused or not, writes one line to the store's retrieval log, and an unexpected error
@@ -61,7 +64,7 @@ from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import applicability, tools
+from adr_store import applicability, dedup, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -483,7 +486,7 @@ def _print_filters(res, excluded: int | None) -> None:
 
 
 def _search(a: argparse.Namespace) -> int:
-    res = _tools(a).search(a.query, top=a.top, filters=_filters(a))
+    res = _tools(a).search(a.query, top=a.top, filters=_filters(a), dedup=a.dedup)
     if a.json:
         _print_json(res)
         return 0
@@ -491,10 +494,21 @@ def _search(a: argparse.Namespace) -> int:
     print(f"snapshot {res.snapshot[:12]}  index {res.system} {res.fingerprint[:12]}{lex}  "
           f"{len(res.hits)} hit(s)")
     _print_filters(res, res.excluded_by_filter)
-    print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  breadcrumb")
+    if res.dedup is None:  # the Phase 1 table
+        print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  "
+              f"breadcrumb")
+        for h in res.hits:
+            print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
+                  f"{f'{h.char_start}-{h.char_end}':<15}  {_cut(h.breadcrumb)}")
+        return 0
+    print(f"  dedup overlay {res.dedup[:12]}: one hit per cluster, the canonical copy shown; "
+          f"alt = other copies")
+    print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  {'alt':>3}  "
+          f"breadcrumb")
     for h in res.hits:
         print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
-              f"{f'{h.char_start}-{h.char_end}':<15}  {_cut(h.breadcrumb)}")
+              f"{f'{h.char_start}-{h.char_end}':<15}  {len(h.alternates):>3}  "
+              f"{_cut(h.breadcrumb)}")
     return 0
 
 
@@ -571,6 +585,61 @@ def _applicability_derive(a: argparse.Namespace) -> int:
               f"{_cut(f['dates'], 2 * TABLE_FIELD)}")
     for caveat in report["caveats"]:
         print(f"  caveat: {caveat}")
+    return 0
+
+
+def _dedup_row(label: str, f: dict) -> str:
+    def pct(x):
+        return "-" if x is None else f"{100 * x:.1f}%"
+
+    return (f"  {label:<14} {f['chunks']:>7}  {f['exact_clusters']:>6} ({f['exact_chunks']})"
+            f"  {f['exact_redundant']:>6} = {pct(f['exact_redundant_share'])} "
+            f"({pct(f['exact_redundant_token_share'])} of tokens)"
+            f"  {f['near_pairs']:>5} ({f['clusters']})  {pct(f['redundant_share'])}")
+
+
+def _dedup_build(a: argparse.Namespace) -> int:
+    """Build the dedup overlay of the active index's chunks, write it once (the same bytes
+    again are a no-op, other bytes are refused) and print the cluster table (spec §4.5): all
+    chunks, and the default view (superseded documents excluded) when the store has an
+    applicability overlay."""
+    t = tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    idx = t.active_index()
+    t0 = time.perf_counter()
+    overlay = dedup.build(list(idx.chunks.values()), idx.snapshot, idx.chunker)
+    seconds = time.perf_counter() - t0
+    path = dedup.overlay_path(t.store_path, overlay.snapshot, idx.chunker)
+    existed = path.is_file()
+    overlay_id, path = dedup.write_overlay(t.store_path, overlay)
+    figures = {"all": dedup.figures(idx.chunks, overlay.clusters), "default": None}
+    app = applicability.load_overlay(t.store_path, t.snapshot)
+    if app is not None:
+        allowed, _ = app.allowed_docs(t.store.doc_ids(), applicability.Filters())
+        figures["default"] = dedup.figures(idx.chunks, overlay.clusters,
+                                           lambda cid: idx.chunks[cid].doc_id in allowed)
+    if a.json:
+        print(json.dumps({"overlay_id": overlay_id, "path": str(path), "existed": existed,
+                          "snapshot": overlay.snapshot, "index": idx.fingerprint,
+                          "params": overlay.params, "stats": overlay.stats,
+                          "figures": figures, "seconds": round(seconds, 3)}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    p, st = overlay.params, overlay.stats
+    print(f"dedup: overlay {overlay_id[:12]} for snapshot {overlay.snapshot[:12]}, index "
+          f"{idx.fingerprint[:12]} ({'unchanged' if existed else 'written'}, built in "
+          f"{seconds:.1f} s)")
+    print(f"  {path}")
+    print(f"  exact {p['exact']}; near: MinHash {p['num_perm']} over word {p['shingle']}-shingles, "
+          f"LSH {p['bands']} x {p['rows']}, seed {p['seed']}, threshold {p['threshold']:g} "
+          f"(Jaccard, every candidate verified)")
+    print(f"  {st['distinct_texts']} distinct texts, {st['candidate_pairs']} candidate pairs, "
+          f"{st['verified_near_pairs']} verified, {st['rejected_candidates']} rejected")
+    print(f"  {'view':<14} {'chunks':>7}  {'exact clusters (chunks)':<23}  "
+          f"{'redundant (tokens)':<28}  near pairs (clusters)  redundant at "
+          f"{p['threshold']:g}")
+    print(_dedup_row("all chunks", figures["all"]))
+    if figures["default"] is not None:
+        print(_dedup_row("default view", figures["default"]))
     return 0
 
 
@@ -655,6 +724,9 @@ def _parser() -> argparse.ArgumentParser:
     se.add_argument("query")
     se.add_argument("--top", type=_positive, default=tools.SEARCH_TOP,
                     help=f"number of chunks (default {tools.SEARCH_TOP})")
+    se.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=None,
+                    help="collapse copies to one hit per cluster (default: on when the "
+                         "active index's chunks have a dedup overlay; `adr dedup build`)")
     _filter_flags(se)
 
     rd = _tool_parser(sub, "read", "the exact text of a document range", _read)
@@ -690,6 +762,18 @@ def _parser() -> argparse.ArgumentParser:
                           "corpora/gov/config.json)")
     der.add_argument("--json", action="store_true", help="print the result as JSON")
     der.set_defaults(fn=_applicability_derive)
+
+    dd = sub.add_parser("dedup", help="the dedup overlay (Phase 2)")
+    dd_sub = dd.add_subparsers(dest="action", required=True)
+    bld = dd_sub.add_parser("build", help="find exact and near-duplicate chunks of the active "
+                                          "index and write the dedup overlay once")
+    where = bld.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    bld.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                     help="embedding cache directory (to load a dense active index)")
+    bld.add_argument("--json", action="store_true", help="print the result as JSON")
+    bld.set_defaults(fn=_dedup_build)
     return ap
 
 

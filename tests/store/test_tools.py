@@ -316,9 +316,9 @@ def test_search_returns_the_index_ranking_with_the_snapshot_on_every_hit(store):
 def test_search_json_shape(store):
     d = lexical(store).search(QUERY, top=2).to_dict()
     assert set(d) == {"query", "top", "snapshot", "system", "lexical_only", "fingerprint", "w",
-                      "hits", "applicability", "filters", "excluded_by_filter"}
+                      "hits", "applicability", "filters", "excluded_by_filter", "dedup"}
     assert set(d["hits"][0]) == {"rank", "chunk_id", "doc_id", "char_start", "char_end",
-                                 "breadcrumb", "score", "snapshot"}
+                                 "breadcrumb", "score", "snapshot", "scored_by", "alternates"}
     json.dumps(d)
 
 
@@ -502,7 +502,7 @@ def test_every_call_appends_exactly_one_log_line(store):
     assert idx["args"] == {"system": "p1-struct", "lexical_only": True, "w_bc": None,
                            "weight": None, "tuning": None, "threads": 1}
     assert idx["results"] == [info.fingerprint]
-    assert srch["args"] == {"query": QUERY, "top": 3, "filters": None}
+    assert srch["args"] == {"query": QUERY, "top": 3, "filters": None, "dedup": None}
     assert srch["results"] == [h.chunk_id for h in res.hits]
     assert srch["index"] == info.fingerprint
     assert rdl["args"] == {"doc_id": d, "start": 2, "end": 9, "element": None, "chunk": None,

@@ -64,6 +64,17 @@ exist; for a doc-scoped grep, of that one document). Log lines of these tools ca
 caller's `filters` in `args`, and `filters` and `applicability` beside them (null when the call
 failed before they were known).
 
+Dedup (Phase 2 spec §4.5). `search(..., dedup=None)` collapses copies when a dedup overlay
+exists for the active index's chunks (`adr dedup build`; `dedup.load_overlay`, a damaged one
+is refused), `dedup=True` requires one ("no dedup overlay; run `adr dedup build`"), and
+`dedup=False` is the uncollapsed ranking (the overlay is not read). Collapse walks the index's
+top 200 fused candidates (a reranked index: its reranked top 50), masked by the filters as
+above, and gives one hit per connected component of a cluster's edges among the chunks the
+filters admit: the component's canonical chunk with the best-ranked member's score
+(`scored_by`) and the other admitted members as `alternates`. Without collapse `scored_by` is
+the hit itself and `alternates` is empty. The result carries `dedup` (the overlay id, or
+None) and so do log lines of `search`.
+
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
 single `O_APPEND` write, after the result is computed; the log is never read, so it cannot
@@ -87,12 +98,13 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from re import _parser as re_parser
 
+from adr_store import dedup as dedup_mod
 from adr_store import grep_worker
 from adr_store.applicability import Applicability, Filters, exclusion_reason, load_overlay
 from adr_store.embedding import EmbeddingCache
 from adr_store.records import sha256_text
 from adr_store.retrieval import Settings, StoreIndex
-from adr_store.retrieval.index import CHANNEL_K
+from adr_store.retrieval.index import CHANNEL_K, chunk_content_sha256
 from adr_store.retrieval.lexical import check_w_bc
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store, StoreError, write_atomic
@@ -103,6 +115,7 @@ GREP_BATCH_CHARS = 4_000_000  # text sent to the grep worker per request
 GREP_WORKER = grep_worker.__file__  # the worker's script
 WORKER_START = 60.0  # seconds the grep worker may take to start
 SEARCH_TOP = 10
+COLLAPSE_CANDIDATES = 200  # fused candidates a collapsed search walks (a reranked index: 50)
 CONTEXT_CHARS = 80  # characters of context on each side of a grep match
 MIN_PREFIX = 8
 DEFAULT_EMB_CACHE = Path(".cache/emb")
@@ -177,6 +190,8 @@ class Hit(_Result):
     breadcrumb: str
     score: float
     snapshot: str
+    scored_by: str | None = None  # the chunk whose score this is (itself without collapse)
+    alternates: list[dedup_mod.Alternate] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -192,6 +207,7 @@ class SearchResult(_Result):
     applicability: str | None = None
     filters: dict = field(default_factory=lambda: Filters().to_dict())
     excluded_by_filter: int = 0
+    dedup: str | None = None  # the dedup overlay id when collapsed
 
 
 @dataclass(frozen=True)
@@ -459,6 +475,7 @@ class Tools:
         self._active: dict | None = None
         self._chunks: dict[str, dict] | None = None
         self._overlay: Applicability | None | object = _UNLOADED
+        self._dedup: tuple[str, dedup_mod.Dedup | None] | None = None  # (index, overlay)
 
     @property
     def index_root(self) -> Path:
@@ -690,6 +707,18 @@ class Tools:
             self._index = idx
         return self._index, active
 
+    def active_index(self) -> StoreIndex:
+        """The active index, loaded and checked as `search` loads it (not logged)."""
+        return self._active_index()[0]
+
+    def _dedup_overlay(self, idx: StoreIndex) -> dedup_mod.Dedup | None:
+        """The dedup overlay of the index's chunks, or None (loaded once per index)."""
+        if self._dedup is None or self._dedup[0] != idx.fingerprint:
+            dd = dedup_mod.load_overlay(self.store_path, self.snapshot, idx.chunker,
+                                        chunk_content_sha256(idx.chunks.values()))
+            self._dedup = (idx.fingerprint, dd)
+        return self._dedup[1]
+
     def _chunk_rows(self) -> dict[str, dict]:
         """The active index's chunks, from the index as `search` loads it (so its fingerprint
         is checked the same way)."""
@@ -701,34 +730,55 @@ class Tools:
     # -- search -----------------------------------------------------------------------
 
     def search(self, query: str, top: int = SEARCH_TOP, *,
-               filters: Filters | dict | None = None) -> SearchResult:
+               filters: Filters | dict | None = None,
+               dedup: bool | None = None) -> SearchResult:
         """The top chunks of the active index for `query` among the documents the filters
-        admit."""
-        fields = self._filter_fields()
+        admit; with dedup (None: on when a dedup overlay exists for the index's chunks),
+        one slot per admitted cluster component, showing its canonical member."""
+        fields = {**self._filter_fields(), "dedup": None}
 
         def run():
             if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
                 raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
+            if dedup is not None and not isinstance(dedup, bool):
+                raise ToolError(f"dedup must be true, false or null, got {dedup!r}")
             applied = self._apply(filters, fields)
             active = self._active_record()
             if active["rerank"] and top > RERANK_TOP:
                 raise ToolError(f"the index ({active['system']}) reranks its top {RERANK_TOP} "
                                 f"chunks only; ask for --top {RERANK_TOP} or fewer")
             idx, active = self._active_index()
+            dd = None if dedup is False else self._dedup_overlay(idx)
+            if dedup is True and dd is None:
+                raise ToolError(dedup_mod.NO_OVERLAY)
+            if dd is None:
+                slots = [dedup_mod.Slot(cid, score, cid, ()) for cid, score in idx.retrieve(
+                    query, fusion="linear", w=active["w"], top=top,
+                    allowed_docs=applied.allowed)]
+            else:
+                fields["dedup"] = dd.overlay_id
+                ranked = idx.retrieve(query, fusion="linear", w=active["w"],
+                                      top=RERANK_TOP if idx.reranker is not None else
+                                      COLLAPSE_CANDIDATES, allowed_docs=applied.allowed)
+                allowed = applied.allowed
+                slots = dedup_mod.collapse(
+                    ranked, dd, lambda cid: allowed is None or idx.chunks[cid].doc_id in allowed,
+                    idx.chunks, applied.overlay, applied.filters.as_of, top)
             hits = []
-            for rank, (cid, score) in enumerate(
-                    idx.retrieve(query, fusion="linear", w=active["w"], top=top,
-                                 allowed_docs=applied.allowed), start=1):
-                c = idx.chunks[cid]
-                hits.append(Hit(rank, cid, c.doc_id, c.char_start, c.char_end, c.breadcrumb,
-                                score, self.snapshot))
+            for rank, slot in enumerate(slots, start=1):
+                c = idx.chunks[slot.chunk_id]
+                hits.append(Hit(rank, slot.chunk_id, c.doc_id, c.char_start, c.char_end,
+                                c.breadcrumb, slot.score, self.snapshot, slot.scored_by,
+                                list(slot.alternates)))
             res = SearchResult(query, top, self.snapshot, active["system"],
                                active["lexical_only"], idx.fingerprint, active["w"], hits,
-                               **applied.fields(), excluded_by_filter=applied.excluded)
+                               **applied.fields(), excluded_by_filter=applied.excluded,
+                               dedup=None if dd is None else dd.overlay_id)
             return res, [h.chunk_id for h in hits], {"index": idx.fingerprint}
 
         return self._call("search", {"query": query, "top": top,
-                                     "filters": _filters_arg(filters)}, run, fields)
+                                     "filters": _filters_arg(filters), "dedup": dedup}, run,
+                          fields)
 
     # -- read -------------------------------------------------------------------------
 
