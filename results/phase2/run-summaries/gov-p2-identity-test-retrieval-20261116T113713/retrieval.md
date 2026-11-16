@@ -1,6 +1,6 @@
-# Retrieval: gov-p2-identity-test-retrieval-20261116T090523
+# Retrieval: gov-p2-identity-test-retrieval-20261116T113713
 
-Corpus `gov`, system `p2-identity`, split `test`, 242 items. Settings: fusion linear, linear_w 1.0, w_bc 2, prefix True, rerank False. Index fingerprint `54c12a3c29170005fd046a56a12b07a80a3fe63a86b80c762c0cffabbd9c0aec`. Metrics version 2. No model calls. Wall-clock 83.6 s.
+Corpus `gov`, system `p2-identity`, split `test`, 242 items. Settings: fusion linear, linear_w 1.0, w_bc 2, prefix True, rerank False. Index fingerprint `54c12a3c29170005fd046a56a12b07a80a3fe63a86b80c762c0cffabbd9c0aec`. Metrics version 2. No model calls. Wall-clock 65.6 s.
 
 Values in brackets are 95% CIs (percentile bootstrap of the mean over items, 10,000 resamples); none where n < 2. `insufficient` items carry no metrics.
 

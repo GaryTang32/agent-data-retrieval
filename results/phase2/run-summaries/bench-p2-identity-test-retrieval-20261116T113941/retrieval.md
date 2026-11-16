@@ -1,6 +1,6 @@
-# Retrieval: bench-p2-identity-test-retrieval-20261116T090810
+# Retrieval: bench-p2-identity-test-retrieval-20261116T113941
 
-Corpus `bench`, system `p2-identity`, split `test`, 572 items. Settings: fusion linear, linear_w 0.7, w_bc 1, prefix True, rerank False. Index fingerprint `8c7bb39d032b886872bf0d64c462a906c4ea0435712feae880018d0bfc121830`. Metrics version 2. No model calls. Wall-clock 136.5 s.
+Corpus `bench`, system `p2-identity`, split `test`, 572 items. Settings: fusion linear, linear_w 0.7, w_bc 1, prefix True, rerank False. Index fingerprint `8c7bb39d032b886872bf0d64c462a906c4ea0435712feae880018d0bfc121830`. Metrics version 2. No model calls. Wall-clock 123.8 s.
 
 Values in brackets are 95% CIs (percentile bootstrap of the mean over items, 10,000 resamples); none where n < 2. `insufficient` items carry no metrics.
 

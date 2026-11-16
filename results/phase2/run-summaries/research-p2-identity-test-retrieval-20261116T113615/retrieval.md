@@ -1,6 +1,6 @@
-# Retrieval: research-p2-identity-test-retrieval-20261116T085500
+# Retrieval: research-p2-identity-test-retrieval-20261116T113615
 
-Corpus `research`, system `p2-identity`, split `test`, 222 items. Settings: fusion linear, linear_w 0.9, w_bc 3, prefix True, rerank False. Index fingerprint `d3902b136e26732774bdfe4ffdcf6919f01308d5ede930baa79d9eaefac7f0a3`. Metrics version 2. No model calls. Wall-clock 304.8 s.
+Corpus `research`, system `p2-identity`, split `test`, 222 items. Settings: fusion linear, linear_w 0.9, w_bc 3, prefix True, rerank False. Index fingerprint `d3902b136e26732774bdfe4ffdcf6919f01308d5ede930baa79d9eaefac7f0a3`. Metrics version 2. No model calls. Wall-clock 351.5 s.
 
 Values in brackets are 95% CIs (percentile bootstrap of the mean over items, 10,000 resamples); none where n < 2. `insufficient` items carry no metrics.
 

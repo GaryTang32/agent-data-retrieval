@@ -1,18 +1,13 @@
 {
   "runs": [
     {
-      "acl": {
-        "acl_snapshot": "6c4d4780e241794e33fbcc473020af6d75e447911bcf1c91718e7098fb18f577",
-        "sequence": 2,
-        "store_docs": 180,
-        "visible_docs": 180
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "gov",
       "identical": true,
       "items": 55,
       "max_abs_score_diff_same_ids": 0.0,
-      "new": "gov-p2-identity-dev-retrieval-20261116T090501",
+      "new": "gov-p2-identity-dev-retrieval-20261116T113615",
       "old": "gov-p2-identity-dev-retrieval-20261116T055907",
       "ranked_differ": 0,
       "scores_differ": 0,
@@ -20,21 +15,16 @@
       "split": "dev",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 66.2
+      "wall": 55.2
     },
     {
-      "acl": {
-        "acl_snapshot": "6c4d4780e241794e33fbcc473020af6d75e447911bcf1c91718e7098fb18f577",
-        "sequence": 2,
-        "store_docs": 180,
-        "visible_docs": 180
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "gov",
       "identical": true,
       "items": 242,
       "max_abs_score_diff_same_ids": 0.0,
-      "new": "gov-p2-identity-test-retrieval-20261116T090523",
+      "new": "gov-p2-identity-test-retrieval-20261116T113713",
       "old": "gov-p2-identity-test-retrieval-20261116T060006",
       "ranked_differ": 0,
       "scores_differ": 0,
@@ -42,7 +32,7 @@
       "split": "test",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 83.6
+      "wall": 65.6
     },
     {
       "acl": {
@@ -177,48 +167,38 @@
       "wall": 89.8
     },
     {
-      "acl": {
-        "acl_snapshot": "5f2ac56f971c3a6838778887ca447886f21736dbb4f816e50fab8d3d740ad94e",
-        "sequence": 2,
-        "store_docs": 245,
-        "visible_docs": 245
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "research",
-      "identical": false,
+      "identical": true,
       "items": 53,
-      "max_abs_score_diff_same_ids": 2.000000000002e-06,
-      "new": "research-p2-identity-dev-retrieval-20261116T085501",
+      "max_abs_score_diff_same_ids": 0.0,
+      "new": "research-p2-identity-dev-retrieval-20261116T113615",
       "old": "research-p2-identity-dev-retrieval-20261116T055908",
       "ranked_differ": 0,
-      "scores_differ": 11,
+      "scores_differ": 0,
       "set_differ": 0,
       "split": "dev",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 279.5
+      "wall": 350.3
     },
     {
-      "acl": {
-        "acl_snapshot": "5f2ac56f971c3a6838778887ca447886f21736dbb4f816e50fab8d3d740ad94e",
-        "sequence": 2,
-        "store_docs": 245,
-        "visible_docs": 245
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "research",
-      "identical": false,
+      "identical": true,
       "items": 222,
-      "max_abs_score_diff_same_ids": 3.0000000000030003e-06,
-      "new": "research-p2-identity-test-retrieval-20261116T085500",
+      "max_abs_score_diff_same_ids": 0.0,
+      "new": "research-p2-identity-test-retrieval-20261116T113615",
       "old": "research-p2-identity-test-retrieval-20261116T060511",
       "ranked_differ": 0,
-      "scores_differ": 55,
+      "scores_differ": 0,
       "set_differ": 0,
       "split": "test",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 304.8
+      "wall": 351.5
     },
     {
       "acl": {
@@ -353,48 +333,38 @@
       "wall": 327.2
     },
     {
-      "acl": {
-        "acl_snapshot": "89e9cd0b5bb4c6c75661c9e254d665a642402a4a753d4e1b2ec11e6680e60b23",
-        "sequence": 2,
-        "store_docs": 2000,
-        "visible_docs": 2000
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "bench",
-      "identical": false,
+      "identical": true,
       "items": 156,
-      "max_abs_score_diff_same_ids": 8.000000000008e-06,
-      "new": "bench-p2-identity-dev-retrieval-20261116T090719",
+      "max_abs_score_diff_same_ids": 0.0,
+      "new": "bench-p2-identity-dev-retrieval-20261116T113822",
       "old": "bench-p2-identity-dev-retrieval-20261116T055908",
       "ranked_differ": 0,
-      "scores_differ": 33,
+      "scores_differ": 0,
       "set_differ": 0,
       "split": "dev",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 100.0
+      "wall": 76.2
     },
     {
-      "acl": {
-        "acl_snapshot": "89e9cd0b5bb4c6c75661c9e254d665a642402a4a753d4e1b2ec11e6680e60b23",
-        "sequence": 2,
-        "store_docs": 2000,
-        "visible_docs": 2000
-      },
-      "caller": "user:auditor",
+      "acl": null,
+      "caller": null,
       "corpus": "bench",
-      "identical": false,
+      "identical": true,
       "items": 572,
-      "max_abs_score_diff_same_ids": 1.799999999996249e-05,
-      "new": "bench-p2-identity-test-retrieval-20261116T090810",
+      "max_abs_score_diff_same_ids": 0.0,
+      "new": "bench-p2-identity-test-retrieval-20261116T113941",
       "old": "bench-p2-identity-test-retrieval-20261116T060027",
       "ranked_differ": 0,
-      "scores_differ": 132,
+      "scores_differ": 0,
       "set_differ": 0,
       "split": "test",
       "summary_equal": true,
       "system": "p2-identity",
-      "wall": 136.5
+      "wall": 123.8
     },
     {
       "acl": {
@@ -529,5 +499,5 @@
       "wall": 103.7
     }
   ],
-  "what": "Phase 2 Task 8 step 1: the four p2 configurations re-run as user:auditor (ACL layer) against the Task 5 runs (no ACL layer); counts only, no item ids"
+  "what": "Phase 2 Task 8 step 1 (fix round): p2-identity re-run with every Phase 2 layer off, the ACL layer included (ruling); p2-appl, p2-dedup and p2-default re-run as user:auditor (ACL layer); each against its Task 5 run; counts only, no item ids"
 }
