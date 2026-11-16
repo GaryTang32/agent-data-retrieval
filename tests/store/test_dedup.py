@@ -161,8 +161,8 @@ def test_a_near_cluster_holds_its_exact_members_and_every_qualifying_edge():
     assert cl.edges == sorted([tuple(sorted((a, b))) + (1.0,), tuple(sorted((a, c))) + (j,),
                                tuple(sorted((b, c))) + (j,)])
     assert cl.min_jaccard == j
-    assert ov.stats["exact_clusters"] == 1 and ov.stats["near_pairs"] == 1
-    assert ov.stats["near_edges"] == 2 and ov.stats["clusters"] == 1
+    assert ov.stats["exact_clusters"] == 1 and ov.stats["near_text_pairs"] == 1
+    assert ov.stats["near_pairs"] == 2 and ov.stats["clusters"] == 1
     assert ov.stats["redundant"] == 2
 
 
@@ -174,6 +174,7 @@ def test_every_candidate_pair_is_verified(monkeypatch):
               chunk("e", 0, text(WORDS[200:300]))]
     ov = build(chunks)
     assert ov.stats["candidate_pairs"] == 10  # all pairs of the five texts collided
+    assert ov.stats["verified_candidates"] == 1 and ov.stats["rejected_candidates"] == 9
     # only the pair at or above 0.90 is linked; 51/61 is not
     assert [sorted(cl.members) for cl in ov.clusters] == [
         sorted([chunks[2].chunk_id, chunks[3].chunk_id])]

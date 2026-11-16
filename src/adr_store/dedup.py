@@ -254,7 +254,7 @@ def build(chunks: list[StoreChunk], snapshot: str, chunker: dict) -> DedupOverla
             min_jaccard=min(x for _, _, x in cl_edges), edges=cl_edges))
     clusters.sort(key=lambda c: c.cluster_id)
     stats = {**figures(by_id, clusters), "distinct_texts": len(keys),
-             "candidate_pairs": len(candidates), "verified_near_pairs": near_pairs,
+             "candidate_pairs": len(candidates), "verified_candidates": near_pairs,
              "rejected_candidates": len(candidates) - near_pairs}
     return DedupOverlay(format_version=FORMAT_VERSION, snapshot=snapshot, chunker=chunker,
                         chunk_content_sha256=chunk_content_sha256(chunks), params=PARAMS,
@@ -272,8 +272,10 @@ def figures(chunks: Mapping[str, StoreChunk], clusters: list[Cluster],
             admitted: Callable[[str], bool] | None = None) -> dict:
     """The §4.5 table row for the chunks `admitted` keeps (all when None): exact clusters
     (SHA-256 groups) and the chunks in them, redundant chunks (all but one per group) and
-    their share of the tokens, verified near pairs (distinct texts) and edges, clusters at the
-    threshold (components of the edges among the kept chunks) and their redundancy."""
+    their share of the tokens, verified near pairs (pairs of kept chunks with different texts
+    joined by an edge) and the pairs of distinct texts among them, clusters at the threshold
+    (components of the edges among the kept chunks) and their redundancy (all but one chunk
+    per cluster)."""
     keep = sorted(c for c in chunks if admitted is None or admitted(c))
     sha = {c: sha256_text(chunks[c].text) for c in keep}
     tokens = {c: count_tokens(chunks[c].text) for c in keep}
@@ -282,7 +284,7 @@ def figures(chunks: Mapping[str, StoreChunk], clusters: list[Cluster],
         groups.setdefault(sha[c], []).append(c)
     exact = [g for g in groups.values() if len(g) > 1]
     keep_set = set(keep)
-    comps, near_edges, near_pairs = [], 0, set()
+    comps, near_pairs, near_texts = [], 0, set()
     for cl in clusters:
         for comp in _restricted(cl, lambda c: c in keep_set):
             if len(comp) > 1:
@@ -290,8 +292,8 @@ def figures(chunks: Mapping[str, StoreChunk], clusters: list[Cluster],
         for i, j, _ in cl.edges:
             a, b = cl.members[i], cl.members[j]
             if a in keep_set and b in keep_set and sha[a] != sha[b]:
-                near_edges += 1
-                near_pairs.add(tuple(sorted((sha[a], sha[b]))))
+                near_pairs += 1
+                near_texts.add(tuple(sorted((sha[a], sha[b]))))
     n, total = len(keep), sum(tokens.values())
     redundant = sum(len(c) - 1 for c in comps)
     exact_tokens = sum(tokens[c] for g in exact for c in g[1:])
@@ -305,7 +307,8 @@ def figures(chunks: Mapping[str, StoreChunk], clusters: list[Cluster],
             "exact_redundant_share": share(sum(len(g) - 1 for g in exact), n),
             "exact_redundant_tokens": exact_tokens,
             "exact_redundant_token_share": share(exact_tokens, total),
-            "near_pairs": len(near_pairs), "near_edges": near_edges, "clusters": len(comps),
+            "near_pairs": near_pairs, "near_text_pairs": len(near_texts),
+            "clusters": len(comps),
             "clustered_chunks": sum(len(c) for c in comps), "redundant": redundant,
             "redundant_share": share(redundant, n)}
 

@@ -590,7 +590,8 @@ def _applicability_derive(a: argparse.Namespace) -> int:
 
 def _dedup_row(label: str, f: dict) -> str:
     def pct(x):
-        return "-" if x is None else f"{100 * x:.1f}%"
+        return "-" if x is None else f"{100 * x:.1f}%" if x == 0 or x >= 0.01 else \
+            f"{100 * x:.2f}%"
 
     return (f"  {label:<14} {f['chunks']:>7}  {f['exact_clusters']:>6} ({f['exact_chunks']})"
             f"  {f['exact_redundant']:>6} = {pct(f['exact_redundant_share'])} "
@@ -633,7 +634,7 @@ def _dedup_build(a: argparse.Namespace) -> int:
           f"LSH {p['bands']} x {p['rows']}, seed {p['seed']}, threshold {p['threshold']:g} "
           f"(Jaccard, every candidate verified)")
     print(f"  {st['distinct_texts']} distinct texts, {st['candidate_pairs']} candidate pairs, "
-          f"{st['verified_near_pairs']} verified, {st['rejected_candidates']} rejected")
+          f"{st['verified_candidates']} verified, {st['rejected_candidates']} rejected")
     print(f"  {'view':<14} {'chunks':>7}  {'exact clusters (chunks)':<23}  "
           f"{'redundant (tokens)':<28}  near pairs (clusters)  redundant at "
           f"{p['threshold']:g}")
