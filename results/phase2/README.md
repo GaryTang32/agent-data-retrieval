@@ -1,10 +1,10 @@
 # Phase 2 results: applicability, permissions, tools as data and an MCP server
 
 > **Work in progress.** Parts 2A (applicability and duplicates), 2B (permissions, for the
-> content tools) and 2C (tools as data, with B1, B3 and B4 completed for the tool tools) are
-> measured so far. These numbers were recorded on 16 November 2026 under version 2 of the
-> metric definitions, with golden sets v0.1. Part 2D (the MCP server) follows in its own
-> section, and completes B1 and B3 for the MCP server.
+> content tools), 2C (tools as data, with B1, B3 and B4 completed for the tool tools) and 2D
+> (the MCP server, completing B1, B3 and B5 through it) are measured. These numbers were
+> recorded on 16 November 2026 under version 2 of the metric definitions, with golden sets
+> v0.1. The determinism criterion X1 and the overall verdict follow.
 
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](../../docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](../../docs/superpowers/plans/2026-11-16-phase2.md).
@@ -865,4 +865,118 @@ adr-eval tools-retrieval --system tools-bm25-raw --split test
 adr acl sync --store .cache/store-p2/toolret
 adr-eval tools-probes --store .cache/store-p2/toolret --index c7d17539c08d
 pytest tests/store/test_revocation.py
+```
+
+## 2D: the MCP server
+
+**Verdict.** D1 passes, and B1, B3 and B5 now also pass through the MCP server.
+- **D1.** The 16 MCP tests and the 44 handle tests pass. `tools/list` gives exactly the five tools, with input and output schemas; 100 fixed calls through MCP equal the Python API; every result carries a handle, and a replay with it is identical.
+- **B1 through MCP.** The seeded 300 of the 1,053 leak probes, each through an `adr mcp` server of its caller, found 0 leaks and 0 invalid results. Every spec family has at least 20 probes: search 135, grep 65, read 48, `search_tools`/`load_tool` 52.
+- **B3, the MCP leg.** A revocation reaches an `adr mcp` server started before the change, for all three change kinds and all five tools (3 of 3 tests; 13 of 13 revocation tests in all).
+- **B5 over the MCP calls.** The 382 calls the probes made through MCP wrote exactly 382 log lines, per store and per tool, and every line carries `caller`, `principals`, `acl_snapshot` and `acl_decision`.
+
+### What was run
+
+- **No model calls** (R1). Every server and command ran with `HF_HUB_OFFLINE=1`. The only model loaded was the cached embedding model, for the dense halves of research, bench and the tool index.
+- **The server** (Task 12). `adr mcp --store S --as USER` starts one `MCPServer` (`mcp==2.3.0`, the high-level API) over one `Tools(acl=True, caller=USER)`, with exactly five tools: `search`, `read`, `grep`, `search_tools` and `load_tool`.
+  - Each has declared input and output schemas and the annotations `readOnlyHint`, `idempotentHint` and `openWorldHint: false`.
+  - The transport is stdio only, and the caller is fixed when the server starts (R12). No tool argument names a principal.
+  - The server holds no retrieval or ACL logic: every call goes through `Tools`, which decides F1–F5 per call and logs it.
+- **The client** is `adr_store.mcp_client.McpTools`. It starts the server as a subprocess, talks to it through the SDK's `mcp.Client`, and returns the same result dataclasses as `Tools`, rebuilt from the structured content.
+- **D1 and B3's MCP leg** are the Task 12 tests, run again in this task with `pytest -q -W error` (73 of 73 passed in 134 s, beside the second MCP probe run): `tests/store/test_mcp.py` (16), `tests/store/test_handles.py` (44) and `tests/store/test_revocation.py` (13, of which 3 are the MCP leg). They run on fixture stores under `tmp_path`.
+- **B1 through MCP** with `adr-eval mcp-probes --tool-index c7d17539c08d` (`adr_eval.probes.mcp`, new in this task), on the four Phase 2 stores, each re-synced just before. The run reused the reference stores of the B2 run and kept them for the second run (X1).
+
+### B1 through MCP
+
+**The universe** is every leak probe of the API runs, built exactly as they build them: the 853 content probes of gov, research and bench (2B) and the 200 tool probes (2C), 1,053 in all.
+
+**The subset** is the 300 probes with the lowest SHA-256 of `"20261116:<store>/<probe id>"`. Nothing forces a family's share; the plan asks for at least 20 per family, else a report.
+- **At the level of the spec's four families** (search, grep, read, `search_tools`/`load_tool`) every family has at least 20.
+- **At the level of the probe families,** two have fewer: `grep-doc` 19 and `alternate-cross-view` 2. The whole universe holds only 13 `alternate-cross-view` probes (bench's one cross-view cluster, 2B), so no 300-probe sample could give it 20.
+
+**Servers.** One server per (store, caller) pair: 78 servers, each used for its caller's probes and stopped. `user:ghost` gets a server too: the server checks only that a caller is given, and F4 is decided per call.
+
+**Judging.** Each probe was judged exactly as in the API runs (`acl.check`, `acl.check_tool`). Content results were compared with the caller's reference store, built from that caller's documents alone and called through the Python API, so the count and score kinds compare what MCP returns with an allowed-only store. Tool results were compared with a reference index of the caller's visible tools.
+
+| Family | Universe | Probes | Callers | Outcomes | Leaks |
+|---|---|---|---|---|---|
+| search, rare tokens | 300 | 95 | 20 | 89 answered, 6 denied F4 (`user:ghost`) | 0 |
+| search, title | 150 | 38 | 15 | 38 answered | 0 |
+| search, `alternate-cross-view` | 13 | 2 | 2 | 2 answered; the visible member in the top 10 with its one visible alternate | 0 |
+| grep, literal | 150 | 46 | 17 | 42 answered, 4 denied F4 | 0 |
+| grep, doc-scoped | 60 | 19 | 9 | 16 "not found", 3 denied F4 | 0 |
+| read | 180 | 48 | 18 | 43 "not found", 5 denied F4 | 0 |
+| `search_tools` | 100 | 28 | 14 | 28 answered | 0 |
+| `load_tool` | 100 | 24 | 13 | 23 "not found", 1 denied F4 | 0 |
+| **total** | **1,053** | **300** | | | **0** |
+
+By store: gov 82, research 80, bench 86, tools 52.
+
+| Leak kind (spec §10.2) | Checked | Leaks |
+|---|---|---|
+| A returned id outside the view | 199 | 0 |
+| An alternate outside the view | 171 | 0 |
+| Text of a hidden document or tool | 300 | 0 |
+| A not-found message that differs from a nonexistent id's | 82 | 0 |
+| A count that includes hidden items | 199 | 0 |
+| A score that differs from the reference allowed-only index | 199 | 0 |
+
+As in 2B, the alternate kind can fire only on the 2 `alternate-cross-view` probes, and an ambiguous prefix cannot occur on the corpora; the fixtures cover both.
+
+### B5 over the MCP calls
+
+The probe counts every call it makes through MCP and compares them with the lines the servers wrote to each store's log during the run:
+
+| Store | Calls through MCP | Log lines | Allowed | Denied F4 |
+|---|---|---|---|---|
+| gov | 103 (search 44, grep 20, read 39) | 103 | 95 | 8 |
+| research | 101 (search 41, grep 30, read 30) | 101 | 95 | 6 |
+| bench | 103 (search 50, grep 31, read 22) | 103 | 99 | 4 |
+| tools | 75 (`search_tools` 28, `load_tool` 47) | 75 | 74 | 1 |
+| **total** | **382** | **382** | **363** | **19** |
+
+- **Every line** has `caller`, `principals`, `acl_snapshot` and `acl_decision`, and every allowed line also a non-null `caller`, `principals`, `acl_snapshot` and `view` (and, for the tool tools, `tool_view` and `tools_snapshot`).
+- **The reference stores' lines** (171, from the judging calls through the Python API) pass the same scan.
+- **What the log cannot show.** A call that the MCP server's input schema rejects (a wrong type, `top` above 50, an unknown argument) is answered by the SDK before it reaches `Tools`, so it is never logged. The probes make no such call, so calls and lines match one for one; the MCP tests check those rejections separately.
+
+### Handles
+
+Every result of the five tools carries a handle (§9.2): the content snapshot, the index, the applicability and dedup overlays, the tool snapshot and the tool index (planner's call 11). The tests show that:
+- a replay with the handle gives an identical result, also after `HEAD` has moved;
+- a handle naming a component that is gone fails with "handle no longer available: <component>", never a silent fallback;
+- a handle naming an older snapshot is judged against the current ACL (R15), so a revocation reaches old handles;
+- a handle with extra fields or a bad shape is refused.
+
+**A handle is a request, not an attestation.** It names the components a caller asks for, and the server checks that they exist and runs on them. Nothing signs a result, so a handle in a client's hands does not prove that a given result came from those components.
+
+### Machine and wall times
+
+The same machine as 2A–2C. The first MCP run had the machine to itself apart from the periodic ACL syncs; the D1 tests ran beside the second.
+
+| Step | Wall time | Notes |
+|---|---|---|
+| `adr-eval mcp-probes` (first run) | 18.5 min | 78 server processes, each loading its store's index (and the embedding model on research, bench and tools) |
+| `adr-eval mcp-probes` (second run) | 17.5 min | |
+| D1 and B3 tests (73) | 134 s | Beside the second MCP probe run |
+
+### Limits
+
+- **stdio only** (R12). One caller per server process; multi-user serving needs HTTP and OAuth, which are out of scope.
+- **Rejected calls are not logged.** Calls that fail the server's input schema never reach `Tools` (above).
+- **The MCP subset is 300 of 1,053.** The other 753 leak probes and all 350 fail-closed probes ran through the Python API only, as the spec plans. F1–F5 are decided per call inside `Tools`, which the server calls for every request.
+- **Handles are not signed** (above).
+- **Fixture stores for D1.** The MCP and handle tests run on small fixture stores; the real stores are exercised through MCP only by the probe subset.
+
+### Files
+
+`run-summaries/` holds:
+- **`probes-mcp-20261116T191633/`** and **`probes-mcp-20261116T193500/`:** `summary.json` and `summary.md` (configuration with each store's snapshot, index, ACL snapshot and tool index; family counts of the universe and the subset; leak and kind counts; the calls and log scans). They hold no probe lists, queries or corpus text.
+- **`2d-checks/checks.json`:** the D1 and B3 test run, the MCP summary's counts, the syncs and the read-only check of the real stores.
+
+The probe subset (`probes.json`) and the per-probe results stay local in `runs/`.
+
+```
+adr acl sync --store .cache/store-p2/gov        # and research, bench, toolret
+adr-eval mcp-probes --tool-index c7d17539c08d --keep-views
+pytest tests/store/test_mcp.py tests/store/test_handles.py tests/store/test_revocation.py
 ```

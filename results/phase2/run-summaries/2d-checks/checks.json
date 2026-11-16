@@ -1,0 +1,442 @@
+{
+ "d1_b3_tests": {
+  "collected": {
+   "tests/store/test_handles.py": 44,
+   "tests/store/test_mcp.py": 16,
+   "tests/store/test_revocation.py": 13
+  },
+  "command": "HF_HUB_OFFLINE=1 pytest -q -W error tests/store/test_mcp.py tests/store/test_handles.py tests/store/test_revocation.py",
+  "note": "ran beside the second mcp-probes run; fixture stores under tmp_path only",
+  "rc": 0,
+  "result": "73 passed in 133.60s",
+  "revocation_mcp_leg": [
+   "test_revocation_reaches_an_mcp_server_started_before_the_change[rule changed in the policy]",
+   "test_revocation_reaches_an_mcp_server_started_before_the_change[user deleted]",
+   "test_revocation_reaches_an_mcp_server_started_before_the_change[user removed from a group]"
+  ],
+  "started": "2026-11-16T19:36Z"
+ },
+ "mcp_probes": {
+  "calls_vs_log_lines": {
+   "bench": {
+    "calls": 103,
+    "equal_per_tool": true,
+    "lines": 103
+   },
+   "gov": {
+    "calls": 103,
+    "equal_per_tool": true,
+    "lines": 103
+   },
+   "research": {
+    "calls": 101,
+    "equal_per_tool": true,
+    "lines": 101
+   },
+   "tools": {
+    "calls": 75,
+    "equal_per_tool": true,
+    "lines": 75
+   }
+  },
+  "counts": {
+   "selected": {
+    "families": {
+     "alternate-cross-view": 2,
+     "grep-doc": 19,
+     "grep-literal": 46,
+     "read": 48,
+     "search-rare": 95,
+     "search-title": 38,
+     "tool-load": 24,
+     "tool-search": 28
+    },
+    "spec_families": {
+     "grep": 65,
+     "read": 48,
+     "search": 135,
+     "search_tools/load_tool": 52
+    },
+    "stores": {
+     "bench": 86,
+     "gov": 82,
+     "research": 80,
+     "tools": 52
+    }
+   },
+   "universe": {
+    "families": {
+     "alternate-cross-view": 13,
+     "grep-doc": 60,
+     "grep-literal": 150,
+     "read": 180,
+     "search-rare": 300,
+     "search-title": 150,
+     "tool-load": 100,
+     "tool-search": 100
+    },
+    "spec_families": {
+     "grep": 210,
+     "read": 180,
+     "search": 463,
+     "search_tools/load_tool": 200
+    },
+    "stores": {
+     "bench": 293,
+     "gov": 280,
+     "research": 280,
+     "tools": 200
+    }
+   }
+  },
+  "log_scan_total": {
+   "allowed": 363,
+   "allowed_unresolved": 0,
+   "complete": true,
+   "complete_lines": 382,
+   "decisions": {
+    "allowed": 363,
+    "denied:F4": 19
+   },
+   "lines": 382,
+   "missing": {
+    "acl_decision": 0,
+    "acl_snapshot": 0,
+    "caller": 0,
+    "principals": 0
+   },
+   "tools": {
+    "grep": 81,
+    "load_tool": 47,
+    "read": 91,
+    "search": 135,
+    "search_tools": 28
+   }
+  },
+  "reference_log_scan_total": {
+   "allowed": 171,
+   "allowed_unresolved": 0,
+   "complete": true,
+   "complete_lines": 171,
+   "decisions": {
+    "allowed": 171
+   },
+   "lines": 171,
+   "missing": {
+    "acl_decision": 0,
+    "acl_snapshot": 0,
+    "caller": 0,
+    "principals": 0
+   },
+   "tools": {
+    "grep": 42,
+    "search": 129
+   }
+  },
+  "runs": [
+   "probes-mcp-20261116T191633",
+   "probes-mcp-20261116T193500"
+  ],
+  "second_run": "probes.json and results.json byte-identical to the first; summary.json differs only in config.stores.gov.acl_sequence and acl_snapshot (a periodic sync between the runs)",
+  "servers_store_caller_pairs": 78,
+  "short_spec_families": {},
+  "summary": {
+   "families": {
+    "alternate-cross-view": {
+     "alternates_shown": 2,
+     "callers": 2,
+     "checked_kinds": {
+      "alternate_outside_view": 2,
+      "count_includes_hidden": 2,
+      "hidden_text": 2,
+      "id_outside_view": 2,
+      "not_found_differs": 0,
+      "score_differs": 2
+     },
+     "ghost": false,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 2,
+     "outcomes": {
+      "ok": 2
+     },
+     "outsider": true,
+     "visible_member_top10": 2
+    },
+    "grep-doc": {
+     "callers": 9,
+     "checked_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 19,
+      "id_outside_view": 0,
+      "not_found_differs": 16,
+      "score_differs": 0
+     },
+     "ghost": true,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 19,
+     "outcomes": {
+      "denied:F4": 3,
+      "refused": 16
+     },
+     "outsider": false
+    },
+    "grep-literal": {
+     "callers": 17,
+     "checked_kinds": {
+      "alternate_outside_view": 42,
+      "count_includes_hidden": 42,
+      "hidden_text": 46,
+      "id_outside_view": 42,
+      "not_found_differs": 0,
+      "score_differs": 42
+     },
+     "ghost": true,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 46,
+     "outcomes": {
+      "denied:F4": 4,
+      "ok": 42
+     },
+     "outsider": true
+    },
+    "read": {
+     "callers": 18,
+     "checked_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 48,
+      "id_outside_view": 0,
+      "not_found_differs": 43,
+      "score_differs": 0
+     },
+     "ghost": true,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 48,
+     "outcomes": {
+      "denied:F4": 5,
+      "refused": 43
+     },
+     "outsider": true
+    },
+    "search-rare": {
+     "callers": 20,
+     "checked_kinds": {
+      "alternate_outside_view": 89,
+      "count_includes_hidden": 89,
+      "hidden_text": 95,
+      "id_outside_view": 89,
+      "not_found_differs": 0,
+      "score_differs": 89
+     },
+     "ghost": true,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 95,
+     "outcomes": {
+      "denied:F4": 6,
+      "ok": 89
+     },
+     "outsider": true
+    },
+    "search-title": {
+     "callers": 15,
+     "checked_kinds": {
+      "alternate_outside_view": 38,
+      "count_includes_hidden": 38,
+      "hidden_text": 38,
+      "id_outside_view": 38,
+      "not_found_differs": 0,
+      "score_differs": 38
+     },
+     "ghost": false,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 38,
+     "outcomes": {
+      "ok": 38
+     },
+     "outsider": true
+    },
+    "tool-load": {
+     "callers": 13,
+     "checked_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 24,
+      "id_outside_view": 0,
+      "not_found_differs": 23,
+      "score_differs": 0
+     },
+     "ghost": true,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 24,
+     "outcomes": {
+      "denied:F4": 1,
+      "refused": 23
+     },
+     "outsider": false
+    },
+    "tool-search": {
+     "callers": 14,
+     "checked_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 28,
+      "hidden_text": 28,
+      "id_outside_view": 28,
+      "not_found_differs": 0,
+      "score_differs": 28
+     },
+     "ghost": false,
+     "invalid": 0,
+     "leak_kinds": {
+      "alternate_outside_view": 0,
+      "count_includes_hidden": 0,
+      "hidden_text": 0,
+      "id_outside_view": 0,
+      "not_found_differs": 0,
+      "score_differs": 0
+     },
+     "leaks": 0,
+     "n": 28,
+     "outcomes": {
+      "ok": 28
+     },
+     "outsider": true
+    }
+   },
+   "spec_families": {
+    "grep": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 65
+    },
+    "read": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 48
+    },
+    "search": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 135
+    },
+    "search_tools/load_tool": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 52
+    }
+   },
+   "stores": {
+    "bench": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 86
+    },
+    "gov": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 82
+    },
+    "research": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 80
+    },
+    "tools": {
+     "invalid": 0,
+     "leaks": 0,
+     "n": 52
+    }
+   },
+   "total": {
+    "checked_kinds": {
+     "alternate_outside_view": 171,
+     "count_includes_hidden": 199,
+     "hidden_text": 300,
+     "id_outside_view": 199,
+     "not_found_differs": 82,
+     "score_differs": 199
+    },
+    "invalid": 0,
+    "leak_kinds": {
+     "alternate_outside_view": 0,
+     "count_includes_hidden": 0,
+     "hidden_text": 0,
+     "id_outside_view": 0,
+     "not_found_differs": 0,
+     "score_differs": 0
+    },
+    "leaks": 0,
+    "n": 300
+   }
+  },
+  "universe": 1053,
+  "wall_s": [
+   1108.4,
+   1048.5
+  ]
+ },
+ "what": "Task 13 (2D): D1 and the B3 MCP leg (the Task 12 tests run again), B1 and B5 through MCP (adr-eval mcp-probes), with the checks behind the 2D section"
+}
