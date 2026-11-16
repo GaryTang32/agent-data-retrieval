@@ -14,6 +14,14 @@ into a temporary directory beside `dir` and renames it into place; `load(dir)` r
 stored fingerprint that does not match the one recomputed on load, and a chunk whose id is
 not `make_chunk_id` of its document and offsets. Saves and loads of one index directory are
 serialized by `flock` on a sibling lock file (POSIX only).
+
+Filtering (Phase 2 spec §6.1). `retrieve(..., allowed_docs=D)` keeps only chunks of the
+documents in `D`: each channel masks its rows before its top-`CHANNEL_K` cut (a mask built
+with `np.isin` from the channel's per-row doc ids, in the channel's own order), then fusion
+and the reranker run as without a mask, so a filter never starves the result.
+`allowed_docs=None` is the Phase 1 code path itself. `lexical` replaces the index's BM25
+channel by another `FieldBM25` over a subset of its chunks (per-view statistics, §6.2; same
+`w_bc`, `k1` and `b`); dense keeps the shared vectors.
 """
 
 from __future__ import annotations
@@ -40,7 +48,7 @@ from adr_eval.retrieval.fusion import linear, rrf
 from adr_store.chunking import StoreChunk, chunk_store, chunker_config
 from adr_store.embedding import EmbeddingCache
 from adr_store.retrieval.dense import CachedDense, embedded_text
-from adr_store.retrieval.lexical import FieldBM25, check_w_bc
+from adr_store.retrieval.lexical import FieldBM25, check_w_bc, doc_mask
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store
 
@@ -182,6 +190,8 @@ class StoreIndex:
         self.embedding = embedding
         self.fingerprint = fingerprint(snapshot, chunker, settings, lexical, embedding,
                                        self.reranker, list(self.chunks.values()))
+        self._dense_doc_ids = None if dense is None else np.array(
+            [self.chunks[cid].doc_id for cid in dense.chunk_ids], dtype=str)
 
     # -- building --------------------------------------------------------------------
 
@@ -252,21 +262,55 @@ class StoreIndex:
         return self.dense.search(query, k=k)
 
     def retrieve(self, query: str, fusion: Literal["linear", "rrf"] = "linear",
-                 w: float | None = None, top: int = TOP_N) -> Hits:
+                 w: float | None = None, top: int = TOP_N, *,
+                 allowed_docs: frozenset[str] | None = None,
+                 lexical: FieldBM25 | None = None) -> Hits:
         """The top chunks for `query`: fused (or BM25's, without a dense channel), then
-        reranked when the settings say so."""
+        reranked when the settings say so. `allowed_docs` keeps the chunks of those documents
+        only, masked in each channel before its cut (None: every chunk, the Phase 1 path);
+        `lexical` is a BM25 index over a subset of the chunks used in place of the index's."""
         if fusion not in ("linear", "rrf"):
             raise ValueError(f"unknown fusion {fusion!r}")
+        if allowed_docs is None and lexical is None:
+            return self._fuse(query, fusion, w, top, self.lexical_hits, self.dense_hits)
+        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
+            raise ValueError(f"allowed_docs must be a set of document ids, got "
+                             f"{type(allowed_docs).__name__}")
+        bm25 = self.lexical if lexical is None else lexical
+        if lexical is not None and (lexical.w_bc, lexical.bm25.k1, lexical.bm25.b) != (
+                self.lexical.w_bc, self.lexical.bm25.k1, self.lexical.bm25.b):
+            raise ValueError(f"the lexical index (w_bc {lexical.w_bc}, k1 {lexical.bm25.k1}, "
+                             f"b {lexical.bm25.b}) does not match this index's (w_bc "
+                             f"{self.lexical.w_bc}, k1 {self.lexical.bm25.k1}, b "
+                             f"{self.lexical.bm25.b})")
+        if allowed_docs is None:
+            def lex(q):
+                return bm25.search(q, k=CHANNEL_K)
+            dense = self.dense_hits
+        else:
+            def lex(q):
+                return bm25.search(q, k=CHANNEL_K, mask=bm25.mask(allowed_docs))
+
+            def dense(q):
+                if self.dense is None:
+                    raise ValueError("this index has no dense channel (built with "
+                                     "dense=False)")
+                return self.dense.search(q, k=CHANNEL_K,
+                                         mask=doc_mask(self._dense_doc_ids, allowed_docs))
+        return self._fuse(query, fusion, w, top, lex, dense)
+
+    def _fuse(self, query: str, fusion: str, w: float | None, top: int, lex_hits,
+              dense_hits) -> Hits:
         n = RERANK_TOP if self.reranker is not None else top
-        lex = self.lexical_hits(query)
+        lex = lex_hits(query)
         if self.dense is None:
             fused = lex[:n]
         elif fusion == "rrf":
-            fused = rrf([lex, self.dense_hits(query)], k=RRF_K, top=n)
+            fused = rrf([lex, dense_hits(query)], k=RRF_K, top=n)
         else:
             if w is None:
                 raise ValueError("linear fusion needs a tuned weight w")
-            fused = linear(lex, self.dense_hits(query), w, top=n)
+            fused = linear(lex, dense_hits(query), w, top=n)
         if self.reranker is None:
             return fused
         return self.reranker.rerank(

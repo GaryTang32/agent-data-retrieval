@@ -576,3 +576,153 @@ def test_the_real_cross_encoder_is_a_pure_function_of_its_inputs():
                                           cands[::-1])
     assert first == again and first[0][0] == cands[0][0]
     assert len(rr.model_hash) == 64 and rr.config()["model"] == "Xenova/ms-marco-MiniLM-L-6-v2"
+
+
+# --- masks before the top-k cut (Phase 2 spec §6.1) --------------------------------------------
+
+
+def _doc_mask(order: list[str], chunks: dict, allowed) -> np.ndarray:
+    return np.array([chunks[cid].doc_id in allowed for cid in order], dtype=bool)
+
+
+def test_a_channel_mask_drops_rows_before_the_cut_with_the_baselines_rounding(mini_store,
+                                                                              tmp_path):
+    idx = build(mini_store, tmp_path, Settings(w_bc=1, prefix=True))
+    order = list(idx.chunks)
+    docs = sorted({c.doc_id for c in idx.chunks.values()})
+    every = np.ones(len(order), dtype=bool)
+    some = set(docs[::2])
+    for q in QUERIES:
+        full_lex = idx.lexical.search(q, k=len(order))
+        full_den = idx.dense.search(q, k=len(order))
+        assert idx.lexical.search(q, mask=None) == idx.lexical_hits(q)
+        assert idx.lexical.search(q, k=7, mask=every) == idx.lexical.search(q, k=7)
+        assert idx.dense.search(q, k=7, mask=every) == idx.dense.search(q, k=7)
+        mask = _doc_mask(order, idx.chunks, some)
+        for k in (1, 5, 100):
+            assert idx.lexical.search(q, k=k, mask=mask) == [
+                h for h in full_lex if idx.chunks[h[0]].doc_id in some][:k]
+            assert idx.dense.search(q, k=k, mask=mask) == [
+                h for h in full_den if idx.chunks[h[0]].doc_id in some][:k]
+        nothing = np.zeros(len(order), dtype=bool)
+        assert idx.lexical.search(q, mask=nothing) == idx.dense.search(q, mask=nothing) == []
+
+
+def test_a_mask_of_the_wrong_shape_or_type_is_refused(mini_store, tmp_path):
+    idx = build(mini_store, tmp_path)
+    n = len(idx.chunks)
+    for bad in (np.ones(n - 1, dtype=bool), np.ones(n, dtype=int), [True] * n):
+        with pytest.raises(ValueError, match="mask"):
+            idx.lexical.search("refund", mask=bad)
+        with pytest.raises(ValueError, match="mask"):
+            idx.dense.search("refund", mask=bad)
+
+
+def test_the_channels_know_the_doc_id_of_each_row(mini_store, tmp_path):
+    idx = build(mini_store, tmp_path)
+    want = [idx.chunks[cid].doc_id for cid in idx.chunks]
+    assert list(idx.lexical.doc_ids) == want and list(idx.lexical.chunk_ids) == list(idx.chunks)
+    assert list(idx.dense.chunk_ids) == list(idx.chunks)
+
+
+@pytest.mark.parametrize("settings,dense", [(Settings(), True),
+                                            (Settings(w_bc=2, prefix=True, rerank=True), True),
+                                            (Settings(w_bc=1), False)])
+def test_retrieve_with_every_document_allowed_is_the_phase1_ranking(mini_store, tmp_path,
+                                                                    settings, dense):
+    idx = build(mini_store, tmp_path, settings, dense=dense)
+    every = frozenset(c.doc_id for c in idx.chunks.values())
+    for q in QUERIES:
+        for kw in ([{}] if not dense else [{"w": 0.4}, {"fusion": "rrf"}]):
+            for top in (1, 10, 50):
+                assert idx.retrieve(q, top=top, allowed_docs=every, **kw) == idx.retrieve(
+                    q, top=top, **kw)
+
+
+def test_retrieve_allowed_docs_masks_both_channels_before_fusion(mini_store, tmp_path):
+    idx = build(mini_store, tmp_path, Settings(w_bc=1, prefix=True))
+    docs = sorted({c.doc_id for c in idx.chunks.values()})
+    allowed = frozenset(docs[1::2])
+    n = len(idx.chunks)
+    for q in QUERIES:
+        lex = [h for h in idx.lexical.search(q, k=n) if idx.chunks[h[0]].doc_id in allowed]
+        den = [h for h in idx.dense.search(q, k=n) if idx.chunks[h[0]].doc_id in allowed]
+        got = idx.retrieve(q, w=0.35, allowed_docs=allowed)
+        assert got == linear(lex[:CHANNEL_K], den[:CHANNEL_K], 0.35, top=10)
+        assert idx.retrieve(q, fusion="rrf", allowed_docs=allowed) == rrf(
+            [lex[:CHANNEL_K], den[:CHANNEL_K]], k=60, top=10)
+        assert {idx.chunks[cid].doc_id for cid, _ in got} <= allowed
+    assert idx.retrieve("refund", w=0.5, allowed_docs=frozenset()) == []
+    with pytest.raises(ValueError, match="allowed_docs"):
+        idx.retrieve("refund", w=0.5, allowed_docs=["x"])
+
+
+def _keyword_cache(path: Path, word: str) -> EmbeddingCache:
+    """Texts with `word` twice point one way, others another; the query points at the
+    first kind, so the dense ranking is the lexical one's kind of order."""
+
+    def passage(texts):
+        out = []
+        for t in texts:
+            base = np.array([1.0, 0.0] if t.count(word) >= 2 else [0.0, 1.0])
+            out.append(np.concatenate([base, 0.05 * fake_vector(t)[:6]]))
+        return out
+
+    def query(texts):
+        return [np.array([1.0, 0.3, 0, 0, 0, 0, 0, 0]) for _ in texts]
+
+    return EmbeddingCache(path, "fake/keyword", model=FakeModel(passage, query),
+                          model_hash="d" * 64, dim=8)
+
+
+def _starving_docs():
+    from tests.store.test_chunking import doc
+
+    crowd = [doc(f"Permit permit renewal number {i} of the harbour.\n".encode(), "md")
+             for i in range(110)]
+    few = [doc(f"Among many other words alpha beta gamma delta epsilon the permit form {w} "
+               f"is described here once.\n".encode(), "md") for w in ("red", "green", "blue")]
+    return crowd, few
+
+
+def test_a_selective_filter_never_starves_the_result(tmp_path):
+    from tests.store.test_chunking import make_store
+
+    crowd, few = _starving_docs()
+    store = make_store(tmp_path / "all", *crowd, *few)
+    subset = make_store(tmp_path / "few", *few)
+    allowed = frozenset(d.doc_id for d, _ in few)
+    settings = Settings(w_bc=0)
+    idx = StoreIndex.build(store, settings, _keyword_cache(tmp_path / "emb", "ermit"))
+    alone = StoreIndex.build(subset, settings, _keyword_cache(tmp_path / "emb", "ermit"))
+    q = "permit"
+    # every unmasked top-100 chunk of both channels is excluded
+    for hits in (idx.lexical_hits(q), idx.dense_hits(q)):
+        assert len(hits) == CHANNEL_K
+        assert not {idx.chunks[cid].doc_id for cid, _ in hits} & allowed
+    for top in (1, 3):
+        got = idx.retrieve(q, w=0.5, top=top, allowed_docs=allowed)
+        assert len(got) == top and {idx.chunks[c].doc_id for c, _ in got} <= allowed
+    # dense is exact under a mask; with the view's own BM25 the whole ranking is that of an
+    # index over the admitted chunks alone
+    assert idx.dense.search(q, mask=_doc_mask(list(idx.chunks), idx.chunks, allowed)) == \
+        alone.dense_hits(q)
+    view_bm25 = FieldBM25(0)
+    view_bm25.build([c for c in idx.chunks.values() if c.doc_id in allowed])
+    for kw in ({"w": 0.5}, {"w": 1.0}, {"fusion": "rrf"}):
+        assert idx.retrieve(q, top=3, allowed_docs=allowed, lexical=view_bm25, **kw) == \
+            alone.retrieve(q, top=3, **kw)
+    lex_only = StoreIndex.build(store, settings, dense=False)
+    assert lex_only.retrieve(q, top=3, allowed_docs=allowed, lexical=view_bm25) == \
+        StoreIndex.build(subset, settings, dense=False).retrieve(q, top=3)
+
+
+def test_a_per_view_lexical_index_must_match_the_index_settings(mini_store, tmp_path):
+    idx = build(mini_store, tmp_path, Settings(w_bc=1))
+    other = FieldBM25(2)
+    other.build(list(idx.chunks.values()))
+    with pytest.raises(ValueError, match="w_bc"):
+        idx.retrieve("refund", w=0.5, lexical=other)
+    same = FieldBM25(1)
+    same.build(list(idx.chunks.values()))
+    assert idx.retrieve("refund", w=0.5, lexical=same) == idx.retrieve("refund", w=0.5)
