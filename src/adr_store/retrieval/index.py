@@ -24,7 +24,10 @@ channel by another `FieldBM25` over a subset of its chunks (per-view statistics,
 `w_bc`, `k1` and `b`); it is refused without `allowed_docs`, which masks the shared dense
 vectors to the same view. A lexical-only index takes BM25's top `max(CHANNEL_K, top)` (the
 fused depth), not `CHANNEL_K`, so `retrieve(top=200)` gives 200 chunks when 200 match; at
-`top <= CHANNEL_K` that is the same ranking.
+`top <= CHANNEL_K` that is the same ranking. `exact=True` (the ACL layer, masked or not) scores
+the dense channel with `dense.row_scores`, a function of (row, query) alone, so a view's
+scores equal those of a view-only index bit for bit; the default is the Phase 1 matrix
+product, which may differ from it in the last float32 bits.
 
 The full ranking (`ranking`, what dedup collapse walks; Phase 2 spec §4.5). Linear fusion
 normalises each channel by its own top `CHANNEL_K`, so fusing deeper lists would change the
@@ -310,30 +313,38 @@ class StoreIndex:
     def retrieve(self, query: str, fusion: Literal["linear", "rrf"] = "linear",
                  w: float | None = None, top: int = TOP_N, *,
                  allowed_docs: frozenset[str] | None = None,
-                 lexical: FieldBM25 | None = None) -> Hits:
+                 lexical: FieldBM25 | None = None, exact: bool = False) -> Hits:
         """The top chunks for `query`: fused (or BM25's, without a dense channel), then
         reranked when the settings say so. `allowed_docs` keeps the chunks of those documents
         only, masked in each channel before its cut (None: every chunk, the Phase 1 path);
         `lexical` is a BM25 index over a subset of the chunks used in place of the index's,
         with the same `w_bc`, `k1` and `b`; it needs `allowed_docs` (the view's documents),
-        which masks the dense channel."""
+        which masks the dense channel. `exact` scores the dense channel row by row (module
+        docstring)."""
         if fusion not in ("linear", "rrf"):
             raise ValueError(f"unknown fusion {fusion!r}")
-        if allowed_docs is None and lexical is None:
+        if allowed_docs is None and lexical is None and not exact:
             return self._fuse(query, fusion, w, top, self.lexical_hits, self.dense_hits)
-        if allowed_docs is None:  # a view's BM25 alone would leave dense unmasked
+        if allowed_docs is None and lexical is not None:  # dense would be left unmasked
             raise ValueError("a per-view lexical index needs the view's allowed_docs too")
-        if not isinstance(allowed_docs, (frozenset, set)):
+        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
             raise ValueError(f"allowed_docs must be a set of document ids, got "
                              f"{type(allowed_docs).__name__}")
-        lex, dense = self._channels(allowed_docs, lexical)
+        lex, dense = self._channels(allowed_docs, lexical, exact)
         return self._fuse(query, fusion, w, top, lex, dense)
 
-    def _channels(self, allowed_docs: frozenset[str] | None, lexical: FieldBM25 | None):
+    def _channels(self, allowed_docs: frozenset[str] | None, lexical: FieldBM25 | None,
+                  exact: bool = False):
         """The two channels as `(query, k) -> Hits`, masked to `allowed_docs` (None: the
-        index's own, unmasked)."""
-        if allowed_docs is None:
+        index's own, unmasked); `exact`: the dense channel by `row_scores`."""
+        if allowed_docs is None and not exact:
             return self.lexical_hits, self.dense_hits
+        if allowed_docs is None:
+            def dense_all(q, k=CHANNEL_K):
+                if self.dense is None:
+                    raise ValueError("this index has no dense channel (built with dense=False)")
+                return self.dense.search(q, k=k, exact=True)
+            return self.lexical_hits, dense_all
         bm25 = self.lexical if lexical is None else lexical
         if lexical is not None:
             differs = [f"{name} {theirs}, not {ours}" for name, theirs, ours in (
@@ -350,11 +361,12 @@ class StoreIndex:
         def dense(q, k=CHANNEL_K):
             if self.dense is None:
                 raise ValueError("this index has no dense channel (built with dense=False)")
-            return self.dense.search(q, k=k, mask=doc_mask(self._dense_doc_ids, allowed_docs))
+            return self.dense.search(q, k=k, mask=doc_mask(self._dense_doc_ids, allowed_docs),
+                                     exact=exact)
         return lex, dense
 
     def _view_channels(self, w: float | None, allowed_docs: frozenset[str] | None,
-                       lexical: FieldBM25 | None):
+                       lexical: FieldBM25 | None, exact: bool = False):
         """The channels of `ranking` and `retrieve_and_ranking`, their arguments checked."""
         if allowed_docs is None and lexical is not None:
             raise ValueError("a per-view lexical index needs the view's allowed_docs too")
@@ -363,7 +375,7 @@ class StoreIndex:
                              f"{type(allowed_docs).__name__}")
         if self.dense is not None and w is None:
             raise ValueError("linear fusion needs a tuned weight w")
-        return self._channels(allowed_docs, lexical)
+        return self._channels(allowed_docs, lexical, exact)
 
     def _lists(self, query: str, lex_hits, dense_hits) -> tuple[Hits, Hits | None]:
         """Each channel's complete list for `query` (one search each: one query embedding);
@@ -374,12 +386,13 @@ class StoreIndex:
 
     def ranking(self, query: str, w: float | None = None, *,
                 allowed_docs: frozenset[str] | None = None,
-                lexical: FieldBM25 | None = None) -> Iterator[tuple[str, float]]:
+                lexical: FieldBM25 | None = None,
+                exact: bool = False) -> Iterator[tuple[str, float]]:
         """The full ranking of `query` (module docstring), lazily: linear fusion's ranking of
         the channels' top `CHANNEL_K`, then every other candidate chunk; no reranking.
         `allowed_docs` and `lexical` are as for `retrieve`. The arguments are checked when
         called (ValueError), not when the ranking is first read."""
-        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical)
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical, exact)
 
         def lazily() -> Iterator[tuple[str, float]]:
             yield from _full_ranking(*self._lists(query, lex_hits, dense_hits), w)
@@ -388,12 +401,12 @@ class StoreIndex:
 
     def retrieve_and_ranking(self, query: str, w: float | None = None, top: int = TOP_N, *,
                              allowed_docs: frozenset[str] | None = None,
-                             lexical: FieldBM25 | None = None
+                             lexical: FieldBM25 | None = None, exact: bool = False
                              ) -> tuple[Hits, Iterator[tuple[str, float]]]:
         """`(retrieve(query, "linear", w, top, ...), ranking(query, w, ...))` from one search
         of each channel, so the query is embedded once (a reranked collapse that needs both:
         its reranked head, and how far the full ranking would fill it)."""
-        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical)
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical, exact)
         lex, dense = self._lists(query, lex_hits, dense_hits)
 
         def cut(hits):
