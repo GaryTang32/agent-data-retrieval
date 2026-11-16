@@ -6,7 +6,7 @@ fail-closed probes, the log-field scan and the CLI. Nothing reads `data/` or `.c
 
 import dataclasses
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -517,7 +517,9 @@ def test_the_cli_runs_both_probe_sets_and_writes_deterministic_probe_files(
 
 
 def test_the_cli_refuses_a_store_whose_acl_snapshot_is_stale(tmp_path, config, capsys):
-    s = make(tmp_path / "store", config)  # synced at T0, hours from the real clock
+    s = make(tmp_path / "store", config, sync=False)
+    stale = datetime.now(UTC) - timedelta(hours=2)  # older than max_sync_age_s by the real clock
+    acl.sync(s.path, *config, clock=lambda: stale)
     assert main(["probes", "acl", "mini", "--store", str(s.path), "--allow-other-index",
                  "--out", str(tmp_path / "runs")]) == 2
     assert "adr acl sync" in capsys.readouterr().err
