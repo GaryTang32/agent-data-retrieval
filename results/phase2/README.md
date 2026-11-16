@@ -1,10 +1,10 @@
 # Phase 2 results: applicability, permissions, tools as data and an MCP server
 
-> **Work in progress.** Parts 2A (applicability and duplicates) and 2B (permissions, for the
-> content tools) are measured so far. These numbers were recorded on 16 November 2026 under
-> version 2 of the metric definitions, with golden sets v0.1. Parts 2C (tools as data) and 2D
-> (the MCP server) follow in their own sections, and complete B1, B3 and B4 for the tool tools
-> and the MCP server.
+> **Work in progress.** Parts 2A (applicability and duplicates), 2B (permissions, for the
+> content tools) and 2C (tools as data, with B1, B3 and B4 completed for the tool tools) are
+> measured so far. These numbers were recorded on 16 November 2026 under version 2 of the
+> metric definitions, with golden sets v0.1. Part 2D (the MCP server) follows in its own
+> section, and completes B1 and B3 for the MCP server.
 
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](../../docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](../../docs/superpowers/plans/2026-11-16-phase2.md).
@@ -589,5 +589,271 @@ adr acl sync --store .cache/store-p2/gov
 adr-eval retrieval gov --system p2-default --split test         # as config p2_caller (user:auditor)
 adr-eval probes equivalence gov --store .cache/store-p2/gov --keep-views
 adr-eval probes acl gov --store .cache/store-p2/gov             # reuses, then removes, the reference stores
+pytest tests/store/test_revocation.py
+```
+
+## 2C: tools as data
+
+**Verdict.** All three 2C criteria pass. B1, B3, B4 and B5 now also pass for the two tool tools, `search_tools` and `load_tool`.
+- **C1.** 14,059 real tool records were ingested from ToolRet's `toolbench` pool, with 100% adapter conformance (Task 9).
+- **C2.** Loading the top 10 tools uses 99.848% fewer tokens than loading the whole catalog, on average over the 888 test queries (threshold 80%). An agent loads 1,240 tokens per query instead of 816,284.
+- **C3.** The chosen system, `tools-hybrid`, has a test Completeness@10 of 0.411, against 0.384 for `tools-bm25-raw`. The difference is +0.027, with a 95% interval of [+0.002, +0.053]. The point estimate is at least the baseline's, and the lower bound is above −0.02.
+- **B1.** 200 tool leak probes found 0 leaks. With the content tools, that makes 1,053 leak probes over all five tools, all with 0 leaks.
+- **B3.** The 5 tool revocation tests pass. All 10 revocation tests pass in all.
+- **B4.** None of the 80 tool fail-closed probes returned content. With the content tools, that makes 350 fail-closed probes, none with content.
+- **B5.** All 461 log lines written by the tool probes and tool tests carry their principals.
+
+Three results need care when reading these numbers:
+- **The C3 margin is thin.** The interval's lower bound is +0.002. On test, `tools-hybrid` completes 80 queries that the baseline misses, and misses 56 that the baseline completes.
+- **Both systems chose `w_name` 3, the edge of the spec's grid {0, 1, 2, 3}.** The grid was not extended (see the tuning table). A larger name weight might do better on dev. That is a limit of the grid, not a measured optimum.
+- **The gold share is low: 6.3%.** On average, only 6.3% of the tokens an agent loads are definitions of gold tools. C2 measures how small the loaded context is, not how much of it is useful (see "Tool context").
+
+### What was run
+
+- **No model calls** (ruling R1). The only model was the local embedding model, `BAAI/bge-small-en-v1.5`.
+  - It is the ONNX file already in `.cache/fastembed` (hash `51f1bd0addd6…`), the one Phase 1 uses, and it was run through the store's embedding cache.
+  - Every command ran with `HF_HUB_OFFLINE=1`, so nothing could be downloaded. Nothing was.
+- **Store.** Everything ran on the tools-only scratch store `.cache/store-p2/toolret`:
+  - the tool snapshot `51536a400bba…` (14,059 records);
+  - the empty content snapshot `de13b4a8eeac…`;
+  - ACL snapshots from the committed directory and policy (`entries_sha256` `3906197e26ef…` on every sync).
+- **`.cache/store` and `.cache/index` were only read.** The SHA-256 and modification time of all 7,320 files were unchanged after the runs.
+- **Steps** (plan, Task 11):
+  1. **Indexing.** The lexical-only `tools-bm25f` index (`8b4e2e07cfd5…`, `w_name` 3) existed from Task 10 and was loaded. The `tools-hybrid` index needed the 14,059 dense texts embedded once. That happened inside the `tools-hybrid` dev run, whose tuning builds the base index, with `--threads 0` (vectors do not depend on the thread count). Its tuned index is `c93ceea6fae2…` (`w_name` 3, `w` 0.6).
+  2. **Tuning, dev runs and test runs.** Both systems were tuned on dev nDCG@10 (planner's call 15), over the spec's grid only: `w_name` ∈ {0, 1, 2, 3}, and for `tools-hybrid` also `w` ∈ {0, 0.05, …, 1}. Ties go to the smallest values. All three systems ran on dev. The best Phase 2 system on dev Completeness@10, `tools-hybrid`, ran on test, and so did `tools-bm25-raw`. Each run was `adr-eval tools-retrieval … --sync`, searching through `Tools.search_tools` and `load_tool` as `user:auditor`.
+  3. **C2 and C3** were computed from the two test runs' per-query rows (`tools-2c-checks/checks.json`). C3 uses the paired bootstrap of `adr_eval.scoring.stats`: 10,000 resamples, seed 20261108, chosen minus baseline.
+  4. **Probes.** The probes ran with `adr-eval tools-probes --index c93ceea6fae2`, after `adr acl sync` (sequence 9), against the chosen system's index, which was active since its runs. That covered B1 (200 leak probes), B4 (80 fail-closed probes on `cp -a` clones, each removed afterwards) and B5 (their log lines). B3 ran with `pytest tests/store/test_revocation.py`.
+  5. **Determinism.** The `tools-hybrid` test run was repeated in a fresh process.
+- **Active tool index.** `tools-retrieval` makes the tuned index active and records the change in each run. The records read `8b4e2e07cfd5 → 8b4e2e07cfd5` (bm25f dev), `8b4e2e07cfd5 → c93ceea6fae2` (hybrid dev), then `c93ceea6fae2 → c93ceea6fae2` (both hybrid test runs). The probes and the latency measurement ran on `c93ceea6fae2`.
+- **ACL freshness.** Each store run's `--sync` and the sync before the probes kept the snapshot within `max_sync_age_s`. That was 5 syncs (sequences 5–9), taking 0.75–1.23 s each, with no access change.
+
+### Tuning (dev, 212 queries, nDCG@10)
+
+`tools-bm25f` (lexical only) and `tools-hybrid` (each `w_name` at its best `w`, plus the two ends of the `w` range):
+
+| `w_name` | `tools-bm25f` | `tools-hybrid`: best `w` | nDCG@10 at best `w` | at `w` = 1 (BM25 alone) | at `w` = 0 (dense alone) |
+|---|---|---|---|---|---|
+| 0 | 0.3906 | 0.45 | 0.5076 | 0.3906 | 0.4551 |
+| 1 | 0.5347 | 0.60 | 0.5732 | 0.5347 | 0.4551 |
+| 2 | 0.5398 | 0.60 | 0.5798 | 0.5398 | 0.4551 |
+| 3 | **0.5422** | 0.60 | **0.5826** | 0.5422 | 0.4551 |
+
+- **Chosen values.** `tools-bm25f` chose `w_name` 3. `tools-hybrid` chose `w_name` 3 and `w` 0.6. Both rows at `w` = 1 reproduce `tools-bm25f`, as they should.
+- **Along `w` at `w_name` 3,** nDCG@10 rises from 0.455 at `w` = 0 to 0.583 at `w` = 0.6, then falls to 0.542 at `w` = 1. The fusion weight is an interior optimum.
+- **Grid edge.** `w_name` 3 is the largest value of the spec's grid, and the gain is still rising there, though slowly: +0.0024 and +0.0028 from `w_name` 2 to 3. The grid was not extended (the spec fixes it). So the chosen `w_name` is the grid's limit, not a measured optimum.
+- **Tuning matched the evaluation.** The tuning table ranks with the index itself, while the evaluation searches through `search_tools` as the auditor. The evaluated dev nDCG@10 of both systems equals their tuning value: 0.542 and 0.583.
+
+### Retrieval
+
+**Dev (212 queries).** This is the table the system was chosen from.
+
+| System | Completeness@10 | Recall@10 | nDCG@10 | Loaded tokens (mean) | Reduction | Gold share |
+|---|---|---|---|---|---|---|
+| `tools-bm25-raw` | 0.396 | 0.592 | 0.516 | – (top 10 raw documents: 1,075) | – | – |
+| `tools-bm25f` (`w_name` 3) | 0.425 | 0.630 | 0.542 | 1,136 | 99.861% | 0.063 |
+| `tools-hybrid` (`w_name` 3, `w` 0.6) | **0.458** | **0.656** | **0.583** | 1,197 | 99.853% | 0.065 |
+
+`tools-hybrid` has the best dev Completeness@10, so it is the chosen system. `tools-bm25f` was not run on test.
+
+**Test (888 queries).** 95% bootstrap intervals in brackets (10,000 resamples, seed 20261108). Differences are paired (chosen minus baseline).
+
+| System | Completeness@10 | Recall@10 | nDCG@10 |
+|---|---|---|---|
+| `tools-bm25-raw` | 0.384 [0.352, 0.417] | 0.578 [0.553, 0.603] | 0.509 [0.485, 0.532] |
+| `tools-hybrid` | 0.411 [0.378, 0.444] | 0.603 [0.578, 0.629] | 0.529 [0.505, 0.553] |
+| Difference | **+0.027 [+0.002, +0.053]** | +0.025 [+0.006, +0.044] | +0.021 [+0.005, +0.037] |
+| Queries better / worse | 80 / 56 | 143 / 110 | 309 / 252 |
+
+- **The baseline matches the spec's probe.** Over all 1,100 queries (Task 10), it gives Completeness@10 0.3864 and Recall@10 0.581, the spec's 0.386 and 0.581. On test it gives 0.384.
+
+### Exit criteria (2C)
+
+| # | Criterion | Threshold | Result |
+|---|---|---|---|
+| C1 | At least 1,000 real tool records | 14,059 ingested, 100% adapter conformance | **Pass:** 14,059 records (13,862 `toolbench_tool_*` of config `web`, 197 `toolbench_sam_tool_*` of config `customized`), 100% structural conformance, the same tool snapshot `51536a400bba…` on every ingest (Task 9). The 20 OpenAPI specs (129 operations) and the 3 MCP reference servers (15 tools) also ingest at 100% (conformance only) |
+| C2 | Tool-context reduction | Mean over test ≥ 80% (expected > 99%) | **Pass:** 99.848% (lowest per query 99.378%). Loaded 1,240 tokens per query (median 1,082, range 520–5,081), against a catalog of 816,284 definition tokens. Gold share 0.063 |
+| C3 | Tool search at least as complete as BM25 | Point estimate ≥ the baseline's, and the paired lower bound > −0.02 | **Pass:** `tools-hybrid` 0.411 against `tools-bm25-raw` 0.384 on test. The difference is +0.027 [+0.002, +0.053] |
+
+**Two Task 9 details about C1's records**, from that task's review:
+- **Cutting `$ref` cycles changed records, not just the token totals.** The cut happens where a `$ref` repeats on its branch, plus a depth limit of 8 and a budget of 10,000 nodes per operation. It also shrank output schemas, which `definition_tokens` does not count. For example, the output schema of lgtm.com's `getHealth` went from 4,290 to 538 bytes. The token totals (60,629 definition tokens over the 129 operations) show only the input side.
+- **`updateLodging` is genuinely large.** The largest OpenAPI record, googleapis `mybusinesslodging.locations.updateLodging`, is 27,768 tokens. Its schema has no cycle; it expands to 1,652 nodes of long descriptions, so the cycle cut did not change it.
+
+### Tool context (C2)
+
+The definitions follow spec §8.4 and `adr_eval.tools_eval`. Tokens are counted as the harness counts them (`chunker._count`).
+- **`loaded`** is the tokens of the canonical JSON of the `search_tools` result (the page) plus the canonical JSON of the `load_tool` definitions of its hits (at most 10).
+- **`catalog`** is the sum of every record's `definition_tokens`: 816,284. That is the MCP Tool definitions (name, description, `inputSchema`), not the 1,227,462 tokens of raw ToolRet documentation.
+- **Reduction** is `1 − loaded / catalog`, averaged over queries.
+- **Gold share** is the mean over queries of (loaded definition tokens of gold tools) ÷ (loaded tokens). Page entries are not counted as gold, even for gold hits.
+
+| Test, `tools-hybrid` | Mean | Notes |
+|---|---|---|
+| Page (`search_tools` result) | 494 tokens | 40% of what is loaded |
+| Definitions (top 10 `load_tool`) | 746 tokens | |
+| Loaded | 1,240 tokens | median 1,082; min 520; max 5,081 |
+| Catalog | 816,284 tokens | every definition |
+| Reduction | 99.848% | min 99.378%, max 99.936% |
+| Gold tools loaded | 1.37 of 2.38 gold tools per test query | 180 of 888 queries load no gold tool |
+| Gold share | 0.063 (median 0.047) | pooled over all queries (gold tokens ÷ loaded tokens): 0.067 |
+
+- **Most of the loaded context is not gold.** An agent that loads the top 10 still spends about 94% of those tokens on tools it will not use. A lower `top` would trade gold share against Completeness@10; it was not measured here.
+- **Comparison with the raw baseline.** `tools-bm25-raw`'s top 10 raw documents average 1,123 tokens on test, which is the same order as the 1,240 tokens loaded here. Those are raw ToolRet strings, not MCP definitions plus a page, so the two are not the same quantity.
+
+### B1, B3, B4 and B5 for the tool tools
+
+**Leak probes (B1).** Each probe is a (caller, target) pair: a tool the caller cannot see, with the caller drawn by seeded hash (20261116) among the directory users and `user:ghost`.
+- Each result was judged against the caller's tool view under the ACL snapshot.
+- Search results were also compared with a reference index of the caller's visible tools only (`ToolIndex.subset`, with the row-exact dense kernel). That comparison covers ids, full-precision scores, the number of hits and `excluded_by_filter`.
+
+| Family | Probe | Probes | Outcomes | Leaks |
+|---|---|---|---|---|
+| `tool-search`, unfiltered | Query = a hidden tool's name and summary | 60 | 56 answered, 4 denied F4 (`user:ghost`) | 0 |
+| `tool-search`, filtered | The same, with `source_kind` `["mcp"]` (excludes the whole view) or `["mcp", "toolret"]` (admits it), alternately | 40 | 38 answered, 2 denied F4 | 0 |
+| `tool-load` | `load_tool` of a hidden tool by full id (even) or 8-character prefix (odd), with a control id or prefix that names nothing | 100 (50 + 50) | 96 "not found", byte for byte as the control; 4 denied F4 | 0 |
+| total | | 200 | | **0** |
+
+- **Kinds checked** (the kinds of spec §10.2 that apply to the tool tools):
+  - search: 94 probes each for id outside the view, count and score; 100 for hidden text;
+  - load: 96 for the not-found message; 100 for hidden text.
+- **Callers.** The families drew 20 and 19 distinct callers, with `user:outsider` and `user:ghost` in both.
+- **Probe strength.** The tool checker's power against leaky variants was measured in Task 10's review: 19 to 96 leaks found per variant, and 0 on the real tools.
+
+**Fail closed (B4).** 80 probes: 8 conditions × 2 tools × 5 callers.
+- **The target.** A tool every fail-closed caller sees, that ranked 1 in its name-and-summary search for each of them and that each could load before any change. The `before` fields record this: rank 1 for all 60 probes of the six conditions on a directory caller.
+- **The callers** are those of 2B: `user:auditor`, `user:outsider`, `user:initech-0`, `user:globex-3` and `user:initech-2` (F4 and F5 have their own callers).
+
+| Condition | How it was produced | Probes | Result |
+|---|---|---|---|
+| F1 | A clone with `acl/HEAD` missing, unreadable, unparsable, schema-invalid, or naming a snapshot whose hash is not its id | 10 | 10 denied F1 |
+| F2 | A clone with a new content snapshot (one note added) after the sync | 10 | 10 denied F2 |
+| F3 | A clone synced with the clock 2 h behind or 1 h ahead | 10 | 10 denied F3 |
+| F4 | The store; callers `None`, `user:ghost`, `user:nobody`, `user:acme-6`, `user:auditor2` | 10 | 10 denied F4 |
+| F5 | The store; malformed or non-user callers | 10 | 10 denied F5 |
+| "no entry" | A clone re-synced with an attribute rule mapping the target's uri to `[]` (only the target's access changed) | 10 | 5 `search_tools` answered without the target; 5 `load_tool` refused exactly as a nonexistent id |
+| `F2-tools` (Task 10) | A clone with a tool snapshot committed after the sync, without the target | 10 | 10 denied F2 |
+| `no-tool-snapshot` (Task 10) | A clone whose ACL snapshot was synced while the catalog was moved away (`tool_snapshot` null), then the catalog restored | 10 | 10 denied F2 |
+| total | | 80 | 80 passed, 0 with content |
+
+**Revocation (B3).** `tests/store/test_revocation.py` passes: 10 of 10 in 14 s, the 5 content tests of 2B and 5 tool tests.
+- **The three change kinds** run on both tool tools: a user removed from a group, a tool's rule changed in the policy, and a user deleted.
+- **Each test checks** that before the sync the tool is unchanged, and that after one sync it is invisible in-process, in a new process (the new-process leg) and in a `tools_proc` process started before the change (the long-lived leg).
+- **Two further tests:** a new tool snapshot denies both tool tools (F2) until a sync, while the content tools are unaffected; and a stale snapshot denies them (F3).
+
+**Log fields (B5).** Every line carries `caller`, `principals`, `acl_snapshot` and `acl_decision`. Every allowed line also has a non-null `caller`, `principals`, `acl_snapshot` and `view`: the same rule as 2B's `scan_log`.
+- **The probe run: 381 lines,** 301 allowed. Denials: F1 10, F2 30, F3 10, F4 20, F5 10. That is 316 lines in the store and 65 in the clones.
+- **The tool revocation tests: 80 lines,** 54 allowed. Denials: F2 6, F3 4, F4 6. There are 10 `off` lines, for the operator's `index` and `tools_index` calls.
+- **Beyond B1–B4,** every line written to the store's log during this task also passes: 26,734 lines, 26,700 allowed, 0 unresolved. That includes the four store-backed `tools-retrieval` runs (24,204 lines), the probes' precheck and the latency measurement.
+
+**B totals over the five tools.** The content counts are 2B's (Task 8); the tool counts are this task's.
+
+| Family (spec §10.2) | Content tools (2B) | Tool tools (2C) | Total | Spec §10.2 |
+|---|---|---|---|---|
+| search (rare tokens 300, title 150, `alternate-cross-view` 13) | 463 | – | 463 | 450 |
+| grep (literal 150, doc-scoped 60) | 210 | – | 210 | 210 |
+| read | 180 | – | 180 | 180 |
+| `search_tools` / `load_tool` (100 + 100) | – | 200 | 200 | 200 |
+| **Leak probes (B1)** | **853** | **200** | **1,053** | **1,040** |
+| Fail closed (B4) | 270 (6 conditions × 3 tools × 5 callers × 3 corpora) | 80 (8 conditions × 2 tools × 5 callers) | **350** | 150 (90 content + 60 tools) |
+| **All probes** | **1,123** | **280** | **1,403** | **1,190** |
+| Leaks / fail-open | 0 / 0 | 0 / 0 | **0 / 0** | 0 |
+| B5 log lines (B1–B4) | 26,114 | 461 | 26,575 | 100% complete |
+| B3 revocation tests | 5 | 5 | 10 | all pass |
+
+- **Why there are 213 more probes than the spec's 1,190:**
+  - **+180:** Task 8 ran the content fail-closed set on each of the three corpora (90 each), where the spec counted 90 once.
+  - **+13:** Task 8 added the `alternate-cross-view` leak family on bench.
+  - **+20:** Task 10 added the two tool-snapshot conditions (`F2-tools`, `no-tool-snapshot`).
+- **Family sizes.** Every family of §10.2 has at least 100 probes: search 463, grep 210, read 180, the tool family 200 (each of its two halves 100), fail closed 350.
+- **Still to come.** The 300-probe MCP subset of B1 and the MCP leg of B3 follow in 2D.
+
+### Determinism
+
+- **The `tools-hybrid` test run, repeated in a fresh process, gave identical rows, summary and tuning table** (`…T153716` and `…T154432`).
+- **Only two config fields differ.** One is `started`. The other is `acl_snapshot`, because each `--sync` writes a new snapshot: sequences 7 and 8, with the same `entries_sha256` `3906197e26ef…` and no access change.
+- **Both test runs loaded the same tool index** (`c93ceea6fae2…`), built once in the dev run.
+
+### Latency
+
+Latency was measured in a fresh process per caller, through `Tools(acl=True)` on `c93ceea6fae2`, over the first 101 test queries. That is the first call, then 100 searches and the 1,000 `load_tool` calls of their top 10.
+
+| Caller (visible tools) | First `search_tools` (index and model load) | `search_tools` median / p95 | `load_tool` median / p95 |
+|---|---|---|---|
+| `user:auditor` (14,059) | 2.23 s | 191 / 251 ms | 23 / 31 ms |
+| `user:initech-0` (6,238) | 2.65 s | 117 / 159 ms | 16 / 22 ms |
+
+- **Search** includes embedding the query and scoring the visible rows with the row-exact kernel, so it scales with the view.
+- **Lexical-only `tools-bm25f`** searched in 33–73 ms (Task 10).
+- **`load_tool`** resolves the caller's tool view again on every call (Task 10), hence about 20 ms.
+
+### Machine and wall times
+
+The same machine as 2A and 2B: 4-core Intel Xeon at 2.10 GHz, 15 GB of memory, Python 3.13.18. Runs were one at a time unless noted.
+
+| Step | Wall time | Notes |
+|---|---|---|
+| `tools-bm25-raw` dev / test | 6.7 s / 14.1 s | |
+| `tools-bm25f` dev | 95 s | Tuning 4 `w_name` values, then 212 searches and 2,120 loads |
+| `tools-hybrid` dev | 35.7 min | Of this, embedding the 14,059 tool texts took 32.5 min (first vector 15:01:08, last 15:33:38 UTC; 4 ONNX threads; the B3 run and the real-store hashing overlapped for about a minute) |
+| `tools-hybrid` test (and re-run) | 7.0 min (7.5 min) | Re-tuning on dev from cached vectors, then 888 searches and 8,880 loads |
+| Tool probes (200 + 80) | 2.3 min | Including 6 `cp -a` clones of the store, made and removed one at a time |
+| B3 | 14–29 s | 10 tests |
+| Test suite | 4.4 min | 1,660 tests, `pytest -q -W error`; `ruff check .` clean |
+
+- **Disk.** 9.8 GB were free at the start. The 14,059 vectors took 55 MB in `.cache/emb`. The store grew from 137 MB to 205 MB: the hybrid index is 33 MB (vectors and rows), and the rest is log lines. Each fail-closed clone was about 200 MB, one at a time.
+
+### Limits
+
+- **Grid edge.** Both Phase 2 systems chose `w_name` 3, the largest value of the spec's grid. The grid was not extended, so a larger name weight is untested.
+- **A thin C3 margin, on one split.** The lower bound is +0.002, and the dev split that chose the system is small (212 queries). `tools-bm25f` was not run on test, by the selection rule.
+- **The filter probes are degenerate on this store.** Every record is `source_kind` `toolret`, so `["mcp"]` excludes the whole view and `["mcp", "toolret"]` admits all of it. Mixed catalogs are covered by the fixture tests.
+- **Synthetic views.** Tool access comes from the committed bucket rule (spec §5.2): public 2,832, two tenants 1,392, one tenant 6,337, one group 3,498. It is not a real organisation's shape.
+- **One fail-closed target.** As in 2B, F1–F5 are decided per call before any tool is touched, so the target matters only for "no entry".
+- **The probes judge what the tools return,** not timing side channels. Search latency scales with the view size (see "Latency").
+- **No `toolbench_sam` tool is gold.** The 197 are distractors only, so C3 says nothing about retrieving them.
+- **A leftover file.** The tool fail-closed run removes its clones but left the 551-byte "no entry" policy in `.cache/store-p2/clones/tools/`. It was removed by hand; it holds one ToolRet `source_uri` and is git-ignored.
+- **One machine.**
+
+### Licence (ToolRet, Q2)
+
+- **ToolRet is local-only** (ruling R13, question Q2). Nothing from it is committed: no queries, tool names or descriptions. Only pinned revisions, hashes, run configs, summaries and counts are committed. Per-query rows, probe sets and probe results stay in `runs/`.
+- **The 13,862 `toolbench_tool_*` tools (config `web`)** are ToolBench's RapidAPI endpoint documentation, under Apache-2.0 (the ToolBench README).
+- **The 197 `toolbench_sam_tool_*` tools (config `customized`) are not RapidAPI data, and their licence is unclear.** They are Python-library function descriptions (spreadsheet and DataFrame methods) and curl commands, from a different upstream. Checked in this task:
+  - the ToolRet-Tools and ToolRet-Queries dataset cards at the pinned revisions;
+  - the parquet files' metadata (only the Hugging Face feature schema);
+  - the ToolRet code README.
+
+  None names their upstream or a licence. Their content matches SambaNova's ToolBench (Xu et al., 2023), whose repository carries an Apache-2.0 LICENSE on its default branch. That attribution is our inference; ToolRet does not state it.
+- **Their records still say Apache-2.0.** The records' `license` field reads "Apache-2.0" for all 14,059, because `corpora/tools/config.json` gives one licence for the pool; changing it would change the tool snapshot. Spec §8.3 and `corpora/tools/README.md` were corrected in this task to say this.
+- **The ToolRet dataset cards declare no licence for any of the data,** which is why it stays local.
+
+### Files
+
+`run-summaries/` holds:
+- **The tool runs**, as `tools.json` (config, tuning table and summary, without per-query rows) and `tools.md`:
+  - `tools-tools-bm25-raw-dev-20261116T145901`, `tools-tools-bm25f-dev-20261116T145907`, `tools-tools-hybrid-dev-20261116T150058`;
+  - `tools-tools-bm25-raw-test-20261116T153702`, `tools-tools-hybrid-test-20261116T153716`;
+  - the determinism re-run `tools-tools-hybrid-test-20261116T154432`.
+- **`probes-tools-20261116T155230/`:** `summary.json` and `probes.md` for B1, B4 and B5 (configuration, tool index, ACL snapshot, counts and log scans). They hold no probe lists or ToolRet text.
+- **`tools-2c-checks/checks.json`:**
+  - the C2 and C3 numbers (with intervals and per-query win counts);
+  - the determinism comparison;
+  - the embedding timing;
+  - the B3 run and its log scan;
+  - the B5 scan of every log line written in this task;
+  - latency;
+  - the syncs;
+  - the read-only check of the real stores;
+  - the licence check.
+
+Per-query rows (`tools.json` in `runs/`), the probe set (`probes.json`) and the per-probe results stay local.
+
+```
+adr-eval tools-retrieval --system tools-bm25-raw --split dev
+adr-eval tools-retrieval --system tools-bm25f   --split dev  --store .cache/store-p2/toolret --sync
+adr-eval tools-retrieval --system tools-hybrid  --split dev  --store .cache/store-p2/toolret --sync --threads 0
+adr-eval tools-retrieval --system tools-hybrid  --split test --store .cache/store-p2/toolret --sync --threads 0
+adr-eval tools-retrieval --system tools-bm25-raw --split test
+adr acl sync --store .cache/store-p2/toolret
+adr-eval tools-probes --store .cache/store-p2/toolret --index c93ceea6fae2
 pytest tests/store/test_revocation.py
 ```
