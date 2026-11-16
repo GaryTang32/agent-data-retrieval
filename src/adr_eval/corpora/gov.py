@@ -250,6 +250,53 @@ class GovAdapter:
                         pairs.append((a, b))
         return pairs
 
+    def section_spans(self, corpus: LoadedCorpus,
+                      doc: ManifestDoc) -> dict[str, tuple[int, int, str]]:
+        """Each eCFR section (<DIV8>) of `doc` by number, in document order: (start, end,
+        heading) where `[start, end)` is the section's extracted text in the full document's
+        text (as `version_pairs` finds it) and `heading` its first line ("§ N Title.")."""
+        if corpus.root is None:
+            raise ValueError("section_spans needs corpus.root to read the eCFR XML")
+        data = (Path(corpus.root) / doc.path).read_bytes()
+        if sha256_bytes(data) != doc.doc_id:
+            raise ValueError(f"{doc.path}: bytes changed since the corpus was loaded")
+        full = corpus.docs[doc.doc_id].text
+        out: dict[str, tuple[int, int, str]] = {}
+        cursor = 0
+        for number, text in _ecfr_sections(data):
+            at = full.find(text, cursor)
+            if at < 0:
+                raise ValueError(f"{doc.path}: section {number} not found in extracted text")
+            cursor = at + len(text)
+            if number and number not in out:
+                out[number] = (at, cursor, text.split("\n", 1)[0])
+        return out
+
+    def ecfr_chains(self, corpus: LoadedCorpus) -> dict[tuple[str, str], list[ManifestDoc]]:
+        """The eCFR documents by (title, part), each list ordered by date (oldest first)."""
+        by_part: dict[tuple[str, str], list[ManifestDoc]] = {}
+        for d in corpus.manifest.documents:
+            if m := _ECFR_URI.search(d.uri):
+                by_part.setdefault((m.group(2), m.group(3)), []).append(d)
+        return {k: sorted(v, key=lambda d: d.source_version) for k, v in sorted(by_part.items())}
+
+    def removed_sections(self, corpus: LoadedCorpus) -> list[tuple[Document, int, int]]:
+        """eCFR sections present in one dated version and absent (by number) from the next:
+        (section, start, end), the section a Document as `version_pairs` gives it and
+        `[start, end)` its range in the full document's text. Parts in (title, part) order,
+        then versions by date, then sections in document order."""
+        out: list[tuple[Document, int, int]] = []
+        for versions in self.ecfr_chains(corpus).values():
+            spans = [self.section_spans(corpus, d) for d in versions]
+            for d, old, new in zip(versions, spans, spans[1:], strict=False):
+                text = corpus.docs[d.doc_id].text
+                for number, (start, end, _heading) in old.items():
+                    if number not in new:
+                        out.append((Document(d.doc_id, text[start:end], d.format,
+                                             d.source_version, f"{d.uri}#{number}"),
+                                    start, end))
+        return out
+
     def _sections(self, corpus: LoadedCorpus, d: ManifestDoc) -> dict[str, Document]:
         data = (Path(corpus.root) / d.path).read_bytes()
         if sha256_bytes(data) != d.doc_id:
