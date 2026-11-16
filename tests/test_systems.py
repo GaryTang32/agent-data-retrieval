@@ -756,3 +756,52 @@ def test_p2_identity_slot_stats_equal_p1_struct_bc_s_on_dated_items(tmp_path, p2
     path.write_text(json.dumps(data))
     with pytest.raises(runner.RunError, match="as_of"):
         phase2.compare(a["dir"], b["dir"], store)
+
+
+def _set(path: Path, edit) -> None:
+    data = json.loads(path.read_text())
+    edit(data)
+    path.write_text(json.dumps(data))
+
+
+def _chunker(**kw):
+    def edit(d):
+        d["config"]["settings"]["chunker"] = {**d["config"]["settings"]["chunker"], **kw}
+    return edit
+
+
+def _scored_row(d) -> dict:
+    return next(r for r in d["rows"] if r["metrics"] and r["qtype"] != "insufficient")
+
+
+@pytest.mark.parametrize("edit_a,edit_b,match", [
+    (None, lambda d: d["config"].update(corpus="gov"), "different corpus"),
+    (None, lambda d: d["config"].update(split="dev"), "different split"),
+    (None, lambda d: d["config"].update(golden_sha256="0" * 64), "different golden_sha256"),
+    (lambda d: d["config"].update(golden_sha256="0" * 64),
+     lambda d: d["config"].update(golden_sha256="0" * 64), "changed since the runs"),
+    (None, lambda d: d["config"].update(metrics_version=1), "different metrics_version"),
+    (None, _chunker(max_tokens=300), "different chunkers"),
+    (_chunker(version="0"), _chunker(version="0"), "not this code's"),
+    (None, lambda d: d["rows"][0]["ranked"].append("0" * 64), "not chunks of the store"),
+    (None, lambda d: _scored_row(d).update(metrics=None), "lack metrics"),
+], ids=["corpus", "split", "golden", "golden-changed", "metrics-version", "chunker",
+        "chunker-not-this-code", "unknown-chunk", "missing-metrics"])
+def test_p2_compare_refuses_runs_it_cannot_compare(tmp_path, p2fakes, capsys, edit_a,
+                                                   edit_b, match):
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-default")
+    store = systems.p2_store_dir(runner.load_config(), "mini")
+    assert phase2.compare(a["dir"], b["dir"], store)["corpus"] == "mini"  # as made: compared
+    for edit, run in ((edit_a, a), (edit_b, b)):
+        if edit is not None:
+            _set(run["dir"] / "retrieval.json", edit)
+    with pytest.raises(runner.RunError, match=match):
+        phase2.compare(a["dir"], b["dir"], store)
+    capsys.readouterr()
+    assert main(["p2-compare", str(a["dir"]), str(b["dir"]), "--store", str(store),
+                 "--out", str(tmp_path / "cmp")]) == 2
+    assert match in capsys.readouterr().err
+    assert not (tmp_path / "cmp").exists()

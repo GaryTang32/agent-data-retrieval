@@ -89,9 +89,18 @@ def test_item_subsets(items):
     assert phase2.item_subsets(items, GROUPS, None)["in_force"] == ["inforce", "old"]
 
 
+def test_an_item_is_in_force_only_when_every_group_is(items, make_item):
+    """One group with an in-force member and one whose only member is superseded: the item
+    needs the old version, so it is superseded_only."""
+    mixed = make_item(id="mixed", evidence=[ev(B, 0, 5), ev(A, 100, 105)])
+    groups = {**GROUPS, "mixed": [[ev(B, 0, 5)], [ev(A, 100, 105)]]}
+    s = phase2.item_subsets([*items, mixed], groups, APP)
+    assert s["superseded_only"] == ["mixed", "old"] and s["in_force"] == ["inforce"]
+
+
 def rows():
     return [
-        {"item_id": "asof", "ranked": ["b1", "a2"], "as_of": None,
+        {"item_id": "asof", "ranked": ["b1", "b2", "a2"], "as_of": None,
          "metrics": {"tokens@10": 8.0}},
         {"item_id": "inforce", "ranked": ["a1", "b1", "f1"], "metrics": {"tokens@10": 12.0}},
         {"item_id": "old", "ranked": ["b2"], "metrics": {"tokens@10": 4.0}},
@@ -110,12 +119,13 @@ def test_slot_stats_in_the_phase1_view(items):
     assert f["duplicate_share"] == pytest.approx(1 / 3)
     assert f["evidence_groups_touched"] == 2 and f["tokens@10"] == 12.0
     a = s["asof"]
-    # b1 (in force from 2025) and a2 (in force 2024-2025): one slot of the wrong version
-    assert (a["wrong_version_slots"], a["wrong_version_share"]) == (1, 0.5)
+    # b1 and b2 (in force from 2025) and a2 (in force 2024-2025, superseded since): two slots
+    # of the wrong version on 2024-06-01, one of a superseded document
+    assert (a["wrong_version_slots"], a["wrong_version_share"]) == (2, pytest.approx(2 / 3))
     assert a["superseded_slots"] == 1 and a["evidence_groups_touched"] == 1
     assert s["superseded_only"]["evidence_groups_touched"] == 0
     assert s["in_force"]["wrong_version_slots"] is None  # no dated item in the subset
-    assert s["all"]["n_items"] == 4 and s["all"]["n_slots"] == 7
+    assert s["all"]["n_items"] == 4 and s["all"]["n_slots"] == 8
     assert s["scored"]["tokens@10"] == pytest.approx(8.0)
 
 
@@ -141,6 +151,20 @@ def test_duplicate_slots_count_admitted_components_not_clusters(items):
     s = phase2.slot_stats(rs, CHUNKS, APP, dedup_of(["a1", "b1"]), items, GROUPS,
                           filters=Filters())
     assert (s["asof"]["duplicate_slots"], s["asof"]["duplicate_cluster_slots"]) == (0, 1)
+
+
+def test_a_dated_row_is_counted_in_the_view_of_its_own_as_of(items):
+    """a1 (superseded, in force 2024-2025) and f1 (in force from 2024-03): under the run's
+    default filters only f1 is admitted, on the row's 2024-06-01 both are, so they share a
+    component and the second is a duplicate."""
+    rs = rows()
+    rs[0].update(ranked=["a1", "f1"], as_of="2024-06-01")
+    dd = dedup_of(["a1", "f1"])
+    dated = phase2.slot_stats(rs, CHUNKS, APP, dd, items, GROUPS, filters=Filters())
+    assert dated["asof"]["duplicate_slots"] == 1
+    rs[0]["as_of"] = None  # the same ranking counted in the run's default view
+    plain = phase2.slot_stats(rs, CHUNKS, APP, dd, items, GROUPS, filters=Filters())
+    assert plain["asof"]["duplicate_slots"] == 0
 
 
 def test_slot_stats_without_overlays_report_none(items):
@@ -173,6 +197,13 @@ def test_noninferiority_passes_above_minus_the_margin_and_fails_below():
         r["metrics"]["mrr"] = 0.1
     mixed = phase2.noninferiority(a, b, ids)
     assert mixed["keys"]["mrr"]["pass"] is False and mixed["pass"] is True
+    # differences that vary: the verdict is the lower bound's, not the mean's or the upper
+    # bound's (the interval straddles -margin, so it fails)
+    spread = metric_rows({i: 0.5 + (0.09 if k % 2 else -0.11) for k, i in enumerate(ids)})
+    wide = phase2.noninferiority(a, spread, ids)
+    lo, hi = wide["keys"]["recall@10"]["ci95"]
+    assert lo < -0.02 < hi and wide["keys"]["recall@10"]["mean_diff"] == pytest.approx(-0.01)
+    assert wide["keys"]["recall@10"]["pass"] is False and wide["pass"] is False
     assert phase2.noninferiority(a, a, [])["pass"] is None
     with pytest.raises(Exception, match="lack metrics"):
         phase2.noninferiority(a, a, ["missing"])
