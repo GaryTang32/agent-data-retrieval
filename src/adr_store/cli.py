@@ -17,7 +17,9 @@ The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 (repeatable) and `--max-tier N`; with none given the call passes no filters (the default:
 superseded documents excluded when the store has an applicability overlay). `adr search
 --dedup/--no-dedup` turns collapse on or off (default: on when the active index's chunks have
-a dedup overlay).
+a dedup overlay). `adr search`, `adr read` and `adr grep` take `--as USER`: the call runs as
+that caller with the ACL layer (Phase 2 spec §5.4: the caller's view only, F1–F5 deny); for
+tests and simulation only, since `adr` is not a security boundary.
 A refused call (unknown id, range out of bounds, bad pattern, a pattern that runs past
 `adr grep --timeout`, a missing or damaged index) exits 2 with a message on stderr; every tool
 call, refused or not, writes one line to the store's retrieval log, and an unexpected error
@@ -430,7 +432,12 @@ def _store_of(a: argparse.Namespace) -> Path:
 
 
 def _tools(a: argparse.Namespace) -> tools.Tools:
-    return tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    """The tools of a search, read or grep: with `--as USER`, as that caller with the ACL
+    layer (for tests and simulation, `NOT_A_BOUNDARY`), else without it."""
+    caller = getattr(a, "as_user", None)
+    if caller is None:
+        return tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    return tools.Tools(_store_of(a), emb_cache=a.emb_cache, acl=True, caller=caller)
 
 
 def _print_json(result) -> None:
@@ -749,8 +756,15 @@ def _positive(s: str) -> int:
     return v
 
 
+AS_HELP = ("call as this user principal (e.g. user:acme-0) with the ACL enforced: the "
+           "caller's view only, and no access at all if the ACL snapshot is missing, stale, "
+           "for another content snapshot or does not know the caller (F1-F5). For tests and "
+           "simulation only: ")
+
+
 def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
-    p = sub.add_parser(name, help=help)
+    p = sub.add_parser(name, help=help,
+                       description=None if name == "index" else f"{help}. {NOT_A_BOUNDARY}")
     where = p.add_mutually_exclusive_group(required=name != "index")
     where.add_argument("--store", type=Path, default=None, help="store directory")
     if name != "index":
@@ -759,6 +773,9 @@ def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
     p.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
                    help="embedding cache directory (dense indexes only)")
     p.add_argument("--json", action="store_true", help="print the result as JSON")
+    if name != "index":
+        p.add_argument("--as", dest="as_user", default=None, metavar="USER",
+                       help=AS_HELP + NOT_A_BOUNDARY)
     p.set_defaults(fn=fn)
     return p
 
@@ -780,7 +797,8 @@ def _filter_flags(p: argparse.ArgumentParser) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools.")
+    ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools. " +
+                                 NOT_A_BOUNDARY)
     sub = ap.add_subparsers(dest="command", required=True)
     ing = sub.add_parser("ingest", help="read a pinned corpus, or the loose files of a "
                                         "folder, into a store and commit a snapshot")

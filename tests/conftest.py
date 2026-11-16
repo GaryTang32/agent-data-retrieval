@@ -82,7 +82,8 @@ def _isolate_writable_state(writable_state, monkeypatch):
                         (model_name, writable_state / "emb", model_cache_dir))
     tools_emb = writable_state / "emb-tools"
     monkeypatch.setattr(tools, "DEFAULT_EMB_CACHE", tools_emb)
-    monkeypatch.setattr(tools.Tools.__init__, "__kwdefaults__", {"emb_cache": tools_emb})
+    monkeypatch.setattr(tools.Tools.__init__, "__kwdefaults__",
+                        {**tools.Tools.__init__.__kwdefaults__, "emb_cache": tools_emb})
     monkeypatch.setattr(tools.make_embedding_cache, "__defaults__", (tools_emb,))
     monkeypatch.setattr(store_index, "_default_cache",
                         lambda: EmbeddingCache(writable_state / "emb-store-index"))

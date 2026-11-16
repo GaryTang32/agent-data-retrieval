@@ -59,8 +59,8 @@ that read envelope fields (`Filters.needs_overlay`) are refused ("no applicabili
 run `adr applicability derive`") and the default and `include_superseded` exclude nothing
 (the Phase 1 behaviour). Results carry `applicability` (the overlay id, or None), `filters`
 (the filters applied, as `Filters.to_dict`) and, for search and grep, `excluded_by_filter`
-(how many documents of the snapshot the filters excluded, the caller's view once views
-exist; for a doc-scoped grep, of that one document). Log lines of these tools carry the
+(how many documents of the caller's view the filters excluded; for a doc-scoped grep, of
+that one document). Log lines of these tools carry the
 caller's `filters` in `args`, and `filters` and `applicability` beside them (null when the call
 failed before they were known).
 
@@ -81,10 +81,38 @@ itself and `alternates` is empty. The result carries `dedup` (the overlay id, or
 `dedup_note` (None when collapsed, else why not: `dedup.OFF`, or `dedup.missing`'s reason);
 log lines of `search` carry `dedup`.
 
+Per call (Phase 2 spec §5.5, planner's call 12). Every call re-reads HEAD (a new content
+snapshot is used from the next call on), `index/active.json` (a new active index is loaded),
+and stats the applicability and dedup overlays, reusing a parse while the file is unchanged;
+nothing is cached as "absent". So a long-running process sees every change on its next call.
+
+Permissions (Phase 2 spec §5.3–§5.6, §6.2). `Tools(..., acl=True, caller=USER)` resolves the
+caller's access on entry to every call (`acl.resolve`: F1–F5, one ACL snapshot for the whole
+call, `clock` for F3); a denial is an `AccessDenied` ("access denied (F<n>): <reason>") and
+the call returns nothing. An allowed call sees only the caller's view (the documents whose
+access list meets the caller's principals; no entry or an empty list: no one):
+- search: `StoreIndex.retrieve(..., allowed_docs = view ∩ admitted, lexical = the view's
+  BM25)`; the dense channel masks the shared vectors to the same set. The view's BM25 has
+  statistics over the view's chunks only (no IDF side channel), from an LRU of `VIEW_CACHE`
+  (32) by (index fingerprint, view id); a view of every chunk uses the index's own BM25, so
+  a caller who sees everything gets the results of `acl=False`. Dedup components are
+  restricted to visible, admitted members: a member outside the view is never shown, listed
+  or counted, and never joins two visible ones.
+- grep scans the visible, admitted documents only; read and a doc-scoped grep resolve ids
+  (and prefixes) among visible ids only, so an invisible document, element or chunk gets
+  byte for byte the message of a nonexistent one (an invisible document that the filters
+  would exclude is "not found" too: the filter message is for visible documents).
+- every count (`excluded_by_filter`, `truncated`, matches, `short_by`) covers the view.
+`index` is an operator call and is refused with the ACL layer. `acl=False` is the tools
+without an ACL layer, as in Phase 1.
+
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
 single `O_APPEND` write, after the result is computed; the log is never read, so it cannot
-change a result. Every result names the snapshot it came from.
+change a result. Every line carries `caller` (as given), `principals`, `acl_snapshot`,
+`acl_decision` (`allowed`, `denied:F1`…`denied:F5`, or `off` without the ACL layer), `view`
+and `not_visible` (the invisible ids a read or doc-scoped grep named, for audit only; [] when
+none), null when not resolved. Every result names the snapshot it came from.
 """
 
 from __future__ import annotations
@@ -96,7 +124,9 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -105,14 +135,24 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 from re import _parser as re_parser
 
+import numpy as np
+
+from adr_store import acl as acl_mod
 from adr_store import dedup as dedup_mod
 from adr_store import grep_worker
-from adr_store.applicability import Applicability, Filters, exclusion_reason, load_overlay
+from adr_store.acl import Access, AclDenied
+from adr_store.applicability import (
+    Applicability,
+    Filters,
+    exclusion_reason,
+    load_overlay,
+    overlay_path,
+)
 from adr_store.embedding import EmbeddingCache
 from adr_store.records import sha256_text
 from adr_store.retrieval import Settings, StoreIndex
 from adr_store.retrieval.index import CHANNEL_K, chunk_content_sha256
-from adr_store.retrieval.lexical import check_w_bc
+from adr_store.retrieval.lexical import FieldBM25, check_w_bc, doc_mask
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store, StoreError, write_atomic
 
@@ -126,10 +166,24 @@ CONTEXT_CHARS = 80  # characters of context on each side of a grep match
 MIN_PREFIX = 8
 DEFAULT_EMB_CACHE = Path(".cache/emb")
 NO_OVERLAY = "no applicability overlay; run `adr applicability derive`"
+VIEW_CACHE = 32  # per-view BM25 indexes kept in memory (LRU by index fingerprint and view)
+_VIEW_LEXICAL: OrderedDict[tuple[str, str], FieldBM25] = OrderedDict()
+_VIEW_LOCK = threading.Lock()
+INDEX_UNDER_ACL = ("index is an operator call and does not run with the ACL layer; use "
+                   "Tools(acl=False) (`adr index`)")
 
 
 class ToolError(Exception):
     """A call the tools refuse, with a message for the caller (exit code 2 on the CLI)."""
+
+
+class AccessDenied(ToolError):
+    """No access for the whole call (fail-closed rule `code`, F1–F5 of §5.4); the message
+    is `access denied (F<n>): <reason>`."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -381,6 +435,31 @@ def _damaged(e: Exception | str) -> ToolError:
     return ToolError(f"active index missing or damaged: {reason}; run `adr index`")
 
 
+def _stat_key(path: Path) -> tuple | None:
+    """What identifies a file's current version for a cache (device, inode, size, mtime and
+    ctime in ns), or None when there is no such file."""
+    try:
+        st = os.stat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+
+def _hidden_matches(given: object, visible: list[str], everything: list[str]) -> list[str]:
+    """The ids of `everything` (sorted) not in `visible` that `given` names: itself, or the
+    ids it is a prefix of (at least `MIN_PREFIX` characters), for the audit log only."""
+    if not isinstance(given, str) or not given:
+        return []
+    shown = set(visible)
+    i = bisect.bisect_left(everything, given)
+    out = []
+    while i < len(everything) and everything[i].startswith(given):
+        if (everything[i] == given or len(given) >= MIN_PREFIX) and everything[i] not in shown:
+            out.append(everything[i])
+        i += 1
+    return out
+
+
 class _GrepWorker:
     """A worker process answering scan requests (`grep_worker.serve`), with a deadline on the
     time spent waiting for its answers; stopped when the `with` block ends."""
@@ -469,9 +548,19 @@ class _GrepWorker:
 
 
 class Tools:
-    """The tools over the store at `store_path`, read at its HEAD snapshot when created."""
+    """The tools over the store at `store_path`. Every call re-reads HEAD (and so sees a new
+    content snapshot), `index/active.json`, the overlays and, with `acl`, `acl/HEAD`.
 
-    def __init__(self, store_path: Path, *, emb_cache: Path = DEFAULT_EMB_CACHE):
+    `acl=False` is the tools without an ACL layer (Phase 1 behaviour; log `acl_decision`
+    "off"). `acl=True` resolves the caller's access on entry to every call (`acl.resolve`,
+    one ACL snapshot per call, `clock` for F3) and enforces it; `caller` is a `user:`
+    principal. Calls on one instance run one at a time."""
+
+    def __init__(self, store_path: Path, *, emb_cache: Path = DEFAULT_EMB_CACHE,
+                 acl: bool = False, caller: str | None = None,
+                 clock: Callable[[], datetime] = acl_mod.utc_now):
+        if not isinstance(acl, bool):
+            raise ToolError(f"acl must be true or false, got {acl!r}")
         self.store_path = Path(store_path)
         try:
             self.store = Store.open(self.store_path)
@@ -479,12 +568,19 @@ class Tools:
             raise ToolError(str(e)) from e
         self.snapshot: str = self.store.snapshot_id
         self.emb_cache = Path(emb_cache)
+        self.acl, self.caller, self.clock = acl, caller, clock
+        self._lock = threading.RLock()
         self._index: StoreIndex | None = None
-        self._active: dict | None = None
-        self._chunks: dict[str, dict] | None = None
-        self._overlay: Applicability | None | object = _UNLOADED
-        # (index fingerprint, overlay or None, why none)
-        self._dedup: tuple[str, dedup_mod.Dedup | None, str | None] | None = None
+        self._memo: dict = {}  # per call: active.json, as read once
+        self._chunks: tuple[str, dict[str, dict]] | None = None  # (fingerprint, rows)
+        self._content: tuple[str, str] | None = None  # (fingerprint, chunk_content_sha256)
+        self._overlay: tuple[tuple, Applicability] | None = None  # (file key, overlay)
+        # (key: fingerprint, snapshot, file or directory state), overlay or None, why none
+        self._dedup: tuple[tuple, dedup_mod.Dedup | None, str | None] | None = None
+        self._acl_cache: OrderedDict = OrderedDict()  # parsed ACL snapshots by id
+        self._access_now: Access | None = None  # the access of the call running
+        self._not_visible: list[str] | None = None  # requested ids that were invisible
+        self._in_call = False
 
     @property
     def index_root(self) -> Path:
@@ -508,52 +604,177 @@ class Tools:
         finally:
             os.close(fd)
 
+    def _logged_caller(self) -> str | None:
+        c = self.caller
+        return c if c is None or isinstance(c, str) else repr(c)
+
     def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]],
-              fields: dict | None = None):
+              fields: dict | None = None, *, acl_check: bool = True):
         """Run one tool call and log it; `fn` returns (result, result ids, extra fields).
-        `fields` are logged on every line, refused or not: `fn` fills in what it learns."""
-        entry = {"time": datetime.now(UTC).isoformat(), "tool": tool, "args": args,
-                 "snapshot": self.snapshot}
-        fields = {} if fields is None else fields
+        `fields` are logged on every line, refused or not: `fn` fills in what it learns.
+        On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access
+        (`acl_check`), which `fn` sees as `self._access_now`."""
+        with self._lock:
+            when = datetime.now(UTC).isoformat()
+            fields = {} if fields is None else fields
+            acl_fields = {"caller": self._logged_caller(), "principals": None,
+                          "acl_snapshot": None, "acl_decision": None if self.acl else "off",
+                          "view": None, "not_visible": None}
+            self._memo, self._access_now, self._not_visible = {}, None, None
+            self._in_call = True
+            try:
+                self._refresh()
+                if self.acl and acl_check:
+                    self._enter(acl_fields)
+                result, ids, extra = fn()
+            except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
+                if isinstance(e, (ToolError, StoreError)):
+                    error = str(e)
+                elif isinstance(e, KeyboardInterrupt):
+                    error = "interrupted"
+                else:
+                    error = f"unexpected {type(e).__name__}: {e}"
+                acl_fields["not_visible"] = self._not_visible
+                self._append_log({"time": when, "tool": tool, "args": args,
+                                  "snapshot": self.snapshot, **fields, **acl_fields,
+                                  "results": [], "error": error})
+                if isinstance(e, StoreError):
+                    raise ToolError(str(e)) from e
+                raise
+            finally:
+                self._access_now, self._memo, self._in_call = None, {}, False
+            acl_fields["not_visible"] = self._not_visible
+            self._append_log({"time": when, "tool": tool, "args": args,
+                              "snapshot": self.snapshot, **fields, **acl_fields, **extra,
+                              "results": ids})
+            return result
+
+    # -- the content snapshot and access ------------------------------------------------
+
+    def _refresh(self) -> None:
+        """Re-read HEAD: a new content snapshot is used from the next call on (the same
+        snapshot keeps the open store)."""
         try:
-            result, ids, extra = fn()
-        except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
-            if isinstance(e, (ToolError, StoreError)):
-                error = str(e)
-            elif isinstance(e, KeyboardInterrupt):
-                error = "interrupted"
-            else:
-                error = f"unexpected {type(e).__name__}: {e}"
-            self._append_log({**entry, **fields, "results": [], "error": error})
-            if isinstance(e, StoreError):
-                raise ToolError(str(e)) from e
+            head = (self.store_path / "HEAD").read_text(encoding="utf-8").strip()
+        except OSError as e:
+            raise StoreError(f"{self.store_path}: no store here (HEAD unreadable: "
+                             f"{type(e).__name__})") from e
+        if head != self.snapshot:
+            store = Store.open(self.store_path, head)
+            self.store, self.snapshot = store, store.snapshot_id
+
+    def _resolve_access(self) -> Access:
+        """The caller's access now (AclDenied F1–F5)."""
+        return acl_mod.resolve(self.store_path, self.caller, self.snapshot, clock=self.clock,
+                               cache=self._acl_cache)
+
+    def _enter(self, acl_fields: dict) -> None:
+        """Resolve the call's access; a denial is an AccessDenied, logged with its code."""
+        try:
+            access = self._resolve_access()
+        except AclDenied as e:
+            acl_fields.update(acl_decision=f"denied:{e.code}", acl_snapshot=e.acl_snapshot)
+            raise AccessDenied(e.code, str(e)) from e
+        acl_fields.update(principals=list(access.principals), acl_snapshot=access.acl_snapshot,
+                          acl_decision="allowed", view=access.view)
+        self._access_now, self._not_visible = access, []
+
+    def _access(self) -> Access | None:
+        """The caller's access to the store as it is now (None without the ACL layer); a
+        denial raises AccessDenied (not logged: not a tool call)."""
+        with self._lock:
+            self._refresh()
+            if not self.acl:
+                return None
+            try:
+                return self._resolve_access()
+            except AclDenied as e:
+                raise AccessDenied(e.code, str(e)) from e
+
+    def _doc_ids(self) -> list[str]:
+        """The sorted document ids this call may see: the snapshot's, or with the ACL layer
+        those of the caller's view."""
+        ids = self.store.doc_ids()
+        a = self._access_now
+        return ids if a is None else [d for d in ids if d in a.docs]
+
+    def _find(self, given: str, visible: list[str], everything: list[str], what: str,
+              where: str) -> str:
+        """`_resolve` among the visible ids only; with the ACL layer, the invisible ids the
+        request named are noted for the log (never returned)."""
+        try:
+            return _resolve(given, visible, what, where)
+        except ToolError:
+            if self._not_visible is not None and len(visible) < len(everything):
+                self._not_visible += _hidden_matches(given, visible, everything)
             raise
-        self._append_log({**entry, **fields, **extra, "results": ids})
-        return result
+
+    def projection(self) -> np.ndarray:
+        """The caller's visibility mask over the active index's chunks (in its chunk order):
+        a pure function of (index, ACL snapshot, caller); all true without the ACL layer."""
+        access = self._access()
+        idx = self.active_index()
+        doc_ids = np.array([c.doc_id for c in idx.chunks.values()], dtype=str)
+        if access is None:
+            return np.ones(len(doc_ids), dtype=bool)
+        return doc_mask(doc_ids, access.docs)
+
+    @staticmethod
+    def _view_lexical(idx: StoreIndex, access: Access) -> FieldBM25:
+        """BM25 over the chunks of the caller's view (§6.2: statistics per view, so a hidden
+        document moves no score), from an LRU of `VIEW_CACHE` by (index fingerprint, view);
+        the index's own BM25 when the view holds every chunk."""
+        chunks = [c for c in idx.chunks.values() if c.doc_id in access.docs]
+        if len(chunks) == len(idx.chunks):
+            return idx.lexical
+        key = (idx.fingerprint, access.view)
+        with _VIEW_LOCK:
+            if key in _VIEW_LEXICAL:
+                _VIEW_LEXICAL.move_to_end(key)
+                return _VIEW_LEXICAL[key]
+        lex = FieldBM25(idx.lexical.w_bc, idx.lexical.bm25.k1, idx.lexical.bm25.b)
+        lex.build(chunks)
+        with _VIEW_LOCK:
+            _VIEW_LEXICAL[key] = lex
+            _VIEW_LEXICAL.move_to_end(key)
+            while len(_VIEW_LEXICAL) > VIEW_CACHE:
+                _VIEW_LEXICAL.popitem(last=False)
+        return lex
 
     # -- applicability ------------------------------------------------------------------
 
     def _applicability(self) -> Applicability | None:
-        """The applicability overlay of the snapshot, or None (loaded once)."""
-        if self._overlay is _UNLOADED:
-            self._overlay = load_overlay(self.store_path, self.snapshot)
-        return self._overlay
+        """The applicability overlay of the snapshot, or None: a stat on every call, the
+        parse reused while the file is the same."""
+        key = _stat_key(overlay_path(self.store_path, self.snapshot))
+        if key is None:
+            return None
+        key = (self.snapshot, key)
+        if self._overlay is not None and self._overlay[0] == key:
+            return self._overlay[1]
+        overlay = load_overlay(self.store_path, self.snapshot)
+        self._overlay = None if overlay is None else (key, overlay)
+        return overlay
 
     def _apply(self, filters: object, fields: dict) -> _Applied:
-        """Parse the caller's filters and work out what they admit (logged in `fields`)."""
+        """Parse the caller's filters and work out what they admit among the documents the
+        call may see (logged in `fields`). `allowed` is None only when nothing is excluded
+        by the filters or hidden by the ACL (the Phase 1 path); counts cover the view."""
         try:
             f = Filters.parse(filters)
         except (ValueError, TypeError) as e:
             raise ToolError(f"bad filters: {e}") from e
         fields["filters"] = f.to_dict()
+        docs = self._doc_ids()
+        hidden = self._access_now is not None and len(docs) < len(self.store.doc_ids())
         overlay = self._applicability()
         if overlay is None:
             if f.needs_overlay():
                 raise ToolError(NO_OVERLAY)
-            return _Applied(f, None, None, 0)
+            return _Applied(f, None, frozenset(docs) if hidden else None, 0)
         fields["applicability"] = overlay.overlay_id
-        allowed, excluded = overlay.allowed_docs(self.store.doc_ids(), f)
-        return _Applied(f, overlay, None if excluded == 0 else allowed, excluded)
+        admitted, excluded = overlay.allowed_docs(docs, f)
+        return _Applied(f, overlay, admitted if excluded or hidden else None, excluded)
 
     @staticmethod
     def _filter_fields() -> dict:
@@ -572,10 +793,12 @@ class Tools:
                 "threads": threads}
 
         def run():
+            if self.acl:
+                raise ToolError(INDEX_UNDER_ACL)
             info = self._index_impl(system, lexical_only, w_bc, weight, tuning, threads)
             return info, [info.fingerprint], {}
 
-        return self._call("index", args, run)
+        return self._call("index", args, run, acl_check=False)
 
     def _settings(self, system: str, lexical_only: bool, w_bc: int | None,
                   weight: float | None, tuning: Path | None):
@@ -667,14 +890,15 @@ class Tools:
         # other threads is reloaded with the default cache on the next search (a lexical
         # index has no embedding model, so `threads` does not apply to it)
         self._index = idx if threads == 1 or lexical_only else None
-        self._active, self._chunks = info.to_dict(), None
+        self._memo["active"] = info.to_dict()
         return info
 
     # -- the active index -------------------------------------------------------------
 
     def _active_record(self) -> dict:
-        if self._active is not None:
-            return self._active
+        """`active.json`, read (and checked) once per call; outside a call on every use."""
+        if "active" in self._memo:
+            return self._memo["active"]
         path = self.index_root / "active.json"
         if not path.is_file():
             raise ToolError(f"{self.store_path}: no index; run `adr index` first")
@@ -696,12 +920,12 @@ class Tools:
             raise ToolError(f"the index ({active['system']}) is for snapshot "
                             f"{_short(active['snapshot'])}, the store is at "
                             f"{_short(self.snapshot)}; run `adr index` again")
-        self._active = active
+        self._memo["active"] = active
         return active
 
     def _active_index(self) -> tuple[StoreIndex, dict]:
         active = self._active_record()
-        if self._index is None:
+        if self._index is None or self._index.fingerprint != active["fingerprint"]:
             dense = not active["lexical_only"]
             cache = make_embedding_cache(self.emb_cache) if dense else None
             reranker = make_reranker() if active["rerank"] else None
@@ -717,35 +941,51 @@ class Tools:
         return self._index, active
 
     def active_index(self) -> StoreIndex:
-        """The active index, loaded and checked as `search` loads it (not logged)."""
-        return self._active_index()[0]
+        """The active index, loaded and checked as `search` loads it (not logged; no ACL)."""
+        with self._lock:
+            if not self._in_call:
+                self._refresh()
+            return self._active_index()[0]
 
     def active_system(self) -> str:
         """The system name the active index was built as (`active.json`, checked)."""
-        return self._active_record()["system"]
+        with self._lock:
+            if not self._in_call:
+                self._refresh()
+            return self._active_record()["system"]
 
     def _dedup_overlay(self, idx: StoreIndex) -> dedup_mod.Dedup | None:
-        """The dedup overlay of the index's chunks, or None (loaded once per index)."""
+        """The dedup overlay of the index's chunks, or None."""
         return self._dedup_state(idx)[0]
 
+    def _content_sha256(self, idx: StoreIndex) -> str:
+        if self._content is None or self._content[0] != idx.fingerprint:
+            self._content = (idx.fingerprint, chunk_content_sha256(idx.chunks.values()))
+        return self._content[1]
+
     def _dedup_state(self, idx: StoreIndex) -> tuple[dedup_mod.Dedup | None, str | None]:
-        """(the dedup overlay of the index's chunks or None, why None), loaded once per
-        index."""
-        if self._dedup is None or self._dedup[0] != idx.fingerprint:
-            content = chunk_content_sha256(idx.chunks.values())
+        """(the dedup overlay of the index's chunks or None, why None): a stat on every call
+        (of the file, or of its directory when there is none), the parse reused while that
+        is unchanged."""
+        content = self._content_sha256(idx)
+        path = dedup_mod.overlay_path(self.store_path, self.snapshot, idx.chunker, content)
+        state = _stat_key(path)
+        key = (idx.fingerprint, self.snapshot, state,
+               _stat_key(path.parent) if state is None else None)
+        if self._dedup is None or self._dedup[0] != key:
             dd = dedup_mod.load_overlay(self.store_path, self.snapshot, idx.chunker, content)
             why = None if dd is not None else dedup_mod.missing(
                 self.store_path, self.snapshot, idx.chunker, content)
-            self._dedup = (idx.fingerprint, dd, why)
+            self._dedup = (key, dd, why)
         return self._dedup[1], self._dedup[2]
 
     def _chunk_rows(self) -> dict[str, dict]:
         """The active index's chunks, from the index as `search` loads it (so its fingerprint
         is checked the same way)."""
-        if self._chunks is None:
-            idx, _ = self._active_index()
-            self._chunks = {cid: asdict(c) for cid, c in idx.chunks.items()}
-        return self._chunks
+        idx, _ = self._active_index()
+        if self._chunks is None or self._chunks[0] != idx.fingerprint:
+            self._chunks = (idx.fingerprint, {cid: asdict(c) for cid, c in idx.chunks.items()})
+        return self._chunks[1]
 
     # -- search -----------------------------------------------------------------------
 
@@ -771,14 +1011,21 @@ class Tools:
             dd, why = (None, dedup_mod.OFF) if dedup is False else self._dedup_state(idx)
             if dedup is True and dd is None:
                 raise ToolError(why)
+            lexical = None
+            if self._access_now is not None:
+                lexical = self._view_lexical(idx, self._access_now)
+                lexical = None if lexical is idx.lexical else lexical
+            if lexical is not None and applied.allowed is None:  # cannot happen: guard
+                raise RuntimeError("a per-view BM25 without the view's mask")
             short_by = 0
             if dd is None:
                 slots = [dedup_mod.Slot(cid, score, cid, ()) for cid, score in idx.retrieve(
                     query, fusion="linear", w=active["w"], top=top,
-                    allowed_docs=applied.allowed)]
+                    allowed_docs=applied.allowed, lexical=lexical)]
             else:
                 fields["dedup"] = dd.overlay_id
-                slots, short_by = self._collapsed(idx, active, query, top, applied, dd)
+                slots, short_by = self._collapsed(idx, active, query, top, applied, dd,
+                                                  lexical)
             hits = []
             for rank, slot in enumerate(slots, start=1):
                 c = idx.chunks[slot.chunk_id]
@@ -798,10 +1045,13 @@ class Tools:
 
     @staticmethod
     def _collapsed(idx: StoreIndex, active: dict, query: str, top: int, applied: _Applied,
-                   dd: dedup_mod.Dedup) -> tuple[list[dedup_mod.Slot], int]:
+                   dd: dedup_mod.Dedup, lexical: FieldBM25 | None = None
+                   ) -> tuple[list[dedup_mod.Slot], int]:
         """(the collapsed slots, short_by). Without a reranker: the collapse of the index's
         full ranking. A reranked index: the collapse of its reranked top 50, and how many
-        more slots the full ranking after those 50 would fill, up to `top`."""
+        more slots the full ranking after those 50 would fill, up to `top`. `applied.allowed`
+        is the view's admitted documents (members outside it never join, show or count) and
+        `lexical` the view's BM25."""
         allowed = applied.allowed
 
         def admitted(cid: str) -> bool:
@@ -812,14 +1062,14 @@ class Tools:
                                       applied.filters.as_of, top)
 
         def full():
-            return idx.ranking(query, w=active["w"], allowed_docs=allowed)
+            return idx.ranking(query, w=active["w"], allowed_docs=allowed, lexical=lexical)
 
         if idx.reranker is None:
             return collapse(full()), 0
         # the reranked head and the full ranking from one search of each channel (the
         # query is embedded once)
         head, rest = idx.retrieve_and_ranking(query, w=active["w"], top=RERANK_TOP,
-                                              allowed_docs=allowed)
+                                              allowed_docs=allowed, lexical=lexical)
         slots = collapse(head)
         if len(slots) == top:
             return slots, 0
@@ -852,8 +1102,9 @@ class Tools:
             raise ToolError("give one of --start/--end, --element or --chunk")
         applied = self._apply(filters, {} if fields is None else fields)
         where = f"snapshot {_short(self.snapshot)}"
-        doc_id = _resolve(doc_id, self.store.doc_ids(), "document", where)
-        applied.refuse_excluded(doc_id)
+        visible = self._doc_ids()
+        doc_id = self._find(doc_id, visible, self.store.doc_ids(), "document", where)
+        applied.refuse_excluded(doc_id)  # a visible document only: filters are not secret
         text = self.store.text(doc_id)
         element_id = chunk_id = None
         if element is not None:
@@ -865,7 +1116,11 @@ class Tools:
                 raise StoreError(f"element {element_id} does not re-slice to its text_sha256")
         elif chunk is not None:
             rows = self._chunk_rows()
-            chunk_id = _resolve(chunk, sorted(rows), "chunk", "the active index")
+            every = sorted(rows)
+            seen = set(visible)
+            shown = every if self._access_now is None else [
+                c for c in every if rows[c]["doc_id"] in seen]
+            chunk_id = self._find(chunk, shown, every, "chunk", "the active index")
             row = rows[chunk_id]
             if row["doc_id"] != doc_id:
                 raise ToolError(f"chunk {_short(chunk_id)} belongs to document "
@@ -924,10 +1179,11 @@ class Tools:
         if min_width == 0 or rx.search("") is not None:
             raise ToolError(empty)
         applied = self._apply(filters, {} if fields is None else fields)
-        doc_ids = self.store.doc_ids()
+        doc_ids = self._doc_ids()
         excluded = applied.excluded
         if doc is not None:
-            doc = _resolve(doc, doc_ids, "document", f"snapshot {_short(self.snapshot)}")
+            doc = self._find(doc, doc_ids, self.store.doc_ids(), "document",
+                             f"snapshot {_short(self.snapshot)}")
             applied.refuse_excluded(doc)
             doc_ids = [doc]
             excluded = 0  # of this one document, which refuse_excluded let through
