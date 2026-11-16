@@ -88,7 +88,8 @@ def slot_stats(rows: list[dict], chunks: dict, applicability: Applicability | No
                items: Iterable[GoldenItem], groups: Groups, *,
                filters: Filters | None = None) -> dict:
     """Slot counts of a run's top 10 per subset. `filters` are the run's own (None: the
-    Phase 1 view, `include_superseded`); a row's `as_of` replaces them as the run did.
+    Phase 1 view, `include_superseded`); a row's `as_of` (the date its system's search
+    applied, recorded by the runner; null or absent for none) replaces them as the run did.
     Duplicate components are those of the dedup overlay among the chunks these filters admit
     (None without an overlay); `duplicate_cluster_slots` ignores the filters."""
     by_id = {i.id: i for i in items}
@@ -295,6 +296,13 @@ def compare(run_a: Path, run_b: Path, store_path: Path, margin: float = MARGIN,
         if unknown:
             raise runner.RunError(f"{name}: {len(unknown)} ranked chunk(s) are not chunks of "
                                   f"the store (e.g. {unknown[0]})")
+    for name, data, s in ((Path(run_a).name, a, sa), (Path(run_b).name, b, sb)):
+        dated = [r["item_id"] for r in data["rows"] if r.get("as_of") is not None]
+        if dated and s.get("as_of_from_item") is not True:
+            raise runner.RunError(
+                f"{name}: {len(dated)} row(s) record an as_of (e.g. {dated[0]}) that its "
+                f"system does not apply (settings.as_of_from_item is not true); a run of an "
+                f"older version, whose rows recorded the date passed: run it again")
     corpus = ca["corpus"]
     loaded = runner.load_checked_corpus(corpus)
     items = runner.load_golden(corpus, loaded)

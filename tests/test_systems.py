@@ -722,3 +722,37 @@ def test_p2_compare_writes_slots_subsets_and_verdicts(tmp_path, p2fakes, capsys)
     assert main(["p2-compare", a["dir"].name, b["dir"].name, "--store", str(store),
                  "--out", str(out)]) == 2
     assert "not the store's HEAD" in capsys.readouterr().err
+
+
+def test_p2_identity_slot_stats_equal_p1_struct_bc_s_on_dated_items(tmp_path, p2fakes):
+    """p2-identity takes a dated item's date but does not apply it, so its rows record none
+    and its slots are counted in its own view (the Phase 1 one), as p1-struct-bc's are: with
+    one cluster joining every chunk, a dated row counted under its date would admit nothing
+    and show no duplicates."""
+    import shutil
+
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-identity")
+    dated = [r for r in b["rows"] if r["qtype"] == "policy_asof"]
+    assert dated and all(r["as_of"] is None for r in b["rows"])
+    store = tmp_path / "store-copy"
+    shutil.copytree(systems.p2_store_dir(runner.load_config(), "mini"), store)
+    from adr_store.tools import Tools
+
+    _forge_one_cluster(store, Tools(store).active_index())
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["subset_sizes"]["asof"] == 1
+    assert c["slots"]["a"]["asof"]["duplicate_slots"] > 0
+    assert c["slots"]["a"] == c["slots"]["b"]
+    # a run whose rows record a date its system did not apply (an older p2-identity run)
+    # is refused rather than counted in another view
+    path = b["dir"] / "retrieval.json"
+    data = json.loads(path.read_text())
+    for r in data["rows"]:
+        if r["qtype"] == "policy_asof":
+            r["as_of"] = "2024-01-01"
+    path.write_text(json.dumps(data))
+    with pytest.raises(runner.RunError, match="as_of"):
+        phase2.compare(a["dir"], b["dir"], store)

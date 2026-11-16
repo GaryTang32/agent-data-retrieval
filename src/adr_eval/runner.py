@@ -592,8 +592,9 @@ def run_retrieval(corpus: str, system: str, split: Literal["dev", "test"], confi
                "ranked": [c for c, _ in hits], "scores": [s for _, s in hits],
                "metrics": retrieval_scores(
                    item, ranked, groups.get(item.id) or [[e] for e in item.evidence])}
-        if getattr(built, "accepts_as_of", False):  # Phase 2 rows record the date passed
-            row["as_of"] = item.as_of.isoformat() if _takes_as_of(built, item) else None
+        if getattr(built, "accepts_as_of", False):  # Phase 2 rows record the date applied
+            applied = built.applied_as_of(item.as_of if _takes_as_of(built, item) else None)
+            row["as_of"] = None if applied is None else applied.isoformat()
         rows.append(row)
     by_doc: dict[str, list[Chunk]] = {}
     for c in built.chunks.values():

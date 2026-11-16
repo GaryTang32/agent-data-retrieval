@@ -1,7 +1,9 @@
 """System registry: a name maps to a builder of one retrieval system over one corpus.
 
 A built system has `retrieve(question) -> [(chunk_id, score)]` (the top 10, best first; a
-system with `accepts_as_of` takes `retrieve(question, as_of)`),
+system with `accepts_as_of` takes `retrieve(question, as_of)` and says with
+`applied_as_of(as_of)` which date its search applied, None for none: what a run's row
+records as `as_of`),
 `chunks` (chunk id -> `Chunk`), `fingerprint`, `w` (the tuned linear weight, or None),
 `source` ("loaded" or "built": where its index came from) and `run_config()` (the
 "retrieval" block of a run's config).
@@ -414,6 +416,11 @@ class P2System:
         if self.spec.as_of and as_of is not None:
             return Filters(as_of=as_of)
         return self.spec.filters
+
+    def applied_as_of(self, as_of=None):
+        """The date the search of `retrieve(question, as_of)` applies (None: the
+        configuration's own filters, which name none)."""
+        return self.filters_for(as_of).as_of
 
     def retrieve(self, question: str, as_of=None) -> list[tuple[str, float]]:
         res = self.tools.search(question, top=TOP_N, filters=self.filters_for(as_of),
