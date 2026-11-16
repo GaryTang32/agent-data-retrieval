@@ -39,7 +39,10 @@ run config; its fingerprint differs from the full system's.
   operator calls without it. The caller's access is resolved once at build (a store without
   a fresh ACL snapshot is refused: run `adr acl sync --store <p2 store>`) and recorded in
   the run config (`acl`); every search resolves it again. Without `p2_caller` (None, the
-  2A runs and the tests' default) they search without the ACL layer.
+  2A runs and the tests' default) they search without the ACL layer. `p2-identity` never
+  uses `p2_caller`: it is every Phase 2 layer off, the ACL layer included, so it keeps the
+  Phase 1 matrix-product dense path (the ACL layer's row-exact kernel may differ in the last
+  float32 bits) and criterion A5 holds bit for bit.
 
 This module is the harness's only entry to `adr_store` for the Phase 0/1 harness modules
 (plan, shared rules).
@@ -621,7 +624,9 @@ def _p2_system(name: str):
                 f"{info.fingerprint[:12]}, the Phase 1 system's is {p1.fingerprint[:12]}\n"
                 f"fix: remove {store.path} so that it is copied again")
         app_id, dedup_id = _ensure_overlays(store, tools.active_index())
-        caller = config.get("p2_caller")
+        # p2-identity is every Phase 2 layer off, the ACL layer included (ruling, Task 8 fix
+        # round): it keeps the Phase 1 matrix-product path, so A5 holds bit for bit
+        caller = None if name == "p2-identity" else config.get("p2_caller")
         searcher, access = _acl_searcher(store.path, emb, caller)
         return P2System(name, spec, tools, p1, info.source, app_id, dedup_id, recorded,
                         caller=caller, searcher=searcher, acl=access)

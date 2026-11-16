@@ -635,6 +635,22 @@ def test_a_phase2_system_searches_as_the_configured_caller(mini, p2config, p2fak
         build("p2-default", mini, {**p2config, "p2_caller": "user:ghost"})
 
 
+def test_p2_identity_never_uses_the_caller(mini, p2config, p2fakes, tmp_path, capsys):
+    """p2-identity is every Phase 2 layer off, the ACL layer included (ruling, Task 8 fix
+    round): with `p2_caller` set it still searches without the ACL layer (the Phase 1
+    matrix-product path), needs no ACL snapshot, and records no caller."""
+    cfg = {**p2config, "p2_caller": "user:auditor"}
+    p2 = build("p2-identity", mini, cfg)  # the copied store has no ACL snapshot: no refusal
+    assert p2.caller is None and p2.acl is None and p2.searcher is p2.tools
+    rc = p2.run_config()
+    assert (rc["caller"], rc["acl"]) == (None, None)
+    p1 = build("p1-struct-bc", mini, p2config)
+    for item in mini[1]:
+        assert p2.retrieve(item.question) == p1.retrieve(item.question)  # scores bit for bit
+    with pytest.raises(runner.RunError, match="F1"):
+        build("p2-appl", mini, cfg)  # the other configurations still search as the caller
+
+
 def test_a_phase2_store_of_other_documents_is_refused(mini, p2config, p2fakes):
     from adr_store.store import Store
 
