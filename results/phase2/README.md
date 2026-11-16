@@ -1,9 +1,10 @@
 # Phase 2 results: applicability, permissions, tools as data and an MCP server
 
-> **Work in progress.** Only part 2A (applicability and duplicates) is measured so far. These
-> numbers were recorded on 16 November 2026 under version 2 of the metric definitions, with
-> golden sets v0.1. Parts 2B (permissions), 2C (tools as data) and 2D (the MCP server) follow in
-> their own sections.
+> **Work in progress.** Parts 2A (applicability and duplicates) and 2B (permissions, for the
+> content tools) are measured so far. These numbers were recorded on 16 November 2026 under
+> version 2 of the metric definitions, with golden sets v0.1. Parts 2C (tools as data) and 2D
+> (the MCP server) follow in their own sections, and complete B1, B3 and B4 for the tool tools
+> and the MCP server.
 
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](../../docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](../../docs/superpowers/plans/2026-11-16-phase2.md).
@@ -316,4 +317,225 @@ adr-eval retrieval gov --system p2-default --split test
 adr-eval retrieval-identical <p1-struct-bc run> <p2-identity run>
 adr-eval p2-compare <p1-struct-bc run> <p2-default run> --store .cache/store-p2/gov
 adr-eval probes temporal gov --store .cache/store-p2/gov
+```
+
+## 2B: permissions (content tools)
+
+**Verdict.** Every 2B criterion measured here passes for the three content tools, `search`,
+`grep` and `read`.
+- **No leak** in 840 leak probes (B1). All six leak kinds of spec §10.2 were checked.
+- **Filtering equals an allowed-only index** in 12,000 of 12,000 checks (B2). These are 60 reference stores × 50 questions × `search` and `grep` × 2 filter views. Ids and scores are equal at full float precision.
+- **Revocation within one sync cycle** passes in all 5 revocation tests (B3), both in a new process and in a long-lived process.
+- **Fail closed:** none of the 270 fail-closed probes returned content (B4). That is 90 per corpus.
+- **Log fields:** all 26,028 log lines written in steps 2–5 carry `caller`, `principals`, `acl_snapshot` and `acl_decision` (B5).
+
+B1, B3 and B4 cover the content tools only. They are completed in 2C (`search_tools`,
+`load_tool`) and 2D (the MCP server), as plan builder note 4 says.
+
+**One result differs from the prediction: the re-runs as `user:auditor` are not bit-identical
+to the 2A runs on research and bench.**
+- The plan expected identical rows. Ranked chunk ids and every metric are identical in all 24 re-runs.
+- **Scores** are bit-identical on gov. On research and bench they differ in the 6th decimal on some items (table below).
+- **Cause.** With the ACL layer, the dense channel scores each row with the row-exact kernel, `(row * q).sum()` (`f84bfc0`, `c25a437`). This is what makes B2 hold bit for bit against a view-only store. Without the ACL layer, the 2A path uses the Phase 1 matrix product `vectors @ q`, which differs in the last float32 bits.
+- **Gov is unaffected** because its fusion weight is `w` = 1.0 (BM25 only).
+- **So A5 holds as `user:auditor` for ids and metrics, but not for scores on research and bench.** Without the ACL layer, A5 holds exactly (2A).
+- This was not patched. Which one should hold bit for bit is a decision for review (Limits).
+
+### What was run
+
+- **No model calls** (ruling R1). Everything ran through `adr_store.tools.Tools`, with the ACL layer, on the scratch copies `.cache/store-p2/<corpus>` at the Phase 1 snapshots (gov `f002821f2cb3…`, research `97c415b1aa71…`, bench `7d8d1f8adda6…`).
+- **Callers.** The measured harness caller is `user:auditor` (`config/eval.json` `p2_caller`). The probes call as the directory's users and as `user:ghost`. The directory and policy are the committed ones (`config/acl/`, `directory_sha256` `d83f6043cffc…`, `policy_sha256` `0e3024f237fc…`).
+- **ACL freshness.** The Task 6 ACL snapshots (sequence 1) were two hours old, older than `max_sync_age_s` (3,600 s). So every acl=True call would have been denied F3.
+  - Each p2 copy was re-synced with `adr acl sync` right before each step. This is an operator action on the scratch copies; the clock was not injected.
+  - For the long B2 runs on research and bench, a loop re-synced the p2 copy and its reference stores every 20 minutes, as a deployment's cron would (spec §5.5). That made 49 syncs, with no error and no access change.
+- **Steps** (plan, Task 8):
+  1. The 24 `p2-*` runs (4 configurations × 3 corpora × dev and test) re-run as `user:auditor`. Each was compared with `retrieval-identical` against its Task 5 run, and `p2-identity` against the `p1-struct-bc` reference runs (A5).
+  2. B2 with `adr-eval probes equivalence <corpus>`.
+  3. and 4. B1 and B4 with `adr-eval probes acl <corpus>`.
+  5. B3 with `pytest tests/store/test_revocation.py`.
+  6. B5 from every log line written in steps 2–5.
+  7. ACL lag from the sync logs.
+- **Reference stores** (`adr_eval.probes.equivalence.view_store`). Each holds one view's documents and was built under `.cache/store-p2/views/<corpus>/<view[:12]>`:
+  - each document re-ingested from the p2 copy (raw blob, stored text, uri, version and licence); every doc record hashes as the source's;
+  - the overlays derived;
+  - `p1-struct-bc` indexed with the source's `w_bc` and `w`;
+  - one ACL sync from the same directory and policy, so the view's caller sees all of it.
+
+  The auditor's reference store reproduces the source exactly: the same content snapshot and the same index fingerprint (gov `54c12a3c2917…`, research `d3902b136e26…`, bench `8c7bb39d032b…`). All 60 stores were removed after the run. Their content snapshots, index fingerprints and ACL snapshot ids are in each `probes-equivalence-*` and `probes-acl-*` `summary.json` (`config.views`).
+- **Destructive probes** (F1, F2, F3, "no entry") ran on `cp -a` clones of the p2 copy, one condition at a time, each removed afterwards.
+- **`.cache/store` and `.cache/index` were only read.** The SHA-256 and modification time of all 7,320 files were unchanged after the runs.
+
+### Exit criteria (2B)
+
+| # | Criterion | Threshold | Result |
+|---|---|---|---|
+| B1 | Zero leaks (content tools; completed in 2C (tools) and 2D (MCP)) | 0 leaks; ≥ 500 probes; ≥ 100 per family | **Pass for `search`, `grep`, `read`:** 840 probes, 0 leaks, 0 invalid. Families: search 450, grep 210, read 180. The `search_tools`/`load_tool` family (200) and the 300 MCP probes follow in 2C and 2D |
+| B2 | Filtering equals an allowed-only index | Identical ids and scores | **Pass:** 12,000 of 12,000 identical (3 corpora × 20 views × 50 questions × `search` and `grep` × Phase 1 view and `p2-default` view) |
+| B3 | Revocation within one sync cycle (content tools; completed in 2C (tools) and 2D (MCP)) | All revocation tests pass | **Pass for `search`, `grep`, `read`:** 5 of 5. The three change kinds were checked in-process, in a new process and in a `tools_proc` process started before the change, plus F2 and F3. The already-running MCP server leg follows in 2D |
+| B4 | Fail closed (content tools; completed in 2C (tools) and 2D (MCP)) | No content in any case | **Pass for `search`, `grep`, `read`:** 270 of 270 (90 per corpus: F1–F5 and "no entry" × 3 tools × 5 callers), 0 with content |
+| B5 | Every log line carries its principals | 100% | **Pass:** 26,028 of 26,028 lines: B2 24,000, B1 and B4 1,921, B3 107 |
+
+Not a criterion, but required by the plan (step 1): the auditor re-runs give identical ranked
+ids and metrics in 24 of 24 runs. They give identical scores only on gov (below).
+
+### Step 1: the 2A runs as `user:auditor`
+
+Each run resolved the auditor's access at build and recorded it in its run config
+(`settings.acl`): the ACL snapshot, sequence 2, and the view of every document (180, 245 and
+2,000).
+
+| Corpus | Configurations | Items (dev / test) | Ranked ids equal | Metrics equal | Items with a score difference (dev / test) | Largest score difference |
+|---|---|---|---|---|---|---|
+| gov | all four | 55 / 242 | all | all | 0 / 0 | 0 |
+| research | each of the four | 53 / 222 | all | all | 11 / 55 | 3.0e-06 |
+| bench | each of the four | 156 / 572 | all | all | 33 / 132 | 1.8e-05 |
+
+- **A5 against the `p1-struct-bc` reference runs gives the same picture:** identical on gov (297 of 297 items), and the same 66 research and 165 bench items differing in score only.
+- **The cause was checked directly before the runs.** On bench dev, the two dense kernels give different top-10 fused rankings or scores for exactly 33 of 156 questions. That is the 33 items above.
+- **Why the differences grow.** A 1-ulp difference in a cosine can cross the 6-decimal rounding. Min-max fusion then scales it by the candidate range, hence up to 1.8e-05 after fusion.
+
+### Probe families (B1)
+
+Each leak probe is a (caller, target) pair:
+- **Target:** a document or chunk the caller cannot see.
+- **Caller:** chosen by seeded hash (20261116) among the directory users with something hidden, and `user:ghost`. The auditor sees every document and has nothing hidden.
+
+Search, grep and read run with `include_superseded`, so applicability masks nothing. Search
+runs with dedup on, so alternates are exercised. Each result was judged against:
+- the caller's view under the ACL snapshot;
+- the caller's reference store, for counts and scores;
+- a control call naming an id that does not exist, in the same store as the same caller, for not-found messages.
+
+| Family | Probe | Per corpus | Total | Outcomes (all corpora) | Leaks |
+|---|---|---|---|---|---|
+| search | Query = the 10 rarest tokens (highest IDF over all chunks) of a hidden chunk | 100 | 300 | 288 answered, 12 denied F4 (`user:ghost`) | 0 |
+| search | Query = a hidden document's title (even probes) or first breadcrumb (odd) | 50 | 150 | 150 answered | 0 |
+| grep | Pattern = a 30-character substring found in that hidden document only | 50 | 150 | 139 answered, 11 denied F4 | 0 |
+| grep | `doc=` a hidden document, by full id (even) or 8-character prefix (odd) | 20 | 60 | 51 "not found", 9 denied F4 | 0 |
+| read | A hidden document by full id, by 8-character prefix, a hidden chunk (with a visible document), a hidden document's element; 15 each | 60 | 180 | 168 "not found", 12 denied F4 | 0 |
+| total | | 280 | 840 | | **0** |
+
+Each probe draws its caller afresh: 19 or 20 callers per family on each corpus, and 12 for
+the doc-scoped grep. `user:outsider` appears in every family, and `user:ghost` in every family
+but the title family. No 8-character prefix of a hidden document began a visible id, so every
+prefix probe of a directory user was answered "not found".
+
+**The six leak kinds**, with the number of probes each was checked on and the number of leaks:
+
+| Leak kind (spec §10.2) | How it is judged | Checked | Leaks |
+|---|---|---|---|
+| A returned id outside the view | Every hit, scoring chunk, match and read names a document of the caller's view | 577 | 0 |
+| An alternate outside the view | Every alternate's document is in the caller's view | 577 | 0 |
+| Text of a hidden document | Every breadcrumb, match, context and read text is the visible document's own. The grep secret appears nowhere in a result or refusal. No refusal holds 8+ hex characters beginning a hidden id the caller did not give | 840 | 0 |
+| A not-found message that differs from a nonexistent id's | A full id: byte for byte against an id with the same first 12 characters. A prefix: with the given string replaced | 219 | 0 |
+| A count that includes hidden items | `excluded_by_filter`, `short_by`, `truncated` and the number of hits or matches equal the reference store's | 577 | 0 |
+| A score that differs from the reference allowed-only index | Hits (ids, full-precision scores, scoring chunks, alternates) and matches equal the reference store's | 577 | 0 |
+
+The checker was tested before the run (`tests/test_probes_acl.py`). Each kind fires on a tool
+that leaks it: tools without the ACL layer, an added hidden alternate, a louder not-found
+message, a shifted count, a score off by 1e-9, and a refusal naming a hidden id.
+
+The synthetic cases the corpora lack are fixtures in `tests/store/test_permissions.py`:
+- two documents sharing an 8-character prefix, one visible and one hidden;
+- an exact duplicate shared by a public and a restricted document.
+
+### B2: equivalence with allowed-only stores
+
+- **Questions.** 50 golden questions per corpus, by seeded hash of the item id (seed 20261116), the same for every view. Gov's sample holds 7 dated `policy_asof` items, searched with their own `as_of` in the `p2-default` view.
+- **Grep pattern.** The question's longest word of at least four letters or digits, escaped, case-insensitive.
+- **Calls.** Both sides were called with the ACL layer as the view's first user (sorted). That user sees the whole reference store.
+
+| Corpus | Views (documents per view) | Checks | Identical | Search hits compared | Grep matches compared | Empty grep results |
+|---|---|---|---|---|---|---|
+| gov | 20 (40–93, auditor 180) | 4,000 | 4,000 | 20,000 | 115,268 | 188 |
+| research | 20 (46–113, auditor 245) | 4,000 | 4,000 | 20,000 | 147,262 | 60 |
+| bench | 20 (436–975, auditor 2,000) | 4,000 | 4,000 | 20,000 | 123,774 | 26 |
+
+- **Views.** Each corpus has 20 distinct views, one per directory user: 18 tenant users, `user:auditor` (everything) and `user:outsider` (`public` only).
+- **Phase 1 view** (`include_superseded`, dedup off) and **`p2-default` view** (default filters or the item's `as_of`, dedup on) were each identical in all 6,000 of their checks.
+- **What is compared.** Search: rank, chunk, document, span, breadcrumb, score, scoring chunk, alternates, `excluded_by_filter`, `short_by` and the dedup state. Grep: document, span, line, match, context, `truncated` and `excluded_by_filter`.
+- No call was refused on either side.
+
+### B4: fail closed
+
+90 probes per corpus: 6 conditions × `search`, `grep`, `read` × 5 callers. The target is one
+document per corpus, chosen by seeded hash. It is not in a chain, and its uri begins no other
+document's.
+
+| Condition | How it was produced | Callers | Per corpus | Result (3 corpora) |
+|---|---|---|---|---|
+| F1 | A clone: `acl/HEAD` missing, `acl/HEAD` unreadable (a directory), an unparsable snapshot, a schema-invalid one (`sequence` 0), a snapshot file whose hash is not its id. One variant per caller | `user:auditor`, `user:outsider`, `user:initech-0`, `user:globex-3`, `user:initech-2` | 15 | 45 denied F1, 0 content |
+| F2 | A clone with a new content snapshot (the target dropped) | as F1 | 15 | 45 denied F2, 0 content |
+| F3 | A clone synced with the clock 2 h behind (3 callers) or 1 h ahead (2 callers); real clock in the tools | as F1 | 15 | 45 denied F3, 0 content |
+| F4 | The p2 copy | `None`, `user:ghost`, `user:nobody`, `user:acme-6`, `user:auditor2` | 15 | 45 denied F4, 0 content |
+| F5 | The p2 copy | `group:acme/0`, `public`, `user:`, `user:Ghost`, `tenant:acme` | 15 | 45 denied F5, 0 content |
+| "no entry" | A clone re-synced from the policy plus an attribute rule mapping the target's uri to `[]`. Only the target's access changed | as F1 | 15 | 30 answered without the target, 15 `read` refused exactly as a nonexistent id; 0 content |
+
+A probe passes only on:
+- the expected code with nothing returned, and a refusal that holds neither the target's secret substring nor, for search and grep, its id;
+- for "no entry": no hit, alternate, scoring chunk or match of the target, its 30-character substring nowhere, and `read` refused byte for byte as an id that names nothing.
+
+### B3 and B5
+
+- **B3.** `tests/store/test_revocation.py` passes (5 of 5, 10 s). It covers three change kinds: a user removed from a group, a document's rule changed by an attribute rule, and a user deleted. Steps 1–5 of §12 are checked in-process, in a new process and in a `tools_proc` process started before the change. Two further tests: a new content snapshot denies all until a sync (F2), and a stale snapshot denies all (F3, injected clock).
+- **B5.** Every log line written in steps 2–5 has the four fields:
+  - B2: 24,000 lines;
+  - B1 and B4: 1,921 lines (1,652 allowed; denied F1 45, F2 45, F3 45, F4 89, F5 45);
+  - B3: 107 lines in the tests' stores (78 allowed, 9 F2, 6 F3, 9 F4, 5 `off` for the operator's `index` calls).
+
+  Denied lines carry `principals` null, as specified.
+
+### ACL lag (spec §5.5)
+
+- **Sync durations.** The 13 syncs of the p2 copies in this task took 0.29–1.52 s: 9 by hand and 4 by the periodic loop. All 49 periodic re-syncs, of p2 copies and reference stores, took at most 0.82 s. That was with the probes running beside them.
+- **Logged `lag_s`.** On those syncs, `lag_s` (HEAD swap minus the newer modification time of the directory and the policy) was 6,939–13,625 s. That is the time since the committed config files were checked out, not a propagation delay: nothing changed.
+- **Lag after a real change.** It was measured on `cp -a` clones: `user:acme-4` was removed from `group:acme/1` in a copy of the directory and one sync run at once. The swap came 0.99 s (gov), 0.22 s (research) and 0.77 s (bench) after the change, essentially the sync duration. The user lost 5, 7 and 43 documents.
+- **Bound.** By §5.5 the lag is at most one sync cycle after the change. Phase 2 runs syncs on demand; between a change and the next sync, access stays the old one for at most `max_sync_age_s` (3,600 s), after which every call is denied F3.
+
+### Machine and wall times
+
+The same machine as 2A: 4-core Intel Xeon at 2.10 GHz, 15 GB of memory, Python 3.13.18.
+
+| Step | Wall time | Notes |
+|---|---|---|
+| 1: 24 auditor re-runs | 17.4 min | Four at a time; per-run wall times 66–330 s, in each run's `retrieval.json` |
+| 2: B2 gov | 36.3 min | Includes building 20 reference stores |
+| 2: B2 research | 33.4 min | Parallel with B2 bench and B1 gov for part of the time |
+| 2: B2 bench | 46.8 min | Parallel with B2 research and B1 research |
+| 3 and 4: B1 + B4 | 8.6 min (gov), 6.5 (research), 6.8 (bench) | Reference stores reused, then removed |
+| 5: B3 | 10 s | |
+| Test suite | 4 min | 1,462 tests, under the load of the B2 runs |
+
+- **Disk.** The 20 reference stores took 0.83 GB on gov, about 4 GB on research (PDF blobs) and 0.99 GB on bench. At most about 5 GB were in use at once, when research and bench were both built.
+
+### Limits
+
+- **Content tools only.** B1, B3 and B4 do not yet cover `search_tools`, `load_tool` or the MCP server (2C, 2D). B1's 300-probe MCP subset is also 2D.
+- **The auditor re-runs are bit-identical to 2A only on gov.** Under the ACL layer, scores use the row-exact dense kernel; without it they use the Phase 1 matrix product.
+  - The two differ in the 6th decimal on 66 research and 165 bench items per configuration. No ranked id and no metric changed.
+  - B2 requires the row-exact kernel. A5 against the recorded Phase 1 runs requires the matrix product.
+  - Holding both bit for bit would need, for example, the matrix product for a full view on both sides of B2. But the fix round rejected that: a full view of a reference store is not a full view of the source when a document has an empty list.
+  - This needs a reviewer's decision. It is reported, not patched.
+- **The leak probes judge what the content tools return,** not timing or resource side channels. Per-view BM25 removes the IDF channel by construction (§6.2). B2 checks that within the scores.
+- **The fail-closed probes use one target per corpus.** The F1–F5 decision is made per call before any document is touched, so the target matters only for "no entry".
+- **One policy.** Phase 2 ships no attribute rules: every document's list comes from the buckets, so no view splits a chain. The probe policy adds one rule for "no entry" only.
+- **One machine;** the B2 and B1 runs overlapped in part, so wall times were taken under shared load.
+
+### Files
+
+`run-summaries/` holds:
+- **The 24 auditor re-runs** (`<corpus>-p2-*-<split>-retrieval-20261116T08*/T09*`), as `retrieval.md` and `retrieval.json` without per-item rows. Each `config.settings.acl` records the caller's ACL snapshot and view.
+- **The probe runs** `probes-equivalence-<corpus>-*` (B2) and `probes-acl-<corpus>-*` (B1, B4, B5). Each has `summary.json` and `summary.md`: configuration, the reference stores' snapshot ids, counts and log-field scans. They hold no probe lists, queries or corpus text.
+- **`acl-2b-checks/auditor-reruns.json`:** the identity counts of step 1.
+- **`acl-2b-checks/checks.json`:** the p2 copies' sync log entries, the periodic re-syncs, the lag measured after a directory change, the B3 log scan and the read-only check of the real stores.
+
+The probe sets (`probes.json`, byte-identical across runs of the same store; tested), the
+per-probe results and the per-check B2 rows stay local in `runs/`.
+
+```
+adr acl sync --store .cache/store-p2/gov
+adr-eval retrieval gov --system p2-identity --split test        # as config p2_caller (user:auditor)
+adr-eval probes equivalence gov --store .cache/store-p2/gov --keep-views
+adr-eval probes acl gov --store .cache/store-p2/gov             # reuses, then removes, the reference stores
+pytest tests/store/test_revocation.py
 ```
