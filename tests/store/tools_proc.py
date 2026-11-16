@@ -5,7 +5,8 @@ revocation tests' "process started before the change", Phase 2 spec §12 Revocat
 
 `--as` turns the ACL layer on (`Tools(acl=True, caller=USER)`); `--clock` fixes the clock the
 freshness check (F3) reads (an ISO time with its offset; default: the real clock). Each
-request is one line `{"method": "search" | "read" | "grep", "args": [...], "kwargs": {...}}`;
+request is one line `{"method": "search" | "read" | "grep" | "search_tools" | "load_tool",
+"args": [...], "kwargs": {...}}`;
 each reply is one line, `{"ok": <the result as a dict>}` or `{"error": <message>,
 "type": <exception class>, "code": <F1..F5 or null>}`. The process ends at end of input.
 """
@@ -20,7 +21,7 @@ from pathlib import Path
 
 from adr_store import tools
 
-METHODS = ("search", "read", "grep")
+METHODS = ("search", "read", "grep", "search_tools", "load_tool")
 
 
 def serve(t: tools.Tools, lines, out) -> None:

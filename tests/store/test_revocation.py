@@ -1,7 +1,8 @@
 """Revocation within one sync cycle (Phase 2 spec §5.5, §12 Revocation, criterion B3) for
-`search`, `grep` and `read`: three change kinds (a user removed from a group, a document's
-rule changed in the policy, a user deleted), steps 1–5 checked in-process, in a new process
-and in a `tools_proc` process started before the change; a new content snapshot denies all
+`search`, `grep` and `read`, and for `search_tools` and `load_tool`: three change kinds (a
+user removed from a group, a document's or tool's rule changed in the policy, a user deleted),
+steps 1–5 checked in-process, in a new process and in a `tools_proc` process started before
+the change; a new content snapshot (and a new tool snapshot, for the tool tools) denies all
 until a sync (F2); a stale snapshot denies all (F3). Subprocesses get explicit `--store` and
 `--emb-cache` under `tmp_path`; lexical-only indexes."""
 
@@ -13,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from adr_store import acl, tools
+from adr_store import acl, tool_catalog, tool_records, tools
 from adr_store.store import Store
 from tests.store.test_permissions import (
     ACME1,
@@ -192,3 +193,120 @@ def test_a_stale_snapshot_denies_all(tmp_path, procs):
             assert reply["code"] == "F3" and "ok" not in reply
     acl.sync(store.path, *config, clock=fixed(now[0]))  # a sync makes it fresh again
     visible_everywhere(t)
+
+
+# -- the tool tools ----------------------------------------------------------------------------
+
+TOOL_URI = "fixture:tools/acme-1/obsidian"
+TOOL_RULES = [{"match": {"uri_prefix": TOOL_URI}, "access": ["group:acme/1"]},
+              {"match": {"uri_prefix": "fixture:tools/public/"}, "access": ["public"]},
+              *RULES]
+
+
+def _tool(name: str, description: str, uri: str):
+    return tool_records.from_mcp({"tools": [{"name": name, "description": description,
+                                             "inputSchema": {"type": "object"}}]},
+                                 "fixture", uri, "1", "CC0-1.0")[0]
+
+
+TARGET_TOOL = _tool("obsidian_probe", "Probes the obsidianite memo archive.", TOOL_URI)
+OTHER_TOOLS = [_tool("harbour_fees", "Looks up harbour fees for a vessel.",
+                     "fixture:tools/public/fees"),
+               _tool("vessel_registry", "Finds a vessel in the registry.",
+                     "fixture:tools/public/registry")]
+
+
+def make_with_tools(path, config):
+    store = make(path, config)
+    tool_catalog.ingest(store.path, [TARGET_TOOL, *OTHER_TOOLS])
+    tools.Tools(store.path).tools_index(1, lexical_only=True)
+    acl.sync(store.path, *config, clock=fixed(T0))
+    return store
+
+
+def sees_tool(who) -> dict:
+    s = ask(who, "search_tools", "obsidianite probe")
+    r = ask(who, "load_tool", TARGET_TOOL.tool_id)
+    return {"search_tools": TARGET_TOOL.tool_id in {
+        h["tool_id"] for h in s.get("ok", {"hits": []})["hits"]},
+        "load_tool": "ok" in r, "replies": (s, r)}
+
+
+def tool_visible_everywhere(*who):
+    for w in who:
+        got = sees_tool(w)
+        assert (got["search_tools"], got["load_tool"]) == (True, True), got["replies"]
+
+
+def tool_invisible_everywhere(*who, denied: str | None = None):
+    none = absent_like(TARGET_TOOL.tool_id, [t.tool_id for t in [TARGET_TOOL, *OTHER_TOOLS]])
+    for w in who:
+        got = sees_tool(w)
+        assert (got["search_tools"], got["load_tool"]) == (False, False)
+        s, r = got["replies"]
+        if denied is None:  # allowed, without the target: load_tool is "not found", exactly
+            assert "ok" in s
+            assert r["error"] == ask(w, "load_tool", none)["error"]
+        else:
+            assert all(x.get("code") == denied and "ok" not in x for x in (s, r)), (s, r)
+
+
+TOOL_CHANGES = {
+    "user removed from a group": CHANGES["user removed from a group"],
+    "tool rule changed in the policy": (
+        lambda c: edit_policy(c, lambda p: p["rules"].insert(0, {
+            "match": {"uri_prefix": TOOL_URI}, "access": ["group:globex/0"]})), None),
+    "user deleted": CHANGES["user deleted"],
+}
+
+
+@pytest.mark.parametrize("change", sorted(TOOL_CHANGES))
+def test_tool_revocation_within_one_sync_cycle(tmp_path, procs, change):
+    config = write_config(tmp_path / "config", TOOL_RULES)
+    store = make_with_tools(tmp_path / "store", config)
+    edit, denied = TOOL_CHANGES[change]
+    # 1. the caller can see the target tool (in-process, and in a process started now)
+    before = procs(store, tmp_path)
+    tool_visible_everywhere(tools.Tools(store.path, acl=True, caller=CALLER, clock=fixed()),
+                            before)
+    # 2. edit the directory or policy copy; 3. before the sync: unchanged
+    edit(config)
+    tool_visible_everywhere(tools.Tools(store.path, acl=True, caller=CALLER, clock=fixed()),
+                            before)
+    # 4. one sync
+    acl.sync(store.path, *config, clock=fixed(T0))
+    # 5. invisible: in-process, in a new process, in the process started before step 2
+    after = procs(store, tmp_path)
+    tool_invisible_everywhere(tools.Tools(store.path, acl=True, caller=CALLER, clock=fixed()),
+                              after, before, denied=denied)
+    # the change revoked nothing else: another caller still loads a public tool
+    other = tools.Tools(store.path, acl=True, caller="user:acme-0", clock=fixed())
+    assert "ok" in ask(other, "load_tool", OTHER_TOOLS[0].tool_id)
+
+
+def test_a_new_tool_snapshot_denies_the_tool_tools_until_a_sync(tmp_path, procs):
+    config = write_config(tmp_path / "config", TOOL_RULES)
+    store = make_with_tools(tmp_path / "store", config)
+    before = procs(store, tmp_path)
+    tool_visible_everywhere(before)
+    late = _tool("late_tool", "Arrives after the sync.", "fixture:tools/public/late")
+    tool_catalog.ingest(store.path, [late])
+    fresh = tools.Tools(store.path, acl=True, caller=CALLER, clock=fixed())
+    for who in (before, fresh, procs(store, tmp_path)):
+        for reply in sees_tool(who)["replies"]:
+            assert reply["code"] == "F2" and "ok" not in reply
+        assert "ok" in ask(who, "read", TARGET)  # the content tools are not affected
+    acl.sync(store.path, *config, clock=fixed(T0))
+    for who in (before, fresh):
+        assert "ok" in ask(who, "load_tool", late.tool_id)
+        assert "adr tools index" in ask(who, "search_tools", "late")["error"]
+
+
+def test_a_stale_snapshot_denies_the_tool_tools(tmp_path, procs):
+    config = write_config(tmp_path / "config", TOOL_RULES)
+    store = make_with_tools(tmp_path / "store", config)
+    now = T0 + timedelta(seconds=3601)
+    for who in (tools.Tools(store.path, acl=True, caller=CALLER, clock=lambda: now),
+                procs(store, tmp_path, clock=now)):
+        for reply in sees_tool(who)["replies"]:
+            assert reply["code"] == "F3" and "ok" not in reply
