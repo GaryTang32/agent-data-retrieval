@@ -21,7 +21,8 @@ with `np.isin` from the channel's per-row doc ids, in the channel's own order), 
 and the reranker run as without a mask, so a filter never starves the result.
 `allowed_docs=None` is the Phase 1 code path itself. `lexical` replaces the index's BM25
 channel by another `FieldBM25` over a subset of its chunks (per-view statistics, §6.2; same
-`w_bc`, `k1` and `b`); dense keeps the shared vectors.
+`w_bc`, `k1` and `b`); it is refused without `allowed_docs`, which masks the shared dense
+vectors to the same view.
 """
 
 from __future__ import annotations
@@ -268,35 +269,36 @@ class StoreIndex:
         """The top chunks for `query`: fused (or BM25's, without a dense channel), then
         reranked when the settings say so. `allowed_docs` keeps the chunks of those documents
         only, masked in each channel before its cut (None: every chunk, the Phase 1 path);
-        `lexical` is a BM25 index over a subset of the chunks used in place of the index's."""
+        `lexical` is a BM25 index over a subset of the chunks used in place of the index's,
+        with the same `w_bc`, `k1` and `b`; it needs `allowed_docs` (the view's documents),
+        which masks the dense channel."""
         if fusion not in ("linear", "rrf"):
             raise ValueError(f"unknown fusion {fusion!r}")
         if allowed_docs is None and lexical is None:
             return self._fuse(query, fusion, w, top, self.lexical_hits, self.dense_hits)
-        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
+        if allowed_docs is None:  # a view's BM25 alone would leave dense unmasked
+            raise ValueError("a per-view lexical index needs the view's allowed_docs too")
+        if not isinstance(allowed_docs, (frozenset, set)):
             raise ValueError(f"allowed_docs must be a set of document ids, got "
                              f"{type(allowed_docs).__name__}")
         bm25 = self.lexical if lexical is None else lexical
-        if lexical is not None and (lexical.w_bc, lexical.bm25.k1, lexical.bm25.b) != (
-                self.lexical.w_bc, self.lexical.bm25.k1, self.lexical.bm25.b):
-            raise ValueError(f"the lexical index (w_bc {lexical.w_bc}, k1 {lexical.bm25.k1}, "
-                             f"b {lexical.bm25.b}) does not match this index's (w_bc "
-                             f"{self.lexical.w_bc}, k1 {self.lexical.bm25.k1}, b "
-                             f"{self.lexical.bm25.b})")
-        if allowed_docs is None:
-            def lex(q):
-                return bm25.search(q, k=CHANNEL_K)
-            dense = self.dense_hits
-        else:
-            def lex(q):
-                return bm25.search(q, k=CHANNEL_K, mask=bm25.mask(allowed_docs))
+        if lexical is not None:
+            differs = [f"{name} {theirs}, not {ours}" for name, theirs, ours in (
+                ("w_bc", lexical.w_bc, self.lexical.w_bc),
+                ("k1", lexical.bm25.k1, self.lexical.bm25.k1),
+                ("b", lexical.bm25.b, self.lexical.bm25.b)) if theirs != ours]
+            if differs:
+                raise ValueError(f"the lexical index does not match this index: "
+                                 f"{'; '.join(differs)}")
 
-            def dense(q):
-                if self.dense is None:
-                    raise ValueError("this index has no dense channel (built with "
-                                     "dense=False)")
-                return self.dense.search(q, k=CHANNEL_K,
-                                         mask=doc_mask(self._dense_doc_ids, allowed_docs))
+        def lex(q):
+            return bm25.search(q, k=CHANNEL_K, mask=bm25.mask(allowed_docs))
+
+        def dense(q):
+            if self.dense is None:
+                raise ValueError("this index has no dense channel (built with dense=False)")
+            return self.dense.search(q, k=CHANNEL_K,
+                                     mask=doc_mask(self._dense_doc_ids, allowed_docs))
         return self._fuse(query, fusion, w, top, lex, dense)
 
     def _fuse(self, query: str, fusion: str, w: float | None, top: int, lex_hits,

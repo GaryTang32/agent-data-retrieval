@@ -566,9 +566,9 @@ class Filters:
             return obj
         if not isinstance(obj, dict):
             raise ValueError(f"filters must be an object, got {type(obj).__name__}")
-        unknown = sorted(set(obj) - set(_FILTER_KEYS))
-        if unknown:
-            raise ValueError(f"unknown filter(s) {', '.join(map(str, unknown))}; known: "
+        unknown = sorted((k for k in obj if k not in _FILTER_KEYS), key=repr)
+        if unknown:  # keys of any type, shown and sorted by repr
+            raise ValueError(f"unknown key(s) {', '.join(map(repr, unknown))}; known: "
                              f"{', '.join(_FILTER_KEYS)}")
         if (as_of := obj.get("as_of")) is not None and not isinstance(as_of, (str, date)):
             raise ValueError(f"as_of must be an ISO date (YYYY-MM-DD), got {as_of!r}")

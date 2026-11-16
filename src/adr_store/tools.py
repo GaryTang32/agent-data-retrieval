@@ -59,9 +59,10 @@ that read envelope fields (`Filters.needs_overlay`) are refused ("no applicabili
 run `adr applicability derive`") and the default and `include_superseded` exclude nothing
 (the Phase 1 behaviour). Results carry `applicability` (the overlay id, or None), `filters`
 (the filters applied, as `Filters.to_dict`) and, for search and grep, `excluded_by_filter`
-(how many documents of the snapshot the filters excluded; the caller's view once views
-exist). Log lines of these tools carry the caller's `filters` in `args`, and `filters` and
-`applicability` beside them (null when the call failed before they were known).
+(how many documents of the snapshot the filters excluded, the caller's view once views
+exist; for a doc-scoped grep, of that one document). Log lines of these tools carry the
+caller's `filters` in `args`, and `filters` and `applicability` beside them (null when the call
+failed before they were known).
 
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
@@ -827,10 +828,12 @@ class Tools:
             raise ToolError(empty)
         applied = self._apply(filters, {} if fields is None else fields)
         doc_ids = self.store.doc_ids()
+        excluded = applied.excluded
         if doc is not None:
             doc = _resolve(doc, doc_ids, "document", f"snapshot {_short(self.snapshot)}")
             applied.refuse_excluded(doc)
             doc_ids = [doc]
+            excluded = int(applied.reason(doc) is not None)  # this document only: 0 here
         elif applied.allowed is not None:
             doc_ids = [d for d in doc_ids if d in applied.allowed]
         matches: list[GrepMatch] = []
@@ -853,4 +856,4 @@ class Tools:
             raise ToolError(empty)
         return GrepResult(pattern, ignore_case, doc, max_, self.snapshot,
                           status == grep_worker.MORE, matches, **applied.fields(),
-                          excluded_by_filter=applied.excluded)
+                          excluded_by_filter=excluded)

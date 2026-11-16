@@ -719,10 +719,18 @@ def test_a_selective_filter_never_starves_the_result(tmp_path):
 
 def test_a_per_view_lexical_index_must_match_the_index_settings(mini_store, tmp_path):
     idx = build(mini_store, tmp_path, Settings(w_bc=1))
-    other = FieldBM25(2)
-    other.build(list(idx.chunks.values()))
-    with pytest.raises(ValueError, match="w_bc"):
-        idx.retrieve("refund", w=0.5, lexical=other)
+    every = frozenset(c.doc_id for c in idx.chunks.values())
+    for other, differs in ((FieldBM25(2), "w_bc 2, not 1"),
+                           (FieldBM25(1, k1=1.5), "k1 1.5, not 1.2"),
+                           (FieldBM25(1, b=0.5), "b 0.5, not 0.75")):
+        other.build(list(idx.chunks.values()))
+        with pytest.raises(ValueError) as e:
+            idx.retrieve("refund", w=0.5, allowed_docs=every, lexical=other)
+        assert str(e.value) == f"the lexical index does not match this index: {differs}"
     same = FieldBM25(1)
     same.build(list(idx.chunks.values()))
-    assert idx.retrieve("refund", w=0.5, lexical=same) == idx.retrieve("refund", w=0.5)
+    assert idx.retrieve("refund", w=0.5, allowed_docs=every, lexical=same) == \
+        idx.retrieve("refund", w=0.5)
+    # a per-view lexical index without the view's documents would leave dense unmasked
+    with pytest.raises(ValueError, match="allowed_docs"):
+        idx.retrieve("refund", w=0.5, lexical=same)

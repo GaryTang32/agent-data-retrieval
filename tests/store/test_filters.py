@@ -214,9 +214,18 @@ def test_status_jurisdiction_and_tier_filters_through_search(store):
 def test_bad_filters_are_refused_and_logged(store):
     t = tools.Tools(store.path)
     for bad in ({"as_of": "June 2025"}, {"colour": "red"}, {"max_tier": 9}, "default"):
-        with pytest.raises(tools.ToolError, match="as_of|unknown filter|max_tier|object"):
+        with pytest.raises(tools.ToolError, match="as_of|unknown key|max_tier|object"):
             t.search(QUERY, filters=bad)
     assert all("error" in ln for ln in log_lines(store)[-4:])
+
+
+def test_filters_with_unknown_keys_of_mixed_types_are_named(store):
+    t = tools.Tools(store.path)
+    with pytest.raises(tools.ToolError) as e:
+        t.search(QUERY, filters={1: True, "colour": "red", None: 0, "as_of": None})
+    assert str(e.value) == ("bad filters: unknown key(s) 'colour', 1, None; known: "
+                            "include_superseded, as_of, status, jurisdiction, max_tier")
+    assert log_lines(store)[-1]["error"] == str(e.value)
 
 
 def test_a_dense_search_masks_both_channels(store, monkeypatch, tmp_path):
@@ -266,6 +275,16 @@ def test_a_doc_scoped_grep_of_an_excluded_document_is_refused_with_the_reason(st
                             f"{doc_id(V2025)[:12]}…); pass include_superseded or another as_of")
     res = t.grep(APPLIES, doc=old, filters={"include_superseded": True})
     assert grep_words(res) == ["old"] and res.excluded_by_filter == 0
+
+
+def test_a_doc_scoped_grep_counts_only_its_own_document(store, capsys):
+    t = tools.Tools(store.path)
+    assert t.grep(APPLIES).excluded_by_filter == 2  # the whole snapshot
+    res = t.grep(APPLIES, doc=doc_id(V2026))
+    assert grep_words(res) == ["new"] and res.excluded_by_filter == 0
+    code, out, _ = run(capsys, "grep", APPLIES, "--store", store.path, "--doc",
+                       doc_id(V2026))
+    assert code == 0 and "0 document(s) excluded" in out
 
 
 # -- read ----------------------------------------------------------------------------------
