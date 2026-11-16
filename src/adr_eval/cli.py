@@ -1,5 +1,6 @@
-"""`adr-eval` command line: fetch, golden, index, run, retrieval, retrieval-compare,
-retrieval-identical, p2-compare, probes (temporal, acl, equivalence), report, doctor."""
+"""`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
+retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
+report, doctor."""
 
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from adr_eval.corpora.registry import (
     fetch_corpus,
     get_adapter,
 )
+from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.models import GoldenItem, jsonl_lines, write_items
 from adr_eval.report import (
     compare,
@@ -40,6 +42,26 @@ from adr_eval.report import (
 def _fetch(a: argparse.Namespace) -> int:
     fetch_corpus(a.corpus)
     print(f"{a.corpus}: all manifest files present and verified")
+    return 0
+
+
+def _tools_fetch(a: argparse.Namespace) -> int:
+    """Download the pinned ToolRet files into data/tools and write corpora/tools/manifest.json
+    (Phase 2 spec §8.3; local-only, like bench)."""
+    from adr_eval.corpora import toolret
+
+    root = a.root if a.root is not None else toolret.DATA_DIR
+    m = toolret.fetch(root, toolret.CONFIG_PATH, toolret.MANIFEST_PATH)
+    c = m["counts"]
+    for f in m["files"]:
+        print(f"{f['name']}: {f['repo']}@{f['revision'][:12]} {f['path']} ({f['bytes']} bytes, "
+              f"sha256 {f['sha256'][:12]})")
+    print(f"tools: {c['tools']} tools ({m['tool_prefix']}*), {c['queries']} queries, mean "
+          f"{c['gold_mean']:.2f} gold tools ({c['gold_distinct']} distinct, "
+          f"{c['gold_missing']} missing from the tools), {c['doc_tokens']} documentation "
+          f"tokens (mean {c['doc_tokens_mean']:.1f}, median {c['doc_tokens_median']:g}), "
+          f"dev {c['dev']} / test {c['test']}")
+    print(f"  manifest {toolret.MANIFEST_PATH}")
     return 0
 
 
@@ -645,6 +667,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("corpus", choices=NAMES)
     p.set_defaults(fn=_fetch)
 
+    p = sub.add_parser("tools-fetch", help="download and verify the pinned ToolRet files "
+                                           "(local-only) and write corpora/tools/manifest.json")
+    p.add_argument("--root", type=Path, default=None,
+                   help="data directory (default data/tools)")
+    p.set_defaults(fn=_tools_fetch)
+
     p = sub.add_parser("golden", help="generate or verify the golden set")
     p.add_argument("corpus", choices=NAMES)
     mode = p.add_mutually_exclusive_group(required=True)
@@ -783,7 +811,8 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(a, "corpus", None):
             check_local_files(a.corpus)
         return a.fn(a)
-    except (runner.RunError, HashMismatch, LocalFilesMissing, ExtractionError) as e:
+    except (runner.RunError, HashMismatch, LocalFilesMissing, ExtractionError,
+            ToolRetMissing) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

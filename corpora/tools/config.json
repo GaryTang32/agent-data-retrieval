@@ -1,0 +1,29 @@
+{
+  "corpus": "tools",
+  "name": "ToolRet, toolbench subset",
+  "paper": "https://arxiv.org/abs/2503.01763",
+  "license": "Apache-2.0",
+  "license_summary": "ToolBench data (RapidAPI endpoint documentation): Apache-2.0 per the ToolBench README; ToolRet code: Apache-2.0; the ToolRet dataset cards declare no licence (Phase 2 spec Q2). Local-only: never committed",
+  "tool_prefix": "toolbench_tool_",
+  "dev_modulus": 5,
+  "files": {
+    "tools": {
+      "repo": "mangopy/ToolRet-Tools",
+      "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
+      "config": "web",
+      "path": "web/tools-00000-of-00001.parquet",
+      "sha256": "57faceebd778b2cb74571dca0e71e8bc8078c11ba05dce0efc562e818d3950e6",
+      "bytes": 8143446,
+      "local": "ToolRet-Tools/web/tools-00000-of-00001.parquet"
+    },
+    "queries": {
+      "repo": "mangopy/ToolRet-Queries",
+      "revision": "b8c76ad3349ff17497b6bdb28bb5b8f61a0f6445",
+      "config": "toolbench",
+      "path": "toolbench/queries-00000-of-00001.parquet",
+      "sha256": "2bb32ea009d6ece37b1b785330247aacac037a20dd4522632cb3359809c8837d",
+      "bytes": 922485,
+      "local": "ToolRet-Queries/toolbench/queries-00000-of-00001.parquet"
+    }
+  }
+}
