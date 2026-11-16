@@ -206,12 +206,19 @@
     }
   },
   "additionalProperties": false,
-  "description": "The content of `<store>/applicability/<snapshot>/envelope-1.json`: every document of the\nsnapshot, by doc id. `config_sha256` is the SHA-256 of the gov config's canonical JSON\n(sorted keys, compact, UTF-8).",
+  "description": "The content of `<store>/applicability/<snapshot>/envelope-1.json`: every document of the\nsnapshot, by doc id. `config_sha256` is the SHA-256 of the gov config fields the deriver\nread (`config_read`), null when it read none (no eCFR document).",
   "properties": {
     "config_sha256": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Config Sha256",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Config Sha256"
     },
     "deriver": {
       "title": "Deriver",

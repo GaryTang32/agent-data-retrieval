@@ -641,10 +641,29 @@ def _parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _silence_stdout() -> None:
+    """Point stdout at /dev/null, so the interpreter's flush at exit does not fail again."""
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except (OSError, ValueError):  # no file descriptor (a replaced sys.stdout)
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     a = _parser().parse_args(argv)
+    code = None
     try:
-        return a.fn(a)
+        code = a.fn(a)
+        sys.stdout.flush()  # inside the try: a closed pipe shows here, not at exit
+        return code
+    except BrokenPipeError:
+        # the reader stopped early (`adr ... | head`): every command prints after its work is
+        # done, so only output is lost; stop quietly (with the command's own code if it had
+        # one), and keep the interpreter's flush at exit from failing too
+        _silence_stdout()
+        return 0 if code is None else code
     except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError,
             _UsageError) as e:
         print(f"error: {e}", file=sys.stderr)

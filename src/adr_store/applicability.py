@@ -21,9 +21,15 @@ Families are recognised by URI only (`chain_of`, `family_of`):
   `type` "Proposed Rule" -> `proposed_rule` (tier 4); `action` names a notice or notification
   of enforcement -> `notice` (tier 3); `action` contains "temporary" -> `temporary_rule`
   (tier 2); else `final_rule` (tier 2). `valid_from` is `effective_on`, else
-  `publication_date`. A temporary rule whose `dates` text says "effective … from … through
-  <Month D, YYYY>" ends the day after that date; the matched range of the canonical text is
-  recorded in the provenance of `valid_to`.
+  `publication_date`. A temporary rule whose `dates` text says, in its first sentence,
+  "effective … from … through|until … <Month D, YYYY>" (`temporary_end`) is in force through
+  that date and ends the day after it (`valid_to` is exclusive); the matched range of the
+  canonical text is recorded in the provenance of `valid_to`. End dates have day granularity:
+  a time before the date is read past ("through 7 p.m. on D"), and a rule ending 12:01 a.m. on
+  D is admitted for all of D. A temporary rule whose end date does not parse, and a
+  "Notification of expired temporary rules issued" (status `temporary_rule`, no end date in its
+  text), is open-ended (`valid_to` null), so any `as_of` on or after its `valid_from` admits
+  it; the derive report lists these.
 - Anything else (research, bench, mini, loose files): every field `unknown` or null.
 
 Chains of more than one version are ordered by `valid_from` (ties by doc id); each version's
@@ -33,6 +39,11 @@ Each derived field has one provenance entry naming where it came from: `uri` (th
 rules), `manifest.source_version`, `chain` (neighbours and the next version's date),
 `config.parts[i].agency`, `fr.type`, `fr.action`, `fr.effective_on`, `fr.publication_date`,
 `fr.agencies[k].name`, `fr.dates` (with the matched character range) or `status` (the tier).
+
+The overlay's `config_sha256` covers only the gov config fields the deriver reads: the
+`title`, `part` and `agency` of each `parts` entry, in order (`config_read`). It is null when
+the snapshot holds no eCFR document (research, bench), as the config is then not read at all;
+other config fields (`version`, `dates`, …) never change an overlay.
 """
 
 from __future__ import annotations
@@ -71,7 +82,12 @@ _ECFR_URI = re.compile(r"^https://www\.ecfr\.gov/api/versioner/v1/full/(\d{4}-\d
 _IRM_URI = re.compile(r"^https://www\.irs\.gov/irm/part\d+/irm_(\d+)-(\d+)-(\d+)r$")
 _FR_PREFIX = f"{FR_API}/documents/"
 _ENFORCEMENT = re.compile(r"(?i)\b(notice|notification) of enforcement\b")
-_THROUGH = re.compile(r"(?is)\beffective\b.*?\bfrom\b(.+?)\bthrough\b(.+?)(?:\.(?:\s|$)|;)")
+# a sentence end: ". " or a final ".", but not the dots of "a.m."/"p.m.", or ";"
+_SENTENCE_END = r"(?:(?<![ap]\.m)(?<!\b[ap])\.(?:\s|$)|;)"
+_FIRST_SENTENCE_END = re.compile(_SENTENCE_END, re.IGNORECASE)
+# group 2 runs to the sentence end, past any time, to the end date
+_END_DATE = re.compile(r"(?is)\beffective\b.*?\bfrom\b(.+?)\b(?:through|until)\b(.+?)"
+                       + _SENTENCE_END)
 _MONTH_DATE = re.compile(r"\b(January|February|March|April|May|June|July|August|September|"
                          r"October|November|December) (\d{1,2}), (\d{4})\b")
 
@@ -128,15 +144,15 @@ class Envelope(BaseModel):
 
 class ApplicabilityOverlay(BaseModel):
     """The content of `<store>/applicability/<snapshot>/envelope-1.json`: every document of the
-    snapshot, by doc id. `config_sha256` is the SHA-256 of the gov config's canonical JSON
-    (sorted keys, compact, UTF-8)."""
+    snapshot, by doc id. `config_sha256` is the SHA-256 of the gov config fields the deriver
+    read (`config_read`), null when it read none (no eCFR document)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, title="ApplicabilityOverlay")
 
     format_version: Literal["0.1"]
     snapshot: str = Field(pattern=_HEX64)
     deriver: str
-    config_sha256: str = Field(pattern=_HEX64)
+    config_sha256: str | None = Field(pattern=_HEX64)
     records: dict[str, Envelope]
 
     @model_validator(mode="after")
@@ -170,8 +186,18 @@ def chain_of(source: SourceRecord) -> str | None:
     return None
 
 
+def config_read(gov_config: dict) -> dict:
+    """The gov config fields the deriver reads (for eCFR issuers): the `title`, `part` and
+    `agency` of each `parts` entry, in order."""
+    return {"parts": [{k: p.get(k) for k in ("title", "part", "agency")}
+                      for p in gov_config.get("parts") or []]}
+
+
 def config_sha256(gov_config: dict) -> str:
-    payload = json.dumps(gov_config, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    """The SHA-256 of `config_read(gov_config)` as canonical JSON (sorted keys, compact,
+    UTF-8)."""
+    payload = json.dumps(config_read(gov_config), sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -261,9 +287,12 @@ def _dates_range(text: str, dates: str, start: int, end: int) -> tuple[int, int]
     return offset(start), offset(end)
 
 
-def _through_date(dates: str) -> tuple[date, int, int] | None:
-    """The last day in force of a temporary rule's `dates` text, with the matched range."""
-    m = _THROUGH.search(dates)
+def temporary_end(dates: str) -> tuple[date, int, int] | None:
+    """The last day in force of a temporary rule's `dates` text, with the matched range of
+    `dates`: "effective … from … through|until … <Month D, YYYY>" within the first sentence
+    (so a later "actual notice … from X until Y" sentence is never read), or None."""
+    first = _FIRST_SENTENCE_END.search(dates)
+    m = _END_DATE.search(dates, 0, len(dates) if first is None else first.end())
     if m is None:
         return None
     d = _MONTH_DATE.search(m.group(2))
@@ -304,7 +333,7 @@ def _fr(source: SourceRecord, text: str) -> tuple[dict, list[Provenance], str | 
     failed = None
     if status == "temporary_rule":
         dates = fr.get("dates") or ""
-        found = _through_date(dates)
+        found = temporary_end(dates)
         if found is None:
             failed = dates
         else:
@@ -366,9 +395,10 @@ def derive(store: Store, gov_config: dict) -> tuple[ApplicabilityOverlay, dict]:
     for doc_id in sorted(fields):
         ordered = sorted(prov[doc_id], key=lambda p: (p.field, p.source))
         envelopes[doc_id] = Envelope(**fields[doc_id], provenance=ordered)
-    overlay = ApplicabilityOverlay(format_version="0.1", snapshot=store.snapshot_id,
-                                   deriver=DERIVER_NAME, config_sha256=config_sha256(gov_config),
-                                   records=envelopes)
+    overlay = ApplicabilityOverlay(
+        format_version="0.1", snapshot=store.snapshot_id, deriver=DERIVER_NAME,
+        config_sha256=config_sha256(gov_config) if families["ecfr"] else None,
+        records=envelopes)
     return overlay, _report(overlay, families, chains, failures)
 
 

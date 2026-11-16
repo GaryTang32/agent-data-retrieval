@@ -141,6 +141,10 @@ File layout, beside Phase 1's:
 ```
 
 - The overlay id is the SHA-256 of the file.
+- The file also records `config_sha256`, the SHA-256 of the config fields the deriver reads:
+  the `title`, `part` and `agency` of each gov config `parts` entry, in order (eCFR issuers).
+  It is null when the snapshot holds no eCFR document (research, bench), which read nothing
+  from the config. Other config fields (`version`, `dates`, …) never change an overlay.
 - `adr applicability derive [--store S]` writes the overlay for HEAD. It refuses to overwrite a
   file that differs.
 - Deriving twice gives byte-identical files.
@@ -150,9 +154,17 @@ File layout, beside Phase 1's:
 | Family | Rule |
 |---|---|
 | eCFR | `chain_id` from the URI (title, part); versions ordered by date. `valid_from` = the eCFR date; `valid_to` = the next pinned date in the chain, null for the head. `status` `codified`, tier 1, `jurisdiction` `US-federal`, `issuer` from the corpus config |
-| Federal Register | No chain. `status`: `proposed_rule` if `type` is Proposed Rule; `notice` if `action` names an enforcement notice or notification; `temporary_rule` if `action` contains "temporary"; else `final_rule`. `valid_from` = `effective_on`, else `publication_date` (basis recorded). `valid_to` = the day after the "through" date for a temporary rule whose `dates` parse, else null (parse failures are counted in the compile report). Tier 2, or 4 for proposals, 3 for notices |
+| Federal Register | No chain. `status`: `proposed_rule` if `type` is Proposed Rule; `notice` if `action` names an enforcement notice or notification; `temporary_rule` if `action` contains "temporary"; else `final_rule`. `valid_from` = `effective_on`, else `publication_date` (basis recorded). `valid_to` = the day after the end date for a temporary rule whose `dates` text says, in its first sentence, "effective … from … through\|until … <Month D, YYYY>" ("until D" is inclusive like "through D"), else null (parse failures are listed in the compile report). Tier 2, or 4 for proposals, 3 for notices |
 | IRM | `chain_id` `irm:<chapter>`, one version. `valid_from` = Manual Transmittal date; `valid_to` null; `status` `guidance`; tier 3; `issuer` IRS |
 | research, bench | Every field `unknown` or null, `validity_basis` `unknown`. No dates are invented |
+
+End dates have day granularity: a time before the end date is read past ("through 7 p.m. on
+D"), and a rule ending 12:01 a.m. on D is admitted for all of D. The match is bounded to the
+first sentence of `dates`, so a later "actual notice will be used from X until Y" sentence is
+never read as the rule's end. A temporary rule whose end date does not parse, and a
+"Notification of expired temporary rules issued" document (status `temporary_rule`, no end
+date in its text), is open-ended (`valid_to` null), so every `as_of` on or after its
+`valid_from` admits it. On gov the end date parses for 43 of the 54 temporary rules.
 
 Caveats the compile report states:
 
