@@ -347,6 +347,16 @@ because it keyed the four IRM documents by `doc_id`; the rule above keys them by
 The policy file can also hold attribute rules (by format or URI prefix), applied before the
 buckets. Phase 2 ships none.
 
+**All versions of a source share access, and this is enforced.** The buckets give it by
+construction, but a URI-prefix rule could give one version of a chain another list. That
+would leak: chain fields such as `superseded_by` and `valid_to` are computed over the whole
+chain, so a caller who sees only an older version would learn of a hidden newer one (its id
+in a filter message, its date as `valid_to`, and an `excluded_by_filter` count that differs
+from an allowed-only store). So `adr acl sync` refuses a policy or directory that gives the
+versions of one chain different access lists (naming the chain and the documents; HEAD stays),
+and every tool call denies with F1 when the caller's view holds some but not all versions of
+a chain, so a hand-edited or older snapshot cannot reopen the leak.
+
 ### 5.3 The ACL snapshot (versioned and synced apart from content)
 
 `adr acl sync [--store S] [--directory F --policy F]` runs one **sync cycle**:

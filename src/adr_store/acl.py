@@ -25,12 +25,15 @@ the tenant's sorted groups, where `H(x) = int(SHA-256(salt + "\\n" + x + "\\n" +
 (planner's call: the spec fixes only the bucket hash).
 
 A sync cycle (`sync`) reads and validates the directory and the policy, computes the access
-list of every document of the store's HEAD content snapshot (tool records arrive with the tool
-catalog in Task 9: until then `tool_snapshot` is null and `tools` empty), writes the snapshot
-and atomically replaces `acl/HEAD`. Every failure is logged and raised as `SyncError`; one
-before the swap leaves the old HEAD, and the error says whether HEAD moved (after the swap
-only reading the clock or appending the sync log can fail). The snapshot file is written
-once: an existing file under its id with other bytes is refused.
+list of every document of the store's HEAD content snapshot (refusing a policy whose
+attribute rules give the versions of one chain different lists: all versions of a source
+share access, `split_chain`; the tools deny F1 to a view that splits a chain; tool records
+arrive with the tool catalog in Task 9: until then `tool_snapshot` is null and `tools`
+empty), writes the snapshot and atomically replaces `acl/HEAD`. Every failure is logged
+and raised as `SyncError`; one before the swap leaves the old HEAD, and the error says
+whether HEAD moved (after the swap only reading the clock or appending the sync log can
+fail). The snapshot file is written once: an existing file under its id with other bytes is
+refused.
 The snapshot id is the SHA-256 of its file; it includes `synced_at`, so every sync is a new
 version, and `entries_sha256` (directory, docs and tools) is equal for equal inputs. Besides
 the fields of §5.3 the snapshot carries the policy's `max_sync_age_s` and `future_skew_s`, so
@@ -510,6 +513,39 @@ def _visible(entries: dict[str, list[str]], principals: frozenset[str]) -> froze
     return frozenset(k for k, ps in entries.items() if not principals.isdisjoint(ps))
 
 
+def chains(store: Store) -> dict[str, tuple[str, ...]]:
+    """The chains of the store's snapshot that hold two or more documents: the assignment
+    key (`applicability.chain_of`) -> its sorted doc ids."""
+    members: dict[str, list[str]] = {}
+    for doc_id in store.doc_ids():
+        key = chain_of(store.source(doc_id))
+        if key is not None:
+            members.setdefault(key, []).append(doc_id)
+    return {k: tuple(sorted(v)) for k, v in sorted(members.items()) if len(v) > 1}
+
+
+def split_chain(chain_map: dict[str, tuple[str, ...]], docs: frozenset[str]) -> str | None:
+    """The first chain of which `docs` holds some but not all documents, or None. All
+    versions of a source share access (§5.2): a view that splits a chain would see chain
+    fields (superseded_by, valid_to) computed from versions it cannot see."""
+    for key, members in chain_map.items():
+        n = sum(d in docs for d in members)
+        if 0 < n < len(members):
+            return key
+    return None
+
+
+def _check_chains(members: dict[str, list[str]], docs: dict[str, list[str]]) -> None:
+    """SyncError when the versions of one chain got different access lists."""
+    for key, ids in sorted(members.items()):
+        lists = {d: docs[d] for d in sorted(ids)}
+        if len({tuple(v) for v in lists.values()}) > 1:
+            shown = "; ".join(f"{d}: {v}" for d, v in lists.items())
+            raise SyncError(f"the policy gives the versions of chain {key} different access "
+                            f"lists ({shown}); all versions of a source share access (spec "
+                            f"§5.2): make the rule cover the whole chain")
+
+
 SNAPSHOT_CACHE = 4  # parsed snapshots `resolve` keeps per cache
 
 
@@ -676,12 +712,17 @@ def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Pa
         line["previous"] = previous
         docs: dict[str, list[str]] = {}
         kinds: Counter[str] = Counter()
+        members: dict[str, list[str]] = {}
         for doc_id in store.doc_ids():
             source = store.source(doc_id)
-            kind, docs[doc_id] = assign(chain_of(source) or doc_id,
+            key = chain_of(source)
+            if key is not None:
+                members.setdefault(key, []).append(doc_id)
+            kind, docs[doc_id] = assign(key or doc_id,
                                         {"format": source.format, "uri": source.uri},
                                         policy, directory)
             kinds[kind] += 1
+        _check_chains(members, docs)
         users = {u: sorted(principals_of(directory, u)) for u in sorted(directory.users)}
         tools: dict[str, list[str]] = {}
         entries = entries_sha256(users, docs, tools)
