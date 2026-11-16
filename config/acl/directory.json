@@ -1,0 +1,99 @@
+{
+  "format_version": "0.1",
+  "groups": {
+    "group:acme/0": "acme",
+    "group:acme/1": "acme",
+    "group:acme/2": "acme",
+    "group:acme/3": "acme",
+    "group:globex/0": "globex",
+    "group:globex/1": "globex",
+    "group:globex/2": "globex",
+    "group:globex/3": "globex",
+    "group:initech/0": "initech",
+    "group:initech/1": "initech",
+    "group:initech/2": "initech",
+    "group:initech/3": "initech"
+  },
+  "tenants": [
+    "acme",
+    "globex",
+    "initech"
+  ],
+  "users": {
+    "user:acme-0": [
+      "group:acme/0"
+    ],
+    "user:acme-1": [
+      "group:acme/1"
+    ],
+    "user:acme-2": [
+      "group:acme/2"
+    ],
+    "user:acme-3": [
+      "group:acme/3"
+    ],
+    "user:acme-4": [
+      "group:acme/0",
+      "group:acme/1"
+    ],
+    "user:acme-5": [
+      "group:acme/1",
+      "group:acme/2"
+    ],
+    "user:auditor": [
+      "group:acme/0",
+      "group:acme/1",
+      "group:acme/2",
+      "group:acme/3",
+      "group:globex/0",
+      "group:globex/1",
+      "group:globex/2",
+      "group:globex/3",
+      "group:initech/0",
+      "group:initech/1",
+      "group:initech/2",
+      "group:initech/3"
+    ],
+    "user:globex-0": [
+      "group:globex/0"
+    ],
+    "user:globex-1": [
+      "group:globex/1"
+    ],
+    "user:globex-2": [
+      "group:globex/2"
+    ],
+    "user:globex-3": [
+      "group:globex/3"
+    ],
+    "user:globex-4": [
+      "group:globex/0",
+      "group:globex/1"
+    ],
+    "user:globex-5": [
+      "group:globex/1",
+      "group:globex/2"
+    ],
+    "user:initech-0": [
+      "group:initech/0"
+    ],
+    "user:initech-1": [
+      "group:initech/1"
+    ],
+    "user:initech-2": [
+      "group:initech/2"
+    ],
+    "user:initech-3": [
+      "group:initech/3"
+    ],
+    "user:initech-4": [
+      "group:initech/0",
+      "group:initech/1"
+    ],
+    "user:initech-5": [
+      "group:initech/1",
+      "group:initech/2"
+    ],
+    "user:outsider": []
+  }
+}
