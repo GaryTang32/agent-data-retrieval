@@ -263,6 +263,17 @@ def _probes(a: argparse.Namespace) -> int:
     if tools.store.doc_ids() != sorted(d.doc_id for d in loaded.manifest.documents):
         raise runner.RunError(f"{a.store}: the store does not hold the {a.corpus} corpus's "
                               f"documents")
+    system = tools.active_system()
+    recorded = systems.phase1_fingerprints(a.corpus)
+    phase1 = system == systems.P2_REFERENCE and idx.fingerprint in recorded
+    if not phase1 and not a.allow_other_index:
+        raise runner.RunError(
+            f"{a.store}: the active index is {system} {idx.fingerprint[:12]}, not "
+            f"{systems.P2_REFERENCE} with the fingerprint of a committed Phase 1 run of "
+            f"{a.corpus} ({', '.join(f[:12] for f in sorted(recorded)) or 'none committed'})"
+            f"\nfix: activate it (`adr index {systems.P2_REFERENCE} --store {a.store}` with "
+            f"the recorded weights; an `adr-eval retrieval` run of a p2 system does so) or "
+            f"pass --allow-other-index to probe this index (recorded in the output)")
     overlay = load_overlay(tools.store_path, tools.snapshot)
     if overlay is None:
         raise runner.RunError(f"{a.store}: no applicability overlay; run `adr applicability "
@@ -277,6 +288,8 @@ def _probes(a: argparse.Namespace) -> int:
     data = {"config": {"corpus": a.corpus, "kind": "temporal",
                        "store": runner._display_path(tools.store_path),
                        "snapshot": tools.snapshot, "index": idx.fingerprint,
+                       "index_system": system, "index_phase1": phase1,
+                       "allow_other_index": a.allow_other_index,
                        "applicability": result["applicability"], "dedup": result["dedup"],
                        "caller": a.as_user, "seed": probes.SEED, "sizes": sizes,
                        "spec_sizes": temporal.SPEC_SIZES,
@@ -376,7 +389,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--split", choices=("dev", "test"), default="test")
     p.add_argument("--max-dollars", type=float, default=None)
     p.add_argument("--dry-run", action="store_true", help="estimate calls and cost only")
-    p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
+    p.add_argument("--rebuild", action="store_true",
+                   help="rebuild a stale saved index (a p2 system: the Phase 1 p1-struct-bc "
+                        "index it reuses)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.add_argument("--stub", action="store_true",
                    help="deterministic stub generator and judge (tests and demos)")
@@ -388,7 +403,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("corpus", choices=NAMES)
     p.add_argument("--system", required=True, choices=systems.ALL_NAMES)
     p.add_argument("--split", choices=("dev", "test"), default="test")
-    p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
+    p.add_argument("--rebuild", action="store_true",
+                   help="rebuild a stale saved index (a p2 system: the Phase 1 p1-struct-bc "
+                        "index it reuses)")
     p.add_argument("--lexical-only", action="store_true",
                    help="the system's BM25 channel alone (no embedding; a diagnostic)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
@@ -435,6 +452,9 @@ def _parser() -> argparse.ArgumentParser:
                    help="search as this caller (needs the ACL layer of Phase 2B)")
     p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
                    help="collapse copies in search (default on)")
+    p.add_argument("--allow-other-index", action="store_true",
+                   help="probe an active index that is not p1-struct-bc with a recorded "
+                        "Phase 1 fingerprint (recorded in the output)")
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-temporal-<corpus>-<ts>/")
     p.set_defaults(fn=_probes)

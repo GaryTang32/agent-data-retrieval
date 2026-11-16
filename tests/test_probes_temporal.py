@@ -200,16 +200,70 @@ def test_the_probes_fail_when_the_filters_are_dropped(gov, items, overlay, store
     assert one["offending"] and one["offending"][0]["doc_id"] == _doc(gov, OLD).doc_id
 
 
+class Refusing(Leaky):
+    """Tools whose `read` refuses for another reason: undated too (`always`), or dated with
+    a reason that is not "not in force"."""
+
+    def __init__(self, real, always: bool):
+        super().__init__(real)
+        self.always = always
+
+    def search(self, *a, **kw):
+        return self.real.search(*a, **kw)
+
+    def grep(self, *a, **kw):
+        return self.real.grep(*a, **kw)
+
+    def read(self, doc_id, *a, filters=None, **kw):
+        if self.always or filters:
+            raise tools.ToolError(f"no document {doc_id[:12]} in snapshot")
+        return self.real.read(doc_id, *a, **kw)
+
+
+@pytest.mark.parametrize("always", [False, True], ids=["other-reason", "control-fails"])
+def test_t5_passes_only_on_a_not_in_force_refusal_and_a_working_control_read(
+        gov, items, overlay, store, always):
+    t5 = [p for p in temporal.build(gov, items, overlay) if p.set == "T5"]
+    good = temporal.run(t5, tools.Tools(store))
+    for o in good["probes"]:
+        assert o["pass"] and o["read_refused"] and o["control_read_ok"]
+        assert f"not in force on {o['as_of']}" in o["read_refusal"]
+    bad = temporal.run(t5, Refusing(tools.Tools(store), always))
+    s = bad["summary"]["T5"]["as_of"]
+    assert s["passed"] == 0 and s["read_refused"] == 0
+    assert s["search_absent"] == s["grep_absent"] == len(t5)
+    assert s["control_read_ok"] == (0 if always else len(t5))
+    assert all("no document" in o["read_refusal"] for o in bad["probes"])
+
+
 def test_a_caller_needs_the_acl_layer(gov, items, overlay, store):
     with pytest.raises(ValueError, match="ACL"):
         temporal.run(temporal.build(gov, items, overlay), tools.Tools(store),
                      caller="user:auditor")
 
 
-def test_the_cli_writes_the_probe_files_deterministically(gov, items, store, tmp_path,
-                                                          monkeypatch, capsys):
+def _recorded(monkeypatch, tmp_path, fingerprint: str | None) -> None:
+    """Committed Phase 1 summaries holding a p1-struct-bc run of `fingerprint` (None: none)."""
+    from adr_eval import systems
+
+    root = tmp_path / "summaries"
+    root.mkdir()
+    monkeypatch.setattr(systems, "PHASE1_SUMMARIES", root)
+    if fingerprint is not None:
+        d = root / "gov-p1-struct-bc-test-retrieval-20261113T000000"
+        d.mkdir()
+        (d / "retrieval.json").write_text(json.dumps({"config": {"fingerprint": fingerprint}}))
+
+
+def _cli_corpus(monkeypatch, gov, items):
     monkeypatch.setattr(runner, "load_checked_corpus", lambda corpus: gov)
     monkeypatch.setattr(runner, "load_golden", lambda corpus, loaded: items)
+
+
+def test_the_cli_writes_the_probe_files_deterministically(gov, items, store, tmp_path,
+                                                          monkeypatch, capsys):
+    _cli_corpus(monkeypatch, gov, items)
+    _recorded(monkeypatch, tmp_path, tools.Tools(store).active_index().fingerprint)
     out = tmp_path / "runs"
     for _ in range(2):
         assert main(["probes", "temporal", "gov", "--store", str(store), "--out",
@@ -223,7 +277,30 @@ def test_the_cli_writes_the_probe_files_deterministically(gov, items, store, tmp
     assert data["config"]["seed"] == 20261116 and data["config"]["sizes"]["T4"] == 3
     assert data["config"]["spec_sizes"] == {"T1": 40, "T2": 189, "T3": 145, "T4": 297,
                                             "T5": 171}
+    assert data["config"]["index_system"] == "p1-struct-bc"
+    assert (data["config"]["index_phase1"], data["config"]["allow_other_index"]) == \
+        (True, False)
     assert (first / "probes.md").read_text().startswith("# Temporal probes")
     assert main(["probes", "temporal", "gov", "--store", str(store), "--out", str(out),
                  "--as", "user:auditor"]) == 2
     assert "ACL" in capsys.readouterr().err
+
+
+def test_the_cli_refuses_an_index_that_is_not_the_recorded_phase1_one(gov, items, store,
+                                                                      tmp_path, monkeypatch,
+                                                                      capsys):
+    """The probes check the Phase 1 index: the active index must be p1-struct-bc with the
+    fingerprint of a committed Phase 1 run, unless --allow-other-index (recorded)."""
+    _cli_corpus(monkeypatch, gov, items)
+    _recorded(monkeypatch, tmp_path, "0" * 64)
+    out = tmp_path / "runs"
+    assert main(["probes", "temporal", "gov", "--store", str(store), "--out", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert "p1-struct-bc" in err and "000000000000" in err and "--allow-other-index" in err
+    assert not out.exists()
+    assert main(["probes", "temporal", "gov", "--store", str(store), "--out", str(out),
+                 "--allow-other-index"]) == 0
+    data = json.loads(next(out.iterdir()).joinpath("probes.json").read_text())
+    assert (data["config"]["index_phase1"], data["config"]["allow_other_index"]) == \
+        (False, True)
+    assert "other index" in next(out.iterdir()).joinpath("probes.md").read_text()

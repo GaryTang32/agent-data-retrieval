@@ -720,6 +720,10 @@ class Tools:
         """The active index, loaded and checked as `search` loads it (not logged)."""
         return self._active_index()[0]
 
+    def active_system(self) -> str:
+        """The system name the active index was built as (`active.json`, checked)."""
+        return self._active_record()["system"]
+
     def _dedup_overlay(self, idx: StoreIndex) -> dedup_mod.Dedup | None:
         """The dedup overlay of the index's chunks, or None (loaded once per index)."""
         return self._dedup_state(idx)[0]

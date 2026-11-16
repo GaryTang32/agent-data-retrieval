@@ -12,7 +12,9 @@ golden items and the store's applicability overlay; run through `adr_store.tools
 - T4: every golden question, default mode. Pass: no chunk of a superseded document.
 - T5: every Federal Register and IRM document, query = its title, `as_of` = `valid_from` - 1
   day. Pass: absent from `search`, from `grep` of a 30-character substring of its text (an
-  untruncated result) and `read` refused.
+  untruncated result), `read` refused because it is not in force on that date (the refusal
+  names its `valid_from` and the date; any other refusal fails), and the same `read` without
+  the date succeeds (the control: the document is readable at all).
 
 "In force on D" is read from the envelope (`valid_from <= D`, `valid_to` null or `D <
 valid_to`, not a proposed rule), independently of the filter code it checks. Search uses the
@@ -209,16 +211,25 @@ def _absence_probe(p: Probe, tools, dedup: bool) -> dict:
     grep_absent = not grep.truncated and all(m.doc_id != doc for m in grep.matches)
     try:
         tools.read(doc, filters=dated)
-        read_refused = False
+        refusal = None
+    except ToolError as e:
+        refusal = str(e)
+    # refused because the document is not in force on the date, not for any other reason
+    span = f"in force from {p.target['valid_from']}"
+    read_refused = refusal is not None and span in refusal and \
+        f"not in force on {p.as_of}" in refusal
+    try:
+        control_read_ok = tools.read(doc).doc_id == doc
     except ToolError:
-        read_refused = True
+        control_read_ok = False
     control = tools.search(p.query, dedup=dedup)
     control_grep = tools.grep(pattern)
     return {"search_absent": search_absent, "grep_absent": grep_absent,
             "grep_truncated": grep.truncated, "read_refused": read_refused,
+            "read_refusal": refusal, "control_read_ok": control_read_ok,
             "control_search_found": any(d == doc for _, d in _returned(control)),
             "control_grep_found": any(m.doc_id == doc for m in control_grep.matches),
-            "pass": search_absent and grep_absent and read_refused}
+            "pass": search_absent and grep_absent and read_refused and control_read_ok}
 
 
 def run(probes: list[Probe], tools, caller: str | None = None, *, dedup: bool = True) -> dict:
@@ -267,7 +278,7 @@ def summarize(outcomes: list[dict]) -> dict:
                 b["recall@10"] = _mean([float(r["found"]) for r in rows])
             if name == "T5":
                 for k in ("search_absent", "grep_absent", "grep_truncated", "read_refused",
-                          "control_search_found", "control_grep_found"):
+                          "control_read_ok", "control_search_found", "control_grep_found"):
                     b[k] = sum(r[k] for r in rows)
             summary.setdefault(name, {})[mode] = b
     return summary
@@ -279,6 +290,10 @@ def render_markdown(data: dict) -> str:
            f"Store `{cfg['store']}` (snapshot `{cfg['snapshot'][:12]}`), index "
            f"`{cfg['index'][:12]}`, applicability overlay `{cfg['applicability'][:12]}`, dedup "
            f"{'on' if cfg['dedup'] else 'off'}. Seed {cfg['seed']}. No model calls.", "",
+           *([] if cfg.get("index_phase1", True) else [
+               f"> **Warning:** the active index ({cfg['index_system']}) is not the recorded "
+               f"Phase 1 p1-struct-bc index: an other index, probed with "
+               f"--allow-other-index.", ""]),
            "| set | mode | probes (spec) | passed | failed | figures |",
            "|---|---|---|---|---|---|"]
     for name, modes in s.items():
