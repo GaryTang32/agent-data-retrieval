@@ -114,9 +114,13 @@ A store is a directory:
 ```
 
 - A snapshot id is the SHA-256 of its canonical JSON. A snapshot is immutable; ingesting or
-  removing documents writes a new snapshot and moves `HEAD`.
+  removing documents writes a new snapshot and moves `HEAD`. A snapshot of loose files
+  (`adr ingest --path`) also holds `paths`, each file's relative path (POSIX separators) to its
+  `doc_id`, so the folder's layout is part of its id; corpus snapshots have no `paths`.
 - Writes are atomic (temporary file, then rename). An existing blob or document file with the
-  same id is left untouched.
+  same id is left untouched; for loose files this includes a document file whose `uri` names
+  an earlier path of the same bytes (the current path is in the snapshot's `paths`, and
+  `adr read --json` shows it as `path`).
 - `adr_store.Store.open(path, snapshot=None)` reads one snapshot. Every result a tool returns
   names the snapshot it came from.
 
@@ -193,7 +197,9 @@ Each adds one component to the one before it, so each component's effect is visi
 A console script `adr` over one store and one index:
 
 - `adr ingest <corpus>`: read a pinned corpus into a store (bytes, canonical text, elements),
-  write a snapshot. `adr ingest --path <dir>` ingests loose files.
+  write a snapshot. `adr ingest --path <dir>` ingests loose files: recursive, hidden names
+  skipped, symlinks not followed (counted), a store inside the folder not read; every file is
+  read and extracted before the first write, and any failure is reported and writes nothing.
 - `adr index <store> --system <name>`: build or load the index for a snapshot.
 - `adr search <query> [--top 10]`: ranked chunks with `chunk_id`, `doc_id`, character range,
   breadcrumb, score and the snapshot id.

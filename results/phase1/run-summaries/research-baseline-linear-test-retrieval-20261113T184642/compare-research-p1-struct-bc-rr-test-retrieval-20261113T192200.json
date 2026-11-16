@@ -1,0 +1,66 @@
+{
+  "allow_mixed": false,
+  "corpus": "research",
+  "difference": "run_b - run_a",
+  "golden_sha256": "fdebe3f0b207df3278c6d44b2aba1060fd7fab5beec7dae22c2d978df6dd5dd4",
+  "lexical_only_a": false,
+  "lexical_only_b": false,
+  "metrics": {
+    "coverage@10": {
+      "a": 0.8564430014430015,
+      "b": 0.6488799107642271,
+      "ci95": [
+        -0.26401575392193855,
+        -0.15127297343246823
+      ],
+      "mean_diff": -0.20756309067877432,
+      "n": 180,
+      "p": 0.0,
+      "p_holm": 0.0
+    },
+    "mrr": {
+      "a": 0.6761574074074074,
+      "b": 0.5450462962962963,
+      "ci95": [
+        -0.19063607804232807,
+        -0.07078610008818344
+      ],
+      "mean_diff": -0.1311111111111111,
+      "n": 180,
+      "p": 0.0,
+      "p_holm": 0.0
+    },
+    "ndcg@10": {
+      "a": 0.7097794929629271,
+      "b": 0.5764745967165822,
+      "ci95": [
+        -0.1875596083621817,
+        -0.07892606445044714
+      ],
+      "mean_diff": -0.13330489624634495,
+      "n": 180,
+      "p": 0.0,
+      "p_holm": 0.0
+    },
+    "recall@10": {
+      "a": 0.8564430014430015,
+      "b": 0.7153120082531846,
+      "ci95": [
+        -0.19873111365758425,
+        -0.08487999255646314
+      ],
+      "mean_diff": -0.14113099318981673,
+      "n": 180,
+      "p": 0.0,
+      "p_holm": 0.0
+    }
+  },
+  "metrics_version": 2,
+  "n_pairs": 180,
+  "n_resamples": 10000,
+  "run_a": "research-baseline-linear-test-retrieval-20261113T184642",
+  "run_b": "research-p1-struct-bc-rr-test-retrieval-20261113T192200",
+  "split": "test",
+  "system_a": "baseline-linear",
+  "system_b": "p1-struct-bc-rr"
+}

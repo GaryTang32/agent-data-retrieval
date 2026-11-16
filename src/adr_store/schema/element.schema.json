@@ -1,0 +1,126 @@
+{
+  "additionalProperties": false,
+  "description": "A character range of the canonical text: a `section` container or a leaf (spec §4.2).",
+  "properties": {
+    "char_end": {
+      "minimum": 0,
+      "title": "Char End",
+      "type": "integer"
+    },
+    "char_start": {
+      "minimum": 0,
+      "title": "Char Start",
+      "type": "integer"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "doc_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "element_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Element Id",
+      "type": "string"
+    },
+    "level": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Level"
+    },
+    "order": {
+      "minimum": 0,
+      "title": "Order",
+      "type": "integer"
+    },
+    "page": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page"
+    },
+    "parent_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Id"
+    },
+    "section_path": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Section Path",
+      "type": "array"
+    },
+    "text_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Text Sha256",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "type": {
+      "enum": [
+        "section",
+        "heading",
+        "paragraph",
+        "list_item",
+        "table",
+        "code",
+        "record"
+      ],
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "element_id",
+    "doc_id",
+    "type",
+    "char_start",
+    "char_end",
+    "order",
+    "confidence",
+    "text_sha256"
+  ],
+  "title": "Element",
+  "type": "object"
+}

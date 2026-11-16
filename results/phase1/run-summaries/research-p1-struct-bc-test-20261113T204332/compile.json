@@ -1,0 +1,21 @@
+{
+  "empty_docs": [],
+  "evidence_copies": {
+    "copies": 0,
+    "spans": 367,
+    "spans_with_copies": 0
+  },
+  "fingerprint": "d3902b136e26732774bdfe4ffdcf6919f01308d5ede930baa79d9eaefac7f0a3",
+  "index_source": "loaded",
+  "n_chunks": 9554,
+  "n_docs": 245,
+  "span_containment": 0.8347457627118644,
+  "text_fidelity": {
+    "checked": 45,
+    "formats_na": [
+      "pdf"
+    ],
+    "matching": 45,
+    "share": 1.0
+  }
+}

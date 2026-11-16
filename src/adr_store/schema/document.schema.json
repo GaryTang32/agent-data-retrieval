@@ -1,0 +1,236 @@
+{
+  "$defs": {
+    "Element": {
+      "additionalProperties": false,
+      "description": "A character range of the canonical text: a `section` container or a leaf (spec §4.2).",
+      "properties": {
+        "char_end": {
+          "minimum": 0,
+          "title": "Char End",
+          "type": "integer"
+        },
+        "char_start": {
+          "minimum": 0,
+          "title": "Char Start",
+          "type": "integer"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "doc_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "element_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Element Id",
+          "type": "string"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "order": {
+          "minimum": 0,
+          "title": "Order",
+          "type": "integer"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        },
+        "section_path": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Section Path",
+          "type": "array"
+        },
+        "text_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Text Sha256",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "type": {
+          "enum": [
+            "section",
+            "heading",
+            "paragraph",
+            "list_item",
+            "table",
+            "code",
+            "record"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "element_id",
+        "doc_id",
+        "type",
+        "char_start",
+        "char_end",
+        "order",
+        "confidence",
+        "text_sha256"
+      ],
+      "title": "Element",
+      "type": "object"
+    },
+    "SourceRecord": {
+      "additionalProperties": false,
+      "description": "One stored document: where its bytes came from and how its text was made (spec §4.1).",
+      "properties": {
+        "byte_length": {
+          "minimum": 0,
+          "title": "Byte Length",
+          "type": "integer"
+        },
+        "doc_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "extractor": {
+          "title": "Extractor",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "md",
+            "txt",
+            "html",
+            "xml",
+            "pdf",
+            "json",
+            "csv"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "License"
+        },
+        "parser": {
+          "title": "Parser",
+          "type": "string"
+        },
+        "source_version": {
+          "title": "Source Version",
+          "type": "string"
+        },
+        "text_length": {
+          "minimum": 0,
+          "title": "Text Length",
+          "type": "integer"
+        },
+        "text_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Text Sha256",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doc_id",
+        "uri",
+        "format",
+        "source_version",
+        "byte_length",
+        "text_sha256",
+        "text_length",
+        "extractor",
+        "parser",
+        "license"
+      ],
+      "title": "SourceRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `<store>/docs/<doc_id[:2]>/<doc_id>.json`: a source and its elements.",
+  "properties": {
+    "elements": {
+      "items": {
+        "$ref": "#/$defs/Element"
+      },
+      "title": "Elements",
+      "type": "array"
+    },
+    "format_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceRecord"
+    }
+  },
+  "required": [
+    "source",
+    "elements"
+  ],
+  "title": "DocRecord",
+  "type": "object"
+}

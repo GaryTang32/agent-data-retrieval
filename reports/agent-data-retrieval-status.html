@@ -412,12 +412,13 @@
         <li><a href="#rs-golden"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg><span><i>2.4</i> Golden sets</span></a></li>
         <li><a href="#rs-fixes"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><i>2.5</i> Problems found and fixed</span></a></li>
         <li><a href="#rs-base"><svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg><span><i>2.6</i> Baseline results</span></a></li>
+        <li><a href="#rs-phase1"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg><span><i>2.7</i> Phase 1: evidence store</span></a></li>
       </ol>
     </li>
     <li class="sn-part sn-p3" data-name="03 Pending"><a href="#td"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-flag"/></svg><span><b>03</b> Pending</span></a>
       <ol>
         <li><a href="#td-decide"><svg class="ic" aria-hidden="true"><use href="#i-scale"/></svg><span><i>3.1</i> Optional: 5 repeats</span></a></li>
-        <li><a href="#td-next"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span><i>3.2</i> Remaining steps</span></a></li>
+        <li><a href="#td-next"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg><span><i>3.2</i> Next steps</span></a></li>
         <li><a href="#td-open"><svg class="ic" aria-hidden="true"><use href="#i-msg"/></svg><span><i>3.3</i> Needs outside input</span></a></li>
         <li><a href="#td-limits"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span><i>3.4</i> Known limits</span></a></li>
       </ol>
@@ -440,28 +441,28 @@
       <p class="eyebrow">Project status · 13 November 2026</p>
       <h1>Agent Data Retrieval Status</h1>
       <p class="dek">What the repository is for, the plan, what is done, what is pending, and the purpose of every step so far.</p>
-      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 merged</span><span>Phase 1 started</span><span>Metric definitions version 2</span><span>CI passing</span><span>All work pushed</span></p>
+      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 merged</span><span>Phase 1 built and measured, not merged</span><span>Baseline stays the reference</span><span>Metric definitions version 2</span><span>CI: one CPU-dependent test fixed in 66307a7</span><span>All work pushed</span></p>
     </div>
     <div class="brief">
       <span class="k"><svg class="ic" aria-hidden="true"><use href="#i-brief"/></svg>Key points</span>
       <ul class="plain">
-        <li><strong>The repository is still work in progress.</strong> Research and design are finished. The toolkit itself (Phases 1–6) has not been started. The only results so far are the baseline's own numbers.</li>
-        <li><strong>The Phase 0 evaluation harness is built.</strong> It is the yardstick every later component must beat. 410 automated tests pass locally and in CI. Each part was independently reviewed, and a final whole-branch review is done.</li>
-        <li><strong>Three golden question sets are generated and verified.</strong> gov 297, research 275 and bench 728 items, with 0 verification failures. Only the gov set is in git; research and bench stay local.</li>
-        <li><strong>The baseline is recorded under version 2 of the metric definitions.</strong> Six runs, 2,072 rows. Accuracy is 0.71–0.72 with RRF fusion and 0.75–0.81 with tuned linear fusion (<a href="#rs-base">section 2.6</a>).</li>
-        <li><strong>Phase 1 has started with the scoring rules.</strong> Four rules the final review flagged were tested on the real corpora, redefined and reviewed: identical copies of evidence, the ranking score, identifier answers and query understanding. The baseline still scores 0 of 27 (RRF) and 2 of 27 (linear) on gov count and filter questions.</li>
-        <li><strong>Three Phase 0 exit items need outside input:</strong> a human-labelled sample, a judge from a different model family, and human vetting of golden items.</li>
+        <li><strong>The repository is still work in progress.</strong> Phase 0, the evaluation harness and its baseline, is merged. Phase 1, the evidence store, is built and measured on the working branch but not merged to <code>main</code> yet. Phases 2–6 are not started.</li>
+        <li><strong>The evidence store works as specified.</strong> All 2,425 documents round-trip losslessly, every leaf element carries a character span, a 1% edit re-embeds at most 0.55% of chunks, 100 PDFs are searchable in 8.4 minutes with all cores embedding, and rankings are identical from run to run (<a href="#rs-phase1">section 2.7</a>).</li>
+        <li><strong>As a retriever it is level with the baseline, not better.</strong> The best Phase 1 system raises gov Recall@10 from 0.771 to 0.802, a gain that is significant in its own test but fragile. It is level on research and bench.</li>
+        <li><strong>Answers are no better.</strong> No accuracy difference is significant on any corpus. The reranker lowered quality on every corpus and is switched off.</li>
+        <li><strong>So the baseline stays the reference.</strong> Phase 1 does not meet its acceptance rule. The store, its spans and its <code>adr</code> tools are what later phases build on; <code>baseline-linear</code> remains the system to beat.</li>
+        <li><strong>The yardstick is unchanged.</strong> Three verified golden sets (1,300 questions) and the baseline under version 2 of the metric definitions: accuracy 0.71–0.72 with RRF fusion and 0.75–0.81 with tuned linear fusion (<a href="#rs-base">section 2.6</a>). Three Phase 0 exit items still need outside input.</li>
       </ul>
-      <p class="rec"><strong>Next:</strong> design and build the rest of Phase 1, the evidence store and record format, structure-led chunking and the search tools, and measure each against this baseline (<a href="#td-next">section 3.2</a>).</p>
+      <p class="rec"><strong>Next:</strong> merge Phase 1 to <code>main</code> after you review it, then start Phase 2, permissions and applicability. The open items carry forward (<a href="#td-next">section 3.2</a>).</p>
     </div>
 
     <div class="stats six" aria-label="Project status in numbers">
-      <div class="stat"><span class="num">503</span><span class="lbl">Automated tests passing, locally and in CI</span></div>
+      <div class="stat"><span class="num">978</span><span class="lbl">Automated tests; one that compared scores across CPUs exactly was fixed in 66307a7</span></div>
       <div class="stat"><span class="num">1,300</span><span class="lbl">Verified golden questions across three corpora</span></div>
-      <div class="stat"><span class="num">17,948</span><span class="lbl">Text chunks indexed for the baseline</span></div>
-      <div class="stat"><span class="num">8,532</span><span class="lbl">Model calls saved, so reruns are free</span></div>
-      <div class="stat"><span class="num">6</span><span class="lbl">Baseline runs recorded: 2 systems, 3 corpora, 1 repeat</span></div>
-      <div class="stat"><span class="num">1 of 7</span><span class="lbl">Roadmap phases merged; Phase 1 started</span></div>
+      <div class="stat"><span class="num">2,425</span><span class="lbl">Documents in the evidence store, all round-tripping losslessly</span></div>
+      <div class="stat"><span class="num">≤ 0.55%</span><span class="lbl">Chunks re-embedded after a 1% edit (target: at most 2%)</span></div>
+      <div class="stat"><span class="num">8.4 min</span><span class="lbl">From 100 PDFs to the first search, on 4 cores (target: under 10)</span></div>
+      <div class="stat"><span class="num">2 of 7</span><span class="lbl">Phases built: Phase 0 merged; Phase 1 measured, not merged, not accepted as the reference</span></div>
     </div>
 
     <nav class="toc" aria-label="Contents">
@@ -478,7 +479,7 @@
       <div>
         <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Part 2 · Done</span>
         <a class="ttl" href="#rs">What is done</a>
-        <span class="gist">Each finished step with its purpose, and the baseline results</span>
+        <span class="gist">Each finished step with its purpose, the baseline and the Phase 1 results</span>
         <ol>
           <li><span>2.1</span><a href="#rs-research">Research and design</a></li>
           <li><span>2.2</span><a href="#rs-harness">Evaluation harness</a></li>
@@ -486,15 +487,16 @@
           <li><span>2.4</span><a href="#rs-golden">Golden sets v0.1</a></li>
           <li><span>2.5</span><a href="#rs-fixes">Problems found and fixed</a></li>
           <li><span>2.6</span><a href="#rs-base">Baseline results</a></li>
+          <li><span>2.7</span><a href="#rs-phase1">Phase 1: evidence store</a></li>
         </ol>
       </div>
       <div>
         <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · Pending</span>
         <a class="ttl" href="#td">What is pending</a>
-        <span class="gist">The remaining steps and the open items</span>
+        <span class="gist">The merge, Phase 2, the carried-over items and the limits</span>
         <ol>
           <li><span>3.1</span><a href="#td-decide">Optional: the 5-repeat run</a></li>
-          <li><span>3.2</span><a href="#td-next">Remaining steps</a></li>
+          <li><span>3.2</span><a href="#td-next">Next steps and carry-overs</a></li>
           <li><span>3.3</span><a href="#td-open">Items that need outside input</a></li>
           <li><span>3.4</span><a href="#td-limits">Known limits</a></li>
         </ol>
@@ -546,8 +548,8 @@
         <thead><tr><th>Phase</th><th>Scope</th><th>Purpose</th><th>Status</th></tr></thead>
         <tbody>
           <tr><th scope="row">0 Evaluation first</th><td>Golden question sets over three corpora, a five-track evaluation harness, a recorded flat hybrid baseline (BM25 + dense)</td><td>Build the yardstick before the toolkit, so every later piece has to prove it beats a known baseline</td><td><span class="str str-strong">Merged</span></td></tr>
-          <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec with conformance tests, content-hash registry, parse routing, structure-led chunks, hybrid search with reranking, <code>search</code> / <code>read</code> / <code>grep</code> tools</td><td>The lossless, hash-pinned foundation that every answer cites</td><td><span class="str str-qual">In progress</span></td></tr>
-          <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records from MCP and OpenAPI</td><td>Permissions and currency are hard to add later, so they come early</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec with conformance tests, content-hash registry, parse routing, structure-led chunks, hybrid search with reranking, <code>search</code> / <code>read</code> / <code>grep</code> tools</td><td>The lossless, hash-pinned foundation that every answer cites</td><td><span class="str str-outcome">Built and measured</span><span class="sub">Not merged yet; retrieval level with the baseline, which stays the reference</span></td></tr>
+          <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records from MCP and OpenAPI</td><td>Permissions and currency are hard to add later, so they come early</td><td><span class="str str-qual">Next</span></td></tr>
           <tr><th scope="row">3 Typed deterministic database</th><td>Schema contracts, grounded extraction with span checks, entity resolution, semantic layer with guarded SQL</td><td>Exact answers for count, filter and lookup questions, rebuilt with identical checksums</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">4 Knowledge units and enforcement</th><td>Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings</td><td>Make domain knowledge, rules and procedures searchable as typed units</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">5 Graph and navigation layers</th><td>Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy</td><td>Multi-hop and overview questions; each layer is kept only if it beats the earlier phases</td><td><span class="str str-na">Not started</span></td></tr>
@@ -560,7 +562,7 @@
 
   <section id="fd-path" aria-labelledby="h-fd3">
     <h3 id="h-fd3"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">1.3</span>Phase 0 step by step</h3>
-    <p class="lead-in">Twelve steps from research to a merged baseline. All twelve are done; Phase 0 was merged on 12 November.</p>
+    <p class="lead-in">Twelve steps from research to a merged baseline. All twelve are done; Phase 0 was merged on 12 November. The six Phase 1 steps are in <a href="#rs-phase1">section 2.7</a>.</p>
     <ol class="flow">
       <li class="done"><strong>Research</strong><span>Find the most effective methods before designing</span><span class="str str-strong">Done</span></li>
       <li class="done"><strong>Design spec and plan</strong><span>Agree what Phase 0 measures, then split the build into small reviewed tasks</span><span class="str str-strong">Done</span></li>
@@ -595,6 +597,7 @@
           <tr><th scope="row">Licence and README</th><td>Make the repo reusable and honest about its state</td><td>Apache-2.0. The README marks the repo as work in progress and states the vision, objectives and plan; a version of it is merged to <code>main</code></td></tr>
           <tr><th scope="row">Phase 0 design spec</th><td>Agree what is measured, on which data, and by which rules, before writing code</td><td><code>docs/superpowers/specs/2026-11-08-phase0-eval-harness-design.md</code></td></tr>
           <tr><th scope="row">Implementation plan</th><td>Split the build into 14 small tasks that can each be tested and reviewed alone</td><td><code>docs/superpowers/plans/2026-11-08-phase0-eval-harness.md</code></td></tr>
+          <tr><th scope="row">Phase 1 design spec and plan</th><td>Fix the record format, the store, the chunks, the systems to measure and the acceptance rule before building; list every choice made without the user as a ruling</td><td><code>docs/superpowers/specs/2026-11-13-phase1-evidence-store-design.md</code> and <code>docs/superpowers/plans/2026-11-13-phase1-evidence-store.md</code></td></tr>
         </tbody>
       </table>
     </div>
@@ -828,11 +831,134 @@
     <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><strong>Read with care:</strong> the generated questions were written by a model reading the source text, so they favour keyword search. The judge is from the same model family as the generator, and its agreement with human labels has not been measured. Answers vary between calls: when 191 gov questions were answered again, 16 outcomes changed, which is as large as the gap between the two gov systems. The full tables and limits are in <code>results/README.md</code>.</p>
   </section>
 
+  <section id="rs-phase1" aria-labelledby="h-rs7">
+    <h3 id="h-rs7"><svg class="ic hic" aria-hidden="true"><use href="#i-layers"/></svg><span class="no">2.7</span>Phase 1: the evidence store (built and measured, not merged)</h3>
+    <p class="lead-in">Phase 1 builds the first part of the toolkit itself: the raw evidence store and the search path over it. It was measured with the Phase 0 harness against <code>baseline-linear</code>, on the same corpora and golden sets, on 13 November. A component is kept as the reference only if it beats the baseline without breaking determinism.</p>
+    <ol class="flow">
+      <li class="done"><strong>Metric definitions v2</strong><span>Scoring rules settled before anything is measured against them</span><span class="str str-strong">Merged</span></li>
+      <li class="done"><strong>Record format, parsers, store</strong><span>A lossless, content-addressed record of every document and its sections</span><span class="str str-strong">Built</span></li>
+      <li class="done"><strong>Structure-led chunks</strong><span>Chunks that follow headings and carry a breadcrumb</span><span class="str str-strong">Built</span></li>
+      <li class="done"><strong>Retrieval over the store</strong><span>Breadcrumb-weighted BM25, dense search, an optional reranker</span><span class="str str-strong">Built</span></li>
+      <li class="done"><strong><code>search</code>, <code>read</code>, <code>grep</code></strong><span>The interface agents call, with a retrieval log</span><span class="str str-strong">Built</span></li>
+      <li class="wait"><strong>Measure against the baseline</strong><span>Level with the baseline, not better</span><span class="str str-qual">Baseline kept</span></li>
+    </ol>
+    <h4>What was built</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:900px">
+        <thead><tr><th>Piece</th><th>What it does</th><th>Purpose</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Record format v0.1 and conformance tests</th><td>Source and element records as JSON, with JSON Schema files. Every document is checked for lossless tiling, re-slicing, nesting, identity and determinism</td><td>Every element is an exact character range of the unchanged Phase 0 text, so every golden span stays valid</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Content-addressed store with snapshots</th><td>Raw bytes, canonical text and records filed under the SHA-256 of the document's bytes; immutable snapshots and a <code>HEAD</code>; atomic writes</td><td>Every result names the exact snapshot it came from</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Structure parsers</th><td>Markdown, XML, HTML, PDF, JSON, CSV and plain text. Headings are read from the markup, or found by cautious rules in PDFs, and aligned to the canonical text without changing it</td><td>Sections, pages and spans for every document, as an overlay</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Structure-led chunks with breadcrumbs</th><td>Up to 400 tokens inside one section; headings travel with their body; short sections are carried into the next. Each chunk carries a breadcrumb: document title, then its section path</td><td>Chunks that follow the document's own structure and say where they sit</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Keyword and dense search</th><td>BM25 with the breadcrumb as an extra field, repeated <code>w_bc</code> times; dense search over breadcrumb + newline + body; linear fusion tuned on dev; vectors cached by text and model hash</td><td>Use the breadcrumb in both halves of hybrid search; re-embed only what changed</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Optional reranker</th><td>A small cross-encoder (<code>ms-marco-MiniLM-L-6-v2</code>) over the top 50 fused results, on CPU</td><td>Test whether reordering the top results helps</td><td><span class="str str-none">Switched off</span></td></tr>
+          <tr><th scope="row"><code>adr</code> tools</th><td><code>ingest</code> (a pinned corpus or a folder), <code>index</code>, <code>search</code>, <code>read</code>, <code>grep</code>; <code>--json</code> output; every call appends one line to a retrieval log</td><td>The interface an agent calls, with a record of what it was shown</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Multi-core embedding</th><td><code>--threads 0</code> embeds on all cores; the vectors are bit-identical to single-threaded ones</td><td>Fast installs without losing identical results</td><td><span class="str str-strong">Done</span></td></tr>
+          <tr><th scope="row">Harness support</th><td>A system registry and a retrieval-only track (<code>adr-eval retrieval</code>, <code>retrieval-compare</code>) that makes no model calls</td><td>Measure every system on dev and test for free; spend model calls only on the best one</td><td><span class="str str-strong">Done</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4>Systems measured</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:760px">
+        <thead><tr><th>System</th><th>Chunks</th><th>Keyword search</th><th>Dense search</th><th>Reranker</th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><code>baseline-linear</code></th><td>Fixed 400 tokens</td><td>BM25</td><td>Body</td><td>No</td></tr>
+          <tr><th scope="row"><code>p1-struct</code></th><td>Structure-led</td><td>BM25</td><td>Body</td><td>No</td></tr>
+          <tr><th scope="row"><code>p1-struct-bc</code></th><td>Structure-led</td><td>BM25 with the breadcrumb field</td><td>Breadcrumb + body</td><td>No</td></tr>
+          <tr><th scope="row"><code>p1-struct-bc-rr</code></th><td>Structure-led</td><td>As above</td><td>As above</td><td>Yes, top 50</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Each system adds one component to the one before it, so each component's effect is visible. Fusion weights and <code>w_bc</code> were tuned on dev nDCG@10 and then fixed for test. On gov the tuned <code>p1-struct-bc</code> uses BM25 alone. Store parser version 3; golden sets v0.1; metric definitions version 2.</p>
+    <h4>Retrieval (test split)</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:860px">
+        <thead><tr><th>Corpus</th><th>System</th><th>n</th><th>Recall@10</th><th>nDCG@10</th><th>Recall@10 minus baseline</th><th>nDCG@10 minus baseline</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">gov</th><td><code>baseline-linear</code></td><td class="n">213</td><td class="n">0.771</td><td class="n">0.691</td><td class="n">–</td><td class="n">–</td></tr>
+          <tr><th scope="row">gov</th><td><code>p1-struct</code></td><td class="n">213</td><td class="n">0.765</td><td class="n">0.686</td><td class="n">−0.006</td><td class="n">−0.005</td></tr>
+          <tr><th scope="row">gov</th><td><code>p1-struct-bc</code></td><td class="n">213</td><td class="n"><strong>0.802</strong></td><td class="n"><strong>0.703</strong></td><td class="n"><strong>+0.031</strong> [+0.006, +0.058]</td><td class="n">+0.012</td></tr>
+          <tr><th scope="row">gov</th><td><code>p1-struct-bc-rr</code></td><td class="n">213</td><td class="n">0.780</td><td class="n">0.643</td><td class="n">+0.009</td><td class="n">−0.048</td></tr>
+          <tr><th scope="row">research</th><td><code>baseline-linear</code></td><td class="n">180</td><td class="n"><strong>0.856</strong></td><td class="n">0.710</td><td class="n">–</td><td class="n">–</td></tr>
+          <tr><th scope="row">research</th><td><code>p1-struct</code></td><td class="n">180</td><td class="n">0.848</td><td class="n">0.692</td><td class="n">−0.009</td><td class="n">−0.017</td></tr>
+          <tr><th scope="row">research</th><td><code>p1-struct-bc</code></td><td class="n">180</td><td class="n">0.844</td><td class="n"><strong>0.710</strong></td><td class="n">−0.013</td><td class="n">+0.000</td></tr>
+          <tr><th scope="row">research</th><td><code>p1-struct-bc-rr</code></td><td class="n">180</td><td class="n">0.715</td><td class="n">0.576</td><td class="n"><strong>−0.141</strong></td><td class="n"><strong>−0.133</strong></td></tr>
+          <tr><th scope="row">bench</th><td><code>baseline-linear</code></td><td class="n">517</td><td class="n"><strong>0.922</strong></td><td class="n"><strong>0.854</strong></td><td class="n">–</td><td class="n">–</td></tr>
+          <tr><th scope="row">bench</th><td><code>p1-struct</code></td><td class="n">517</td><td class="n">0.915</td><td class="n">0.843</td><td class="n">−0.007</td><td class="n">−0.011</td></tr>
+          <tr><th scope="row">bench</th><td><code>p1-struct-bc</code></td><td class="n">517</td><td class="n">0.919</td><td class="n">0.853</td><td class="n">−0.003</td><td class="n">−0.001</td></tr>
+          <tr><th scope="row">bench</th><td><code>p1-struct-bc-rr</code></td><td class="n">517</td><td class="n">0.901</td><td class="n">0.825</td><td class="n">−0.021</td><td class="n"><strong>−0.029</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">In the two value columns, bold marks the best value per corpus; on research the nDCG@10 of <code>p1-struct-bc</code> (0.7103) and the baseline (0.7098) round to the same value. In the difference columns, bold marks a significant paired difference (Holm p &lt; 0.05 across the four retrieval metrics of one corpus and system); the bracket is a 95% paired bootstrap interval. Phase 1 chunks are smaller, so its top 10 holds 10–16% fewer tokens than the baseline's. MRR, coverage@10 and the split by question type are in <code>results/phase1/README.md</code>.</p>
+    <h4>End to end (test split, one repeat, <code>p1-struct-bc</code> only)</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:900px">
+        <thead><tr><th>Corpus</th><th>n</th><th>Baseline accuracy [95% CI]</th><th>Phase 1 accuracy [95% CI]</th><th>Only baseline / only Phase 1 correct</th><th>McNemar p (Holm)</th><th>Penalised t=0.75 difference</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">gov</th><td class="n">242</td><td class="n">0.752 [0.698, 0.806]</td><td class="n">0.731 [0.674, 0.785]</td><td class="n">13 / 8</td><td class="n">0.38 (1.00)</td><td class="n">−0.021 [−0.165, +0.120]</td></tr>
+          <tr><th scope="row">research</th><td class="n">222</td><td class="n">0.806 [0.752, 0.856]</td><td class="n">0.779 [0.721, 0.833]</td><td class="n">15 / 9</td><td class="n">0.31 (1.00)</td><td class="n">−0.068 [−0.234, +0.099]</td></tr>
+          <tr><th scope="row">bench</th><td class="n">572</td><td class="n">0.801 [0.767, 0.834]</td><td class="n">0.813 [0.780, 0.844]</td><td class="n">18 / 25</td><td class="n">0.36 (1.00)</td><td class="n">+0.028 [−0.059, +0.114]</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><code>p1-struct-bc</code> was the best Phase 1 system on dev, so only it was answered and judged; it is paired with the recorded <code>baseline-linear</code> runs. 1,036 rows, 0 errors. No difference is significant. Generator Sonnet, judge Opus, through Claude Code on the subscription. On gov the better recall did not turn into better answers.</p>
+    <h4>What Phase 1 shows</h4>
+    <div class="cards">
+      <div><strong>The store does its job</strong><p>Lossless on all 2,425 documents, a span on every leaf and a page on every PDF leaf, cheap re-indexing after an edit, and identical rankings from run to run and after a rebuild.</p></div>
+      <div><strong>The one gain is fragile</strong><p>The gov Recall@10 gain (+0.031) is significant only within its own comparison; across the five end-to-end measures its Holm p is 0.056. Against the baseline with BM25 alone (0.780) the gain is +0.022 and not significant.</p></div>
+      <div><strong>Breadcrumbs recover what chunks lose</strong><p>Structure-led chunks alone are level or slightly lower. Adding the breadcrumb field lifts gov Recall@10 by 0.037 over <code>p1-struct</code>, and brings research and bench back level with the baseline.</p></div>
+      <div><strong>The reranker hurt everywhere</strong><p>On dev it lowered nDCG@10 by 0.064 on gov, 0.135 on research and 0.081 on bench. A cross-encoder trained on web search queries probably does not suit these corpora. Only one was tried.</p></div>
+      <div><strong>The golden evidence favours the baseline</strong><p>Phase 0 drew overview and procedure evidence as exactly one baseline chunk. It fits inside one Phase 1 chunk only 34% of the time on gov and 18% on research, which costs Phase 1 coverage@10 on those questions.</p></div>
+      <div><strong>Research PDFs are a real weak spot</strong><p>On research questions other than overview and procedure, structure-led chunks lose about 0.03–0.04, most likely from the heuristic section boundaries in PDFs.</p></div>
+    </div>
+    <h4>Acceptance (design §10.5)</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:760px">
+        <thead><tr><th>Check on the test split</th><th><code>p1-struct-bc</code></th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">nDCG@10 and Recall@10 not lower than the baseline on any corpus</th><td>Fails if "not lower" means the point estimate (research Recall@10 −0.013; bench −0.003 and −0.001). Passes if it means "not significantly lower"</td><td><span class="str str-qual">Depends on reading</span></td></tr>
+          <tr><th scope="row">Both significantly higher on at least one corpus</th><td>Gov Recall@10 +0.031 is significant (Holm p 0.045), but gov nDCG@10 +0.012 is not, and nothing is significant elsewhere</td><td><span class="str str-none">Fails</span></td></tr>
+          <tr><th scope="row">Retrieval identity intact</th><td>End-to-end runs retrieved exactly the rankings and scores of the retrieval-only runs for all 1,036 test questions; rebuilt indexes gave the same 528 dev rankings</td><td><span class="str str-strong">Holds</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="implication"><svg class="ic" aria-hidden="true"><use href="#i-scale"/></svg><strong>Result: not accepted.</strong> Under either reading of "not lower", the second check fails. <code>baseline-linear</code> stays the reference for later phases; the store, its spans and its tools are what Phases 2–5 build on.</p>
+    <h4>What each component did</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:860px">
+        <thead><tr><th>Component</th><th>Effect</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Structure-led chunks (<code>p1-struct</code>)</th><td>Level with the baseline on Recall@10 and nDCG@10 overall. Lower coverage@10, mostly from the evidence bias. About 0.03–0.04 lower on research questions other than overview and procedure. 10–16% fewer tokens in the top 10</td><td><span class="str str-outcome">Kept in the store</span><span class="sub">It needs them for spans, breadcrumbs and cheap re-indexing. Not the retrieval reference</span></td></tr>
+          <tr><th scope="row">Breadcrumb field and prefix (<code>p1-struct-bc</code>)</th><td>Recovers what structure-led chunks lost. On gov, +0.037 Recall@10 over <code>p1-struct</code> and +0.031 over the baseline (fragile). Level on research and bench</td><td><span class="str str-outcome">Best Phase 1 system</span><span class="sub">Not the reference</span></td></tr>
+          <tr><th scope="row">Reranker (<code>p1-struct-bc-rr</code>)</th><td>Worse than <code>p1-struct-bc</code> on dev on every corpus, and lower nDCG@10 than the baseline on test on all three</td><td><span class="str str-none">Switched off</span><span class="sub">As the design requires for a component that loses</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4>Exit criteria of the roadmap</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:860px">
+        <thead><tr><th>Criterion</th><th>Result</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Lossless round trip on a mixed corpus of at least 1,000 documents</th><td>2,425 documents across gov, research and bench; the lossless rule passes on all</td><td><span class="str str-strong">Met</span></td></tr>
+          <tr><th scope="row">At least 95% of born-digital elements carry page, bounding box and character span</th><td>Character span on 100% of leaves; page on 100% of PDF leaves; no bounding boxes</td><td><span class="str str-qual">Partly met</span><span class="sub">Boxes need a layout parser</span></td></tr>
+          <tr><th scope="row">A 1% edit re-embeds at most 2% of chunks</th><td>gov 0.03%, research 0.08%, bench 0.55%; an unedited corpus needs 0 new embeddings. On the largest research PDF an edit re-embeds 7 of 96 Phase 1 chunks, against 43 of 84 baseline chunks</td><td><span class="str str-strong">Met</span></td></tr>
+          <tr><th scope="row">Install to 100 queryable PDFs in under ten minutes</th><td>8.4 minutes on an idle 4-core machine with embedding on all cores: ingest 92 s, index 411 s (3,477 chunks embedded), first search 3 s. Single-threaded, an earlier build took 26.0 minutes on a loaded machine</td><td><span class="str str-strong">Met</span><span class="sub">With all cores</span></td></tr>
+          <tr><th scope="row">Routed parse within two points of the best backend</th><td>Needs layout models</td><td><span class="str str-na">Deferred</span></td></tr>
+          <tr><th scope="row">Approximate search recall against exact search</th><td>Exact search is used</td><td><span class="str str-na">Not applicable</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The full write-up, with MRR, coverage@10, the split by question type, the compile track and how the edit and install tests were run, is in <code>results/phase1/README.md</code>. Run configurations and summaries are in <code>results/phase1/run-summaries/</code>; per-item rows stay local, as in Phase 0.</p>
+  </section>
+
   <!-- =================== PART 3: PENDING =================== -->
   <div class="banner" id="td" data-pn="03">
     <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · Pending</span>
     <h2>What is pending, and what each step is for</h2>
-    <div class="meta"><span>Nothing is running</span><span>No decision is blocking</span><span>Three items need outside input</span></div>
+    <div class="meta"><span>Nothing is running</span><span>Merging Phase 1 waits for your review</span><span>Three items need outside input</span></div>
   </div>
 
   <section id="td-decide" aria-labelledby="h-td1">
@@ -872,19 +998,24 @@
   </section>
 
   <section id="td-next" aria-labelledby="h-td2">
-    <h3 id="h-td2"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">3.2</span>Remaining Phase 0 steps</h3>
+    <h3 id="h-td2"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">3.2</span>Next steps and items carried forward</h3>
+    <p class="lead-in">Phase 1 is complete on the working branch. What comes next is the merge, then Phase 2; the other items were found in Phase 0 or Phase 1 and carry forward.</p>
     <ol class="todo">
-      <li><strong>Design and build the evidence store</strong><p>A record format with tests, a content-hash registry, structure-led chunks, and <code>search</code>, <code>read</code> and <code>grep</code> tools. Purpose: the first component of the toolkit itself, measured against the baseline.</p><span class="meta"><span>Phase 1</span><span class="str str-qual">Next</span></span></li>
-      <li><strong>Open a pull request for the metric definitions</strong><p>The four new scoring rules, the version 2 baseline and the comparison with version 1 are on the working branch. Purpose: land them on <code>main</code>.</p><span class="meta"><span>On your request</span><span class="str str-na">To do</span></span></li>
-      <li><strong>Run 5 repeats (optional)</strong><p>Repeats 2–5 for both systems. Purpose: measure answer agreement across repeats and pass^5, the determinism numbers a single repeat cannot give.</p><span class="meta"><span>Any time</span><span class="str str-na">Optional</span></span></li>
-      <li><strong>Improve the golden sets (v0.2)</strong><p>Check every "not in the corpus" question against the corpus, require questions to name what they ask about, keep policy pairs in one split, and drop questions drawn from catalogue rows. Purpose: fix the weak questions the review found.</p><span class="meta"><span>Early in Phase 1</span><span class="str str-na">To do</span></span></li>
-      <li><strong>Harden the reply parser</strong><p>Three rare cases remain: a JSON example quoted after the answer, a cut-off reply with a nested object, and a reply that is a list. Purpose: a recovered reply should always be the one the model meant.</p><span class="meta"><span>Early in Phase 1</span><span class="str str-na">To do</span></span></li>
-      <li><strong>Start Phase 1</strong><p>Record spec v0.1 and the evidence store. Purpose: the first real toolkit component, measured against the Phase 0 baseline.</p><span class="meta"><span>After Phase 0</span><span class="str str-na">Not started</span></span></li>
+      <li><strong>Merge Phase 1 to <code>main</code></strong><p>The store, the <code>adr</code> tools, the harness changes and the results write-up are on the working branch. Purpose: land them once you have reviewed them, with the baseline kept as the reference.</p><span class="meta"><span>Needs your review</span><span class="str str-qual">Next</span></span></li>
+      <li><strong>Phase 2: permissions and applicability</strong><p>Access control on every record, version chains, validity and jurisdiction filters, deduplication, and tool records from MCP and OpenAPI. Purpose: permissions and currency are hard to add later, so they come next, on top of the Phase 1 store.</p><span class="meta"><span>After the merge</span><span class="str str-na">Not started</span></span></li>
+      <li><strong>Improve the golden sets (v0.2)</strong><p>Check every "not in the corpus" question against the corpus, require questions to name what they ask about, keep policy pairs in one split, and drop questions drawn from catalogue rows. Also fix the evidence bias Phase 1 found: overview and procedure evidence is exactly one baseline chunk, which favours the baseline chunker. Purpose: fair questions for every chunker.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Harden the reply parser</strong><p>Three rare cases remain: a JSON example quoted after the answer, a cut-off reply with a nested object, and a reply that is a list. Purpose: a recovered reply should always be the one the model meant.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Add a layout parser</strong><p>Bounding boxes for born-digital elements, and routed parsing across several backends. Purpose: the two Phase 1 exit criteria still open (one partly met, one deferred). Needs layout models.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
+      <li><strong>A better reranker, or none</strong><p>The one cross-encoder tried, trained on web search queries, lowered quality on every corpus. Purpose: try one that suits these corpora, or leave reranking off.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Better section boundaries in research PDFs</strong><p>Structure-led chunks lose about 0.03–0.04 on research questions other than overview and procedure, most likely because PDF sections come from heuristics. Purpose: remove the one real weakness of the Phase 1 chunks.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Run 5 repeats (optional)</strong><p>Repeats 2–5 for the baseline systems, and for Phase 1 if wanted. Purpose: measure answer agreement across repeats and pass^5, the determinism numbers a single repeat cannot give.</p><span class="meta"><span>Any time</span><span class="str str-na">Optional</span></span></li>
     </ol>
+    <p class="note">A judge from a second model family and a human-labelled sample also carry forward; they need outside input (<a href="#td-open">section 3.3</a>).</p>
   </section>
 
   <section id="td-open" aria-labelledby="h-td3">
     <h3 id="h-td3"><svg class="ic hic" aria-hidden="true"><use href="#i-msg"/></svg><span class="no">3.3</span>Phase 0 exit items that need outside input</h3>
+    <p class="lead-in">All three are still open, and they carry forward: the Phase 1 end-to-end comparison has the same judge and the same unvetted questions.</p>
     <div class="tbl-wrap">
       <table style="min-width:760px">
         <thead><tr><th>Item</th><th>Purpose</th><th>What it needs</th><th>Status</th></tr></thead>
@@ -899,6 +1030,16 @@
 
   <section id="td-limits" aria-labelledby="h-td4">
     <h3 id="h-td4"><svg class="ic hic" aria-hidden="true"><use href="#i-shield"/></svg><span class="no">3.4</span>Known limits to keep in mind</h3>
+    <h4>Phase 1 measurement</h4>
+    <div class="cards">
+      <div><strong>One repeat end to end</strong><p>Phase 1 answers were generated and judged once, so answer agreement across repeats is not measured.</p></div>
+      <div><strong>Small dev splits</strong><p>43, 45 and 141 items, so the tuned weights are noisy. They were fixed before the test split was read.</p></div>
+      <div><strong>Golden evidence favours the baseline</strong><p>Overview and procedure evidence was drawn as exactly one baseline chunk, so it rarely fits one Phase 1 chunk. Golden set v0.2 should fix this.</p></div>
+      <div><strong>One model each</strong><p>One embedding model (the baseline's) and one reranker were tried. A better model might change the picture.</p></div>
+      <div><strong>Same model family</strong><p>The judge and the generator come from the same family, as in Phase 0.</p></div>
+      <div><strong>One machine</strong><p>The 8.4-minute install timing is for one idle 4-core machine, with the embedding model already downloaded.</p></div>
+    </div>
+    <h4>Phase 0 baseline and golden sets</h4>
     <div class="cards">
       <div><strong>Same-family judge</strong><p>Sonnet generates and Opus judges. Every report flags this until a second provider is available.</p></div>
       <div><strong>Judge-accepted items are not marked</strong><p>Golden files do not record whether an item passed on an exact match or on the judge's verdict. The same judge later scores answers, which could make those items look easier.</p></div>
@@ -922,16 +1063,18 @@
       <table style="min-width:680px">
         <thead><tr><th>Path</th><th>Contents</th></tr></thead>
         <tbody>
-          <tr><th scope="row"><code>README.md</code></th><td>Work-in-progress notice, vision, objectives, plan and Phase 0 status</td></tr>
+          <tr><th scope="row"><code>README.md</code></th><td>Work-in-progress notice, vision, objectives, the progress diagram and tables, Phase 0 status and the Phase 1 results in brief</td></tr>
           <tr><th scope="row"><code>reports/</code></th><td>Research reports, methods catalogs, the combined summary, the research brief and this status page</td></tr>
           <tr><th scope="row"><code>papers/</code></th><td>Source catalog (<code>manifest.csv</code>, <code>README.md</code>); PDFs are local only</td></tr>
-          <tr><th scope="row"><code>docs/superpowers/</code></th><td>Phase 0 design spec and implementation plan</td></tr>
+          <tr><th scope="row"><code>docs/superpowers/</code></th><td>Design specs and implementation plans for Phase 0, the metric definitions version 2 and Phase 1</td></tr>
           <tr><th scope="row"><code>docs/eval/providers.md</code></th><td>How to set up each model provider</td></tr>
-          <tr><th scope="row"><code>src/adr_eval/</code>, <code>tests/</code></th><td>The evaluation harness and its 503 tests</td></tr>
+          <tr><th scope="row"><code>src/adr_eval/</code></th><td>The evaluation harness, with its system registry and retrieval-only track</td></tr>
+          <tr><th scope="row"><code>src/adr_store/</code></th><td>The Phase 1 evidence store: record format, structure parsers, store, structure-led chunks, retrieval and the <code>adr</code> tools</td></tr>
+          <tr><th scope="row"><code>tests/</code></th><td>978 tests for the harness and the store</td></tr>
           <tr><th scope="row"><code>config/</code></th><td>Run settings, model profiles and the price table; no keys</td></tr>
           <tr><th scope="row"><code>corpora/</code></th><td>Pinned manifests for gov, research and bench; files download into <code>data/</code>, which is not committed</td></tr>
           <tr><th scope="row"><code>golden/</code></th><td>Golden sets v0.1: gov items and its review exclusions; hash-pinned READMEs for research and bench</td></tr>
-          <tr><th scope="row"><code>results/</code></th><td>The six recorded baseline runs and their summary</td></tr>
+          <tr><th scope="row"><code>results/</code></th><td>The six recorded baseline runs and their summary; the Phase 1 results and run summaries in <code>results/phase1/</code></td></tr>
         </tbody>
       </table>
     </div>
@@ -947,10 +1090,17 @@ adr-eval index gov
 adr-eval golden gov --verify
 adr-eval run gov --system baseline-rrf --split test --repeats 1 --dry-run</code></pre>
     <p class="note">Drop <code>--dry-run</code> to run for real. Add <code>--max-calls N</code> to cap a run. <code>adr-eval report &lt;run_id&gt;</code> then writes <code>report.json</code> and <code>report.md</code>.</p>
+    <p>The evidence store's <code>adr</code> command works on one store and one index. For a folder of loose files:</p>
+    <pre class="cmd" tabindex="0" aria-label="Evidence store commands"><code>adr ingest --path &lt;folder&gt; --store &lt;store&gt;
+adr index &lt;store&gt; --system p1-struct-bc --w-bc 2 --weight 0.9 --threads 0
+adr search "&lt;question&gt;" --store &lt;store&gt; --top 10
+adr read &lt;doc_id&gt; --store &lt;store&gt; --start 0 --end 500
+adr grep "&lt;pattern&gt;" --store &lt;store&gt; --max 20</code></pre>
+    <p class="note"><code>adr ingest &lt;corpus&gt;</code> ingests a pinned corpus instead. <code>--tuning &lt;run&gt;</code> takes the weights an <code>adr-eval retrieval</code> run tuned on dev. <code>--json</code> gives machine-readable output, and every call appends one line to <code>&lt;store&gt;/log/retrieval.jsonl</code>. <code>--threads 0</code> embeds on all cores with identical vectors.</p>
   </section>
 
   <section id="sr-commits" aria-labelledby="h-sr3">
-    <h3 id="h-sr3"><svg class="ic hic" aria-hidden="true"><use href="#i-audit"/></svg><span class="no">4.3</span>Commit trail for Phase 0</h3>
+    <h3 id="h-sr3"><svg class="ic hic" aria-hidden="true"><use href="#i-audit"/></svg><span class="no">4.3</span>Commit trail for Phase 0 and Phase 1</h3>
     <div class="tbl-wrap">
       <table style="min-width:760px">
         <thead><tr><th>Commit</th><th>What it added</th><th>Purpose</th></tr></thead>
@@ -977,6 +1127,16 @@ adr-eval run gov --system baseline-rrf --split test --repeats 1 --dry-run</code>
           <tr><td class="n">983c1da</td><th scope="row">Phase 0 merged to main</th><td>One squashed commit, so no PDF excerpts are published</td></tr>
           <tr><td class="n">4063a0e · 3aa3728</td><th scope="row">Metric definitions version 2</th><td>Scoring rules that do not reward the wrong thing</td></tr>
           <tr><td class="n">d6f753a · d11c318</td><th scope="row">Baseline under version 2, with the comparison</th><td>The numbers Phase 1 is measured against</td></tr>
+          <tr><td class="n">22ceacc · 44c2abc</td><th scope="row">Phase 1 design and plan; metric definitions and design merged to main (#4)</th><td>Agree the store, the systems and the acceptance rule before building</td></tr>
+          <tr><td class="n">e8a6fce · f6fea37 · d8b6b0f</td><th scope="row">Record format v0.1, JSON Schema files, conformance checks</th><td>Every document provably lossless and re-sliceable</td></tr>
+          <tr><td class="n">d9d4244 · 171cda5 · caa9822 · b5925ff</td><th scope="row">Structure parsers: text and records, Markdown and XML, HTML, PDF</th><td>Sections, pages and spans for every format in the corpora</td></tr>
+          <tr><td class="n">b30ce3e · e7f5577</td><th scope="row">Content-addressed store with snapshots; <code>adr ingest</code></th><td>Results tied to an exact, immutable snapshot</td></tr>
+          <tr><td class="n">60f0523 · 23e5efb · b7735fb</td><th scope="row">Structure-led chunks with breadcrumbs</th><td>Chunks that follow headings and say where they sit</td></tr>
+          <tr><td class="n">606a0f7 · 8094b9a</td><th scope="row">Embedding cache; field-weighted BM25, prefixed dense search and a reranker</th><td>Retrieval over the store; cheap re-indexing after an edit</td></tr>
+          <tr><td class="n">f5c54e7 · 6574b9f</td><th scope="row">System registry, Phase 1 systems, retrieval-only track</th><td>Measure every system without model calls</td></tr>
+          <tr><td class="n">643259c · a3af387 · 63d5d2d</td><th scope="row"><code>adr</code> index, search, read and grep with a retrieval log; folder ingest; multi-core embedding</th><td>The interface agents call; 100 PDFs searchable in under ten minutes</td></tr>
+          <tr><td class="n">70ff0c0 · 56132f4 · 2e75bf3</td><th scope="row">Review fixes: fingerprint covers chunk content, atomic and locked index saves, safer comparisons</th><td>Identical retrieval that a stale or half-written index cannot break</td></tr>
+          <tr><td class="n">8be5d07 · 325378e</td><th scope="row">Phase 1 results write-up and run summaries, with the numbers review</th><td>The measured verdict: the store works; the baseline stays the reference</td></tr>
         </tbody>
       </table>
     </div>
@@ -984,9 +1144,9 @@ adr-eval run gov --system baseline-rrf --split test --repeats 1 --dry-run</code>
 
   <section class="endnote" id="conclusion" aria-labelledby="h-concl">
     <h2 id="h-concl"><svg class="ic hic" aria-hidden="true"><use href="#i-check"/></svg>Conclusion</h2>
-    <p>Phase 0 is merged: the harness, three verified golden sets covering 1,300 questions, and a reviewed baseline. Phase 1 has started by settling four scoring rules, and the baseline is recorded again under them. It answers 71% to 81% of test questions correctly and fails almost every count and filter question on gov.</p>
-    <p>The toolkit itself is still to be built. The next step is the evidence store, the first component that will be measured against these numbers. Three Phase 0 items still need outside input: human labels, a judge from another model family, and human vetting of golden items.</p>
-    <p class="note">Status as of 13 November 2026, branch <code>claude/magical-lamport-n94rs3</code> at commit <code>d11c318</code>. Baseline figures are from the test split with one repeat under metric definitions version 2.</p>
+    <p>Phase 0 is merged: the harness, three verified golden sets covering 1,300 questions, and a baseline recorded under version 2 of the metric definitions. Phase 1, the evidence store, is built and measured on the working branch. As a store it does what it was designed to do: every one of 2,425 documents round-trips losslessly, every leaf carries a span, a 1% edit re-embeds at most 0.55% of chunks, 100 PDFs are searchable in 8.4 minutes, and rankings repeat exactly.</p>
+    <p>As a retriever it is level with the baseline, not better. The one gain, gov Recall@10 from 0.771 to 0.802, is fragile; answer accuracy shows no significant difference on any corpus; and the reranker made things worse and is switched off. So <code>baseline-linear</code> stays the reference, and the store, its spans and its tools become the base for later phases. The next steps are to merge Phase 1 once you have reviewed it, then to start Phase 2, permissions and applicability, with the golden set v0.2, the layout parser, the reranker question, the research PDF sections and the three items that need outside input carried forward.</p>
+    <p class="note">Status as of 13 November 2026, branch <code>claude/magical-lamport-n94rs3</code> at commit <code>325378e</code>. Baseline and Phase 1 figures are from the test split with one repeat under metric definitions version 2.</p>
   </section>
 </main>
 </div>

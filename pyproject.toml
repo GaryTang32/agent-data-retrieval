@@ -32,9 +32,10 @@ dev = ["pytest==9.2.0", "ruff==0.17.4"]
 
 [project.scripts]
 adr-eval = "adr_eval.cli:main"
+adr = "adr_store.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/adr_eval"]
+packages = ["src/adr_eval", "src/adr_store"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
