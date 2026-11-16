@@ -64,7 +64,8 @@ def _isolate_writable_state(writable_state, monkeypatch):
     and so does the store directory `adr --corpus <name>` and `adr index <name>` use.
     The default tools-only store of `adr tools ingest --toolret`, and the ToolRet data
     directory (`data/tools`) and manifest (`corpora/tools/manifest.json`) that
-    `adr-eval tools-fetch` writes, go there too.
+    `adr-eval tools-fetch` writes, go there too, and so does the default output root of
+    `adr-eval tools-retrieval`.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -102,6 +103,9 @@ def _isolate_writable_state(writable_state, monkeypatch):
 
     monkeypatch.setattr(phase2, "OUT_ROOT", writable_state / "runs")
     monkeypatch.setattr(probes, "OUT_ROOT", writable_state / "runs")
+    from adr_eval import tools_eval
+
+    monkeypatch.setattr(tools_eval, "OUT_ROOT", writable_state / "runs")
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
 retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
-report, doctor."""
+tools-retrieval, report, doctor."""
 
 from __future__ import annotations
 
@@ -63,6 +63,19 @@ def _tools_fetch(a: argparse.Namespace) -> int:
           f"tokens (mean {c['doc_tokens_mean']:.1f}, median {c['doc_tokens_median']:g}), "
           f"dev {c['dev']} / test {c['test']}")
     print(f"  manifest {toolret.MANIFEST_PATH}")
+    return 0
+
+
+def _tools_retrieval(a: argparse.Namespace) -> int:
+    """`adr-eval tools-retrieval` (Phase 2 spec §8.4): one tool system over one ToolRet split;
+    writes <out>/tools-<system>-<split>-<time>/tools.{json,md}."""
+    from adr_eval import tools_eval
+
+    d = tools_eval.run(a.system, a.split, a.store, root=a.root, lexical_only=a.lexical_only,
+                       out=a.out, emb_cache=a.emb_cache, threads=a.threads, sync=a.sync)
+    rec = json.loads((d / "tools.json").read_text(encoding="utf-8"))
+    print((d / "tools.md").read_text(encoding="utf-8"), end="")
+    print(f"{d}: {rec['summary']['n']} queries")
     return 0
 
 
@@ -784,6 +797,30 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-<kind>-<corpus>-<ts>/")
     p.set_defaults(fn=_probes)
+
+    p = sub.add_parser("tools-retrieval",
+                       help="tool retrieval on ToolRet (no model calls): tools.json/tools.md for "
+                            "a tool system (Phase 2)")
+    p.add_argument("--system", required=True,
+                   choices=("tools-bm25-raw", "tools-bm25f", "tools-hybrid"))
+    p.add_argument("--split", choices=("dev", "test"), required=True)
+    p.add_argument("--store", type=Path, default=None,
+                   help="the tools-only store (tools-bm25f, tools-hybrid; e.g. "
+                        ".cache/store-p2/toolret); its active tool index is replaced by the "
+                        "tuned one")
+    p.add_argument("--root", type=Path, default=None,
+                   help="the ToolRet data directory (default data/tools)")
+    p.add_argument("--lexical-only", action="store_true",
+                   help="tools-hybrid: the BM25 channel alone (no embedding)")
+    p.add_argument("--emb-cache", type=Path, default=None,
+                   help="embedding cache directory (dense index only)")
+    p.add_argument("--threads", type=int, default=1,
+                   help="threads of the embedding model while building (vectors unchanged)")
+    p.add_argument("--sync", action="store_true",
+                   help="run one ACL sync cycle (committed directory and policy) first")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes tools-<system>-<split>-<time>/")
+    p.set_defaults(fn=_tools_retrieval)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")
