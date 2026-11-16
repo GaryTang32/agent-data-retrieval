@@ -176,7 +176,7 @@ margins fixed before any result:
 | Are dated questions served better? | Yes: on the 34 dated gov test questions nDCG@10 rises from 0.567 to 0.820 (+0.254 [+0.182, +0.325]); Recall@10 is unchanged |
 | Are other questions served worse? | No: gov +0.023 Recall@10 and +0.035 nDCG@10 on in-force questions; research and bench unchanged. 21 gov questions whose evidence is only superseded are reported apart |
 | Does dedup help? | It removes every repeated passage from the top 10, but under the default filters it changes no quality metric |
-| Can a caller see what they should not? | No leak in 1,053 leak probes through the Python API and 300 through the MCP server; filtering equals an allowed-only index in 12,000 of 12,000 checks; 350 fail-closed probes returned nothing |
+| Can a caller see what they should not? | No leak in 1,053 leak probes through the Python API, nor in 300 of them re-run through the MCP server; filtering equals an allowed-only index in 12,000 of 12,000 checks; 350 fail-closed probes returned nothing |
 | Does a revocation take effect? | Yes, within one sync, also in an MCP server that was already running |
 | How much tool context does search save? | 99.846%: an agent loads 1,256 tokens instead of the 816,284-token catalog of 14,059 real tools |
 | Is tool search as complete as BM25? | Yes, by a thin margin: Completeness@10 0.411 against 0.384 (+0.027 [+0.002, +0.053]) |

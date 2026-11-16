@@ -692,7 +692,7 @@ Phase 1 weights (`w`, `w_bc`) are reused, not retuned, so each change is attribu
 | Configuration | ACL caller | Applicability | Dedup | Purpose |
 |---|---|---|---|---|
 | `p1-struct-bc` (recorded) | — | — | — | The Phase 1 reference, from `results/phase1/` |
-| `p2-identity` | `auditor` | `include_superseded` | off | Regression guard: must equal Phase 1 exactly |
+| `p2-identity` | none: ACL layer off (R17; first written as `auditor`) | `include_superseded` | off | Regression guard: must equal Phase 1 exactly |
 | `p2-appl` | `auditor` | default; `as_of` from the item | off | Applicability alone |
 | `p2-dedup` | `auditor` | `include_superseded` | on | Dedup alone |
 | `p2-default` | `auditor` | default; `as_of` from the item | on | The Phase 2 default |
@@ -748,7 +748,7 @@ The best on dev goes to test.
 | fail closed | F1–F5 and "no entry", each × the 5 tools × 5 callers | — | 150 |
 | total | | | **1,190** |
 
-All 1,190 run against the Python API. A seeded subset of 300 also runs through the MCP server.
+All 1,190 run against the Python API. A seeded subset of 300 also runs through the MCP server. (As run: 300 of the leak probes only, ruling R18.)
 Synthetic fixtures add cases the corpora lack: an id prefix shared by a visible and a hidden
 document, and an exact duplicate shared by a public and a restricted document.
 
@@ -892,6 +892,8 @@ pre-declared comparison per corpus, so no Holm correction across them.
 | R14 | `mcp==2.3.0` in an optional `[mcp]` extra; no Tasks | Current stable SDK implementing 2026-07-28; Tasks are unimplemented in it and unneeded | Tasks-dependent features wait for the SDK |
 | R15 | The ACL never forms part of a snapshot handle | Revocation must reach old handles | A replayed handle can return fewer results after a revocation, by design |
 | R16 | Tool descriptions are untrusted data; there is no poisoning defence beyond that | Poisoned-description drills are a roadmap "known unknown", not a Phase 2 criterion | A malicious description can still mislead an agent that loads it |
+| R17 | (Added in the Task 8 review.) `p2-identity` runs with the ACL layer off, not as `auditor` | The ACL path scores dense rows with the row-exact kernel that makes B2 bit-exact; the Phase 1 matrix product can differ in the last float32 bits, so A5's "identical scores" can hold only with the ACL layer off | A5 does not show that the ACL path as `auditor` reproduces Phase 1 scores bit for bit; it reproduces every ranked id, with scores within 1.8e-05 |
+| R18 | (Added in Task 13.) The MCP subset of B1 is 300 of the leak probes only, not of all probes | B1 is the leak criterion; fail-closed cases (B4) are decided inside `Tools`, which the server calls on every request | No fail-closed probe ran through MCP; F4 was exercised through MCP only by `user:ghost`'s calls |
 
 ## 15. Questions settled without the user
 

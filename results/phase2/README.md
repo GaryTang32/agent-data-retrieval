@@ -6,8 +6,8 @@
 > accuracy is not measured.
 
 **Verdict.** All 16 exit criteria of the design (§13) pass, with the thresholds fixed before any result.
-- **Applicability (A1–A6).** Default search returns no superseded chunk, and `as_of` returns only documents in force on that date. Dated gov questions gain +0.254 nDCG@10; the other gov questions gain +0.023 Recall@10 and +0.035 nDCG@10. With every Phase 2 layer off, Phase 1 is reproduced bit for bit, and dedup leaves no repeated passage in a top 10.
-- **Permissions (B1–B5).** No leak in 1,053 leak probes over the five tools through the Python API, nor in the seeded 300 through the MCP server. Filtering equals an index built from the caller's documents alone in 12,000 of 12,000 checks. A revocation takes effect within one sync, also in an MCP server that was already running. None of 350 fail-closed probes returned content, and every log line written carries its principals.
+- **Applicability (A1–A6).** Default search returns no superseded chunk, and `as_of` returns only documents in force on that date. Dated gov questions gain +0.254 nDCG@10; the other gov questions gain +0.023 Recall@10 and +0.035 nDCG@10. With every Phase 2 layer off (the ACL layer included, ruling R17), Phase 1 is reproduced bit for bit, and dedup leaves no repeated passage in a top 10.
+- **Permissions (B1–B5).** No leak in 1,053 leak probes over the five tools through the Python API, nor in a seeded 300 of those leak probes re-run through the MCP server. Filtering equals an index built from the caller's documents alone in 12,000 of 12,000 checks. A revocation takes effect within one sync, also in an MCP server that was already running. None of 350 fail-closed probes returned content, and every log line written carries its principals.
 - **Tools as data (C1–C3).** 14,059 real tool records were ingested. Loading the top 10 tools takes 99.846% fewer tokens than loading the catalog, and the hybrid tool search is at least as complete as BM25 over the raw documentation (Completeness@10 0.411 against 0.384).
 - **MCP server (D1).** `adr mcp` serves the five tools over stdio as one caller. Every result carries a snapshot handle, and a replay with it is identical.
 - **Determinism (X1).** Every configuration, tool system and probe set, run twice in fresh processes, gave identical results, and the same as the runs recorded in Tasks 5, 8 and 11. The overlays derived twice are byte-identical, and every sync of a store gave the same access entries.
@@ -17,6 +17,7 @@ Four results need care when reading these numbers:
 - **Dedup is not a retrieval gain here.** It matters on gov only when superseded versions are kept; under the default filters it changed 2 gov rankings and no quality metric.
 - **The C3 margin is thin.** The lower bound of the interval is +0.002, against a margin of −0.02.
 - **The permissions are synthetic.** Three tenants, twelve groups and twenty users give 20 views per corpus; this is not a real organisation's shape.
+- **Two measurements differ from what the spec wrote** (rulings R17 and R18, recorded in spec §14 after the fact). A5 runs `p2-identity` with the ACL layer off; §10.1 had it search as `user:auditor`, and that run differs from Phase 1 in the last float32 bits of some scores (ranked ids equal, see 2B step 1). The MCP subset was drawn from the 1,053 leak probes only, where §10.2 drew it from all 1,190, so no fail-closed probe ran through MCP (F4 was still exercised: 19 of the 300 were F4 denials).
 
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](../../docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](../../docs/superpowers/plans/2026-11-16-phase2.md).
@@ -77,9 +78,9 @@ per corpus, so there is no Holm correction. Every number is in the named file un
 | A2 | `as_of` selects the version in force | 0 chunks from documents not in force on `as_of` | gov: T1 40/40, T2 `as_of` 189/189, T3 `as_of` 145/145, T5 171/171. research and bench hold no dated documents (R6) | **Pass** | `probes-temporal-gov-20261116T070327`, `…T070706` |
 | A3 | Dated questions served at least as well | Lower bound of the 95% paired interval > −0.02 on Recall@10 and nDCG@10, `p2-default` against `p1-struct-bc`, 34 `policy_asof` test items | Recall@10 +0.000 [+0.000, +0.000]; nDCG@10 +0.254 [+0.182, +0.325] (predicted +0.000 and +0.254) | **Pass** | `p2-compare-gov-p1-struct-bc-test-…T055136--gov-p2-default-test-…T060721` |
 | A4 | Applicability does not lower non-as-of items | As A3, per corpus, test, non-as-of items with every evidence group visible under the default filters | gov (158 items): Recall@10 +0.023 [+0.004, +0.048], nDCG@10 +0.035 [+0.021, +0.051]; research (180) and bench (517): +0.000 [+0.000, +0.000] on both. The 21 gov superseded-only items reported apart (R3) | **Pass** | `p2-compare-<corpus>-p1-struct-bc-test-…--<corpus>-p2-default-test-…` |
-| A5 | Regression guard | `p2-identity` identical to the recorded `p1-struct-bc` runs: ranked chunk ids and scores, every item, dev and test, 3 corpora | 1,300 of 1,300 items identical (gov 297, research 275, bench 728), with every Phase 2 layer off; again in both X1 rounds | **Pass** | `acl-2b-checks/auditor-reruns.json`; `<corpus>-p2-identity-<split>-retrieval-*T11*`; `x1-checks/x1.json` |
+| A5 | Regression guard | `p2-identity` identical to the recorded `p1-struct-bc` runs: ranked chunk ids and scores, every item, dev and test, 3 corpora | 1,300 of 1,300 items identical (gov 297, research 275, bench 728), with every Phase 2 layer off, the ACL layer included (R17; §10.1 had `auditor`, under which scores differ by up to 1.8e-05, ids equal); again in both X1 rounds | **Pass** | `acl-2b-checks/auditor-reruns.json`; `<corpus>-p2-identity-<split>-retrieval-*T11*`; `x1-checks/x1.json` |
 | A6 | Dedup does what it says | 0 top-10 slots holding two members of one cluster; clusters and parameters recorded; effect reported | 0 duplicate, cluster and exact-copy slots for `p2-dedup` and `p2-default` on every corpus and split (Phase 1 gov test: 1,076 = 44.5%) | **Pass** | `p2-compare-*-p2-dedup-*`, `p2-compare-*-p2-default-*` |
-| B1 | Zero leaks | 0 leaks; at least 500 probes; at least 100 in each family; all through the API and 300 through MCP; `search`, `grep`, `read`, `search_tools`, `load_tool` | API: 1,053 leak probes, 0 leaks (search 463, grep 210, read 180, `search_tools`/`load_tool` 200). MCP: the seeded 300, 0 leaks, 0 invalid (search 135, grep 65, read 48, `search_tools`/`load_tool` 52; at least 20 per spec family) | **Pass** | `probes-acl-<corpus>-*`, `probes-tools-20261116T175249`, `probes-mcp-20261116T191633` |
+| B1 | Zero leaks | 0 leaks; at least 500 probes; at least 100 in each family; all through the API and 300 through MCP; `search`, `grep`, `read`, `search_tools`, `load_tool` | API: 1,053 leak probes, 0 leaks (search 463, grep 210, read 180, `search_tools`/`load_tool` 200). MCP: a seeded 300 of the 1,053 leak probes (R18: leak probes only, where §10.2 sampled all 1,190; no fail-closed probe through MCP), 0 leaks, 0 invalid (search 135, grep 65, read 48, `search_tools`/`load_tool` 52; at least 20 per spec family) | **Pass** | `probes-acl-<corpus>-*`, `probes-tools-20261116T175249`, `probes-mcp-20261116T191633` |
 | B2 | Filtering equals an allowed-only index | Identical ids and scores, 3 corpora × 20 views × 50 queries, against subset stores | 12,000 of 12,000 checks identical (`search` and `grep`, Phase 1 view and `p2-default` view), at full float precision | **Pass** | `probes-equivalence-<corpus>-*` |
 | B3 | Revocation within one sync cycle | All revocation tests pass, including the already-running MCP server | 13 of 13: 5 content, 5 tool, 3 MCP-server tests (the three change kinds, each in-process, in a new process and in a process or server started before the change; F2 and F3) | **Pass** | `acl-2b-checks/checks.json`, `tools-2c-checks/checks.json`, `2d-checks/checks.json` |
 | B4 | Fail closed | No content returned in any case, F1–F5 and "no entry" × 5 tools | 350 of 350 probes returned no content (270 content-tool probes on three corpora, 80 tool-tool probes) | **Pass** | `probes-acl-<corpus>-*`, `probes-tools-20261116T175249` |
@@ -88,7 +89,7 @@ per corpus, so there is no Holm correction. Every number is in the named file un
 | C2 | Tool-context reduction | Mean over the test queries ≥ 80% (expected > 99%) | 99.846% (lowest per query 99.376%): 1,256 tokens loaded per query against 816,284 | **Pass** | `tools-2c-checks/reingest.json`, `tools-tools-hybrid-test-20261116T174246` |
 | C3 | Tool search at least as complete as BM25 | Completeness@10 on test, best Phase 2 system against `tools-bm25-raw`: point estimate ≥ the baseline's and paired lower bound > −0.02 | `tools-hybrid` 0.411 against 0.384: +0.027 [+0.002, +0.053] | **Pass** (thin margin) | `tools-2c-checks/reingest.json` |
 | D1 | MCP server with snapshot handles | The MCP tests of §12 pass; every result carries a handle | 73 of 73: 16 MCP tests, 44 handle tests, 13 revocation tests | **Pass** | `2d-checks/checks.json` |
-| X1 | Determinism | Every §10.1 configuration, the tool systems and the probe sets twice in fresh processes; overlays twice; two syncs from the same inputs: identical results, byte-identical overlays, equal `entries_sha256` | 30 of 30 retrieval configurations, 5 of 5 tool runs and 10 of 10 probe sets identical in two fresh-process rounds (and equal to the runs recorded in Tasks 5, 8 and 11); overlays byte-identical; one `entries_sha256` per store over 38 syncs | **Pass** | `x1-checks/x1.json` |
+| X1 | Determinism | Every §10.1 configuration, the tool systems and the probe sets twice in fresh processes; overlays twice; two syncs from the same inputs: identical results, byte-identical overlays, equal `entries_sha256` | 30 of 30 retrieval configurations, 5 of 5 tool runs and 10 of 10 probe sets identical in two fresh-process rounds (and, for the 9 sets that existed before this task, equal to the runs recorded in Tasks 5, 8 and 11); overlays byte-identical; one `entries_sha256` per store over 38 syncs | **Pass** | `x1-checks/x1.json` |
 
 ## 2A: applicability and duplicates
 
@@ -503,8 +504,8 @@ runs with dedup on, so alternates are exercised. Each result was judged against:
 | search, `alternate-cross-view` | For each dedup cluster whose members have different access lists, each user who sees some members and not others searches the 10 rarest tokens of a visible member | as found: gov 0, research 0, bench 13 | 13 | 13 answered | 0 |
 | total | | | 853 | | **0** |
 
-Each probe draws its caller afresh: 19 or 20 callers per family on each corpus, and 12 for
-the doc-scoped grep. `user:outsider` appears in every family, and `user:ghost` in every family
+Each probe draws its caller afresh: 18 to 20 callers per family on each corpus (`search-title` 18 on
+research and bench, 19 on gov), and 12 for the doc-scoped grep. `user:outsider` appears in every family, and `user:ghost` in every family
 but the title family. No 8-character prefix of a hidden document began a visible id, so every
 prefix probe of a directory user was answered "not found".
 
@@ -968,7 +969,7 @@ pytest tests/store/test_revocation.py
 
 ### B1 through MCP
 
-**The universe** is every leak probe of the API runs, built exactly as they build them: the 853 content probes of gov, research and bench (2B) and the 200 tool probes (2C), 1,053 in all.
+**The universe** (ruling R18) is every leak probe of the API runs, built exactly as they build them: the 853 content probes of gov, research and bench (2B) and the 200 tool probes (2C), 1,053 in all. Spec §10.2 and the plan drew the subset from all 1,190 probes, fail-closed ones included; it was limited to leak probes because B1 is the leak criterion and B4's fail-closed cases are decided inside `Tools`, which the server calls on every request. So no fail-closed probe ran through MCP, and the run did not report that family as short. F4 was still exercised through MCP: 19 of the 300 calls were F4 denials (`user:ghost`).
 
 **The subset** is the 300 probes with the lowest SHA-256 of `"20261116:<store>/<probe id>"`. Nothing forces a family's share; the plan asks for at least 20 per family, else a report.
 - **At the level of the spec's four families** (search, grep, read, `search_tools`/`load_tool`) every family has at least 20.
@@ -1043,8 +1044,9 @@ The same machine as 2A–2C. The first MCP run had the machine to itself apart f
 
 - **stdio only** (R12). One caller per server process; multi-user serving needs HTTP and OAuth, which are out of scope.
 - **Rejected calls are not logged.** Calls that fail the server's input schema never reach `Tools` (above).
-- **The MCP subset is 300 of 1,053.** The other 753 leak probes and all 350 fail-closed probes ran through the Python API only, as the spec plans. F1–F5 are decided per call inside `Tools`, which the server calls for every request.
+- **The MCP subset is 300 of 1,053.** The other 753 leak probes and all 350 fail-closed probes ran through the Python API only. The spec planned the 300 to be sampled from every probe, fail-closed ones included (R18). F1–F5 are decided per call inside `Tools`, which the server calls for every request.
 - **Handles are not signed** (above).
+- **B5 through MCP covers the probe calls only.** The D1 and revocation-leg tests log into fixture stores under `tmp_path`, which were not scanned.
 - **Fixture stores for D1.** The MCP and handle tests run on small fixture stores; the real stores are exercised through MCP only by the probe subset.
 
 ### Files
@@ -1152,7 +1154,9 @@ Each part lists its own limits above. Across Phase 2:
 - **Synthetic tenants** (R9). Three tenants, twelve groups and twenty users, with access keyed by chain, give 20 views per corpus. That is not a real organisation's shape and says nothing about very many views. B2 compares exactly those 20 views per corpus.
 - **The ToolRet licence** (R13, Q2). ToolRet stays local; nothing from it is committed. The 13,862 `web` tools are Apache-2.0 (ToolBench). For the 197 `customized` (`toolbench_sam`) tools no source states a licence or an upstream, and their records now say NOASSERTION. None of them is gold, so C3 says nothing about them.
 - **stdio only** (R12). The MCP server serves one caller per process over stdio; HTTP and OAuth are out of scope.
-- **Rejected MCP calls are not logged.** A call the server's input schema rejects never reaches `Tools`, so B5 covers every call that reached the tools, not every request.
+- **Rejected MCP calls are not logged.** A call the server's input schema rejects never reaches `Tools`, so B5 covers every call that reached the tools, not every request. B5 through MCP covers the 382 probe calls, not the MCP test runs, which log into fixture stores.
+- **A5 under ruling R17.** `p2-identity` runs with the ACL layer off. Run as `user:auditor`, as §10.1 first defined it, it keeps every ranked id but differs from Phase 1 in the last float32 bits of some scores (up to 1.8e-05 on bench), because the ACL path uses the row-exact dense kernel that B2 needs.
+- **The MCP subset is drawn from leak probes only** (R18), so no fail-closed probe ran through MCP; F1–F5 are decided inside `Tools`, which the server calls on every request.
 - **Handle parameters are requests, not attestations.** A handle names the components a call asks for; the server checks that they exist and runs on them, but nothing signs a result.
 - **Probe total: 1,403 against the spec's 1,190.** The leak probes are 1,053 (the spec's 1,040, plus 13 `alternate-cross-view` probes for bench's one cross-view cluster). The fail-closed probes are 350, not 150: the content set ran on each of the three corpora (90 each, where the spec counted 90 once), and the tool set has two more tool-snapshot conditions (`F2-tools`, `no-tool-snapshot`, 20 probes). See 2C, "B totals".
 - **The thin C3 margin.** `tools-hybrid` beats `tools-bm25-raw` by +0.027 Completeness@10 [+0.002, +0.053]: the lower bound clears the −0.02 margin by 0.022, on one test split, with the system chosen on a 212-query dev split. Both Phase 2 tool systems chose the edge of the name-weight grid.
