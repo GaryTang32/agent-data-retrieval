@@ -212,8 +212,15 @@ def test_an_old_snapshot_whose_chain_the_current_acl_splits_is_denied_f1(built):
     _second_snapshot(store, config, [d for d in [*DOCS, *mini_docs()] if d is not V2024])
     with pytest.raises(tools.AccessDenied) as e:
         as_(store).search("vessel", handle=h)
-    assert e.value.code == "F1" and "chain" in str(e.value)
+    msg = str(e.value)
+    assert e.value.code == "F1" and "chain" in msg
+    ln = log_lines(store)[-1]
+    assert ln["acl_decision"] == "denied:F1" and ln["error"] == msg
     assert as_(store).search("vessel").hits  # HEAD itself is fine
+    # its own message: the handle's snapshot, not the policy, is the problem; it names
+    # snapshots only (never the version that is no longer listed)
+    assert "handle" in msg and "fix the policy" not in msg and "current handle" in msg
+    assert h["snapshot"][:12] in msg and did(V2024)[:8] not in msg
 
 
 # -- parts that are gone, and bad handles -------------------------------------------------------
@@ -348,3 +355,157 @@ def test_ids_of_the_wrong_type_are_refused_cleanly(store, acl_on):
         assert type(e.value) is tools.ToolError
         assert len(log_lines(store)) == before + 1
         assert log_lines(store)[-1]["error"] == str(e.value)
+
+
+# -- fix round: the view of a cursor, replays, damaged records, forged labels -------------------
+
+Q = "refund rule vessel harbour section part"
+
+
+def test_next_cursor_covers_only_the_callers_view(store):
+    """outsider sees fewer matching chunks than the auditor (and far fewer than the index
+    holds): a page one past the outsider's last hit has no next page for the outsider, and
+    has one for the auditor; the same for grep. Nothing about hidden documents moves it."""
+    out, aud = as_(store, "user:outsider"), as_(store, "user:auditor")
+    n = len(out.search(Q, top=50).hits)
+    every = len(aud.search(Q, top=50).hits)
+    chunks = len(tools.Tools(store.path).active_index().chunks)
+    assert 1 <= n and n + 1 < every < chunks
+    assert out.search(Q, top=n).next_cursor == str(n)  # a full page: there may be more
+    after = out.search(Q, top=5, cursor=str(n))
+    assert after.hits == [] and after.next_cursor is None
+    assert out.search(Q, top=n + 1).next_cursor is None
+    assert aud.search(Q, top=n + 1).next_cursor == str(n + 1)
+    m = len(out.grep("vessel|harbour").matches)
+    g_out, g_aud = out.grep("vessel|harbour", max=m), aud.grep("vessel|harbour", max=m)
+    assert (g_out.truncated, g_out.next_cursor) == (False, None)
+    assert g_aud.truncated and g_aud.next_cursor is not None
+
+
+def test_a_replay_keeps_its_dedup_note_after_an_overlay_is_built(store):
+    from tests.store.test_permissions import build_dedup
+
+    t = tools.Tools(store.path)
+    h = t.search("vessel").handle
+    shutil.rmtree(store.path / "dedup")  # as if no overlay had been built
+    first = t.search("vessel")
+    assert first.handle["dedup"] is None and first.dedup_note == tools.dedup_mod.NO_OVERLAY
+    build_dedup(store)
+    assert t.search("vessel").dedup is not None  # without a handle: collapsed now
+    again = t.search("vessel", handle=first.handle)
+    assert again.to_dict() == first.to_dict()
+    assert t.search("vessel", handle=h).dedup == h["dedup"]
+
+
+@pytest.mark.parametrize("damage", [{"w": 1.5}, {"w": float("nan")},
+                                    {"system": "Not A System!"}])
+def test_a_damaged_active_record_keeps_phase1_search_and_nulls_the_index(store, damage):
+    p = store.path / "index" / "active.json"
+    rec = json.loads(p.read_text())
+    want = tools.Tools(store.path).search("vessel")
+    p.write_text(json.dumps({**rec, **damage}))
+    got = tools.Tools(store.path).search("vessel")  # acl=False: Phase 1 behaviour
+    assert [x.to_dict() for x in got.hits] == [x.to_dict() for x in want.hits]
+    assert got.handle["index"] is None and got.handle["dedup"] is None
+    assert got.handle["snapshot"] == store.snapshot_id
+    assert tools.Tools(store.path).read(did(PUBLIC)).handle["index"] is None
+
+
+def test_current_never_raises_on_damaged_parts(store):
+    rec = json.loads((store.path / "index" / "active.json").read_text())
+    for bad in ({**rec, "w": 2}, {**rec, "system": "x y"}, {**rec, "w": float("inf")}):
+        h = handles.current(store.path, store.snapshot_id, index=bad)
+        assert h.index is None and h.dedup is None
+    ti = {"tool_snapshot": "a" * 64, "fingerprint": "b" * 64, "w": 1.5, "lexical_only": False}
+    h = handles.current(store.path, store.snapshot_id, tools="a" * 64, tool_index=ti)
+    assert h.tool_index is None and h.tools == "a" * 64
+
+
+@pytest.mark.parametrize("label", ["p1-struct-bc-rr", "p1-struct-bc"])
+def test_a_handle_cannot_relabel_an_index_as_a_system_that_cannot_run_it(store, label):
+    h = tools.Tools(store.path).search("vessel").handle
+    fp, system, w = h["index"].split(":")
+    assert system == "p1-struct"  # lexical, no breadcrumb prefix
+    forged = {**h, "index": f"{fp}:{label}:{w}"}
+    for t in (tools.Tools(store.path), as_(store)):
+        e = pytest.raises(tools.ToolError, t.search, "vessel", handle=forged).value
+        assert str(e).startswith("bad handle: ") and label in str(e)
+
+
+def test_a_relabel_the_index_can_run_is_accepted(tmp_path):
+    """A lexical-only p1-struct-bc-rr index is a lexical-only p1-struct-bc index (no
+    reranker without dense): either label runs it."""
+    s = Store.create(tmp_path / "s")
+    for d in DOCS[-6:]:
+        s.add(*d)
+    s.commit()
+    t = tools.Tools(s.path)
+    t.index("p1-struct-bc-rr", lexical_only=True, w_bc=1)
+    h = t.read(did(DOCS[-1])).handle
+    fp, _, w = h["index"].split(":")
+    res = t.search("vessel", handle={**h, "index": f"{fp}:p1-struct-bc:{w}"})
+    assert res.system == "p1-struct-bc"
+
+
+def test_an_old_handle_logs_the_view_of_its_own_snapshot(built):
+    from tests.store.test_permissions import md
+
+    store, config = built
+    a = as_(store, "user:auditor")
+    old = a.read(did(PUBLIC))
+    _second_snapshot(store, config, [*DOCS, *mini_docs(),
+                                     md("public/new.md", "New", "A new vessel notice.")])
+    a.read(did(PUBLIC), handle=old.handle)
+    ln = log_lines(store)[-1]
+    snap = acl.read_head(store.path)[1]
+    ps = set(snap.directory["user:auditor"])
+    head_view = {d for d, v in snap.docs.items() if ps & set(v)}
+    old_docs = set(Store.open(store.path, old.handle["snapshot"]).doc_ids())
+    assert ln["view"] == acl.view_id(head_view & old_docs) != acl.view_id(head_view)
+    a.read(did(PUBLIC))
+    assert log_lines(store)[-1]["view"] == acl.view_id(head_view)
+
+
+def test_a_handle_object_is_logged_as_a_dict(store):
+    t = tools.Tools(store.path)
+    h = t.search("vessel").handle
+    t.search("vessel", handle=handles.Handle(**h))
+    ln = log_lines(store)[-1]
+    assert ln["args"]["handle"] == h and ln["handle"] == h
+
+
+def test_an_index_deleted_after_the_handle_is_resolved_is_no_longer_available(store,
+                                                                            monkeypatch):
+    h = tools.Tools(store.path).search("vessel").handle
+    real = handles.resolve
+
+    def resolve_then_delete(path, handle):
+        r = real(path, handle)
+        shutil.rmtree(store.path / "index" / h["index"].split(":")[0], ignore_errors=True)
+        return r
+
+    monkeypatch.setattr(handles, "resolve", resolve_then_delete)
+    for t in (tools.Tools(store.path), as_(store)):
+        e = pytest.raises(tools.ToolError, t.search, "vessel", handle=h).value
+        assert str(e) == "handle no longer available: index"
+
+
+def test_the_dedup_id_hashes_the_chunks_once_per_version_and_not_without_an_overlay(
+        store, monkeypatch):
+    calls = []
+    real = handles.chunk_content_sha256
+    monkeypatch.setattr(handles, "chunk_content_sha256",
+                        lambda rows: calls.append(1) or real(rows))
+    handles._CONTENT.clear()
+    for _ in range(2):
+        tools.Tools(store.path).read(did(PUBLIC))
+    assert len(calls) == 1  # one hash per index version, whatever the instance
+    chunks = next((store.path / "index").glob("*/chunks.jsonl"))
+    chunks.write_bytes(chunks.read_bytes())  # a new version of the file (mtime)
+    tools.Tools(store.path).read(did(PUBLIC))
+    assert len(calls) == 2
+    shutil.rmtree(store.path / "dedup")  # no dedup overlay: nothing to locate
+    handles._CONTENT.clear()
+    calls.clear()
+    res = tools.Tools(store.path).read(did(PUBLIC))
+    assert res.handle["dedup"] is None and calls == []

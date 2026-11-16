@@ -33,6 +33,9 @@ Inputs and outputs:
   other exception is the SDK's generic "Error executing tool <name>" (the call is in the
   retrieval log with the error).
 - Annotations: `readOnlyHint`, `idempotentHint`, `openWorldHint: false`.
+- A handle's parameters (the system label, the fusion weights) are what the client asks for,
+  not an attestation of what was active: any weight in [0, 1] runs on a hybrid index, and a
+  system label is accepted only when it could have built the index (`adr_store.handles`).
 
 stdio has no authentication, so the principal is fixed when the server starts (ruling R12):
 a server without a caller refuses to start (exit 2). It checks nothing else about the caller.
@@ -248,9 +251,13 @@ class ToolFilters(_Strict):
         None, description="keep tools of these source kinds only")
 
 
+HELP_HANDLES = ("Every result carries a snapshot handle; a call given one runs on exactly the "
+                "store versions it names. A handle's parameters (system label, weights) are "
+                "what the client asks for, not an attestation of what was active.")
 HandleArg = Annotated[Handle | None, Field(
     description="the `handle` of an earlier result: run on exactly the store versions it "
-                "names (fails if one is gone); omit for the current ones")]
+                "names (fails if one is gone); omit for the current ones. Its parameters "
+                "(system label, weights) are a request, not a record of what was active")]
 Top = Annotated[int, Field(ge=1, le=TOP_MAX, description=f"results per page (1 to {TOP_MAX})")]
 
 
@@ -462,7 +469,7 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="adr mcp", description="Serve the store's tools over "
-                                 "MCP (stdio) as one caller.")
+                                 "MCP (stdio) as one caller. " + HELP_HANDLES)
     add_arguments(ap)
     a = ap.parse_args(argv)
     return serve(a.store, a.as_user, a.emb_cache)

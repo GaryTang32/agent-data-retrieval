@@ -310,6 +310,24 @@ def test_each_remaining_leak_kind_is_detected(store, config, tmp_path):
         assert leaks_by_kind(results)[kind] > 0, kind
 
 
+def test_a_next_cursor_beyond_the_view_is_counted_as_hidden(store, config, tmp_path):
+    """A `next_cursor` (or the echoed `cursor`) that differs from the view-only reference's,
+    say one that offers a next page because the whole index has more chunks than the
+    caller's view, is a count that includes hidden documents (search and grep)."""
+    def search(res):
+        return dataclasses.replace(res, next_cursor=res.next_cursor or str(res.top))
+
+    def grep(res):
+        return dataclasses.replace(res, next_cursor=res.next_cursor or "f" * 64 + ":0")
+
+    results = run_leak(store, config, tmp_path, tools_for=lambda c: Wrap(
+        as_(store, c), ok={"search": search, "grep": grep}))
+    hit = {r.family for r in results if r.kinds["count_includes_hidden"]}
+    assert {"search-rare", "grep-literal"} <= hit
+    assert all(r.kinds["count_includes_hidden"] is not True for r in results
+               if r.tool == "read")
+
+
 def test_the_cross_view_duplicate_family_targets_a_split_cluster(store, config, tmp_path,
                                                                  monkeypatch):
     """The fixture's levy section is an exact duplicate in a public and a group:acme/0

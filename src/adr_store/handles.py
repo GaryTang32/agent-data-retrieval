@@ -24,6 +24,14 @@ Components (planner's calls, Task 12):
   tool snapshot id.
 - The ACL snapshot is never part of a handle (ruling R15): every call is judged against the
   current ACL, whatever its handle names (`adr_store.tools`).
+- A handle's parameters (the system label and the weights) are what the client asks for, not
+  an attestation of what was active: a client may hand back any weight in [0, 1] for a hybrid
+  index, and any system label that could have built the index (judged from the index's own
+  `meta.json`: breadcrumb prefix, w_bc and reranker). A label the index cannot run (a
+  lexical `p1-struct` index called `p1-struct-bc-rr`, say) is a bad handle.
+- `current` never raises: a part whose record is damaged (an `active.json` weight outside
+  [0, 1] or NaN, a system name of the wrong shape) is null, so a call without a handle behaves
+  as it did before handles existed.
 
 `resolve(store_path, None)` is the store as it is now (`current`): HEAD, the active index when
 `index/active.json` names a saved index of that snapshot, the overlays of that snapshot (of
@@ -99,6 +107,23 @@ def encode_tool_index(fingerprint: str, w: float | int | None) -> str:
     return f"{fingerprint}:{json.dumps(w)}"
 
 
+def check_index(v: str) -> str:
+    """`v` if it is an index component, else ValueError."""
+    m = _INDEX.fullmatch(v)
+    if m is None:
+        raise ValueError("expected '<64 hex characters>:<system>:<weight>'")
+    _weight(m.group(3))
+    return v
+
+
+def check_tool_index(v: str) -> str:
+    m = _TOOL_INDEX.fullmatch(v)
+    if m is None:
+        raise ValueError("expected '<64 hex characters>:<weight>'")
+    _weight(m.group(2))
+    return v
+
+
 class Handle(BaseModel):
     """A snapshot handle. Every field is required (null: the store had no such part)."""
 
@@ -115,22 +140,12 @@ class Handle(BaseModel):
     @field_validator("index")
     @classmethod
     def _index(cls, v: str | None) -> str | None:
-        if v is not None:
-            m = _INDEX.fullmatch(v)
-            if m is None:
-                raise ValueError("expected '<64 hex characters>:<system>:<weight>'")
-            _weight(m.group(3))
-        return v
+        return None if v is None else check_index(v)
 
     @field_validator("tool_index")
     @classmethod
     def _tool_index(cls, v: str | None) -> str | None:
-        if v is not None:
-            m = _TOOL_INDEX.fullmatch(v)
-            if m is None:
-                raise ValueError("expected '<64 hex characters>:<weight>'")
-            _weight(m.group(2))
-        return v
+        return None if v is None else check_tool_index(v)
 
     def index_parts(self) -> tuple[str, str, float | int | None] | None:
         """(fingerprint, system, w) of `index`, or None."""
@@ -269,7 +284,20 @@ def index_content(store_path: Path, fingerprint: str) -> tuple[dict, str, str] |
 
 
 def dedup_id(store_path: Path, snapshot: str, fingerprint: str) -> str | None:
-    """The id of the dedup overlay of an index's chunks (the SHA-256 of its file), or None."""
+    """The id of the dedup overlay of an index's chunks (the SHA-256 of its file), or None.
+    When the snapshot holds no dedup overlay of the index's chunker at all, that is known
+    without reading the index's chunks (`index_content` hashes them once per file version and
+    process)."""
+    meta = index_meta(store_path, fingerprint)
+    if meta is None:
+        return None
+    prefix = f"{dedup_mod.overlay_key(meta['chunker'], dedup_mod.PARAMS)}-"
+    folder = Path(store_path) / dedup_mod.OVERLAY_DIR / snapshot
+    try:
+        if not any(p.name.startswith(prefix) for p in folder.glob("*.json")):
+            return None
+    except OSError:
+        return None
     parts = index_content(store_path, fingerprint)
     if parts is None:
         return None
@@ -349,23 +377,55 @@ def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNS
     store_path = Path(store_path)
     if index is _UNSET:
         index = _active_index(store_path, snapshot)
-    index_s = None if index is None else encode_index(index["fingerprint"], index["system"],
-                                                      index["w"])
+    index_s = _valid(check_index, lambda: encode_index(index["fingerprint"],
+                                                         index["system"], index["w"]))
     if applicability is _UNSET:
         applicability = file_sha256(ap.overlay_path(store_path, snapshot))
-    if dedup is _UNSET:
-        dedup = None if index is None else dedup_id(store_path, snapshot, index["fingerprint"])
+    if index_s is None:  # no index (or a damaged record of it): no dedup overlay of its chunks
+        dedup = None
+    elif dedup is _UNSET:
+        dedup = dedup_id(store_path, snapshot, index["fingerprint"])
     if tools is _UNSET:
         tools = tool_head(store_path)
     if tool_index is _UNSET:
         tool_index = _active_tool_index(store_path, tools)
-    ti = None if tool_index is None else encode_tool_index(tool_index["fingerprint"],
-                                                           tool_index["w"])
-    return Handle(snapshot=snapshot, index=index_s, applicability=applicability, dedup=dedup,
-                  tools=tools, tool_index=ti)
+    ti = None if tools is None else _valid(check_tool_index, lambda: encode_tool_index(
+        tool_index["fingerprint"], tool_index["w"]))
+    parts = {"applicability": applicability, "dedup": dedup, "tools": tools}
+    parts = {k: v if isinstance(v, str) and _HEX64.fullmatch(v) else None
+             for k, v in parts.items()}
+    if parts["tools"] is None:
+        ti = None
+    return Handle(snapshot=snapshot, index=index_s, tool_index=ti, **parts)
+
+
+def _valid(validator, encode) -> str | None:
+    """`encode()` when it gives a component `validator` accepts, else None (a part the store
+    has but whose record is damaged is null in a handle, never an error: `current` serves
+    every call, and the call itself decides what a damaged record means)."""
+    try:
+        v = encode()
+        validator(v)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+    return v
 
 
 # -- resolving a handle ------------------------------------------------------------------------
+
+def _runs(system: str, meta: dict) -> bool:
+    """Whether `adr index <system>` can make an index with these settings (`meta.json`): the
+    system's breadcrumb prefix and w_bc rule, and its reranker exactly when the index is
+    hybrid (a lexical-only index has none, so a lexical-only `p1-struct-bc-rr` index is a
+    lexical-only `p1-struct-bc` one, and either label runs it)."""
+    from adr_store.tools import SYSTEMS  # the tools import this module
+
+    spec = SYSTEMS.get(system)
+    st = meta["settings"]
+    return spec is not None and st.get("prefix") == spec.prefix and \
+        st.get("rerank") == (spec.rerank and meta["dense"]) and \
+        (spec.tune_w_bc or st.get("w_bc") == 0)
+
 
 def resolve(store_path: Path, handle: Handle | dict | None) -> Resolved:
     """The parts `handle` names, each checked (module docstring); None: the store now."""
@@ -396,6 +456,10 @@ def resolve(store_path: Path, handle: Handle | dict | None) -> Resolved:
         if meta["dense"] == (w is None):
             raise bad(f"index {fp[:12]} is {'hybrid' if meta['dense'] else 'lexical-only'} "
                       f"but the handle gives weight {json.dumps(w)}")
+        if not _runs(system, meta):
+            raise bad(f"index {fp[:12]} cannot be run as {system} (its settings: "
+                      f"{json.dumps(meta['settings'], sort_keys=True)}, "
+                      f"{'hybrid' if meta['dense'] else 'lexical-only'})")
         index = {"system": system, "snapshot": snap, "fingerprint": fp,
                  "lexical_only": not meta["dense"], "rerank": meta["settings"]["rerank"],
                  "w": w}

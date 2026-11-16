@@ -165,10 +165,15 @@ about a handle) and never stands in for it (ruling R15): F1–F5 are decided aga
 the current ACL snapshot whatever the handle names, an older content snapshot's documents are
 visible only as the current ACL lists them (a document it holds that the ACL no longer lists
 is "not found", byte for byte as one that never existed; a chain the current ACL thereby
-splits is F1), and an older tool snapshot's tools likewise. Without a handle, a result's
-handle is the store as the call found it: what the call used, and the rest as it is now
-(`handles.current`). A handle given is logged in `args`; every line carries `handle` (the
-result's, or the one given when the call failed). `search` and `grep` page with `cursor`, the
+splits is F1, whose message says to use a current handle and names snapshots only), and an
+older tool snapshot's tools likewise; the `view` logged is that of the snapshot read. A
+replay gives the result again, the dedup note of a handle without a dedup overlay included
+(an overlay built since is not used, and the note is `dedup.missing`'s, as before).
+Without a handle, a result's handle is the store as the call found it: what the call used,
+and the rest as it is now (`handles.current`, which never fails: a damaged record is a null
+part, so such a call behaves as before handles existed). A handle given is logged in
+`args` (as a dict); every line carries `handle` (the result's, or the one given when the call
+failed). `search` and `grep` page with `cursor`, the
 previous result's `next_cursor`: for `search` a rank offset (ranks offset+1 to offset+top of
 the same ranking, at most `CHANNEL_K` deep, `RERANK_TOP` for a reranked index; `next_cursor`
 is set when the page is full and that depth is not reached), for `grep` "<doc_id>:<offset>"
@@ -243,7 +248,6 @@ CHAIN_CACHE = 8  # chain maps kept in memory, by content snapshot id
 _CHAINS: OrderedDict[str, dict[str, tuple[str, ...]]] = OrderedDict()
 OPERATOR_UNDER_ACL = ("{} is an operator call (the whole index, unfiltered) and does not run "
                       "with the ACL layer; use Tools(acl=False)")
-HANDLE_NO_DEDUP = "the handle names no dedup overlay"
 INDEX_UNDER_ACL = ("index is an operator call and does not run with the ACL layer; use "
                    "Tools(acl=False) (`adr index`)")
 
@@ -800,7 +804,8 @@ class Tools:
             when = datetime.now(UTC).isoformat()
             fields = {} if fields is None else fields
             if handle is not None:
-                args = {**args, "handle": _filters_arg(handle)}
+                args = {**args, "handle": handle.model_dump() if isinstance(
+                    handle, handles_mod.Handle) else _filters_arg(handle)}
             acl_fields = {"caller": self._logged_caller(), "principals": None,
                           "acl_snapshot": None, "acl_decision": None if self.acl else "off",
                           "view": None, "not_visible": None}
@@ -883,11 +888,19 @@ class Tools:
         and valid_to would show versions the caller cannot see). An older snapshot (by
         handle) is judged against the current ACL: a version it holds that the ACL no longer
         lists is visible to no one, which may split its chain."""
-        if acl_mod.split_chain(self._chains(), access.docs) is not None:
-            raise AclDenied("F1", f"the ACL snapshot {access.acl_snapshot[:12]} splits a chain "
-                                  f"across access lists (all versions of a source share "
-                                  f"access); fix the policy and run `adr acl sync`",
-                            access.acl_snapshot)
+        if acl_mod.split_chain(self._chains(), access.docs) is None:
+            return
+        if self.snapshot != self._head.snapshot_id:  # a handle's older snapshot
+            raise AclDenied("F1", f"the handle's content snapshot {self.snapshot[:12]} no "
+                                  f"longer has consistent access under the current ACL "
+                                  f"snapshot {access.acl_snapshot[:12]} (a chain of it "
+                                  f"holds a version the ACL no longer lists, and all "
+                                  f"versions of a source share access); call with a current "
+                                  f"handle, or none", access.acl_snapshot)
+        raise AclDenied("F1", f"the ACL snapshot {access.acl_snapshot[:12]} splits a chain "
+                              f"across access lists (all versions of a source share "
+                              f"access); fix the policy and run `adr acl sync`",
+                        access.acl_snapshot)
 
     def _enter(self, acl_fields: dict, tool_call: bool = False, handle: object = None) -> None:
         """Resolve the call's access against HEAD (and for a tool tool, check the catalog
@@ -905,6 +918,7 @@ class Tools:
             raise AccessDenied(e.code, str(e)) from e
         allowed = {"principals": list(access.principals), "acl_snapshot": access.acl_snapshot,
                    "acl_decision": "allowed", "view": access.view}
+        # (with a handle, the view logged is that of the snapshot the call reads, below)
         if handle is not None:
             try:
                 self._pin_handle(handle)
@@ -916,6 +930,9 @@ class Tools:
         except AclDenied as e:
             acl_fields.update(acl_decision=f"denied:{e.code}", acl_snapshot=e.acl_snapshot)
             raise AccessDenied(e.code, str(e)) from e
+        if self.snapshot != self._head.snapshot_id:
+            allowed["view"] = acl_mod.view_id(d for d in self.store.doc_ids()
+                                              if d in access.docs)
         acl_fields.update(allowed)
         self._access_now, self._not_visible = access, []
 
@@ -924,8 +941,6 @@ class Tools:
         else "handle no longer available: <part>"; no fallback to HEAD): the call reads the
         handle's content snapshot, index, overlays, tool snapshot and tool index."""
         pin = handles_mod.resolve(self.store_path, handle)
-        if pin.index is not None and pin.index["system"] not in SYSTEMS:
-            raise ToolError(f"bad handle: unknown system {pin.index['system']!r}")
         self._pin, self.store, self.snapshot = pin, pin.store, pin.store.snapshot_id
 
     def _result_handle(self) -> dict:
@@ -1230,6 +1245,8 @@ class Tools:
                 idx = StoreIndex.load(self.index_root / active["fingerprint"], cache=cache,
                                       reranker=reranker)
             except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
+                if self._pin is not None:  # checked on entry: removed or damaged since
+                    raise handles_mod.unavailable("index") from e
                 raise _damaged(e) from e
             if idx.fingerprint != active["fingerprint"]:
                 raise _damaged(f"{self.index_root}: loaded index {idx.fingerprint} is not the "
@@ -1284,7 +1301,10 @@ class Tools:
         if self._pin is not None and (dd is None or dd.overlay_id != self._pin.dedup):
             if self._pin.dedup is not None:  # checked on entry: the file changed since
                 raise handles_mod.unavailable("dedup")
-            dd, why = None, why or HANDLE_NO_DEDUP  # an overlay made after the handle
+            # an overlay made after the handle: the note the call without a handle gave
+            # (`missing` passes over the overlay of these very chunks)
+            dd, why = None, why or dedup_mod.missing(self.store_path, self.snapshot,
+                                                     idx.chunker, content)
         self._memo["dedup"] = None if dd is None else dd.overlay_id
         return dd, why
 

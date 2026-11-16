@@ -41,8 +41,9 @@ not apply to this outcome):
   characters, so byte for byte; a prefix: an 8-character prefix of no id, compared with each
   given string replaced by `<given>`). A prefix that resolves to a visible document is no
   leak (prefixes resolve among visible ids);
-- `count_includes_hidden`: `excluded_by_filter`, `short_by`, `truncated` or the number of
-  hits or matches differ from the same call on the caller's reference store;
+- `count_includes_hidden`: `excluded_by_filter`, `short_by`, `truncated`, the number of
+  hits or matches, or the paging (`cursor`, `next_cursor`) differ from the same call on the
+  caller's reference store;
 - `score_differs`: hits (ids, scores at full precision, scoring chunks, alternates) or
   matches differ from the reference store's (B2).
 
@@ -506,6 +507,12 @@ def _returned(res) -> tuple[list[str], list[str], list[tuple]]:
     return docs, alts, texts
 
 
+def _paging(res) -> tuple:
+    """(cursor, next_cursor) of a search or grep result (None, None before Task 12's
+    cursors)."""
+    return getattr(res, "cursor", None), getattr(res, "next_cursor", None)
+
+
 def _payload(res) -> str:
     """The result as JSON without the caller's own input echoed back."""
     d = res.to_dict()
@@ -610,10 +617,13 @@ def check(probe: Probe, tools_for: Callable, reference_for: Callable,
         else:
             theirs = ("ok", *key(other[1])[1:])
             # [1] hits or matches; [2:4] the counts (search: excluded_by_filter, short_by;
-            # grep: truncated, excluded_by_filter); the rest the dedup state and the echo
+            # grep: truncated, excluded_by_filter); the rest the dedup state and the echo;
+            # and the paging: `cursor` and `next_cursor` (whether another page is offered
+            # must depend on the caller's view only)
             kinds["score_differs"] = mine[1] != theirs[1] or mine[4:] != theirs[4:]
             kinds["count_includes_hidden"] = (len(mine[1]) != len(theirs[1])
-                                              or mine[2:4] != theirs[2:4])
+                                              or mine[2:4] != theirs[2:4]
+                                              or _paging(res) != _paging(other[1]))
     extra = {}
     if probe.family == "alternate-cross-view":
         vis = set(probe.target["visible_members"])

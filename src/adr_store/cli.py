@@ -1096,7 +1096,8 @@ def _parser() -> argparse.ArgumentParser:
                         description="Serve search, read, grep, search_tools and load_tool over "
                                     "MCP on stdio, as one caller with the ACL enforced on every "
                                     "call (code in adr_store.mcp_server). Without a caller "
-                                    "(--as or ADR_CALLER) it refuses to start.")
+                                    "(--as or ADR_CALLER) it refuses to start. " +
+                                    mcp_server.HELP_HANDLES)
     mcp_server.add_arguments(mc)
     mc.set_defaults(fn=_mcp)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
