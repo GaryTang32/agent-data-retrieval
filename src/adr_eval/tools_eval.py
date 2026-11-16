@@ -13,7 +13,8 @@ Tuning (planner's call 15): mean nDCG@10 over the dev queries, `w_name` in `W_NA
 smallest `w`. It ranks every tool with the index itself (the auditor's view is the whole
 catalog under the committed policy; the dense channel by the row-exact kernel, as the ACL
 layer scores it). The tuned index is then built (or loaded) and made the store's active tool
-index, and the Phase 2 systems are evaluated through `Tools.search_tools` with the ACL layer
+index (the run records and prints "active tool index: <old> → <new>", so the change is never
+silent), and the Phase 2 systems are evaluated through `Tools.search_tools` with the ACL layer
 as `CALLER` (`user:auditor`), each query's top 10 loaded with `load_tool`; a denied call (no
 or stale ACL snapshot) stops the run with "run `adr acl sync`" (`--sync` runs one sync cycle
 with the committed directory and policy first). Hits map back to ToolRet ids by the fragment
@@ -25,9 +26,10 @@ ideal = min(10, |gold|) gains). Tool context (§8.4), Phase 2 systems: `page` = 
 canonical JSON of the `search_tools` result, `definitions` = tokens of the canonical JSON of
 the `load_tool` definitions of its hits (at most 10), `loaded` = their sum, `catalog` = the
 sum of every catalog record's `definition_tokens`, `reduction` = 1 - loaded / catalog,
-`gold_share` = tokens of the loaded definitions of gold tools / loaded; tokens as the harness
-counts them (`chunker._count`, stop words kept). The baseline reports `top10_doc_tokens`, the
-raw documentation tokens of its top 10.
+`gold_share` = the loaded definition tokens of gold tools / loaded (page entries are not
+counted as gold, even for gold hits), and the summary's gold share is the mean of that ratio
+over queries; tokens as the harness counts them (`chunker._count`, stop words kept). The
+baseline reports `top10_doc_tokens`, the raw documentation tokens of its top 10.
 
 `run` writes `<out>/tools-<system>-<split>-<UTC time>/tools.json` (config, tuning table,
 summary, one row per query: id, query, gold, ranked ToolRet ids, tool ids, scores, metrics,
@@ -213,6 +215,16 @@ def _raw_rows(root: Path | None, queries: list) -> tuple[list[dict], dict]:
     return rows, {"tools": len(raw.docs), "catalog_doc_tokens": raw.catalog_tokens}
 
 
+def _active_fingerprint(store: Path) -> str | None:
+    """The fingerprint `tools/index/active.json` names, or None (none, or unreadable)."""
+    try:
+        fp = json.loads((Path(store) / "tools" / "index" / "active.json").read_text(
+            encoding="utf-8")).get("fingerprint")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return fp if isinstance(fp, str) else None
+
+
 def _store_rows(system: str, store: Path, root: Path | None, dev: list, queries: list, *,
                 lexical_only: bool, emb_cache: Path, caller: str, threads: int,
                 sync: bool) -> tuple[list[dict], dict, dict]:
@@ -220,6 +232,7 @@ def _store_rows(system: str, store: Path, root: Path | None, dev: list, queries:
     dense = system == "tools-hybrid" and not lexical_only
     cache = tools.make_embedding_cache(emb_cache, threads=threads) if dense else None
     chosen, table = tune(catalog, dev, dense=dense, cache=cache)
+    before = _active_fingerprint(store)
     op = tools.Tools(store, emb_cache=emb_cache)
     info = op.tools_index(chosen["w_name"], weight=chosen["w"], lexical_only=not dense,
                           threads=threads)
@@ -256,7 +269,8 @@ def _store_rows(system: str, store: Path, root: Path | None, dev: list, queries:
     cfg = {"store": str(store), "tools_snapshot": catalog.snapshot_id,
            "acl_snapshot": acl_snapshot, "fingerprint": info.fingerprint,
            "w_name": info.w_name, "w": info.w, "lexical_only": info.lexical_only,
-           "caller": caller, "tools": len(catalog), "catalog_definition_tokens": total}
+           "caller": caller, "tools": len(catalog), "catalog_definition_tokens": total,
+           "active_tool_index": {"before": before, "after": info.fingerprint}}
     return rows, cfg, {"metric": "ndcg@10", "split": "dev", "queries": len(dev),
                        "chosen": chosen, "table": table}
 
@@ -314,6 +328,11 @@ def render_markdown(rec: dict, seconds: float | None = None) -> str:
                      f"`{c['fingerprint'][:12]}` (w_name {c['w_name']}, {mode}), searched as "
                      f"`{c['caller']}`. Tuned on dev nDCG@10 "
                      f"({rec['tuning']['queries']} queries).")
+    if "active_tool_index" in c:
+        old, new = c["active_tool_index"]["before"], c["active_tool_index"]["after"]
+        same = " (unchanged)" if old == new else ""
+        lines += ["", f"active tool index: {'none' if old is None else old[:12]} → "
+                      f"{new[:12]}{same}"]
     lines += ["", "| queries | Completeness@10 | Recall@10 | nDCG@10 |", "|---|---|---|---|",
               f"| {s['n']} | {s['completeness@10']:.3f} | {s['recall@10']:.3f} | "
               f"{s['ndcg@10']:.3f} |", ""]
@@ -322,7 +341,9 @@ def render_markdown(rec: dict, seconds: float | None = None) -> str:
                      f"(page {s['context_page']:.0f}, definitions "
                      f"{s['context_definitions']:.0f}) of a catalog of "
                      f"{s['context_catalog']} tokens; reduction {s['context_reduction']:.4%}; "
-                     f"gold share {s['context_gold_share']:.3f}.")
+                     f"gold share {s['context_gold_share']:.3f} (the mean over queries of the "
+                     f"loaded gold definition tokens / loaded tokens; page entries are not "
+                     f"counted as gold).")
     elif "top10_doc_tokens" in s:
         lines.append(f"Top 10 raw documentation: {s['top10_doc_tokens']:.0f} tokens per query "
                      f"(mean).")

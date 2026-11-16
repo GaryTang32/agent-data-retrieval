@@ -3,6 +3,7 @@ leak probes and their judge, the fail-closed probes (F1–F5 and "no entry" × 2
 callers, plus the two tool-catalog conditions) and their log lines, on the tools-only fixture
 store of `tests/store/test_tool_search.py`; `adr-eval tools-probes`."""
 
+import dataclasses
 import json
 
 import pytest
@@ -63,6 +64,49 @@ def test_tool_leak_probes_are_hidden_targets_and_deterministic(store):
     assert probes.GHOST in {p.caller for p in ps} and "user:outsider" in {p.caller for p in ps}
 
 
+def test_tool_search_probes_split_unfiltered_and_filtered(store):
+    ps = [p for p in probes.tool_leak_probes(ctx_of(store)) if p.family == "tool-search"]
+    filters = [p.call.get("filters") for p in ps]
+    assert len(ps) == 100 and filters.count(None) == 60
+    assert filters.count({"source_kind": ["mcp"]}) == 20
+    assert filters.count({"source_kind": ["mcp", "toolret"]}) == 20
+
+
+def whole_index_count(t, store):
+    """A variant of `search_tools` whose `excluded_by_filter` counts the exclusions over the
+    whole index instead of the caller's view (a count that includes hidden tools)."""
+    real = t.search_tools
+    idx = tools.Tools(store).active_tool_index()
+
+    def search_tools(query, top=10, *, filters=None):
+        res = real(query, top, filters=filters)
+        kinds = res.filters["source_kind"]
+        if kinds is None:
+            return res
+        n = sum(r.source_kind in kinds for r in idx.rows.values())
+        return dataclasses.replace(res, excluded_by_filter=len(idx.rows) - n)
+
+    t.search_tools = search_tools
+    return t
+
+
+def test_the_probes_catch_a_whole_index_exclusion_count(store):
+    ctx = ctx_of(store)
+    ps = probes.tool_leak_probes(ctx)
+    made: dict = {}
+
+    def tools_for(caller):
+        if caller not in made:
+            made[caller] = whole_index_count(make_tools(store, caller), store)
+        return made[caller]
+
+    results = [probes.check_tool(p, tools_for, ctx) for p in ps]
+    caught = [r for r in results if r.kinds["count_includes_hidden"]]
+    assert caught and all(r.family == "tool-search" for r in caught)
+    unfiltered = {p.probe_id for p in ps if p.call.get("filters") is None}
+    assert not any(r.leak for r in results if r.probe_id in unfiltered)
+
+
 def test_tool_leak_probes_find_no_leak(store):
     ctx = ctx_of(store)
     ps = probes.tool_leak_probes(ctx, sizes=SMALL)
@@ -120,16 +164,32 @@ def test_tool_failclosed_probes_pass(store, tmp_path, config):
 def test_cli_tools_probes(store, tmp_path, config, capsys):
     acl.sync(store, *config)  # the command line reads the real clock
     out = tmp_path / "runs"
+    fp = tools.Tools(store).active_tool_index().fingerprint
     code = eval_cli.main(["tools-probes", "--store", str(store), "--per-family", "10",
+                          "--index", fp,
                           "--clones", str(tmp_path / "clones"), "--directory", str(config[0]),
                           "--policy", str(config[1]), "--out", str(out)])
     text = capsys.readouterr().out
     assert code == 0, text
     d = next(out.glob("probes-tools-*"))
     summary = json.loads((d / "summary.json").read_text())
+    assert summary["config"]["tool_index"] == fp
     assert summary["leak"]["total"]["n"] == 20 and summary["leak"]["total"]["leaks"] == 0
     assert summary["failclosed"]["total"]["n"] == 80
     assert summary["failclosed"]["total"]["passed"] == 80
     assert summary["logs"]["total"]["complete"]
     assert (d / "probes.md").read_text().startswith("# ACL probes: tools")
     assert tools_eval.CALLER == "user:auditor"
+
+
+def test_cli_tools_probes_refuses_another_index(store, tmp_path, capsys):
+    fp = tools.Tools(store).active_tool_index().fingerprint
+    other = ("0" if fp[0] != "0" else "1") + fp[1:]
+    code = eval_cli.main(["tools-probes", "--store", str(store), "--index", other,
+                          "--out", str(tmp_path / "runs")])
+    err = capsys.readouterr().err
+    assert code == 2 and fp[:12] in err and "adr tools index" in err
+    assert not (tmp_path / "runs").exists()
+    code = eval_cli.main(["tools-probes", "--store", str(store), "--index", fp[:6],
+                          "--out", str(tmp_path / "runs")])
+    assert code == 2 and "at least" in capsys.readouterr().err

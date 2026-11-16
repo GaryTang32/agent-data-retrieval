@@ -80,7 +80,17 @@ def _tools_probes(a: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     started = datetime.now(UTC)
     emb = a.emb_cache if a.emb_cache is not None else store_tools.DEFAULT_EMB_CACHE
-    idx = store_tools.Tools(a.store, emb_cache=emb).active_tool_index()
+    if len(a.index) < store_tools.MIN_PREFIX:
+        raise runner.RunError(f"--index needs at least {store_tools.MIN_PREFIX} characters of "
+                              f"the tool index fingerprint, got {a.index!r}")
+    try:
+        idx = store_tools.Tools(a.store, emb_cache=emb).active_tool_index()
+    except store_tools.ToolError as e:
+        raise runner.RunError(str(e)) from e
+    if not idx.fingerprint.startswith(a.index):
+        raise runner.RunError(f"{a.store}: the active tool index is {idx.fingerprint[:12]}, not "
+                              f"{a.index}; run `adr tools index` with the chosen system's "
+                              f"values first (the probes run against the active index)")
     ctx = acl_probes.tool_context(a.store, idx)
 
     def make_tools(path, caller):
@@ -930,6 +940,9 @@ def _parser() -> argparse.ArgumentParser:
                    help="the directory the clones sync from (default config/acl/directory.json)")
     p.add_argument("--policy", type=Path, default=tools_acl / "policy.json",
                    help="the policy (default config/acl/policy.json)")
+    p.add_argument("--index", required=True, metavar="FP",
+                   help="the fingerprint (or a prefix of 8+ characters) of the tool index to "
+                        "probe; refused unless it is the store's active tool index")
     p.add_argument("--per-family", type=int, default=None, metavar="N",
                    help="N leak probes per family instead of 100 (a quick check; recorded)")
     p.add_argument("--emb-cache", type=Path, default=None,

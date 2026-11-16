@@ -146,6 +146,10 @@ def test_bm25f_run_searches_as_the_auditor_through_search_tools(store, root):  #
     assert [r["w_name"] for r in rec["tuning"]["table"]] == list(tools_eval.W_NAMES)
     assert cfg["acl_snapshot"] == acl.read_head(store)[0]
     assert cfg["tools_snapshot"] == ToolCatalog.open(store).snapshot_id
+    assert cfg["active_tool_index"] == {"before": None, "after": cfg["fingerprint"]}
+    runs = sorted(tools_eval.OUT_ROOT.glob("tools-tools-bm25f-test-*"))
+    md = (runs[-1] / "tools.md").read_text()
+    assert f"active tool index: none → {cfg['fingerprint'][:12]}" in md
     t = tools.Tools(store, acl=True, caller="user:auditor")
     qs = [q for q in toolret.queries(root) if q.split == "test"]
     for row, q in zip(rec["rows"], qs, strict=True):
@@ -170,9 +174,12 @@ def test_hybrid_run_tunes_both_weights_with_the_fake_embedder(store, root, fake_
     assert tools.Tools(store).active_tool_index().fingerprint == cfg["fingerprint"]
 
 
-def test_runs_are_identical_apart_from_their_start_time(store, root):  # noqa: F811
+def test_runs_are_identical_apart_from_their_start_time(store, root, capsys):  # noqa: F811
     a = _run("tools-bm25f", "dev", store, root)
     b = _run("tools-bm25f", "dev", store, root)
+    fp = a["config"]["fingerprint"]
+    assert b["config"]["active_tool_index"] == {"before": fp, "after": fp}
+    assert f"active tool index: {fp[:12]} → {fp[:12]} (unchanged)" in capsys.readouterr().out
     assert a["rows"] == b["rows"] and a["summary"] == b["summary"]
     assert a["tuning"] == b["tuning"]
 
@@ -185,6 +192,14 @@ def test_a_denied_caller_is_an_error_naming_the_sync(store, root, capsys):  # no
     code = eval_cli.main(["tools-retrieval", "--system", "tools-bm25f", "--split", "dev",
                           "--store", str(store), "--root", str(root), "--sync"])
     assert code == 0
+
+
+def test_the_markdown_defines_the_gold_share(store, root):  # noqa: F811
+    _run("tools-bm25f", "dev", store, root)
+    md = sorted(tools_eval.OUT_ROOT.glob("tools-tools-bm25f-dev-*"))[-1] / "tools.md"
+    assert "mean over queries of the loaded gold definition tokens / loaded tokens" in \
+        md.read_text()
+    assert "page entries are not counted as gold" in " ".join(tools_eval.__doc__.split())
 
 
 def test_out_root_is_redirected_in_tests():
