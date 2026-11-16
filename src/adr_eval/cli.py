@@ -4,6 +4,7 @@ retrieval-identical, p2-compare, probes, report, doctor."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
@@ -238,6 +239,61 @@ def _p2_compare(a: argparse.Namespace) -> int:
     return 0
 
 
+def _probes(a: argparse.Namespace) -> int:
+    """`adr-eval probes temporal gov`: build T1-T5, run them through the tools of `--store`,
+    write `<out>/probes-temporal-gov-<ts>/probes.{json,md}` (no wall-clock in the files)."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import temporal
+    from adr_store.applicability import load_overlay
+    from adr_store.tools import ToolError, Tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    loaded = runner.load_checked_corpus(a.corpus)
+    items = runner.load_golden(a.corpus, loaded)
+    try:
+        tools = Tools(a.store, emb_cache=runner.REPO_ROOT / config.get(
+            "embedding_cache_dir", ".cache/emb"))
+        idx = tools.active_index()
+    except ToolError as e:
+        raise runner.RunError(f"{a.store}: {e}") from e
+    if tools.store.doc_ids() != sorted(d.doc_id for d in loaded.manifest.documents):
+        raise runner.RunError(f"{a.store}: the store does not hold the {a.corpus} corpus's "
+                              f"documents")
+    overlay = load_overlay(tools.store_path, tools.snapshot)
+    if overlay is None:
+        raise runner.RunError(f"{a.store}: no applicability overlay; run `adr applicability "
+                              f"derive --store {a.store}`")
+    built = temporal.build(loaded, items, overlay)
+    try:
+        result = temporal.run(built, tools, caller=a.as_user, dedup=a.dedup)
+    except (ValueError, ToolError) as e:
+        raise runner.RunError(str(e)) from e
+    sizes = dict(Counter(p.set for p in built if p.mode == "as_of" or p.set == "T4"))
+    golden = runner.golden_items_path(a.corpus)
+    data = {"config": {"corpus": a.corpus, "kind": "temporal",
+                       "store": runner._display_path(tools.store_path),
+                       "snapshot": tools.snapshot, "index": idx.fingerprint,
+                       "applicability": result["applicability"], "dedup": result["dedup"],
+                       "caller": a.as_user, "seed": probes.SEED, "sizes": sizes,
+                       "spec_sizes": temporal.SPEC_SIZES,
+                       "golden_sha256": hashlib.sha256(golden.read_bytes()).hexdigest()
+                       if golden.is_file() else None},
+            "summary": result["summary"], "probes": result["probes"]}
+    out = probes.OUT_ROOT if a.out is None else a.out
+    d = runner._new_run_dir(Path(out), f"probes-temporal-{a.corpus}-{started:%Y%m%dT%H%M%S}")
+    (d / "probes.json").write_text(json.dumps(data, indent=2, sort_keys=True,
+                                              ensure_ascii=False) + "\n", encoding="utf-8")
+    md = temporal.render_markdown(data)
+    (d / "probes.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(built)} probes; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -369,6 +425,19 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="run output root (default runs); writes p2-compare-<a>--<b>/")
     p.set_defaults(fn=_p2_compare)
+
+    p = sub.add_parser("probes", help="Phase 2 probe sets (no model calls)")
+    p.add_argument("kind", choices=("temporal",))
+    p.add_argument("corpus", choices=("gov",))
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store to probe (its active index and overlays)")
+    p.add_argument("--as", dest="as_user", default=None, metavar="USER",
+                   help="search as this caller (needs the ACL layer of Phase 2B)")
+    p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
+                   help="collapse copies in search (default on)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-temporal-<corpus>-<ts>/")
+    p.set_defaults(fn=_probes)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

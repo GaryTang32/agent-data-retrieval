@@ -87,9 +87,10 @@ def _isolate_writable_state(writable_state, monkeypatch):
     monkeypatch.setattr(store_index, "_default_cache",
                         lambda: EmbeddingCache(writable_state / "emb-store-index"))
     monkeypatch.setattr(cli, "STORE_ROOT", writable_state / "cli-store")
-    from adr_eval import phase2
+    from adr_eval import phase2, probes
 
     monkeypatch.setattr(phase2, "OUT_ROOT", writable_state / "runs")
+    monkeypatch.setattr(probes, "OUT_ROOT", writable_state / "runs")
 
 
 @pytest.fixture

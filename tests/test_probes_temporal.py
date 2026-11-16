@@ -4,12 +4,20 @@ chapter. No model calls; lexical-only index."""
 
 import json
 import re
+from datetime import date, timedelta
 
 import pytest
 
+from adr_eval import runner
+from adr_eval.cli import main
 from adr_eval.corpora.base import load_corpus
 from adr_eval.corpora.gov import GovAdapter
 from adr_eval.corpora.registry import write_manifest
+from adr_eval.models import Evidence, GoldenItem
+from adr_eval.probes import temporal
+from adr_store import applicability, dedup, tools
+from adr_store.store import Store
+from tests.conftest import _base
 from tests.test_adapters import HTTP, RecordedFetcher
 
 GOV_CONFIG = json.loads((HTTP / "gov" / "config.json").read_text())
@@ -69,3 +77,153 @@ def test_removed_sections_are_those_missing_from_the_next_version(gov):
     assert gov.docs[old.doc_id].text[start:end] == section.text
     assert section.text.startswith("§ 117.261")
     assert [a.uri.rsplit("#", 1)[1] for a, _ in GovAdapter().version_pairs(gov)] == ["117.189"]
+
+
+# -- the probe sets -------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def store(gov, tmp_path_factory):
+    """A store of the gov fixture with its applicability and dedup overlays and an active
+    lexical-only p1-struct-bc index."""
+    path = tmp_path_factory.mktemp("gov-store") / "store"
+    s = Store.create(path)
+    for d in sorted(gov.manifest.documents, key=lambda d: d.doc_id):
+        s.add(gov.docs[d.doc_id], (gov.root / d.path).read_bytes())
+    s.commit()
+    s = Store.open(path)
+    overlay, _ = applicability.derive(s, GOV_CONFIG)
+    applicability.write_overlay(path, overlay)
+    t = tools.Tools(path)
+    t.index("p1-struct-bc", lexical_only=True, w_bc=2)
+    idx = t.active_index()
+    dedup.write_overlay(path, dedup.build(list(idx.chunks.values()), idx.snapshot,
+                                          idx.chunker))
+    return path
+
+
+def _item(gov, **kw) -> GoldenItem:
+    old = _doc(gov, OLD)
+    ev = Evidence(doc_id=old.doc_id, char_start=0, char_end=5,
+                  quote=gov.docs[old.doc_id].text[:5])
+    return GoldenItem(**{**_base(), "corpus": "gov", "evidence": [ev], **kw})
+
+
+@pytest.fixture(scope="module")
+def items(gov):
+    return [_item(gov, id="gov-asof-1", qtype="policy_asof", as_of=date(2024, 6, 27),
+                  question="Housatonic River drawbridge opening schedule"),
+            _item(gov, id="gov-factoid-1", question="Which drawbridge regulations apply?"),
+            _item(gov, id="gov-insufficient-1", qtype="insufficient", evidence=[],
+                  question="What is the bridge toll?")]
+
+
+@pytest.fixture(scope="module")
+def overlay(store):
+    s = Store.open(store)
+    return applicability.load_overlay(store, s.snapshot_id)
+
+
+def test_build_gives_the_five_sets(gov, items, overlay):
+    probes = temporal.build(gov, items, overlay)
+    by = {}
+    for p in probes:
+        by.setdefault((p.set, p.mode), []).append(p)
+    assert {k: len(v) for k, v in by.items()} == {
+        ("T1", "as_of"): 1, ("T2", "default"): 1, ("T2", "as_of"): 1, ("T3", "default"): 1,
+        ("T3", "as_of"): 1, ("T4", "default"): 3, ("T5", "as_of"): 3}
+    t1 = by["T1", "as_of"][0]
+    assert (t1.query, t1.as_of) == (items[0].question, "2024-06-27")
+    t2 = by["T2", "as_of"][0]
+    assert t2.query.startswith("§ 117.189") and t2.as_of == OLD
+    assert t2.target["head_doc"] == _doc(gov, NEW).doc_id
+    assert by["T2", "default"][0].as_of is None
+    t3 = by["T3", "as_of"][0]
+    assert t3.query.startswith("§ 117.261") and t3.as_of == OLD
+    t5 = {p.target["doc"]: p for p in by["T5", "as_of"]}
+    for doc_id, p in t5.items():
+        valid_from = overlay.records[doc_id].valid_from
+        assert p.as_of == (valid_from - timedelta(days=1)).isoformat()
+        assert len(p.target["grep"]) == 30 and p.target["grep"] in gov.docs[doc_id].text
+        assert p.query and "Internal Revenue Service" not in p.query
+    assert {p.target["family"] for p in t5.values()} == {"fr", "irm"}
+    assert len({p.probe_id for p in probes}) == len(probes)
+    again = temporal.build(gov, items, overlay)
+    assert [p.to_dict() for p in again] == [p.to_dict() for p in probes]
+
+
+def test_the_probes_pass_on_the_tools(gov, items, overlay, store):
+    r = temporal.run(temporal.build(gov, items, overlay), tools.Tools(store))
+    s = r["summary"]
+    for name, modes in s.items():
+        for mode, block in modes.items():
+            assert block["passed"] == block["n"] and block["failed"] == [], (name, mode)
+    assert s["T3"]["as_of"]["recall@10"] == 1.0  # the removed section is found when dated
+    assert s["T2"]["as_of"]["other_version_chunks"] == 0
+    assert s["T2"]["default"]["head_found@10"] == 1
+    t5 = s["T5"]["as_of"]
+    assert t5["search_absent"] == t5["grep_absent"] == t5["read_refused"] == 3
+    assert t5["control_grep_found"] == 3
+    assert r["dedup"] is True and len(r["probes"]) == 11
+
+
+class Leaky:
+    """Tools that drop the caller's filters and dedup (the Phase 1 view): every rule fails."""
+
+    def __init__(self, real):
+        self.real = real
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+    def search(self, query, top=10, *, filters=None, dedup=None):
+        return self.real.search(query, top, filters={"include_superseded": True}, dedup=False)
+
+    def grep(self, pattern, doc=None, max=100, *, filters=None, **kw):
+        return self.real.grep(pattern, doc, max, filters={"include_superseded": True}, **kw)
+
+    def read(self, doc_id, *a, filters=None, **kw):
+        return self.real.read(doc_id, *a, filters={"include_superseded": True}, **kw)
+
+
+def test_the_probes_fail_when_the_filters_are_dropped(gov, items, overlay, store):
+    r = temporal.run(temporal.build(gov, items, overlay), Leaky(tools.Tools(store)))
+    s = r["summary"]
+    assert s["T2"]["default"]["passed"] == 0 and s["T3"]["default"]["passed"] == 0
+    assert s["T2"]["as_of"]["passed"] == 0 and s["T2"]["as_of"]["other_version_chunks"] > 0
+    assert s["T1"]["as_of"]["passed"] == 0
+    assert s["T5"]["as_of"]["passed"] == 0 and s["T5"]["as_of"]["read_refused"] == 0
+    assert s["T5"]["as_of"]["grep_absent"] == 0
+    failed = {p["probe_id"]: p for p in r["probes"] if not p["pass"]}
+    assert set(s["T2"]["default"]["failed"]) <= set(failed)
+    one = failed[s["T3"]["default"]["failed"][0]]
+    assert one["offending"] and one["offending"][0]["doc_id"] == _doc(gov, OLD).doc_id
+
+
+def test_a_caller_needs_the_acl_layer(gov, items, overlay, store):
+    with pytest.raises(ValueError, match="ACL"):
+        temporal.run(temporal.build(gov, items, overlay), tools.Tools(store),
+                     caller="user:auditor")
+
+
+def test_the_cli_writes_the_probe_files_deterministically(gov, items, store, tmp_path,
+                                                          monkeypatch, capsys):
+    monkeypatch.setattr(runner, "load_checked_corpus", lambda corpus: gov)
+    monkeypatch.setattr(runner, "load_golden", lambda corpus, loaded: items)
+    out = tmp_path / "runs"
+    for _ in range(2):
+        assert main(["probes", "temporal", "gov", "--store", str(store), "--out",
+                     str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert "T1" in printed and "T5" in printed
+    first, second = sorted(out.iterdir())
+    assert first.name.startswith("probes-temporal-gov-")
+    assert (first / "probes.json").read_bytes() == (second / "probes.json").read_bytes()
+    data = json.loads((first / "probes.json").read_text())
+    assert data["config"]["seed"] == 20261116 and data["config"]["sizes"]["T4"] == 3
+    assert data["config"]["spec_sizes"] == {"T1": 40, "T2": 189, "T3": 145, "T4": 297,
+                                            "T5": 171}
+    assert (first / "probes.md").read_text().startswith("# Temporal probes")
+    assert main(["probes", "temporal", "gov", "--store", str(store), "--out", str(out),
+                 "--as", "user:auditor"]) == 2
+    assert "ACL" in capsys.readouterr().err
