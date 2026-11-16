@@ -17,7 +17,11 @@ among the caller's hidden ones; a pair already taken draws again. Per store:
 - `grep-doc` (20): `grep(doc=...)` of a hidden document, by full id (even `k`) or
   8-character prefix (odd `k`);
 - `read` (60): `read` of a hidden document by full id, by 8-character prefix, of a hidden
-  chunk (of a visible document), of a hidden document's element (15 each).
+  chunk (of a visible document), of a hidden document's element (15 each);
+- `alternate-cross-view` (as many as exist): for each dedup cluster whose members' documents
+  have different access lists, each directory user who sees some members and not others
+  searches the 10 rarest tokens of a visible member (`cross_view_probes`); the visible
+  member's rank is reported.
 
 Search, grep and read run with `include_superseded` (nothing masked by applicability) and
 search with dedup on when the store has an overlay (so alternates are exercised).
@@ -47,20 +51,27 @@ makes the probe invalid (reported, not a pass).
 
 **Fail closed** (`failclosed_probes`, `run_failclosed`): F1–F5 and "no entry" × `search`,
 `grep`, `read` × 5 callers = 90 per store. One target document (seeded, not in a chain, whose
-uri begins no other document's). Callers (planner's call): F1–F3 and "no entry" use five
-directory users (`user:auditor`, `user:outsider` and three by seeded hash); F4 uses `None`,
-`user:ghost`, `user:nobody`, `user:acme-6`, `user:auditor2`; F5 `group:acme/0`, `public`,
-`user:`, `user:Ghost`, `tenant:acme`. F1 (a variant per caller: HEAD missing, HEAD unreadable,
-an unparsable snapshot, a schema-invalid one, a file whose hash is not its id), F2 (a new
-content snapshot without the target), F3 (synced with a clock 2 h behind for three callers,
-1 h ahead for two) and "no entry" (re-synced from the policy plus an attribute rule mapping
-the target's uri to `[]`) run on `cp -a` clones of the store, removed afterwards; F4 and F5
-on the store itself. Pass: F1–F5 refuse with that code and return nothing; "no entry" returns
-nothing of the target (no hit, alternate, scoring chunk or match of it, its secret nowhere,
-and `read` refused exactly as an id that names nothing).
+uri begins no other document's) that must pass a precondition, so that "no entry" can fail:
+every one of the five directory callers sees it before the rule, finds it in the top 10 of the
+search query (its title, else the 10 rarest tokens of its first chunk), matches it with the
+grep pattern and reads it (`failclosed_target`, `tools_precheck`); the next seeded candidate is
+tried otherwise, and none qualifying is an error. The result rows record `visible_before`,
+`top10_before` and `rank_before` per probe. Callers (planner's call): F1–F3 and "no entry" use
+five directory users (`user:auditor`, `user:outsider` and three by seeded hash); F4 uses
+`None`, `user:ghost`, `user:nobody`, `user:acme-6`, `user:auditor2`; F5 `group:acme/0`,
+`public`, `user:`, `user:Ghost`, `tenant:acme`. F1 (a variant per caller: HEAD missing, HEAD
+unreadable, an unparsable snapshot, a schema-invalid one, a file whose hash is not its id), F2
+(a new content snapshot without the target), F3 (synced with a clock 2 h behind for three
+callers, 1 h ahead for two) and "no entry" (re-synced from the policy plus an attribute rule
+mapping the target's uri to `[]`) run on `cp -a` clones of the store, removed afterwards; F4
+and F5 on the store itself. Pass: F1–F5 refuse with that code and return nothing; "no entry"
+returns nothing of the target (no hit, alternate, scoring chunk or match of it, its secret
+nowhere, and `read` refused exactly as an id that names nothing).
 
 **Log fields** (`log_size`, `scan_log`, B5): every line written has `caller`, `principals`,
-`acl_snapshot` and `acl_decision`.
+`acl_snapshot` and `acl_decision`, and every `allowed` line has a non-null `caller`,
+`principals`, `acl_snapshot` and `view` (a denied line may hold nulls where access was not
+resolved; an `off` line has no ACL layer).
 
 This module may import `adr_store` directly (plan, shared rules).
 """
@@ -90,7 +101,7 @@ from adr_store.tools import AccessDenied, ToolError
 FAMILY_SIZES = {"search-rare": 100, "search-title": 50, "grep-literal": 50, "grep-doc": 20,
                 "read": 60}
 FAMILY_TOOL = {"search-rare": "search", "search-title": "search", "grep-literal": "grep",
-               "grep-doc": "grep", "read": "read"}
+               "grep-doc": "grep", "read": "read", "alternate-cross-view": "search"}
 READ_KINDS = ("doc", "prefix", "chunk", "element")
 KINDS = ("id_outside_view", "alternate_outside_view", "hidden_text", "not_found_differs",
          "count_includes_hidden", "score_differs")
@@ -110,6 +121,7 @@ FIXED_USERS = ("user:auditor", "user:outsider")
 STALE = timedelta(hours=2)
 AHEAD = timedelta(hours=1)
 REQUIRED = ("caller", "principals", "acl_snapshot", "acl_decision")
+RESOLVED = ("caller", "principals", "acl_snapshot", "view")  # non-null on an allowed line
 _HEX = re.compile(r"[0-9a-f]{8,}")
 
 
@@ -128,6 +140,7 @@ class Context:
     store: Store
     snap: acl.AclSnapshot
     chunks: dict  # chunk id -> StoreChunk, in index order
+    clusters: list = field(default_factory=list)  # dedup clusters: sorted member chunk ids
     _texts: dict = field(default_factory=dict)
     _visible: dict = field(default_factory=dict)
     _doc_chunks: dict | None = None
@@ -163,9 +176,17 @@ class Context:
         return [*sorted(self.snap.directory), GHOST]
 
 
-def context(store_path: Path, chunks: dict) -> Context:
+def context(store_path: Path, idx) -> Context:
+    """The probes' view of the store at `store_path` with its active index `idx` (a
+    `StoreIndex`): its chunks and its dedup overlay's clusters (none without an overlay)."""
+    from adr_store import dedup
+    from adr_store.retrieval.index import chunk_content_sha256
+
     store = Store.open(store_path)
-    return Context(store, acl.read_head(store_path)[1], chunks)
+    dd = dedup.load_overlay(store_path, store.snapshot_id, idx.chunker,
+                            chunk_content_sha256(idx.chunks.values()))
+    clusters = [] if dd is None else [sorted(c.members) for _, c in sorted(dd.clusters.items())]
+    return Context(store, acl.read_head(store_path)[1], idx.chunks, clusters)
 
 
 # -- probes ----------------------------------------------------------------------------------
@@ -379,7 +400,33 @@ def leak_probes(ctx: Context, seed: int = SEED, sizes: dict | None = None) -> li
                 target["element_id"] = el
             probes.append(Probe(f"read:{k:03d}", "read", "read", caller, target, call,
                                 control))
+    probes += cross_view_probes(ctx, df)
     return probes
+
+
+def cross_view_probes(ctx: Context, df: dict[str, int]) -> list[Probe]:
+    """`alternate-cross-view`: for every dedup cluster whose members' documents have
+    different access lists, and every directory user who sees some members and not others,
+    a search of the 10 rarest tokens of the first visible member (dedup on): the hidden
+    members must never be shown, listed as alternates or counted."""
+    out = []
+    for members in ctx.clusters:
+        docs = {c: ctx.chunks[c].doc_id for c in members if c in ctx.chunks}
+        if len({tuple(ctx.snap.docs.get(d, ())) for d in docs.values()}) < 2:
+            continue
+        for caller in sorted(ctx.snap.directory):
+            seen = ctx.visible(caller)
+            vis = [c for c in sorted(docs) if docs[c] in seen]
+            hid = [c for c in sorted(docs) if docs[c] not in seen]
+            if not vis or not hid:
+                continue
+            out.append(Probe(
+                f"alternate-cross-view:{len(out):03d}", "alternate-cross-view", "search",
+                caller, {"doc_id": docs[hid[0]], "chunk_id": hid[0], "visible_member": vis[0],
+                         "visible_members": vis, "hidden_members": hid},
+                {"query": " ".join(rare_tokens(ctx.chunks[vis[0]].text, df)),
+                 "filters": WIDE}))
+    return out
 
 
 # -- running and judging ---------------------------------------------------------------------
@@ -475,6 +522,7 @@ class ProbeResult:
     leak: bool
     valid: bool  # False: an unexpected denial or outcome (not a pass)
     note: str | None = None
+    extra: dict = field(default_factory=dict)  # family-specific figures
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -563,8 +611,14 @@ def check(probe: Probe, tools_for: Callable, reference_for: Callable,
             kinds["score_differs"] = mine[1] != theirs[1] or mine[4:] != theirs[4:]
             kinds["count_includes_hidden"] = (len(mine[1]) != len(theirs[1])
                                               or mine[2:4] != theirs[2:4])
+    extra = {}
+    if probe.family == "alternate-cross-view":
+        vis = set(probe.target["visible_members"])
+        extra = {"visible_member_rank": next(
+            (h.rank for h in res.hits if h.chunk_id in vis or h.scored_by in vis), None),
+            "alternates_shown": sum(len(h.alternates) for h in res.hits)}
     return ProbeResult(probe.probe_id, probe.family, probe.tool, caller, "ok", kinds,
-                       any(bool(v) for v in kinds.values()), valid, note)
+                       any(bool(v) for v in kinds.values()), valid, note, extra)
 
 
 def summarize(results: list[ProbeResult]) -> dict:
@@ -591,6 +645,12 @@ def summarize(results: list[ProbeResult]) -> dict:
                      "ghost": GHOST in b["callers"], "outsider": "user:outsider" in b["callers"],
                      "leak_kinds": {k: b["leak_kinds"][k] for k in KINDS},
                      "checked_kinds": {k: b["checked_kinds"][k] for k in KINDS}}
+    cross = [r for r in results if r.family == "alternate-cross-view"]
+    if cross:
+        out["alternate-cross-view"]["visible_member_top10"] = sum(
+            r.extra.get("visible_member_rank") is not None for r in cross)
+        out["alternate-cross-view"]["alternates_shown"] = sum(
+            r.extra.get("alternates_shown", 0) for r in cross)
     total = {"n": len(results), "leaks": sum(r.leak for r in results),
              "invalid": sum(not r.valid for r in results),
              "leak_kinds": {k: sum(bool(r.kinds[k]) for r in results) for k in KINDS},
@@ -601,22 +661,82 @@ def summarize(results: list[ProbeResult]) -> dict:
 # -- fail closed -----------------------------------------------------------------------------
 
 
-def failclosed_target(ctx: Context, seed: int = SEED) -> dict:
+def _meets(before: dict | None, callers: list[str]) -> bool:
+    if not isinstance(before, dict):
+        return False
+    for u in callers:
+        b = before.get(u) or {}
+        rank = b.get("rank")
+        if not (b.get("visible") and b.get("grep") and b.get("read")
+                and isinstance(rank, int) and 1 <= rank <= 10):
+            return False
+    return True
+
+
+def failclosed_target(ctx: Context, callers: list[str], before: Callable,
+                      seed: int = SEED) -> dict:
     """The fail-closed target: by seeded hash order, the first document not in a chain whose
-    uri begins no other document's, with a title and a unique substring."""
+    uri begins no other document's, with a title and a unique substring, that every one of
+    `callers` sees under the snapshot and for which `before(target, callers)` (the tools as
+    each caller, before any rule) shows it in the top 10 of the search query, matched by
+    the grep pattern and readable by id. The query is the title, else the 10 rarest tokens
+    of the document's first chunk. `before` returns {caller: {rank, grep, read}} or None;
+    the result holds it per caller, with `visible`. A ValueError when none qualifies."""
     ids = ctx.store.doc_ids()
     uris = {d: ctx.store.source(d).uri for d in ids}
+    df = None
     for d in sorted(ids, key=lambda d: (_h(seed, "failclosed", d), d)):
         source = ctx.store.source(d)
-        if chain_of(source) is not None:
+        if chain_of(source) is not None or not all(d in ctx.visible(u) for u in callers):
             continue
         if any(o != d and u.startswith(source.uri) for o, u in uris.items()):
             continue
         title = title_of(ctx, d)
         secret = unique_substring(ctx, d, f"{seed}:failclosed:{d}")
-        if title and secret:
-            return {"doc_id": d, "uri": source.uri, "title": title, "secret": secret}
-    raise ValueError("no document fits as the fail-closed target")
+        if not secret:
+            continue
+        queries = [("title", title)] if title else []
+        first = next((c for c in ctx.doc_chunks().get(d, []) if tokenize(ctx.chunks[c].text)),
+                     None)
+        if first is not None:
+            df = df if df is not None else idf_order(ctx.chunks.values())
+            queries.append(("rare_tokens", " ".join(rare_tokens(ctx.chunks[first].text, df))))
+        for how, query in queries:
+            target = {"doc_id": d, "uri": source.uri, "title": title, "secret": secret,
+                      "query": query, "query_from": how}
+            got = before(target, callers)
+            got = None if got is None else {u: {**(got.get(u) or {}), "visible": True}
+                                            for u in callers}
+            if _meets(got, callers):
+                return {**target, "before": got}
+    raise ValueError("no document meets the no-entry precondition (visible to every "
+                     "fail-closed caller, in the top 10 of its search, matched by grep, "
+                     "readable)")
+
+
+def tools_precheck(store_path: Path, make_tools: Callable) -> Callable:
+    """`before` for `failclosed_target`: each caller's search, grep and read of the target
+    on the store as it is (no rule yet), with `make_tools(path, caller)`."""
+    made: dict = {}
+
+    def before(target: dict, callers: list[str]) -> dict:
+        out = {}
+        for u in callers:
+            if u not in made:
+                made[u] = make_tools(store_path, u)
+            t = made[u]
+            s = run_call(t, "search", {"query": target["query"], "filters": WIDE})
+            rank = None if s[0] != "ok" else next(
+                (h.rank for h in s[1].hits if h.doc_id == target["doc_id"]), None)
+            g = run_call(t, "grep", {"pattern": re.escape(target["secret"]), "filters": WIDE})
+            r = run_call(t, "read", {"doc_id": target["doc_id"], "filters": WIDE})
+            out[u] = {"rank": rank,
+                      "grep": g[0] == "ok" and any(m.doc_id == target["doc_id"]
+                                                    for m in g[1].matches),
+                      "read": r[0] == "ok" and r[1].doc_id == target["doc_id"]}
+        return out
+
+    return before
 
 
 def failclosed_callers(ctx: Context, seed: int = SEED) -> list[str]:
@@ -626,10 +746,12 @@ def failclosed_callers(ctx: Context, seed: int = SEED) -> list[str]:
     return [*FIXED_USERS, *rest[:3]]
 
 
-def failclosed_probes(ctx: Context, seed: int = SEED) -> list[Probe]:
-    target = failclosed_target(ctx, seed)
+def failclosed_probes(ctx: Context, before: Callable, seed: int = SEED) -> list[Probe]:
+    """The 90 fail-closed probes; `before` checks the target's precondition
+    (`failclosed_target`, e.g. `tools_precheck`)."""
     users = failclosed_callers(ctx, seed)
-    calls = {"search": {"query": target["title"], "filters": WIDE},
+    target = failclosed_target(ctx, users, before, seed)
+    calls = {"search": {"query": target["query"], "filters": WIDE},
              "grep": {"pattern": re.escape(target["secret"]), "filters": WIDE},
              "read": {"doc_id": target["doc_id"], "filters": WIDE}}
     control = {"read": {"doc_id": absent_like(target["doc_id"], ctx.store.doc_ids())}}
@@ -748,8 +870,13 @@ def run_failclosed(probes: list[Probe], store_path: Path, clone_root: Path, ctx:
             t = make_tools(path, p.caller)
             out = run_call(t, p.tool, p.call)
             ctrl = run_call(t, p.tool, {**p.call, **p.control}) if p.control else None
+            b = (p.target.get("before") or {}).get(p.caller)
             results.append({"probe_id": p.probe_id, "family": p.family, "tool": p.tool,
                             "caller": p.caller, "variant": p.target.get("variant"),
+                            "visible_before": None if b is None else b["visible"],
+                            "top10_before": None if b is None else b["rank"] is not None
+                            and b["rank"] <= 10,
+                            "rank_before": None if b is None else b["rank"],
                             **judge_failclosed(p, out, ctrl, ctx)})
 
     def scanned(name: str, path: Path, offset: int) -> None:
@@ -808,8 +935,11 @@ def summarize_failclosed(results: list[dict]) -> dict:
     out: dict = {}
     for r in results:
         b = out.setdefault(r["family"], {"n": 0, "passed": 0, "content": 0,
+                                         "visible_before": 0, "top10_before": 0,
                                          "outcomes": Counter(), "by_tool": Counter()})
         b["n"] += 1
+        b["visible_before"] += bool(r.get("visible_before"))
+        b["top10_before"] += bool(r.get("top10_before"))
         b["passed"] += r["pass"]
         b["content"] += r["content"]
         b["outcomes"][r["outcome"]] += 1
@@ -840,7 +970,7 @@ def scan_log(path: Path, offset: int = 0) -> dict:
     """The log lines written after byte `offset`: how many, how many lack each of
     `REQUIRED`, and their decisions and tools."""
     out = {"lines": 0, "complete_lines": 0, "missing": dict.fromkeys(REQUIRED, 0),
-           "decisions": {}, "tools": {}}
+           "allowed": 0, "allowed_unresolved": 0, "decisions": {}, "tools": {}}
     try:
         with open(path, "rb") as f:
             f.seek(offset)
@@ -858,6 +988,9 @@ def scan_log(path: Path, offset: int = 0) -> dict:
         out["complete_lines"] += not lacking
         for k in lacking:
             out["missing"][k] += 1
+        if rec.get("acl_decision") == "allowed":
+            out["allowed"] += 1
+            out["allowed_unresolved"] += any(rec.get(k) is None for k in RESOLVED)
         decisions[str(rec.get("acl_decision"))] += 1
         tools[str(rec.get("tool"))] += 1
     out["decisions"] = dict(sorted(decisions.items()))
@@ -873,15 +1006,18 @@ def merge_scans(a: dict | None, b: dict) -> dict:
     tl.update(b["tools"])
     return {"lines": a["lines"] + b["lines"],
             "complete_lines": a["complete_lines"] + b["complete_lines"],
+            "allowed": a["allowed"] + b["allowed"],
+            "allowed_unresolved": a["allowed_unresolved"] + b["allowed_unresolved"],
             "missing": {k: a["missing"][k] + b["missing"][k] for k in REQUIRED},
             "decisions": dict(sorted(dec.items())), "tools": dict(sorted(tl.items()))}
 
 
 def total_scan(scans: dict) -> dict:
-    """The scans of several logs added up; `complete`: every line has every field."""
+    """The scans of several logs added up; `complete`: every line has every field and every
+    allowed line a non-null caller, principals, acl_snapshot and view."""
     out = None
     for s in scans.values():
         out = merge_scans(out, s)
     out = dict(out or scan_log(Path("/nonexistent")))
-    out["complete"] = out["lines"] == out["complete_lines"]
+    out["complete"] = out["lines"] == out["complete_lines"] and out["allowed_unresolved"] == 0
     return out

@@ -58,7 +58,7 @@ def store(tmp_path, config):
 
 
 def ctx_of(store) -> probes_acl.Context:
-    return probes_acl.context(store.path, tools.Tools(store.path).active_index().chunks)
+    return probes_acl.context(store.path, tools.Tools(store.path).active_index())
 
 
 def refs_of(store, config, tmp_path) -> dict:
@@ -175,7 +175,9 @@ def test_leak_probes_have_the_spec_counts_and_are_deterministic(store):
     ctx = ctx_of(store)
     probes = probes_acl.leak_probes(ctx)
     counts = {f: sum(p.family == f for p in probes) for f in probes_acl.FAMILY_SIZES}
-    assert counts == probes_acl.FAMILY_SIZES and len(probes) == 280
+    assert counts == probes_acl.FAMILY_SIZES
+    cross = [p for p in probes if p.family == "alternate-cross-view"]
+    assert len(probes) == 280 + len(cross) and cross  # the fixture's levy duplicate
     again = probes_acl.leak_probes(ctx_of(store))
     assert json.dumps([p.to_dict() for p in again]) == json.dumps([p.to_dict() for p in probes])
     callers = {p.caller for p in probes}
@@ -308,6 +310,30 @@ def test_each_remaining_leak_kind_is_detected(store, config, tmp_path):
         assert leaks_by_kind(results)[kind] > 0, kind
 
 
+def test_the_cross_view_duplicate_family_targets_a_split_cluster(store, config, tmp_path,
+                                                                 monkeypatch):
+    """The fixture's levy section is an exact duplicate in a public and a group:acme/0
+    document: callers who see one and not the other get a probe whose visible member ranks;
+    the tools show no hidden alternate, and a collapse that ignores the view is caught."""
+    ctx = ctx_of(store)
+    cross = [p for p in probes_acl.leak_probes(ctx, sizes=SMALL)
+             if p.family == "alternate-cross-view"]
+    assert cross
+    for p in cross:
+        assert p.target["doc_id"] not in ctx.visible(p.caller)
+        assert ctx.chunks[p.target["visible_member"]].doc_id in ctx.visible(p.caller)
+    results = [r for r in run_leak(store, config, tmp_path)
+               if r.family == "alternate-cross-view"]
+    assert len(results) == len(cross) and not any(r.leak for r in results)
+    assert all(r.extra["visible_member_rank"] is not None for r in results)
+    orig = tools.dedup_mod.collapse
+    monkeypatch.setattr(tools.dedup_mod, "collapse", lambda ranked, dd, admitted, *rest:
+                        orig(ranked, dd, lambda c: True, *rest))
+    leaky = [r for r in run_leak(store, config, tmp_path)
+             if r.family == "alternate-cross-view"]
+    assert sum(bool(r.kinds["alternate_outside_view"]) for r in leaky) > 0
+
+
 def test_a_caller_outside_the_directory_who_is_not_denied_is_invalid(store, config, tmp_path):
     off = tools.Tools(store.path)
     results = run_leak(store, config, tmp_path,
@@ -319,11 +345,15 @@ def test_a_caller_outside_the_directory_who_is_not_denied_is_invalid(store, conf
 # -- fail closed ---------------------------------------------------------------------------------
 
 
+def acl_tools(path, caller):
+    return tools.Tools(path, acl=True, caller=caller, clock=fixed(NOW))
+
+
 def run_failclosed(store, config, tmp_path, make_tools=None):
     ctx = ctx_of(store)
-    probes = probes_acl.failclosed_probes(ctx)
-    make_tools = make_tools or (lambda path, caller: tools.Tools(
-        path, acl=True, caller=caller, clock=fixed(NOW)))
+    probes = probes_acl.failclosed_probes(
+        ctx, before=probes_acl.tools_precheck(store.path, acl_tools))
+    make_tools = make_tools or acl_tools
     return probes, *probes_acl.run_failclosed(
         probes, store.path, tmp_path / "clones", ctx, make_tools=make_tools,
         directory=config[0], policy=config[1], clock=fixed(NOW))
@@ -345,6 +375,10 @@ def test_the_90_failclosed_probes_return_no_content(store, config, tmp_path):
     assert {"user:auditor", "user:outsider"} <= callers and len(callers) == 5
     assert {r["variant"] for r in results if r["family"] == "F1"} == set(
         probes_acl.F1_VARIANTS)
+    entry = [r for r in results if r["family"] == "no_entry"]
+    assert all(r["visible_before"] and r["top10_before"] for r in entry) and len(entry) == 15
+    assert s["conditions"]["no_entry"]["visible_before"] == 15
+    assert s["conditions"]["no_entry"]["top10_before"] == 15
     assert (store.path / "acl" / "HEAD").read_bytes() == head  # the store itself unchanged
     assert not any((tmp_path / "clones").glob("failclosed-*"))
     total = probes_acl.total_scan(logs)
@@ -359,7 +393,50 @@ def test_a_tool_that_fails_open_is_caught(store, config, tmp_path):
     for cond in ("F1", "F2", "F3", "F4", "F5"):
         assert s["conditions"][cond]["passed"] == 0
         assert s["conditions"][cond]["content"] > 0
-    assert s["conditions"]["no_entry"]["passed"] < 15
+    # the target is visible, ranks in the top 10, greps and reads for every caller before
+    # the rule, so a tool that ignores the rule fails every "no entry" probe
+    assert s["conditions"]["no_entry"]["passed"] == 0
+    assert s["conditions"]["no_entry"]["content"] == 15
+
+
+def test_the_no_entry_target_meets_its_precondition_for_every_caller(store):
+    """Each of the five callers sees the target before the rule, finds it in the top 10 of
+    its search, matches it by grep and reads it; the precondition is recorded per probe."""
+    ctx = ctx_of(store)
+    probes = probes_acl.failclosed_probes(
+        ctx, before=probes_acl.tools_precheck(store.path, acl_tools))
+    users = probes_acl.failclosed_callers(ctx)
+    t = probes[0].target
+    assert set(t["before"]) == set(users)
+    for u in users:
+        b = t["before"][u]
+        assert b["visible"] and b["grep"] and b["read"] and 1 <= b["rank"] <= 10
+        assert t["doc_id"] in ctx.visible(u)
+    assert all(p.target["before"] == t["before"] for p in probes)
+    assert {p.call["query"] for p in probes if p.tool == "search"} == {t["query"]}
+
+
+def test_the_failclosed_builder_refuses_or_skips_a_target_that_fails_the_precondition(store):
+    ctx = ctx_of(store)
+    real = probes_acl.tools_precheck(store.path, acl_tools)
+    first = probes_acl.failclosed_probes(ctx, before=real)[0].target["doc_id"]
+    rejected = []
+
+    def refuse_first(target, callers):
+        if target["doc_id"] == first:
+            rejected.append(first)
+            return None
+        return real(target, callers)
+
+    other = probes_acl.failclosed_probes(ctx, before=refuse_first)[0].target
+    assert set(rejected) == {first} and other["doc_id"] != first  # each query tried
+    assert all(1 <= b["rank"] <= 10 for b in other["before"].values())
+    with pytest.raises(ValueError, match="precondition"):
+        probes_acl.failclosed_probes(ctx, before=lambda target, callers: None)
+    # a checker that claims a rank outside the top 10 is refused too
+    with pytest.raises(ValueError, match="precondition"):
+        probes_acl.failclosed_probes(ctx, before=lambda target, callers: {
+            u: {"visible": True, "rank": 11, "grep": True, "read": True} for u in callers})
 
 
 def test_scan_log_counts_lines_missing_a_field(tmp_path):
@@ -378,6 +455,27 @@ def test_scan_log_counts_lines_missing_a_field(tmp_path):
                             "acl_decision": 0}
     assert not probes_acl.total_scan({"a": s})["complete"]
     assert probes_acl.scan_log(tmp_path / "none.jsonl")["lines"] == 0
+
+
+def test_an_allowed_line_needs_its_resolved_fields_non_null(tmp_path):
+    """Allowed lines must carry caller, principals, acl_snapshot and view (non-null); a
+    denied line may hold nulls where access was not resolved, an "off" line has no ACL."""
+    log = tmp_path / "retrieval.jsonl"
+    ok = {"tool": "search", "caller": "user:a", "principals": ["public"], "acl_snapshot": "x",
+          "acl_decision": "allowed", "view": "v"}
+    denied = {"tool": "read", "caller": "user:ghost", "principals": None,
+              "acl_snapshot": "x", "acl_decision": "denied:F4", "view": None}
+    off = {"tool": "index", "caller": None, "principals": None, "acl_snapshot": None,
+           "acl_decision": "off", "view": None}
+    lines = [ok, denied, off, {**ok, "view": None}, {**ok, "principals": None},
+             {**ok, "caller": None}, {**ok, "acl_snapshot": None}]
+    log.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    s = probes_acl.scan_log(log)
+    assert (s["lines"], s["complete_lines"], s["allowed"], s["allowed_unresolved"]) == \
+        (7, 7, 5, 4)
+    assert not probes_acl.total_scan({"a": s})["complete"]
+    log.write_text("".join(json.dumps(x) + "\n" for x in lines[:3]))
+    assert probes_acl.total_scan({"a": probes_acl.scan_log(log)})["complete"]
 
 
 # -- the command line ----------------------------------------------------------------------------
@@ -402,8 +500,10 @@ def test_the_cli_runs_both_probe_sets_and_writes_deterministic_probe_files(
     (eq_dir,) = out.glob("probes-equivalence-mini-*")
     assert (first / "probes.json").read_bytes() == (second / "probes.json").read_bytes()
     summary = json.loads((first / "summary.json").read_text())
-    assert summary["leak"]["total"] == {**summary["leak"]["total"], "n": 20, "leaks": 0,
-                                        "invalid": 0}
+    cross = summary["leak"]["families"]["alternate-cross-view"]["n"]
+    assert summary["leak"]["total"] == {**summary["leak"]["total"], "n": 20 + cross,
+                                        "leaks": 0, "invalid": 0}
+    assert summary["failclosed"]["conditions"]["no_entry"]["top10_before"] == 15
     assert summary["failclosed"]["total"] == {"n": 90, "passed": 90, "content": 0}
     assert summary["logs"]["total"]["complete"]
     assert summary["config"]["views_removed"] and summary["config"]["views"][0]["how"] == \

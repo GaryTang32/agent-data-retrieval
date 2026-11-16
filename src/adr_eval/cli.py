@@ -496,7 +496,7 @@ def _probes_acl(a: argparse.Namespace) -> int:
     emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
     tools, idx, system, phase1 = _probe_store(a, emb)
     cfg = _store_config(a, tools, idx, system, phase1)
-    ctx = acl_probes.context(tools.store_path, idx.chunks)
+    ctx = acl_probes.context(tools.store_path, idx)
     vs = equivalence.views(ctx.snap)
     root = _views_root(a, config)
     refs, info = _reference_stores(a, tools.store, vs, emb, root)
@@ -507,7 +507,11 @@ def _probes_acl(a: argparse.Namespace) -> int:
     sizes = None if a.per_family is None else dict.fromkeys(acl_probes.FAMILY_SIZES,
                                                             a.per_family)
     leak = acl_probes.leak_probes(ctx, sizes=sizes)
-    fc = acl_probes.failclosed_probes(ctx)
+    def make_tools(path, caller):
+        return Tools(path, emb_cache=emb, acl=True, caller=caller)
+
+    fc = acl_probes.failclosed_probes(ctx, before=acl_probes.tools_precheck(
+        tools.store_path, make_tools))
     results: dict[str, object] = {}
     for caller in sorted({p.caller for p in leak}, key=str):  # one caller's Tools at a time
         mine = Tools(tools.store_path, emb_cache=emb, acl=True, caller=caller)
@@ -522,7 +526,7 @@ def _probes_acl(a: argparse.Namespace) -> int:
         runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / "clones" / a.corpus
     fc_results, fc_logs = acl_probes.run_failclosed(
         fc, tools.store_path, clones, ctx, directory=a.directory, policy=a.policy,
-        make_tools=lambda path, caller: Tools(path, emb_cache=emb, acl=True, caller=caller))
+        make_tools=make_tools)
     if clones.is_dir() and not any(p for p in clones.iterdir() if p.is_dir()):
         import shutil
 
@@ -544,6 +548,7 @@ def _probes_acl(a: argparse.Namespace) -> int:
         f"{', '.join(f'{k} {v}' for k, v in b['checked_kinds'].items())} |\n"
         for name, b in leak_summary["families"].items())
     fc_rows = "".join(f"| {name} | {b['n']} | {b['passed']} | {b['content']} | "
+                      f"{b['visible_before']} | {b['top10_before']} | "
                       f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
                       for name, b in fc_summary["conditions"].items())
     md = (f"# ACL probes: {a.corpus}\n\nStore `{cfg['store']}` (snapshot "
@@ -554,11 +559,14 @@ def _probes_acl(a: argparse.Namespace) -> int:
           + md_rows + f"\nTotal: {leak_summary['total']['n']} probes, "
           f"{leak_summary['total']['leaks']} leaks, {leak_summary['total']['invalid']} "
           f"invalid.\n\n## Fail closed\n\n| condition | probes | passed | with content | "
-          f"outcomes |\n|---|---|---|---|---|\n" + fc_rows
+          f"visible before | top 10 before | outcomes |\n|---|---|---|---|---|---|---|\n"
+          + fc_rows
           + f"\nTotal: {fc_summary['total']['n']} probes, {fc_summary['total']['passed']} "
             f"passed, {fc_summary['total']['content']} with content.\n\n## Log fields\n\n"
             f"{logs['total']['lines']} log lines, {logs['total']['complete_lines']} with "
-            f"caller, principals, acl_snapshot and acl_decision.\n")
+            f"caller, principals, acl_snapshot and acl_decision; {logs['total']['allowed']} "
+            f"allowed, {logs['total']['allowed_unresolved']} of them with a null caller, "
+            f"principals, acl_snapshot or view.\n")
     probe_set = {"seed": probes.SEED, "leak": [p.to_dict() for p in leak],
                  "failclosed": [p.to_dict() for p in fc]}
     d = _write_probe_run(a, "acl", started,
