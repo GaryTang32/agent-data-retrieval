@@ -655,10 +655,11 @@ class Tools:
     one ACL snapshot per call, `clock` for F3) and enforces it; `caller` is a `user:`
     principal. Calls on one instance run one at a time.
 
-    Only the tool methods (`search`, `read`, `grep`) serve a caller; the MCP layer (Task 12)
-    must call nothing else. `index`, `active_index` and `active_system` are operator calls,
-    refused with the ACL layer (`index` after resolving access, so it is logged with the
-    caller's decision)."""
+    Only the tool methods (`search`, `read`, `grep`, `search_tools`, `load_tool`) serve a
+    caller; the MCP layer (Task 12) must call nothing else. `index`, `tools_index`,
+    `active_index`, `active_system` and `active_tool_index` are operator calls, refused with
+    the ACL layer (`index` and `tools_index` after resolving access, so they are logged with
+    the caller's decision)."""
 
     def __init__(self, store_path: Path, *, emb_cache: Path = DEFAULT_EMB_CACHE,
                  acl: bool = False, caller: str | None = None,
