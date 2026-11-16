@@ -310,3 +310,44 @@ def test_a_stale_snapshot_denies_the_tool_tools(tmp_path, procs):
                 procs(store, tmp_path, clock=now)):
         for reply in sees_tool(who)["replies"]:
             assert reply["code"] == "F3" and "ok" not in reply
+
+
+# -- the MCP leg -------------------------------------------------------------------------------
+
+MCP_CHANGES = {
+    "user removed from a group": ([CHANGES["user removed from a group"][0]], None),
+    "rule changed in the policy": ([CHANGES["document rule changed in the policy"][0],
+                                    TOOL_CHANGES["tool rule changed in the policy"][0]], None),
+    "user deleted": ([CHANGES["user deleted"][0]], "F4"),
+}
+
+
+@pytest.mark.parametrize("change", sorted(MCP_CHANGES))
+def test_revocation_reaches_an_mcp_server_started_before_the_change(tmp_path, change):
+    """Step 5's MCP leg (§12 Revocation, B3): an `adr mcp` server started before the edit
+    sees the target document and tool through all five tools, still sees them after the edit,
+    and no longer sees them once one sync has run (its next calls honour the new ACL
+    snapshot; a deleted user is denied F4)."""
+    pytest.importorskip("mcp")
+    from adr_store.mcp_client import McpTools
+
+    config = write_config(tmp_path / "config", TOOL_RULES)
+    store = make_with_tools(tmp_path / "store", config)
+    acl.sync(store.path, *config)  # the real clock: the server reads it
+    edits, denied = MCP_CHANGES[change]
+    with McpTools(store.path, CALLER, emb_cache=tmp_path / "emb", cwd=REPO,
+                  env={"HF_HUB_OFFLINE": "1"}) as server:
+        # 1. the caller sees the target through each tool
+        visible_everywhere(server)
+        tool_visible_everywhere(server)
+        # 2. edit the directory or policy copy; 3. before the sync: unchanged
+        for edit in edits:
+            edit(config)
+        visible_everywhere(server)
+        tool_visible_everywhere(server)
+        # 4. one sync; 5. invisible through the server started before step 2
+        acl.sync(store.path, *config)
+        invisible_everywhere(store, server, denied=denied)
+        tool_invisible_everywhere(server, denied=denied)
+        if denied is None:  # the change revoked nothing else
+            assert "ok" in ask(server, "read", did(PUBLIC))

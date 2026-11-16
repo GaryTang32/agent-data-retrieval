@@ -8,7 +8,9 @@ sync` and `adr acl show` (Phase 2 spec §5.3: one sync cycle of the ACL snapshot
 directory and policy, and the principals of a chunk, a document or a user; code in
 `adr_store.acl`), and `adr tools ingest` (Phase 2 spec §8.1, §8.3: tool records from a
 captured MCP `tools/list` result, an OpenAPI 3.x JSON document or the local ToolRet corpus into
-a store's tool catalog; code in `adr_store.tool_records` and `adr_store.tool_catalog`). `adr`
+a store's tool catalog; code in `adr_store.tool_records` and `adr_store.tool_catalog`), and
+`adr mcp --store <dir> --as USER` (Phase 2 spec §9.3: the five tools over MCP on stdio as one
+caller; code in `adr_store.mcp_server`, needs the `[mcp]` extra). `adr`
 is not a security boundary (Phase 2 spec §7.1): whoever can run it
 can read the store directory.
 
@@ -74,7 +76,7 @@ from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import acl, applicability, dedup, tool_catalog, tool_records, tools
+from adr_store import acl, applicability, dedup, mcp_server, tool_catalog, tool_records, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -893,6 +895,12 @@ def _load_tool(a: argparse.Namespace) -> int:
     return 0
 
 
+def _mcp(a: argparse.Namespace) -> int:
+    """`adr mcp`: the server of `adr_store.mcp_server` (which imports the `mcp` package only
+    when it builds the server, so the rest of `adr` runs without the `[mcp]` extra)."""
+    return mcp_server.serve(a.store, a.as_user, a.emb_cache)
+
+
 def _non_negative(s: str) -> int:
     v = int(s)
     if v < 0:
@@ -1083,6 +1091,14 @@ def _parser() -> argparse.ArgumentParser:
     sh.add_argument("--json", action="store_true", help="print the result as JSON")
     sh.set_defaults(fn=_acl_show)
 
+    mc = sub.add_parser("mcp", help="serve the tools over MCP (stdio) as one caller (Phase 2; "
+                                     "needs the [mcp] extra)",
+                        description="Serve search, read, grep, search_tools and load_tool over "
+                                    "MCP on stdio, as one caller with the ACL enforced on every "
+                                    "call (code in adr_store.mcp_server). Without a caller "
+                                    "(--as or ADR_CALLER) it refuses to start.")
+    mcp_server.add_arguments(mc)
+    mc.set_defaults(fn=_mcp)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "
