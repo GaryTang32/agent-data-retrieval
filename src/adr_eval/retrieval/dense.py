@@ -85,6 +85,14 @@ class DenseIndex:
         hits.sort(key=lambda h: (-h[1], h[0]))
         return hits[:k]
 
+    def scores(self, query: str) -> np.ndarray | None:
+        """The raw cosine of every row with `query`, in build order, or None for an empty
+        index. `search` ranks these, rounded to 6 decimals."""
+        if not self._ids:
+            return None
+        q = _unit(next(iter(self._get_model().query_embed([query]))))
+        return self.vectors @ q
+
     def model_hash(self) -> str:
         """SHA-256 of the model's ONNX file in the fastembed cache (downloads it if absent)."""
         from fastembed import TextEmbedding

@@ -53,3 +53,16 @@ def test_bm25_config_and_chunk_pipeline():
     idx = BM25Index()
     idx.build(chunk_document(doc))
     assert idx.search("gamma")
+
+
+def test_bm25_scores_are_the_raw_per_row_scores_search_ranks():
+    idx = BM25Index()
+    idx.build(SOME)
+    s = idx.scores("refund shipping")
+    assert s.shape == (len(SOME),)
+    want = sorted(((c.chunk_id, round(float(v), 6)) for c, v in zip(SOME, s, strict=True)
+                   if round(float(v), 6) > 0), key=lambda h: (-h[1], h[0]))
+    assert idx.search("refund shipping", k=100) == want
+    assert idx.scores("the of and") is None and idx.scores("") is None
+    idx.build([])
+    assert idx.scores("refund") is None
