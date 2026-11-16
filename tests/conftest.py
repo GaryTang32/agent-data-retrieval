@@ -62,7 +62,8 @@ def _isolate_writable_state(writable_state, monkeypatch):
     unless a test opts in. The ACL probes' view stores and clones go there too.
     The `adr` tools' default embedding cache and `StoreIndex`'s default one point there too,
     and so does the store directory `adr --corpus <name>` and `adr index <name>` use.
-    The ToolRet data directory of `adr-eval tools-fetch` (`data/tools`) goes there too.
+    The default tools-only store of `adr tools ingest --toolret` and the ToolRet data
+    directory of `adr-eval tools-fetch` (`data/tools`) go there too.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -91,6 +92,7 @@ def _isolate_writable_state(writable_state, monkeypatch):
     monkeypatch.setattr(store_index, "_default_cache",
                         lambda: EmbeddingCache(writable_state / "emb-store-index"))
     monkeypatch.setattr(cli, "STORE_ROOT", writable_state / "cli-store")
+    monkeypatch.setattr(cli, "TOOL_STORE", writable_state / "store-p2-toolret")
     from adr_eval.corpora import toolret
 
     monkeypatch.setattr(toolret, "DATA_DIR", writable_state / "data-tools")

@@ -1,0 +1,101 @@
+{
+  "additionalProperties": false,
+  "description": "`<store>/tools/records/<tool_id[:2]>/<tool_id>.json` (spec §8.1). The description is\nuntrusted text from the source, returned as data, never as instructions.",
+  "properties": {
+    "definition_tokens": {
+      "minimum": 0,
+      "title": "Definition Tokens",
+      "type": "integer"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "input_schema": {
+      "additionalProperties": true,
+      "title": "Input Schema",
+      "type": "object"
+    },
+    "license": {
+      "title": "License",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "operation": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Operation"
+    },
+    "output_schema": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Output Schema"
+    },
+    "source_kind": {
+      "enum": [
+        "mcp",
+        "openapi",
+        "toolret"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "source_uri": {
+      "title": "Source Uri",
+      "type": "string"
+    },
+    "source_version": {
+      "title": "Source Version",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Title"
+    },
+    "tool_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tool Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool_id",
+    "name",
+    "title",
+    "description",
+    "input_schema",
+    "output_schema",
+    "source_kind",
+    "source_uri",
+    "source_version",
+    "operation",
+    "license",
+    "definition_tokens"
+  ],
+  "title": "ToolRecord",
+  "type": "object"
+}

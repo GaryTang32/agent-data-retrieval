@@ -6,7 +6,10 @@ store's HEAD snapshot, code in `adr_store.applicability`), `adr dedup build` (Ph
 §4.5: the dedup overlay of the active index's chunks, code in `adr_store.dedup`), and `adr acl
 sync` and `adr acl show` (Phase 2 spec §5.3: one sync cycle of the ACL snapshot from the
 directory and policy, and the principals of a chunk, a document or a user; code in
-`adr_store.acl`). `adr` is not a security boundary (Phase 2 spec §7.1): whoever can run it
+`adr_store.acl`), and `adr tools ingest` (Phase 2 spec §8.1, §8.3: tool records from a
+captured MCP `tools/list` result, an OpenAPI 3.x JSON document or the local ToolRet corpus into
+a store's tool catalog; code in `adr_store.tool_records` and `adr_store.tool_catalog`). `adr`
+is not a security boundary (Phase 2 spec §7.1): whoever can run it
 can read the store directory.
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
@@ -66,11 +69,12 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
 from adr_eval.corpora import REPO_ROOT
-from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
+from adr_eval.corpora.base import Document, ExtractionError, HashMismatch, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
+from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import acl, applicability, dedup, tools
+from adr_store import acl, applicability, dedup, tool_catalog, tool_records, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -693,6 +697,9 @@ def _acl_sync(a: argparse.Namespace) -> int:
     print(f"  {res.path}")
     print(f"  documents {res.documents}: " + ", ".join(
         f"{_KIND_LABELS[k]} {n}" for k, n in res.kinds.items() if n or k != "rule"))
+    if res.tool_snapshot is not None:
+        print(f"  tools {res.tools} (tool snapshot {res.tool_snapshot[:12]}): " + ", ".join(
+            f"{_KIND_LABELS[k]} {n}" for k, n in res.tool_kinds.items() if n or k != "rule"))
     print(f"  entries {res.entries_sha256[:12]}; sync {res.duration_s:.3f} s; lag "
           f"{res.lag_s:.1f} s since the directory or policy changed")
     return 0
@@ -739,6 +746,89 @@ def _acl_show(a: argparse.Namespace) -> int:
         print(line)
     if warning:
         print(f"warning: {warning}")
+    return 0
+
+
+TOOL_STORE = Path(".cache/store-p2/toolret")
+
+
+def _tool_source(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolRecord]]:
+    """(description of the source, its tool records) for `adr tools ingest`."""
+    if a.toolret:
+        from adr_eval.corpora import toolret
+
+        cfg = toolret.load_config(toolret.CONFIG_PATH)
+        entry = cfg["files"]["tools"]
+        rows = toolret.tools(a.root if a.root is not None else toolret.DATA_DIR,
+                             toolret.CONFIG_PATH)
+        recs = [tool_records.from_toolret(
+            json.loads(r["documentation"]),
+            tool_records.toolret_uri(entry["repo"], entry["revision"], entry["config"],
+                                     r["id"]),
+            entry["revision"], cfg["license"]) for r in rows]
+        return f"toolret {entry['repo']}@{entry['revision'][:12]}/{entry['config']}", recs
+    path = a.mcp or a.openapi
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise _UsageError(f"cannot read {path}: {_one_line(e)}") from e
+    try:
+        if a.mcp:
+            for key in ("tools_list", "server"):
+                if key not in doc:
+                    raise _UsageError(f"{path}: not a captured tools/list file (no {key!r})")
+            uri = a.source_uri or doc.get("source_uri")
+            lic = a.license or doc.get("license")
+            if not uri or not lic:
+                raise _UsageError(f"{path}: give --source-uri and --license (the file has "
+                                  f"no source_uri or license)")
+            recs = tool_records.from_mcp(doc["tools_list"], doc["server"], uri,
+                                         a.source_version or str(doc.get("version", "")), lic)
+            return f"MCP server {doc['server']} ({path})", recs
+        if not a.source_uri or not a.license:
+            raise _UsageError("--openapi needs --source-uri and --license (they are part of "
+                              "every record, and the source_uri of its tool_id)")
+        version = a.source_version or str((doc.get("info") or {}).get("version", ""))
+        return f"OpenAPI {path}", tool_records.from_openapi(doc, a.source_uri, version,
+                                                            a.license)
+    except (ValueError, TypeError, AttributeError) as e:
+        raise _UsageError(f"{path}: {_one_line(e)}") from e
+
+
+def _tools_ingest(a: argparse.Namespace) -> int:
+    """Add the tool records of one source to a store's tool catalog and commit a tool
+    snapshot; every record is checked first and none is written if one fails."""
+    if a.store is None and not a.toolret:
+        raise _UsageError("--mcp and --openapi need --store (the default store "
+                          f"{TOOL_STORE} is the ToolRet one)")
+    store = a.store if a.store is not None else TOOL_STORE
+    source, recs = _tool_source(a)
+    failed = [(r, p) for r in recs if (p := tool_records.conformance(r))]
+    if failed:
+        for r, problems in failed:
+            print(f"error: tool {r.name!r} ({r.tool_id[:12]}): {'; '.join(problems)}",
+                  file=sys.stderr)
+        print(f"error: {len(failed)} of {len(recs)} tools from {source} fail conformance; "
+              f"nothing written", file=sys.stderr)
+        return EXIT_CONFORMANCE
+    tool_catalog.ensure_store(store)
+    cat = (tool_catalog.ToolCatalog.open(store) if tool_catalog.has_catalog(store)
+           else tool_catalog.ToolCatalog.create(store))
+    before = len(cat)
+    for r in recs:
+        cat.add(r)
+    sid = cat.commit()
+    res = {"store": str(store), "source": source, "records": len(recs),
+           "added": len(cat) - before, "tools": len(cat), "tool_snapshot": sid,
+           "content_snapshot": Store.open(store).snapshot_id, "conformance": 1.0,
+           "definition_tokens": sum(r.definition_tokens for r in recs)}
+    if a.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    print(f"tools: {len(recs)} tools from {source}: conformance 100%, {res['added']} new; "
+          f"catalog {sid[:12]} holds {len(cat)} tools")
+    print(f"  store {store} (content snapshot {res['content_snapshot'][:12]}); definitions "
+          f"{res['definition_tokens']} tokens")
     return 0
 
 
@@ -919,6 +1009,30 @@ def _parser() -> argparse.ArgumentParser:
                     help="embedding cache directory (to load a dense active index)")
     sh.add_argument("--json", action="store_true", help="print the result as JSON")
     sh.set_defaults(fn=_acl_show)
+
+    tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
+    tl_sub = tl.add_subparsers(dest="action", required=True)
+    ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "
+                                          "catalog and commit a tool snapshot")
+    src = ti.add_mutually_exclusive_group(required=True)
+    src.add_argument("--mcp", type=Path, default=None, metavar="F",
+                     help="a captured tools/list file (server, version, source_uri, license, "
+                          "tools_list)")
+    src.add_argument("--openapi", type=Path, default=None, metavar="F",
+                     help="an OpenAPI 3.x JSON document (needs --source-uri and --license)")
+    src.add_argument("--toolret", action="store_true",
+                     help="the local ToolRet toolbench tools (`adr-eval tools-fetch` first)")
+    ti.add_argument("--store", type=Path, default=None,
+                    help=f"store directory (made a tools-only store if new; default "
+                         f"{TOOL_STORE} with --toolret)")
+    ti.add_argument("--root", type=Path, default=None,
+                    help="--toolret: the data directory (default data/tools)")
+    ti.add_argument("--source-uri", default=None, help="the records' source_uri")
+    ti.add_argument("--source-version", default=None,
+                    help="the records' source_version (default: the file's version)")
+    ti.add_argument("--license", default=None, help="the records' licence")
+    ti.add_argument("--json", action="store_true", help="print the result as JSON")
+    ti.set_defaults(fn=_tools_ingest)
     return ap
 
 
@@ -946,7 +1060,7 @@ def main(argv: list[str] | None = None) -> int:
         _silence_stdout()
         return 0 if code is None else code
     except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError,
-            acl.AclDenied, _UsageError) as e:
+            acl.AclDenied, _UsageError, ToolRetMissing, HashMismatch) as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_LOAD_OR_STORE
     except _Unexpected as e:

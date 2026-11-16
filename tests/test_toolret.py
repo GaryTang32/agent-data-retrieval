@@ -1,5 +1,5 @@
-"""The ToolRet `toolbench` corpus: download at pinned revisions, tools, queries and splits
-(Phase 2 spec §8.3; §12 Tools). Built from the synthetic
+"""The ToolRet `toolbench` corpus: download at pinned revisions, tools, queries, splits and
+the tools-only store (Phase 2 spec §8.3; §12 Tools). Built from the synthetic
 `tests/fixtures/tools/toolret_sample.jsonl` (ToolRet's shape, no ToolRet text)."""
 
 import hashlib
@@ -16,6 +16,9 @@ from adr_eval.corpora import toolret
 from adr_eval.corpora.base import HashMismatch
 from adr_eval.corpora.http import PoliteFetcher
 from adr_eval.retrieval.chunker import _count
+from adr_store import cli, tool_records
+from adr_store.store import Store
+from adr_store.tool_catalog import ToolCatalog
 
 REPO = Path(__file__).parents[1]
 SAMPLE = REPO / "tests" / "fixtures" / "tools" / "toolret_sample.jsonl"
@@ -189,3 +192,29 @@ def test_cli_tools_fetch(tmp_path, blobs, config_path, monkeypatch, capsys):
 def test_default_data_dir_is_redirected_in_tests():
     assert REPO not in Path(toolret.DATA_DIR).resolve().parents
 
+
+# -- the tools-only store ---------------------------------------------------------------------
+
+def test_cli_ingest_toolret_twice_gives_the_same_snapshot(root, config_path, monkeypatch,
+                                                         capsys, tmp_path):
+    monkeypatch.setattr(toolret, "CONFIG_PATH", config_path)
+    store = tmp_path / "toolret"
+    args = ["tools", "ingest", "--toolret", "--root", str(root), "--store", str(store),
+            "--json"]
+    assert cli.main(args) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert first["tools"] == 6 and first["conformance"] == 1.0
+    assert cli.main(args) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert second["tool_snapshot"] == first["tool_snapshot"]
+    assert Store.open(store).doc_ids() == []
+    cat = ToolCatalog.open(store)
+    rev = json.loads(config_path.read_text())["files"]["tools"]["revision"]
+    uri = tool_records.toolret_uri("mangopy/ToolRet-Tools", rev, "web", "toolbench_tool_2")
+    rec = next(cat.get(t) for t in cat.ids() if cat.get(t).source_uri == uri)
+    assert rec.name == "Ledgerly_Convert_Currency" and rec.source_version == rev
+    assert rec.license == json.loads(config_path.read_text())["license"]
+
+
+def test_default_tool_store_is_redirected_in_tests():
+    assert REPO not in Path(cli.TOOL_STORE).resolve().parents

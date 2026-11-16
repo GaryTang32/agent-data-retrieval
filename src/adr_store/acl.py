@@ -27,9 +27,12 @@ the tenant's sorted groups, where `H(x) = int(SHA-256(salt + "\\n" + x + "\\n" +
 A sync cycle (`sync`) reads and validates the directory and the policy, computes the access
 list of every document of the store's HEAD content snapshot (refusing a policy whose
 attribute rules give the versions of one chain different lists: all versions of a source
-share access, `split_chain`; the tools deny F1 to a view that splits a chain; tool records
-arrive with the tool catalog in Task 9: until then `tool_snapshot` is null and `tools`
-empty), writes the snapshot and atomically replaces `acl/HEAD`. Every failure is logged
+share access, `split_chain`; the tools deny F1 to a view that splits a chain) and, when the
+store has a tool catalog (`tools/HEAD`), of every tool record of that tool snapshot: a tool's
+key is its `tool_id` and its attributes are its `uri` (its `source_uri`) and no `format`, so a
+format rule never matches a tool (planner's call); `tool_snapshot` names the tool snapshot
+(null, and `tools` empty, without a catalog). It then writes the snapshot and atomically
+replaces `acl/HEAD`. Every failure is logged
 and raised as `SyncError`; one before the swap leaves the old HEAD, and the error says
 whether HEAD moved (after the swap only reading the clock or appending the sync log can
 fail). The snapshot file is written once: an existing file under its id with other bytes is
@@ -70,8 +73,10 @@ from adr_eval.corpora import REPO_ROOT
 from adr_store.applicability import chain_of
 from adr_store.records import Format, canonical_json
 from adr_store.store import Store, StoreError, write_atomic
+from adr_store.tool_catalog import ToolCatalog, has_catalog
 
 FORMAT_VERSION = "0.1"
+KIND_ORDER = ("public", "two_tenants", "tenant", "group", "rule")
 SALT = "adr-acl-v1"
 MAX_SYNC_AGE_S = 3600
 FUTURE_SKEW_S = 300
@@ -606,6 +611,8 @@ class SyncResult:
     path: str
     documents: int
     kinds: dict[str, int] = field(default_factory=dict)
+    tools: int = 0
+    tool_kinds: dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -723,12 +730,23 @@ def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Pa
                                         policy, directory)
             kinds[kind] += 1
         _check_chains(members, docs)
-        users = {u: sorted(principals_of(directory, u)) for u in sorted(directory.users)}
         tools: dict[str, list[str]] = {}
+        tool_kinds: Counter[str] = Counter()
+        tool_snapshot = None
+        if has_catalog(store.path):
+            catalog = ToolCatalog.open(store.path)
+            tool_snapshot = catalog.snapshot_id
+            line["tool_snapshot"] = tool_snapshot
+            for tid in catalog.ids():
+                kind, tools[tid] = assign(tid, {"uri": catalog.get(tid).source_uri}, policy,
+                                          directory)
+                tool_kinds[kind] += 1
+        users = {u: sorted(principals_of(directory, u)) for u in sorted(directory.users)}
         entries = entries_sha256(users, docs, tools)
         snap = AclSnapshot(
             format_version=FORMAT_VERSION, sequence=prev_seq + 1, synced_at=_aware(clock()),
-            content_snapshot=store.snapshot_id, tool_snapshot=None, directory_sha256=dir_sha,
+            content_snapshot=store.snapshot_id, tool_snapshot=tool_snapshot,
+            directory_sha256=dir_sha,
             policy_sha256=pol_sha, max_sync_age_s=policy.max_sync_age_s,
             future_skew_s=policy.future_skew_s, directory=users, docs=docs, tools=tools,
             entries_sha256=entries)
@@ -770,9 +788,9 @@ def _sync_locked(store: Store, adir: Path, directory_path: Path, policy_path: Pa
     return SyncResult(acl_snapshot=sid, sequence=snap.sequence, entries_sha256=entries,
                       changed=line["changed"], duration_s=duration, lag_s=lag,
                       previous=previous, content_snapshot=store.snapshot_id,
-                      tool_snapshot=None, path=str(path), documents=len(docs),
-                      kinds={k: kinds[k] for k in ("public", "two_tenants", "tenant", "group",
-                                                   "rule")})
+                      tool_snapshot=tool_snapshot, path=str(path), documents=len(docs),
+                      kinds={k: kinds[k] for k in KIND_ORDER}, tools=len(tools),
+                      tool_kinds={k: tool_kinds[k] for k in KIND_ORDER})
 
 
 if __name__ == "__main__":
