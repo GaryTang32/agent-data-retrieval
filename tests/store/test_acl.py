@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from adr_store import acl, records
+from adr_store import acl, cli, records
 from adr_store.acl import AclDenied, Directory, Policy
 from adr_store.store import Store, StoreError
 from tests.store.test_applicability import (
@@ -531,3 +531,79 @@ def test_the_acl_schemas_are_record_schemas():
     assert s["acl-directory.schema.json"] == Directory.model_json_schema()
     assert s["acl-policy.schema.json"] == Policy.model_json_schema()
     assert s["acl-snapshot.schema.json"] == acl.AclSnapshot.model_json_schema()
+
+
+# -- the CLI -------------------------------------------------------------------------------
+
+def _cli(capsys, *argv) -> tuple[int, str, str]:
+    code = cli.main(list(argv))
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_cli_sync_and_show(store, config, capsys):
+    flags = ["--store", str(store.path), "--directory", str(config[0]),
+             "--policy", str(config[1])]
+    code, out, _ = _cli(capsys, "acl", "sync", *flags)
+    assert code == 0 and "sequence 1" in out
+    sid, snap = acl.read_head(store.path)
+    assert sid[:12] in out
+    code, out, _ = _cli(capsys, "acl", "sync", *flags, "--json")
+    res = json.loads(out)
+    assert code == 0 and res["sequence"] == 2 and res["changed"] is False
+    assert set(res) >= {"acl_snapshot", "sequence", "entries_sha256", "changed", "duration_s",
+                        "lag_s", "kinds", "documents"}
+
+    did = doc_id(V2024)
+    code, out, _ = _cli(capsys, "acl", "show", "--store", str(store.path), "--doc", did[:10])
+    assert code == 0 and did in out
+    for p in snap.docs[did]:
+        assert p in out
+    code, out, _ = _cli(capsys, "acl", "show", "--store", str(store.path), "--user",
+                        "user:acme-4", "--json")
+    shown = json.loads(out)
+    assert shown["principals"] == snap.directory["user:acme-4"]
+    assert shown["visible_documents"] == sum(
+        1 for v in snap.docs.values() if set(v) & set(shown["principals"]))
+
+
+def test_cli_show_chunk(store, config, capsys):
+    from adr_store import tools
+
+    sync(store, config, clock=fixed())
+    idx = tools.Tools(store.path)
+    idx.index("p1-struct", lexical_only=True)
+    chunk = next(iter(idx.active_index().chunks.values()))
+    _, snap = acl.read_head(store.path)
+    code, out, _ = _cli(capsys, "acl", "show", "--store", str(store.path), "--chunk",
+                        chunk.chunk_id, "--json")
+    shown = json.loads(out)
+    assert code == 0 and shown["doc_id"] == chunk.doc_id
+    assert shown["principals"] == snap.docs[chunk.doc_id]
+
+
+def test_cli_show_refusals(store, config, capsys):
+    code, _, err = _cli(capsys, "acl", "show", "--store", str(store.path), "--user",
+                        "user:acme-0")
+    assert code == 2 and "access denied (F1)" in err
+    sync(store, config, clock=fixed())
+    code, _, err = _cli(capsys, "acl", "show", "--store", str(store.path), "--user",
+                        "user:ghost")
+    assert code == 2 and "user:ghost" in err
+    code, _, err = _cli(capsys, "acl", "show", "--store", str(store.path), "--doc", "ffffffff")
+    assert code == 2 and "no document" in err
+
+
+def test_cli_sync_refusal(store, config, capsys):
+    config[1].write_text("{}")
+    code, _, err = _cli(capsys, "acl", "sync", "--store", str(store.path), "--directory",
+                        str(config[0]), "--policy", str(config[1]))
+    assert code == 2 and "policy" in err
+    assert not (store.path / "acl" / "HEAD").exists()
+
+
+def test_cli_help_says_adr_is_not_a_security_boundary(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(["acl", "--help"])
+    out = " ".join(capsys.readouterr().out.split())
+    assert "not a security boundary" in out

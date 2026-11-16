@@ -2,8 +2,12 @@
 --store <dir>` (below), and the retrieval tools `adr index`, `adr search`, `adr read` and
 `adr grep` (spec §9; the code is in `adr_store.tools`, this module only parses arguments and
 prints), `adr applicability derive` (Phase 2 spec §4.2: the applicability overlay of the
-store's HEAD snapshot, code in `adr_store.applicability`) and `adr dedup build` (Phase 2 spec
-§4.5: the dedup overlay of the active index's chunks, code in `adr_store.dedup`).
+store's HEAD snapshot, code in `adr_store.applicability`), `adr dedup build` (Phase 2 spec
+§4.5: the dedup overlay of the active index's chunks, code in `adr_store.dedup`), and `adr acl
+sync` and `adr acl show` (Phase 2 spec §5.3: one sync cycle of the ACL snapshot from the
+directory and policy, and the principals of a chunk, a document or a user; code in
+`adr_store.acl`). `adr` is not a security boundary (Phase 2 spec §7.1): whoever can run it
+can read the store directory.
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
@@ -64,7 +68,7 @@ from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import applicability, dedup, tools
+from adr_store import acl, applicability, dedup, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -663,6 +667,74 @@ def _dedup_build(a: argparse.Namespace) -> int:
     return 0
 
 
+_KIND_LABELS = {"public": "public", "two_tenants": "two tenants", "tenant": "one tenant",
+                "group": "one group", "rule": "by attribute rule"}
+NOT_A_BOUNDARY = ("`adr` is not a security boundary: whoever can run it can read the store "
+                  "directory. The enforcement point is the Tools API, served over MCP "
+                  "(Phase 2 spec §7.1).")
+
+
+def _acl_sync(a: argparse.Namespace) -> int:
+    """Run one sync cycle and print what it wrote."""
+    res = acl.sync(_store_of(a), a.directory, a.policy)
+    if a.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    print(f"acl: snapshot {res.acl_snapshot[:12]} sequence {res.sequence} for content snapshot "
+          f"{res.content_snapshot[:12]} (access {'changed' if res.changed else 'unchanged'}"
+          f"{'' if res.previous is None else f' since {res.previous[:12]}'})")
+    print(f"  {res.path}")
+    print(f"  documents {res.documents}: " + ", ".join(
+        f"{_KIND_LABELS[k]} {n}" for k, n in res.kinds.items() if n or k != "rule"))
+    print(f"  entries {res.entries_sha256[:12]}; sync {res.duration_s:.3f} s; lag "
+          f"{res.lag_s:.1f} s since the directory or policy changed")
+    return 0
+
+
+def _acl_show(a: argparse.Namespace) -> int:
+    """The principals of a chunk (through the active index), a document, or a user, as the
+    current ACL snapshot has them."""
+    store_path = _store_of(a)
+    sid, snap = acl.read_head(store_path)
+    out: dict = {"acl_snapshot": sid, "content_snapshot": snap.content_snapshot}
+    head = Store.open(store_path).snapshot_id
+    warning = None if head == snap.content_snapshot else (
+        f"the ACL snapshot is for content snapshot {snap.content_snapshot[:12]}, the store is "
+        f"at {head[:12]}: tools deny every call (F2) until `adr acl sync`")
+    out["warning"] = warning
+    if a.user is not None:
+        principals = acl.caller_principals(snap, a.user)
+        visible = sum(1 for v in snap.docs.values() if set(v) & set(principals))
+        out.update(user=a.user, principals=list(principals), visible_documents=visible,
+                   documents=len(snap.docs))
+        lines = [f"{a.user}: {' '.join(principals)}",
+                 f"  sees {visible} of {len(snap.docs)} documents"]
+    else:
+        if a.chunk is not None:
+            idx = tools.Tools(store_path, emb_cache=a.emb_cache).active_index()
+            cid = tools._resolve(a.chunk, sorted(idx.chunks), "chunk", "the active index")
+            doc_id = idx.chunks[cid].doc_id
+            out["chunk_id"] = cid
+        else:
+            doc_id = tools._resolve(a.doc, sorted(snap.docs), "document",
+                                    f"ACL snapshot {sid[:12]}")
+        principals = snap.docs.get(doc_id)
+        out.update(doc_id=doc_id, principals=principals)
+        who = "no entry: visible to no one" if not principals else " ".join(principals)
+        lines = ([f"chunk {out['chunk_id']}"] if a.chunk is not None else []) + \
+            [f"document {doc_id}: {who}"]
+    if a.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
+    print(f"acl snapshot {sid[:12]} (sequence {snap.sequence}, synced "
+          f"{snap.synced_at.isoformat().replace('+00:00', 'Z')})")
+    for line in lines:
+        print(line)
+    if warning:
+        print(f"warning: {warning}")
+    return 0
+
+
 def _non_negative(s: str) -> int:
     v = int(s)
     if v < 0:
@@ -794,6 +866,41 @@ def _parser() -> argparse.ArgumentParser:
                      help="embedding cache directory (to load a dense active index)")
     bld.add_argument("--json", action="store_true", help="print the result as JSON")
     bld.set_defaults(fn=_dedup_build)
+
+    acl_p = sub.add_parser("acl", help="the ACL snapshot (Phase 2): sync and show",
+                           description="ACL snapshots: `adr acl sync` runs one sync cycle "
+                                       "(read and validate the directory and policy, compute "
+                                       "every document's access list, write the snapshot, "
+                                       "replace acl/HEAD atomically); `adr acl show` prints "
+                                       "principals. " + NOT_A_BOUNDARY)
+    acl_sub = acl_p.add_subparsers(dest="action", required=True)
+    sy = acl_sub.add_parser("sync", help="one sync cycle: write a new ACL snapshot and move "
+                                         "acl/HEAD to it", description=NOT_A_BOUNDARY)
+    where = sy.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    sy.add_argument("--directory", type=Path, default=acl.DIRECTORY_PATH,
+                    help="the directory (default config/acl/directory.json)")
+    sy.add_argument("--policy", type=Path, default=acl.POLICY_PATH,
+                    help="the policy (default config/acl/policy.json)")
+    sy.add_argument("--json", action="store_true", help="print the result as JSON")
+    sy.set_defaults(fn=_acl_sync)
+    sh = acl_sub.add_parser("show", help="the principals of a chunk, a document or a user in "
+                                         "the current ACL snapshot",
+                            description=NOT_A_BOUNDARY)
+    where = sh.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    what = sh.add_mutually_exclusive_group(required=True)
+    what.add_argument("--chunk", default=None, help="a chunk id of the active index (or a "
+                                                   "unique prefix of 8+ characters)")
+    what.add_argument("--doc", default=None, help="a document id (or a unique prefix of 8+ "
+                                                 "characters)")
+    what.add_argument("--user", default=None, help="a user principal, e.g. user:acme-0")
+    sh.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                    help="embedding cache directory (to load a dense active index)")
+    sh.add_argument("--json", action="store_true", help="print the result as JSON")
+    sh.set_defaults(fn=_acl_show)
     return ap
 
 
@@ -821,7 +928,7 @@ def main(argv: list[str] | None = None) -> int:
         _silence_stdout()
         return 0 if code is None else code
     except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError,
-            _UsageError) as e:
+            acl.AclDenied, _UsageError) as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_LOAD_OR_STORE
     except _Unexpected as e:
