@@ -1,6 +1,6 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
 retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
-tools-retrieval, report, doctor."""
+tools-retrieval, tools-probes, report, doctor."""
 
 from __future__ import annotations
 
@@ -64,6 +64,101 @@ def _tools_fetch(a: argparse.Namespace) -> int:
           f"dev {c['dev']} / test {c['test']}")
     print(f"  manifest {toolret.MANIFEST_PATH}")
     return 0
+
+
+def _tools_probes(a: argparse.Namespace) -> int:
+    """`adr-eval tools-probes --store S` (B1, B4, B5 for `search_tools` and `load_tool`): the
+    200 tool leak probes against per-caller reference indexes and the 80 tool fail-closed
+    probes (clones under --clones, removed); writes <out>/probes-tools-<time>/."""
+    import shutil
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_store import tools as store_tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    emb = a.emb_cache if a.emb_cache is not None else store_tools.DEFAULT_EMB_CACHE
+    idx = store_tools.Tools(a.store, emb_cache=emb).active_tool_index()
+    ctx = acl_probes.tool_context(a.store, idx)
+
+    def make_tools(path, caller):
+        return store_tools.Tools(path, emb_cache=emb, acl=True, caller=caller)
+
+    sizes = None if a.per_family is None else dict.fromkeys(acl_probes.TOOL_FAMILY_SIZES,
+                                                            a.per_family)
+    leak = acl_probes.tool_leak_probes(ctx, sizes=sizes)
+    users = acl_probes.failclosed_callers(ctx)
+    fc = acl_probes.tool_failclosed_probes(ctx, acl_probes.tool_precheck(a.store, make_tools),
+                                           users)
+    store_log = acl_probes.log_path(a.store)
+    offset = acl_probes.log_size(store_log)
+    made: dict = {}
+
+    def tools_for(caller):
+        if caller not in made:
+            made[caller] = make_tools(a.store, caller)
+        return made[caller]
+
+    leak_results = [acl_probes.check_tool(p, tools_for, ctx) for p in leak]
+    config = runner.load_config()
+    clones = Path(a.clones) if a.clones is not None else \
+        runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / "clones" / "tools"
+    fc_results, fc_logs = acl_probes.run_tool_failclosed(
+        fc, a.store, clones, ctx, make_tools=make_tools, directory=a.directory,
+        policy=a.policy)
+    if clones.is_dir() and not any(clones.iterdir()):
+        shutil.rmtree(clones)
+    scans = {"store": acl_probes.scan_log(store_log, offset),
+             **{k: v for k, v in fc_logs.items() if k != "store"}}
+    logs = {"total": acl_probes.total_scan(scans), "by_store": scans}
+    leak_summary = acl_probes.summarize(leak_results)
+    fc_summary = acl_probes.summarize_failclosed(fc_results)
+    sid, snap = acl_probes.acl.read_head(a.store)
+    cfg = {"kind": "tools", "store": str(a.store), "tools_snapshot": idx.tool_snapshot,
+           "tool_index": idx.fingerprint, "acl_snapshot": sid, "acl_sequence": snap.sequence,
+           "seed": probes.SEED, "sizes": sizes or acl_probes.TOOL_FAMILY_SIZES,
+           "failclosed_callers": users, "failclosed_target": fc[0].target["tool_id"]}
+    rows = "".join(f"| {name} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
+                   f"{', '.join(f'{k} {v}' for k, v in b['checked_kinds'].items())} |\n"
+                   for name, b in leak_summary["families"].items())
+    fc_rows = "".join(f"| {name} | {b['n']} | {b['passed']} | {b['content']} | "
+                      f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                      for name, b in fc_summary["conditions"].items())
+    md = (f"# ACL probes: tools\n\nStore `{cfg['store']}` (tool snapshot "
+          f"`{cfg['tools_snapshot'][:12]}`, ACL snapshot `{sid[:12]}` sequence {snap.sequence}),"
+          f" tool index `{idx.fingerprint[:12]}`. Seed {probes.SEED}. No model calls.\n\n"
+          f"## Leak probes\n\n| family | probes | leaks | invalid | callers | kinds checked |\n"
+          f"|---|---|---|---|---|---|\n" + rows +
+          f"\nTotal: {leak_summary['total']['n']} probes, {leak_summary['total']['leaks']} "
+          f"leaks, {leak_summary['total']['invalid']} invalid.\n\n## Fail closed\n\n"
+          f"| condition | probes | passed | with content | outcomes |\n|---|---|---|---|---|\n"
+          + fc_rows + f"\nTotal: {fc_summary['total']['n']} probes, "
+          f"{fc_summary['total']['passed']} passed, {fc_summary['total']['content']} with "
+          f"content.\n\n## Log fields\n\n{logs['total']['lines']} log lines, "
+          f"{logs['total']['complete_lines']} with caller, principals, acl_snapshot and "
+          f"acl_decision; {logs['total']['allowed']} allowed, "
+          f"{logs['total']['allowed_unresolved']} of them unresolved.\n")
+    d = Path(a.out or probes.OUT_ROOT) / f"probes-tools-{started:%Y%m%dT%H%M%S}"
+    d.mkdir(parents=True, exist_ok=False)
+    files = {"probes.json": {"seed": probes.SEED, "leak": [p.to_dict() for p in leak],
+                             "failclosed": [p.to_dict() for p in fc]},
+             "results.json": {"leak": [r.to_dict() for r in leak_results],
+                              "failclosed": fc_results},
+             "summary.json": {"config": cfg, "leak": leak_summary, "failclosed": fc_summary,
+                              "logs": logs}}
+    for name, data in files.items():
+        (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False,
+                                         default=str) + "\n", encoding="utf-8")
+    (d / "probes.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(leak)} tool leak and {len(fc)} tool fail-closed probes; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    ok = (leak_summary["total"]["leaks"] == 0 and leak_summary["total"]["invalid"] == 0
+          and fc_summary["total"]["passed"] == fc_summary["total"]["n"]
+          and logs["total"]["complete"])
+    return 0 if ok else 1
 
 
 def _tools_retrieval(a: argparse.Namespace) -> int:
@@ -821,6 +916,27 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes tools-<system>-<split>-<time>/")
     p.set_defaults(fn=_tools_retrieval)
+
+    p = sub.add_parser("tools-probes",
+                       help="ACL probes of search_tools and load_tool (no model calls): 200 "
+                            "leak and 80 fail-closed probes (Phase 2)")
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store to probe (its tool catalog, active tool index and ACL)")
+    p.add_argument("--clones", type=Path, default=None, metavar="DIR",
+                   help="where the fail-closed clones go (default <p2_store_dir>/clones/tools; "
+                        "removed)")
+    tools_acl = runner.REPO_ROOT / "config" / "acl"
+    p.add_argument("--directory", type=Path, default=tools_acl / "directory.json",
+                   help="the directory the clones sync from (default config/acl/directory.json)")
+    p.add_argument("--policy", type=Path, default=tools_acl / "policy.json",
+                   help="the policy (default config/acl/policy.json)")
+    p.add_argument("--per-family", type=int, default=None, metavar="N",
+                   help="N leak probes per family instead of 100 (a quick check; recorded)")
+    p.add_argument("--emb-cache", type=Path, default=None,
+                   help="embedding cache directory (a dense tool index)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-tools-<time>/")
+    p.set_defaults(fn=_tools_probes)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

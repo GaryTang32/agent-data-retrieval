@@ -73,6 +73,9 @@ nowhere, and `read` refused exactly as an id that names nothing).
 `principals`, `acl_snapshot` and `view` (a denied line may hold nulls where access was not
 resolved; an `off` line has no ACL layer).
 
+**The tool tools** (`search_tools`, `load_tool`): 200 leak probes, 80 fail-closed probes and
+their judges, in the last section of this module (`adr-eval tools-probes`).
+
 This module may import `adr_store` directly (plan, shared rules).
 """
 
@@ -1021,3 +1024,379 @@ def total_scan(scans: dict) -> dict:
     out = dict(out or scan_log(Path("/nonexistent")))
     out["complete"] = out["lines"] == out["complete_lines"] and out["allowed_unresolved"] == 0
     return out
+
+
+# -- the tool tools: search_tools and load_tool (Task 10; run in Task 11) ---------------------
+#
+# Leak probes (`tool_leak_probes`, 200): `tool-search` (100) searches a hidden tool's name and
+# summary; `tool-load` (100) loads a hidden tool by full id (even k) or 8-character prefix (odd
+# k), with a control id or prefix that names nothing. Callers and targets are drawn as for the
+# content families (`_pick`, the directory's users and `user:ghost`). `check_tool` judges the
+# kinds of §10.2 that apply: a returned tool id outside the view; hidden text (a hit or
+# definition that is not the visible tool's own, or a hidden tool id the caller did not give in
+# a refusal); a not-found message that differs from the control's; a count (hits,
+# `excluded_by_filter`) or a score that differs from the reference, an index of the caller's
+# visible tools only (`ToolIndex.subset`: B2 for tools, the row-exact dense kernel).
+#
+# Fail closed (`tool_failclosed_probes`, `run_tool_failclosed`): F1–F5 and "no entry" × the two
+# tool tools × 5 callers = 60, as for the content tools (same callers, variants and clones),
+# plus two tool-catalog conditions × 2 × 5 = 20 (planner's call; both must deny F2):
+# `F2-tools` (a tool snapshot committed after the sync, without the target) and
+# `no-tool-snapshot` (an ACL snapshot synced while the catalog was moved away, so its
+# `tool_snapshot` is null, with the catalog back). The target is a tool every fail-closed
+# caller sees, found in the top 10 of its name-and-summary search and loadable by all of them
+# before any change, whose `source_uri` begins no other tool's (so the "no entry" rule, an
+# attribute rule on that uri mapping to `[]`, changes that tool alone). F2 on a tools-only
+# store commits a content snapshot with one more document.
+
+TOOL_FAMILY_SIZES = {"tool-search": 100, "tool-load": 100}
+TOOL_TOOLS = ("search_tools", "load_tool")
+TOOL_CONDITIONS = (*CONDITIONS, "F2-tools", "no-tool-snapshot")
+TOOL_EXPECTED = {"F2-tools": "F2", "no-tool-snapshot": "F2"}
+
+
+@dataclass
+class ToolContext:
+    """The store's ACL snapshot, active tool index and catalog (the operator's view, to build
+    probes and judge results; never shown to a caller)."""
+
+    store_path: Path
+    snap: acl.AclSnapshot
+    index: object  # adr_store.retrieval.tool_index.ToolIndex
+    catalog: object  # adr_store.tool_catalog.ToolCatalog
+    _visible: dict = field(default_factory=dict)
+    _refs: dict = field(default_factory=dict)
+
+    def ids(self) -> list[str]:
+        return list(self.index.rows)
+
+    def visible(self, caller: str | None) -> frozenset[str]:
+        if caller not in self._visible:
+            ps = frozenset(self.snap.directory.get(caller, ())) if isinstance(caller, str) \
+                else frozenset()
+            self._visible[caller] = frozenset(
+                t for t, v in self.snap.tools.items() if not ps.isdisjoint(v))
+        return self._visible[caller]
+
+    def hidden(self, caller: str | None) -> list[str]:
+        seen = self.visible(caller)
+        return [t for t in self.index.rows if t not in seen]
+
+    def callers(self) -> list[str]:
+        return [*sorted(self.snap.directory), GHOST]
+
+    def reference(self, caller: str):
+        """An index of the caller's visible tools only (the B2 reference)."""
+        if caller not in self._refs:
+            self._refs[caller] = self.index.subset(self.visible(caller))
+        return self._refs[caller]
+
+
+def tool_context(store_path: Path, idx) -> ToolContext:
+    """The probes' view of the store at `store_path` with its active tool index `idx`."""
+    from adr_store.tool_catalog import ToolCatalog
+
+    return ToolContext(Path(store_path), acl.read_head(store_path)[1], idx,
+                       ToolCatalog.open(store_path, idx.tool_snapshot))
+
+
+def tool_leak_probes(ctx: ToolContext, seed: int = SEED,
+                     sizes: dict | None = None) -> list[Probe]:
+    """The 200 tool leak probes (comment above), in family order (deterministic)."""
+    sizes = {**TOOL_FAMILY_SIZES, **(sizes or {})}
+    ids = ctx.ids()
+    probes: list[Probe] = []
+    taken: set = set()
+    for k in range(sizes["tool-search"]):
+        caller, tid = _pick(ctx, seed, "tool-search", k, ctx.hidden, taken)
+        r = ctx.index.rows[tid]
+        probes.append(Probe(f"tool-search:{k:03d}", "tool-search", "search_tools", caller,
+                            {"tool_id": tid, "name": r.name, "summary": r.summary},
+                            {"query": f"{r.name} {r.summary}".strip()}))
+    taken = set()
+    for k in range(sizes["tool-load"]):
+        caller, tid = _pick(ctx, seed, "tool-load", k, ctx.hidden, taken)
+        full = k % 2 == 0
+        control = absent_like(tid, ids) if full else \
+            absent_prefix(f"{seed}:tool-load:{k}", ids)
+        probes.append(Probe(f"tool-load:{k:03d}", "tool-load", "load_tool", caller,
+                            {"tool_id": tid, "given": "id" if full else "prefix"},
+                            {"tool_id": tid if full else tid[:PREFIX]},
+                            {"tool_id": control}))
+    return probes
+
+
+def run_tool_call(t, tool: str, call: dict) -> tuple:
+    """("ok", result) | ("denied", code, message) | ("refused", message)."""
+    try:
+        if tool == "search_tools":
+            res = t.search_tools(call["query"], filters=call.get("filters"))
+        elif tool == "load_tool":
+            res = t.load_tool(call["tool_id"])
+        else:
+            raise ValueError(f"unknown tool {tool!r}")
+    except AccessDenied as e:
+        return ("denied", e.code, str(e))
+    except ToolError as e:
+        return ("refused", str(e))
+    return ("ok", res)
+
+
+def _hidden_tool_ids_in(text: str, ctx: ToolContext, caller, given: list[str]) -> bool:
+    seen = ctx.visible(caller)
+    for tok in _HEX.findall(text):
+        if any(g.startswith(tok) or tok.startswith(g[:12]) for g in given):
+            continue
+        if any(t.startswith(tok) and t not in seen for t in ctx.index.rows):
+            return True
+    return False
+
+
+def check_tool(probe: Probe, tools_for: Callable, ctx: ToolContext) -> ProbeResult:
+    """Run one tool leak probe as its caller and judge it (comment above)."""
+    from adr_store.tool_records import definition
+
+    caller = probe.caller
+    out = run_tool_call(tools_for(caller), probe.tool, probe.call)
+    kinds: dict = dict.fromkeys(KINDS)
+    given = [v for k, v in probe.call.items() if k == "tool_id" and isinstance(v, str)]
+    in_directory = isinstance(caller, str) and caller in ctx.snap.directory
+    note, valid = None, True
+    if out[0] == "denied":
+        kinds["hidden_text"] = _hidden_tool_ids_in(out[2], ctx, caller, given)
+        valid = not in_directory and out[1] == "F4"
+        note = None if valid else f"unexpected denial {out[1]}"
+        return ProbeResult(probe.probe_id, probe.family, probe.tool, caller,
+                           f"denied:{out[1]}", kinds, any(kinds.values()), valid, note)
+    if not in_directory:
+        valid, note = False, f"{caller} was not denied"
+    seen = ctx.visible(caller)
+    if out[0] == "refused":
+        msg = out[1]
+        kinds["hidden_text"] = _hidden_tool_ids_in(msg, ctx, caller, given)
+        if probe.control is not None:
+            ctrl = run_tool_call(tools_for(caller), probe.tool, {**probe.call, **probe.control})
+            if ctrl[0] != "refused":
+                kinds["not_found_differs"], note = True, f"the control was {ctrl[0]}"
+            else:
+                kinds["not_found_differs"] = _normalized(msg, given) != _normalized(
+                    ctrl[1], [probe.control["tool_id"]])
+        else:
+            valid, note = False, "refused"
+        return ProbeResult(probe.probe_id, probe.family, probe.tool, caller, "refused",
+                           kinds, any(bool(v) for v in kinds.values()), valid, note)
+    res = out[1]
+    if probe.tool == "load_tool":
+        kinds["id_outside_view"] = res.tool_id not in seen
+        own = res.tool_id in ctx.index.rows and \
+            definition(ctx.catalog.get(res.tool_id)) == res.definition
+        kinds["hidden_text"] = not own or res.tool_id not in seen
+        if probe.control is not None:  # resolved: a prefix of a visible id, or a leak above
+            kinds["not_found_differs"] = False
+    else:
+        rows = ctx.index.rows
+        kinds["id_outside_view"] = any(h.tool_id not in seen for h in res.hits)
+        kinds["hidden_text"] = any(
+            h.tool_id not in seen or h.tool_id not in rows
+            or (h.name, h.summary, h.source_kind, h.source_uri) != (
+                rows[h.tool_id].name, rows[h.tool_id].summary, rows[h.tool_id].source_kind,
+                rows[h.tool_id].source_uri) for h in res.hits)
+        if in_directory:
+            ref = ctx.reference(caller).retrieve(probe.call["query"], res.w, res.top,
+                                                 exact=True)
+            kinds["score_differs"] = [(h.tool_id, h.score) for h in res.hits] != ref
+            kinds["count_includes_hidden"] = len(res.hits) != len(ref) or \
+                res.excluded_by_filter != 0
+    return ProbeResult(probe.probe_id, probe.family, probe.tool, caller, "ok", kinds,
+                       any(bool(v) for v in kinds.values()), valid, note)
+
+
+def tool_failclosed_target(ctx: ToolContext, callers: list[str], before: Callable,
+                           seed: int = SEED) -> dict:
+    """The tool fail-closed target (comment above); ValueError when none qualifies."""
+    uris = {t: r.source_uri for t, r in ctx.index.rows.items()}
+    for t in sorted(ctx.index.rows, key=lambda t: (_h(seed, "tool-failclosed", t), t)):
+        if not all(t in ctx.visible(u) for u in callers):
+            continue
+        if any(o != t and u.startswith(uris[t]) for o, u in uris.items()):
+            continue
+        r = ctx.index.rows[t]
+        target = {"tool_id": t, "uri": r.source_uri, "name": r.name,
+                  "query": f"{r.name} {r.summary}".strip()}
+        got = before(target, callers)
+        if isinstance(got, dict) and all(
+                (got.get(u) or {}).get("load") and isinstance((got.get(u) or {}).get("rank"),
+                                                              int)
+                and got[u]["rank"] <= 10 for u in callers):
+            return {**target, "before": {u: {**got[u], "visible": True} for u in callers}}
+    raise ValueError("no tool meets the no-entry precondition (visible to every fail-closed "
+                     "caller, in the top 10 of its search, loadable)")
+
+
+def tool_precheck(store_path: Path, make_tools: Callable) -> Callable:
+    """`before` for `tool_failclosed_target`: each caller's search and load of the target."""
+    made: dict = {}
+
+    def before(target: dict, callers: list[str]) -> dict:
+        out = {}
+        for u in callers:
+            if u not in made:
+                made[u] = make_tools(store_path, u)
+            s = run_tool_call(made[u], "search_tools", {"query": target["query"]})
+            rank = None if s[0] != "ok" else next(
+                (h.rank for h in s[1].hits if h.tool_id == target["tool_id"]), None)
+            r = run_tool_call(made[u], "load_tool", {"tool_id": target["tool_id"]})
+            out[u] = {"rank": rank, "load": r[0] == "ok"}
+        return out
+
+    return before
+
+
+def tool_failclosed_probes(ctx: ToolContext, before: Callable, users: list[str],
+                           seed: int = SEED) -> list[Probe]:
+    """The 80 tool fail-closed probes (comment above); `users` are the five directory
+    callers (`failclosed_callers`)."""
+    target = tool_failclosed_target(ctx, users, before, seed)
+    calls = {"search_tools": {"query": target["query"]},
+             "load_tool": {"tool_id": target["tool_id"]}}
+    control = {"load_tool": {"tool_id": absent_like(target["tool_id"], ctx.ids())}}
+    out = []
+    for cond in TOOL_CONDITIONS:
+        callers = F4_CALLERS if cond == "F4" else F5_CALLERS if cond == "F5" else users
+        for i, caller in enumerate(callers):
+            variant = F1_VARIANTS[i] if cond == "F1" else F3_VARIANTS[i] if cond == "F3" \
+                else None
+            for tool in TOOL_TOOLS:
+                out.append(Probe(f"tool-{cond}:{i}:{tool}", cond, tool, caller,
+                                 {**target, "variant": variant}, calls[tool],
+                                 control.get(tool) if cond == "no_entry" else None))
+    return out
+
+
+def judge_tool_failclosed(probe: Probe, out: tuple, control: tuple | None) -> dict:
+    t = probe.target
+    if probe.family != "no_entry":
+        expected = TOOL_EXPECTED.get(probe.family, probe.family)
+        msg = out[-1] if out[0] != "ok" else ""
+        leaked = t["name"] in msg or (t["tool_id"][:12] in msg and probe.tool != "load_tool")
+        return {"outcome": out[0] if out[0] != "denied" else f"denied:{out[1]}",
+                "content": out[0] == "ok",
+                "pass": out[0] == "denied" and out[1] == expected and not leaked}
+    if out[0] == "ok":
+        content = probe.tool == "load_tool" or any(h.tool_id == t["tool_id"]
+                                                   for h in out[1].hits)
+        return {"outcome": "ok", "content": content,
+                "pass": not content and probe.tool == "search_tools"}
+    if out[0] == "refused" and probe.tool == "load_tool" and control is not None:
+        same = control[0] == "refused" and out[1].replace(t["tool_id"][:12], "<id>") == \
+            control[1].replace(probe.control["tool_id"][:12], "<id>")
+        return {"outcome": "refused", "content": False, "not_found_equal": same,
+                "pass": same}
+    return {"outcome": out[0] if out[0] != "denied" else f"denied:{out[1]}",
+            "content": False, "pass": False}
+
+
+def _content_commit(path: Path) -> None:
+    """A new content snapshot of the store at `path`: its documents plus one note."""
+    from adr_eval.corpora.base import Document
+
+    raw = b"A content note committed after the ACL sync (fail-closed probe F2).\n"
+    s = Store.open(path)
+    s.add(Document(hashlib.sha256(raw).hexdigest(), raw.decode(), "txt", "1",
+                   "file://probes/failclosed-f2.txt"), raw)
+    s.commit()
+
+
+def run_tool_failclosed(probes: list[Probe], store_path: Path, clone_root: Path,
+                        ctx: ToolContext, *, make_tools: Callable,
+                        directory: Path = acl.DIRECTORY_PATH, policy: Path = acl.POLICY_PATH,
+                        clock: Callable = acl.utc_now) -> tuple[list[dict], dict]:
+    """Run the tool fail-closed probes; (one outcome per probe, the log-field scans by
+    store). Clones under `clone_root` are removed."""
+    from adr_store.tool_catalog import ToolCatalog
+
+    store_path, clone_root = Path(store_path), Path(clone_root)
+    results: list[dict] = []
+    logs: dict = {}
+    by: dict[str, list[Probe]] = {}
+    for p in probes:
+        by.setdefault(p.family, []).append(p)
+
+    def run(path: Path, ps: list[Probe]) -> None:
+        for p in ps:
+            t = make_tools(path, p.caller)
+            out = run_tool_call(t, p.tool, p.call)
+            ctrl = run_tool_call(t, p.tool, {**p.call, **p.control}) if p.control else None
+            b = (p.target.get("before") or {}).get(p.caller)
+            results.append({"probe_id": p.probe_id, "family": p.family, "tool": p.tool,
+                            "caller": p.caller, "variant": p.target.get("variant"),
+                            "visible_before": None if b is None else b["visible"],
+                            "top10_before": None if b is None else b["rank"] is not None
+                            and b["rank"] <= 10,
+                            "rank_before": None if b is None else b["rank"],
+                            **judge_tool_failclosed(p, out, ctrl)})
+
+    def scanned(name: str, path: Path, offset: int) -> None:
+        logs[name] = merge_scans(logs.get(name), scan_log(log_path(path), offset))
+
+    for cond in TOOL_CONDITIONS:
+        ps = by.get(cond, [])
+        if not ps:
+            continue
+        if cond in ("F4", "F5"):
+            offset = log_size(log_path(store_path))
+            run(store_path, ps)
+            scanned("store", store_path, offset)
+            continue
+        clone = clone_root / f"tool-failclosed-{cond}"
+        _cp(store_path, clone)
+        offset = log_size(log_path(clone))
+        target = ps[0].target["tool_id"]
+        try:
+            if cond == "F1":
+                damage = _F1(clone)
+                for i, variant in enumerate(F1_VARIANTS):
+                    damage.apply(variant)
+                    try:
+                        run(clone, [p for p in ps if p.target["variant"] == variant
+                                    and p.probe_id.startswith(f"tool-F1:{i}:")])
+                    finally:
+                        damage.undo()
+            elif cond == "F2":
+                _content_commit(clone)
+                run(clone, ps)
+            elif cond == "F3":
+                for variant, shift in (("stale", -STALE), ("future", AHEAD)):
+                    acl.sync(clone, directory, policy, clock=lambda s=shift: clock() + s)
+                    run(clone, [p for p in ps if p.target["variant"] == variant])
+            elif cond == "F2-tools":
+                cat = ToolCatalog.open(clone)
+                ToolCatalog(clone, None, {t: h for t, h in cat._records.items()
+                                          if t != target}).commit()
+                run(clone, ps)
+            elif cond == "no-tool-snapshot":
+                head = clone / "tools" / "HEAD"
+                aside = clone / "tools" / "HEAD.aside"
+                head.rename(aside)
+                try:
+                    acl.sync(clone, directory, policy, clock=clock)
+                finally:
+                    aside.rename(head)
+                if acl.read_head(clone)[1].tool_snapshot is not None:
+                    raise ValueError("the sync without a catalog kept a tool snapshot")
+                run(clone, ps)
+            else:  # no entry
+                pol = _no_entry_policy(policy, ps[0].target["uri"],
+                                       clone_root / "policy-tool-no-entry.json")
+                before = acl.read_head(clone)[1].tools
+                acl.sync(clone, directory, pol, clock=clock)
+                after = acl.read_head(clone)[1].tools
+                changed = {t for t in after if after[t] != before.get(t)}
+                if after.get(target) != [] or not changed <= {target}:
+                    raise ValueError(f"the no-entry rule changed {len(changed)} tools' access, "
+                                     f"not only the target's")
+                run(clone, ps)
+            scanned(f"clone-{cond}", clone, offset)
+        finally:
+            shutil.rmtree(clone, ignore_errors=True)
+    return results, logs
