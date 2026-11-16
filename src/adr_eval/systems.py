@@ -33,7 +33,13 @@ run config; its fingerprint differs from the full system's.
   system's) and searches through `Tools.search` with the configuration's filters and dedup.
   They take `retrieve(question, as_of)`: the configurations with `as_of` search a dated item
   with `Filters(as_of=...)`. They are registered apart (`P2_NAMES`); `NAMES` stays the Phase
-  0/1 systems and `ALL_NAMES` is both.
+  0/1 systems and `ALL_NAMES` is both. With `config["p2_caller"]` (config/eval.json: the
+  measured caller `user:auditor`, Phase 2 Task 8) they search through the ACL layer
+  (`Tools(acl=True, caller=...)`) as that caller; indexing and the index's chunks stay
+  operator calls without it. The caller's access is resolved once at build (a store without
+  a fresh ACL snapshot is refused: run `adr acl sync --store <p2 store>`) and recorded in
+  the run config (`acl`); every search resolves it again. Without `p2_caller` (None, the
+  2A runs and the tests' default) they search without the ACL layer.
 
 This module is the harness's only entry to `adr_store` for the Phase 0/1 harness modules
 (plan, shared rules).
@@ -399,7 +405,13 @@ class P2System:
     dedup: str | None
     recorded: list[str]
     caller: str | None = None
+    searcher: object = None  # the Tools that searches: `tools`, or with a caller the ACL layer's
+    acl: dict | None = None  # the caller's access at build (ACL snapshot, sequence, view)
     accepts_as_of = True
+
+    def __post_init__(self):
+        if self.searcher is None:
+            self.searcher = self.tools
 
     @property
     def w(self) -> float | None:
@@ -424,8 +436,8 @@ class P2System:
         return self.filters_for(as_of).as_of
 
     def retrieve(self, question: str, as_of=None) -> list[tuple[str, float]]:
-        res = self.tools.search(question, top=TOP_N, filters=self.filters_for(as_of),
-                                dedup=self.spec.dedup)
+        res = self.searcher.search(question, top=TOP_N, filters=self.filters_for(as_of),
+                                   dedup=self.spec.dedup)
         return [(h.chunk_id, h.score) for h in res.hits]
 
     def run_config(self) -> dict:
@@ -435,7 +447,7 @@ class P2System:
                 "phase1_system": P2_REFERENCE,
                 "phase1_store": runner._display_path(self.phase1.store_path),
                 "phase1_recorded": self.recorded,
-                "caller": self.caller, "acl": None,
+                "caller": self.caller, "acl": self.acl,
                 "filters": self.spec.filters.to_dict(), "as_of_from_item": self.spec.as_of,
                 "applicability": self.applicability,
                 "dedup": self.dedup if self.spec.dedup else None,
@@ -560,6 +572,30 @@ def _ensure_overlays(store, idx) -> tuple[str, str]:
     return app.overlay_id, dd.overlay_id
 
 
+def _acl_searcher(path: Path, emb: Path, caller: str | None) -> tuple[object, dict | None]:
+    """(the Tools that searches as `caller` through the ACL layer, the caller's access now
+    as recorded in the run config), or (None, None) without a caller. A denial (no or a
+    stale ACL snapshot, an unknown caller) is a RunError before any item is searched."""
+    if caller is None:
+        return None, None
+    from adr_store import acl
+    from adr_store.tools import ToolError, Tools
+
+    searcher = Tools(path, emb_cache=emb, acl=True, caller=caller)
+    try:
+        access = searcher._access()
+    except ToolError as e:
+        raise runner.RunError(f"{path}: searching as {caller}: {e}\nfix: run `adr acl sync "
+                              f"--store {path}` (the ACL snapshot must be for the store's "
+                              f"HEAD and at most max_sync_age_s old)") from e
+    snap = acl.read_head(path)[1]
+    return searcher, {"acl_snapshot": access.acl_snapshot, "sequence": snap.sequence,
+                      "synced_at": snap.synced_at.isoformat(), "view": access.view,
+                      "principals": list(access.principals),
+                      "visible_docs": len(access.docs),
+                      "store_docs": len(searcher.store.doc_ids())}
+
+
 def _p2_system(name: str):
     spec = P2_SPECS[name]
 
@@ -585,7 +621,10 @@ def _p2_system(name: str):
                 f"{info.fingerprint[:12]}, the Phase 1 system's is {p1.fingerprint[:12]}\n"
                 f"fix: remove {store.path} so that it is copied again")
         app_id, dedup_id = _ensure_overlays(store, tools.active_index())
-        return P2System(name, spec, tools, p1, info.source, app_id, dedup_id, recorded)
+        caller = config.get("p2_caller")
+        searcher, access = _acl_searcher(store.path, emb, caller)
+        return P2System(name, spec, tools, p1, info.source, app_id, dedup_id, recorded,
+                        caller=caller, searcher=searcher, acl=access)
 
     return build
 

@@ -57,7 +57,9 @@ def _isolate_writable_state(writable_state, monkeypatch):
     and embedding cache dirs and DenseIndex's default embedding cache point at the session
     directory instead.
     The Phase 2 harness's store copies (`p2_store_dir`) and the default output root of
-    `adr-eval p2-compare` and `adr-eval probes` go there too.
+    `adr-eval p2-compare` and `adr-eval probes` go there too, and the Phase 2 configurations
+    search without a caller (`p2_caller` None; the shipped config measures `user:auditor`)
+    unless a test opts in. The ACL probes' view stores and clones go there too.
     The `adr` tools' default embedding cache and `StoreIndex`'s default one point there too,
     and so does the store directory `adr --corpus <name>` and `adr index <name>` use.
     The fastembed model store (.cache/fastembed) is only read."""
@@ -73,7 +75,7 @@ def _isolate_writable_state(writable_state, monkeypatch):
         return {**real_load_config(path), "index_dir": str(writable_state / "index"),
                 "cache_dir": str(writable_state / "llm"),
                 "store_dir": str(writable_state / "store"),
-                "p2_store_dir": str(writable_state / "store-p2"),
+                "p2_store_dir": str(writable_state / "store-p2"), "p2_caller": None,
                 "embedding_cache_dir": str(writable_state / "emb-store")}
 
     monkeypatch.setattr(runner, "load_config", load_config)

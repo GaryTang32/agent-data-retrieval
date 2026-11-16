@@ -592,6 +592,49 @@ def test_a_phase2_system_refuses_a_recorded_phase1_run_it_does_not_reproduce(
         build("p2-identity", mini, p2config)
 
 
+def test_the_measured_caller_is_the_auditor_and_tests_default_to_none():
+    """config/eval.json names the measured caller (Task 8); the tests' config has none, so
+    the 2A tests keep searching without the ACL layer unless they opt in."""
+    shipped = json.loads((runner.CONFIG_PATH).read_text(encoding="utf-8"))
+    assert shipped["p2_caller"] == "user:auditor"
+    assert runner.load_config()["p2_caller"] is None
+
+
+def test_a_phase2_system_searches_as_the_configured_caller(mini, p2config, p2fakes):
+    """With `p2_caller` the configuration searches through the ACL layer as that caller
+    (indexing stays an operator call without it); the run config records the caller and the
+    ACL snapshot; a store without an ACL snapshot, or an unknown caller, is refused before
+    any item is searched."""
+    from adr_store import acl
+
+    plain = build("p2-default", mini, p2config)  # copies the store, no caller
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    cfg = {**p2config, "p2_caller": "user:auditor"}
+    with pytest.raises(runner.RunError, match=r"(?s)F1.*adr acl sync --store"):
+        build("p2-default", mini, cfg)
+    res = acl.sync(path)
+    p2 = build("p2-default", mini, cfg)
+    assert p2.caller == "user:auditor" and p2.searcher is not p2.tools
+    rc = p2.run_config()
+    assert rc["caller"] == "user:auditor"
+    assert rc["acl"]["acl_snapshot"] == res.acl_snapshot and rc["acl"]["sequence"] == 1
+    assert rc["acl"]["visible_docs"] == rc["acl"]["store_docs"] == len(mini[0].docs)
+    assert p2.fingerprint == plain.fingerprint and set(p2.chunks) == set(plain.chunks)
+    log = path / "log" / "retrieval.jsonl"
+    before = len(log.read_text(encoding="utf-8").splitlines())
+    for item in mini[1]:
+        assert [c for c, _ in p2.retrieve(item.question, item.as_of)] == \
+            [c for c, _ in plain.retrieve(item.question, item.as_of)]
+    lines = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()[before:]]
+    mine = [x for x in lines if x["caller"] is not None]
+    assert len(mine) == len(mini[1]) == len(lines) - len(mine)  # and the plain searches'
+    assert {(x["caller"], x["acl_decision"], x["acl_snapshot"]) for x in mine} == {
+        ("user:auditor", "allowed", res.acl_snapshot)}
+    assert {x["acl_decision"] for x in lines if x["caller"] is None} == {"off"}
+    with pytest.raises(runner.RunError, match="F4"):
+        build("p2-default", mini, {**p2config, "p2_caller": "user:ghost"})
+
+
 def test_a_phase2_store_of_other_documents_is_refused(mini, p2config, p2fakes):
     from adr_store.store import Store
 
