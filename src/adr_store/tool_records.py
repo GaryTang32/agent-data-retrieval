@@ -19,8 +19,11 @@ token count are those computed here; Task 12 adds validation by `mcp.types.Tool`
   `properties` (MCP makes it optional) gets an empty `properties` object; everything else is
   taken as the server gives it. Two tools with one name are refused.
 - `from_openapi`: OpenAPI 3.x, one record per operation, paths in sorted order and methods in
-  the order of the Path Item object. Local `$ref`s (`#/...`) are resolved, at most `REF_DEPTH`
-  (8) nested on one branch; a deeper or non-local `$ref` becomes `{}` (any value). The name
+  the order of the Path Item object. Local `$ref`s (`#/...`) are resolved, with three bounds
+  that keep a record small: a `$ref` already on the current expansion branch (a cycle) is cut,
+  at most `REF_DEPTH` (8) are nested on one branch, and once an operation has expanded
+  `NODE_BUDGET` (10,000) nodes further `$ref`s are cut; a cut, non-local or missing `$ref`
+  becomes `{}` (any value), and each kind is counted (`stats`). The name
   is the `operationId`, else `<method><path>` with every run of other characters than
   `[A-Za-z0-9_.-]` replaced by `_` (none kept at either end); a name that repeats in one
   spec gets `__2`, `__3`, ... in that order. Title = `summary`; description =
@@ -56,6 +59,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from adr_eval.retrieval.chunker import _count
 
 REF_DEPTH = 8
+NODE_BUDGET = 10_000
+REF_STATS = ("cycle_cuts", "depth_cuts", "budget_cuts", "external_refs", "missing_refs")
 _HEX64 = r"^[0-9a-f]{64}$"
 _METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 _NAME_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -209,10 +214,21 @@ def from_mcp(tools_list: dict, server: str, source_uri: str, version: str,
 # -- OpenAPI ----------------------------------------------------------------------------------
 
 class _Resolver:
-    """Deep resolution of local `$ref`s, at most REF_DEPTH nested on one branch."""
+    """Deep resolution of local `$ref`s, bounded (module docstring): a `$ref` already on the
+    current expansion branch (a cycle), one REF_DEPTH deep, one met after NODE_BUDGET nodes
+    of the current operation, a non-local one and a missing one all become `{}`; `stats`
+    counts each kind."""
 
-    def __init__(self, spec: dict):
+    def __init__(self, spec: dict, stats: dict | None = None):
         self.spec = spec
+        self.stats = stats if stats is not None else {}
+        for key in REF_STATS:
+            self.stats.setdefault(key, 0)
+        self.nodes = 0
+
+    def start(self) -> None:
+        """A new operation: its own node budget."""
+        self.nodes = 0
 
     def _target(self, ref: str):
         if not ref.startswith("#/"):
@@ -228,20 +244,38 @@ class _Resolver:
                 return None
         return node
 
-    def resolve(self, node, depth: int = 0):
+    def _expand(self, ref: str, branch: tuple[str, ...]):
+        if ref in branch:
+            cut = "cycle_cuts"
+        elif len(branch) >= REF_DEPTH:
+            cut = "depth_cuts"
+        elif self.nodes > NODE_BUDGET:
+            cut = "budget_cuts"
+        elif not ref.startswith("#/"):
+            cut = "external_refs"
+        else:
+            target = self._target(ref)
+            if target is not None:
+                return self.resolve(target, branch + (ref,))
+            cut = "missing_refs"
+        self.stats[cut] += 1
+        return {}
+
+    def resolve(self, node, branch: tuple[str, ...] = ()):
         if isinstance(node, list):
-            return [self.resolve(x, depth) for x in node]
+            self.nodes += 1
+            return [self.resolve(x, branch) for x in node]
         if not isinstance(node, dict):
             return node
+        self.nodes += 1
         ref = node.get("$ref")
         if isinstance(ref, str):
-            target = self._target(ref) if depth < REF_DEPTH else None
-            out = {} if target is None else self.resolve(target, depth + 1)
-            siblings = {k: self.resolve(v, depth) for k, v in node.items() if k != "$ref"}
+            out = self._expand(ref, branch)
+            siblings = {k: self.resolve(v, branch) for k, v in node.items() if k != "$ref"}
             if siblings and isinstance(out, dict):
                 out = {**out, **siblings}
             return out
-        return {k: self.resolve(v, depth) for k, v in node.items()}
+        return {k: self.resolve(v, branch) for k, v in node.items()}
 
 
 def _media_schema(content, prefer_json: bool = True):
@@ -320,15 +354,18 @@ def _operation_output(res: _Resolver, op: dict) -> dict | None:
     return None
 
 
-def from_openapi(spec: dict, source_uri: str, version: str, license: str) -> list[ToolRecord]:
-    """One record per operation of an OpenAPI 3.x document (module docstring)."""
+def from_openapi(spec: dict, source_uri: str, version: str, license: str, *,
+                 stats: dict | None = None) -> list[ToolRecord]:
+    """One record per operation of an OpenAPI 3.x document (module docstring). `stats`, when
+    given, receives the counts of `$ref`s cut or left unresolved (`REF_STATS`)."""
     if not str(spec.get("openapi", "")).startswith("3."):
         raise ValueError(f"{source_uri}: not an OpenAPI 3.x document "
                          f"(openapi {spec.get('openapi')!r}, swagger {spec.get('swagger')!r})")
-    res = _Resolver(spec)
+    res = _Resolver(spec, stats)
     paths = spec.get("paths") or {}
     out, used = [], set()
     for path in sorted(paths):
+        res.start()
         item = res.resolve(paths[path]) if isinstance(paths[path], dict) and \
             "$ref" in paths[path] else paths[path]
         if not isinstance(item, dict):
@@ -344,6 +381,7 @@ def from_openapi(spec: dict, source_uri: str, version: str, license: str) -> lis
             while name in used:
                 name, n = f"{base}__{n}", n + 1
             used.add(name)
+            res.start()
             summary = op.get("summary") if isinstance(op.get("summary"), str) else None
             desc = op.get("description") if isinstance(op.get("description"), str) else None
             out.append(make_record(

@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -198,13 +199,71 @@ def _depth(schema: dict) -> int:
     return n
 
 
-def test_openapi_ref_cycle_cut_at_depth_8():
+def test_openapi_ref_cycle_cut_at_the_first_repeat():
     t = by_name(handmade_openapi())
     body = t["addNode"].input_schema["properties"]["body"]
-    assert _depth(body) == tool_records.REF_DEPTH == 8
-    # the response schema starts one $ref deeper (Page, then Node)
-    out = t["listNodes"].output_schema
-    assert out["type"] == "object" and _depth(out["properties"]["items"]["items"]) == 7
+    assert _depth(body) == 1  # Node -> children[] -> Node is on the branch: cut to {}
+    assert body["properties"]["children"] == {"type": "array", "items": {}}
+    out = t["listNodes"].output_schema  # Page -> items[] -> Node -> children[] -> Node (cut)
+    assert out["type"] == "object" and _depth(out["properties"]["items"]["items"]) == 1
+
+
+def _openapi_body(schemas: dict, root: str) -> dict:
+    return {"openapi": "3.0.0", "components": {"schemas": schemas},
+            "paths": {"/a": {"post": {"requestBody": {"content": {"application/json": {
+                "schema": {"$ref": f"#/components/schemas/{root}"}}}}, "responses": {}}}}}
+
+
+@pytest.mark.parametrize("k", [4, 8])
+def test_openapi_self_reference_fanout_stays_small(k):
+    """The reviewer's reproduction: T = {properties: {p0..p(k-1): {$ref: T}}}."""
+    props = {f"p{i}": {"$ref": "#/components/schemas/T"} for i in range(k)}
+    t0 = time.perf_counter()
+    (rec,) = tool_records.from_openapi(_openapi_body({"T": {"type": "object",
+                                                            "properties": props}}, "T"),
+                                       "u", "1", "x")
+    assert time.perf_counter() - t0 < 2.0
+    body = rec.input_schema["properties"]["body"]
+    assert body == {"type": "object", "properties": {f"p{i}": {} for i in range(k)}}
+    assert rec.definition_tokens < 100
+
+
+def test_openapi_depth_8_bounds_a_chain_of_distinct_refs():
+    schemas = {f"S{i}": {"type": "object", "properties": {"next": {
+        "$ref": f"#/components/schemas/S{i + 1}"}}} for i in range(12)}
+    (rec,) = tool_records.from_openapi(_openapi_body(schemas, "S0"), "u", "1", "x")
+    node, levels = rec.input_schema["properties"]["body"], 0
+    while node:
+        levels += 1
+        node = node["properties"]["next"]
+    assert levels == tool_records.REF_DEPTH == 8
+
+
+def test_openapi_node_budget_bounds_an_acyclic_fanout():
+    """S0..S7, each with 6 properties referring to the next: 6**7 leaves without a budget."""
+    schemas = {f"S{i}": {"type": "object", "properties": {
+        f"p{j}": {"$ref": f"#/components/schemas/S{i + 1}"} for j in range(6)}}
+        for i in range(7)}
+    schemas["S7"] = {"type": "string"}
+    stats: dict = {}
+    t0 = time.perf_counter()
+    (rec,) = tool_records.from_openapi(_openapi_body(schemas, "S0"), "u", "1", "x",
+                                       stats=stats)
+    assert time.perf_counter() - t0 < 5.0
+    size = len(tool_records.canonical(rec.input_schema))
+    assert size < 40 * tool_records.NODE_BUDGET  # bounded by the budget, not 6**7
+    assert stats["budget_cuts"] > 0
+
+
+def test_openapi_budget_is_per_operation():
+    schemas = {f"S{i}": {"type": "object", "properties": {
+        f"p{j}": {"$ref": f"#/components/schemas/S{i + 1}"} for j in range(6)}}
+        for i in range(7)}
+    schemas["S7"] = {"type": "string"}
+    spec = _openapi_body(schemas, "S0")
+    spec["paths"]["/b"] = spec["paths"]["/a"]
+    a, b = tool_records.from_openapi(spec, "u", "1", "x")
+    assert a.input_schema == b.input_schema
 
 
 def test_openapi_output_schema_only_for_an_object():
