@@ -21,7 +21,7 @@ Phase 1 results: [`results/phase1/README.md`](../phase1/README.md).
 
 Two results need care when reading these numbers:
 - **21 gov test questions lose all their evidence by design (ruling R3).** Their evidence exists only in superseded versions, so default search no longer returns it. They are kept out of A4 and reported apart. With them counted, gov Recall@10 falls from 0.802 to 0.735.
-- **Dedup is not a retrieval gain here.** It matters on gov only when superseded versions are kept (`include_superseded`). In the default view it changed 2 of 242 gov test rankings and no metric. On research and bench it changed one ranking and no metric.
+- **Dedup is not a retrieval gain here.** It matters on gov only when superseded versions are kept (`include_superseded`). In the default view it changed 2 of 242 gov test rankings and no quality metric (Recall/nDCG/MRR); tokens@10 moved by a few tokens on one item (2,840 → 2,835). On research it changed one ranking, with no quality metric change and tokens@10 3,541 → 3,543 on that item; on bench nothing changed.
 
 ### What was run
 
@@ -132,7 +132,8 @@ predicted values are the prototype figures of spec §4.6.
 | `asof`, without the date | 34 | `p2-dedup` | 0.853 → 0.588 (−0.265 [−0.412, −0.118]) | 0.567 → 0.508 (−0.058 [−0.200, +0.078]) | 0.471 → 0.480 (+0.010 [−0.135, +0.152]) | wrong-version 221 → 182 | 0.853 → 0.588, 0.567 → 0.434, 0.471 → 0.380 |
 
 `p2-appl` gives exactly the `p2-default` metrics on every subset above. Dedup under the
-default filters changes no metric (next section).
+default filters changes no quality metric (Recall/nDCG/MRR); tokens@10 moved by a few tokens on
+one item (next section).
 
 **Applicability matches the prediction to three decimals,** intervals included.
 
@@ -162,6 +163,7 @@ the 29 dated items Phase 1 had found. Copies are never credited for dated items.
 - **Who they are.** Their gold passage lies in a section that was later removed or changed, and the question carries no date.
 - **Default search returns none of them** (`p2-appl` and `p2-default`: Recall@10, nDCG@10 and MRR 0.000, from 0.857, 0.746 and 0.709). This is the intended behaviour: the passage is no longer in force.
 - **They are not counted in A4.** With them, gov `p2-default` test is Recall@10 0.735 (−0.067 [−0.110, −0.026]) and nDCG@10 0.696 (−0.007 [−0.050, +0.033]) over all 213 scored items.
+  - This pooled comparison would not pass the 0.02 margin (its Recall@10 lower bound is −0.110). A3 and A4 exclude these items by ruling R3 (spec §15).
 - **Dev:** the same holds for the 2 dev items (1.000 → 0.000).
 - **Golden v0.2.** Giving these items an `as_of` date belongs there (spec §15, Q1).
 
@@ -218,7 +220,7 @@ The cluster parameters are recorded in each overlay and in every `p2-compare` re
 | research | 9,554 | 3 | 1 (3) | 2 | 3 | 5 = 0.05% |
 | bench | 7,400 | 1 | 1 (3) | 2 | 0 | 2 = 0.03% |
 
-These equal the spec §4.5 table.
+These equal the spec §4.5 table at the spec's rounding (research redundant is 5 of 9,554 = 0.05%; the spec shows 0.1%).
 
 **After collapse, no top-10 slot shares a component, a cluster or a text** with a slot above it.
 This holds for `p2-dedup` and `p2-default` on all three corpora and both splits. Phase 1 had
@@ -226,8 +228,8 @@ This holds for `p2-dedup` and `p2-default` on all three corpora and both splits.
 
 **Effect.**
 - **gov, superseded versions kept** (`p2-dedup`): `in_force` gains +0.016 Recall@10 and +0.028 nDCG@10, both with intervals above zero.
-- **gov, default filters** (`p2-default` against `p2-appl`): dedup changed 2 rankings (one dated item, one superseded-only item) and no metric. The in-force view has no exact copies and 1 near cluster.
-- **research:** one test ranking changed, with no metric change. **bench:** nothing changed.
+- **gov, default filters** (`p2-default` against `p2-appl`): dedup changed 2 rankings (one dated item, one superseded-only item) and no quality metric (Recall/nDCG/MRR); tokens@10 moved by a few tokens on one item (2,840 → 2,835). The in-force view has no exact copies and 1 near cluster.
+- **research:** one test ranking changed, with no quality metric change (tokens@10 3,541 → 3,543 on that item). **bench:** nothing changed.
 - **Tokens@10** moves by at most +0.6% (gov `p2-dedup`, 3,171 → 3,190). Dedup swaps copies for other chunks of similar length.
 
 **So dedup matters on gov only when superseded versions are kept.** Research and bench have
@@ -245,7 +247,7 @@ counts.
 | T2: changed sections, query = heading | default | 189 | 189 | 0 superseded chunks. Head version's section found in the top 10 for 188, mean rank 1.03; 1 section has no head version |
 | T2 | `as_of` = older date | 189 | 189 | 0 chunks from other versions; old section Recall@10 1.000 |
 | T3: removed sections, query = heading | default | 145 | 145 | 0 superseded chunks (Recall@10 0.000, as intended) |
-| T3 | `as_of` = its version's date | 145 | 145 | 0 chunks not in force; removed section Recall@10 0.993 (144 of 145) |
+| T3 | `as_of` = its version's date | 145 | 145 | 0 chunks not in force; removed section Recall@10 1.000 (145 of 145) |
 | T4: all gov golden questions, no date | default | 297 | 297 | 0 superseded chunks |
 | T5: Federal Register and IRM documents | `as_of` = `valid_from` − 1 day | 171 | 171 | Absent from `search` (171), from `grep` of a 30-character substring (171, none truncated) and refused by `read` (171). Controls without the date find each document by `search` and `grep` and read it (171 each) |
 
@@ -253,12 +255,12 @@ counts.
 every golden item (275 research, 728 bench): 0. This holds by construction: no research or bench
 document has a successor version, so nothing there can be superseded.
 
-**The one T3 removed section not found** under its date (§ 165.T08-0413, 33 CFR 165, the
-2024-06-27 version) is a probe-construction defect, not a retrieval miss:
-- The section's text starts with a line holding only a zero-width space (U+200B), with the heading on the next line.
-- The probe takes the first line as its query, so it searched for "​".
-- The pass rule (no chunk out of force) is unaffected.
-- The fix belongs in `adr_eval.probes.temporal.build` and goes back through Task 4 review. No product code was changed in this task.
+**T3 probe-construction defect, fixed in `5fb86cb`.** The first probe runs found 144 of the 145
+removed sections under their date (Recall@10 0.993). The one missed, § 165.T08-0413 (33 CFR 165,
+the 2024-06-27 version), was a defect of the probe, not a retrieval miss:
+- The section's text starts with a line holding only a zero-width space (U+200B), with the heading on the next line, and the probe took the first line as its query.
+- The probes now take the first line that is non-empty once whitespace and Unicode format characters (category Cf) are stripped (`adr_eval.probes.temporal.first_line`, also used for T2 headings and the T5 title fallback).
+- On re-running, only that section's two probes changed (its query is now its heading), and it is found. Pass counts are unchanged (1,176 of 1,176, dedup on and off).
 
 ### Determinism
 
@@ -304,7 +306,7 @@ without the date shows the head version.
 `run-summaries/` holds:
 - **31 retrieval runs:** the 6 `p1-struct-bc` reference runs, the 24 Phase 2 runs, and the gov `p2-default` test re-run (`…T063055`). Each has `retrieval.md`, and `retrieval.json` without per-item rows.
 - **18 `p2-compare` records** (`compare.json`, `compare.md`): slot counts, subset sizes, paired differences and verdicts. They hold no item ids.
-- **The two temporal probe runs** (dedup on: `probes-temporal-gov-20261116T061157`; dedup off: `…T061553`). Only their configuration and pass counts are committed; the probe lists stay local.
+- **The two temporal probe runs** (dedup on: `probes-temporal-gov-20261116T070327`; dedup off: `…T070706`), re-run after the T3 fix `5fb86cb`. Only their configuration and pass counts are committed; the probe lists stay local.
 
 Per-item rows, probe sets and anything quoting research or bench text stay local in `runs/`, as
 in Phase 1.
