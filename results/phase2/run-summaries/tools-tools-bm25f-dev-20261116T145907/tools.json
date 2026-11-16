@@ -1,0 +1,67 @@
+{
+  "config": {
+    "acl_snapshot": "d86528d242283557888d9a155e8cfb38ecf44c1c9de6e67cecdb8b52f78f07c2",
+    "active_tool_index": {
+      "after": "8b4e2e07cfd51870fabebc11c65639bef44b341f34dec1dfe92618bc234c4c0f",
+      "before": "8b4e2e07cfd51870fabebc11c65639bef44b341f34dec1dfe92618bc234c4c0f"
+    },
+    "caller": "user:auditor",
+    "catalog_definition_tokens": 816284,
+    "fingerprint": "8b4e2e07cfd51870fabebc11c65639bef44b341f34dec1dfe92618bc234c4c0f",
+    "lexical_only": true,
+    "split": "dev",
+    "started": "2026-11-16T14:59:07.722031+00:00",
+    "store": ".cache/store-p2/toolret",
+    "system": "tools-bm25f",
+    "tools": 14059,
+    "tools_snapshot": "51536a400bba75506fa53cd2addfa95111707a46827177b8f5ee2474c7cbf39d",
+    "top": 10,
+    "track": "tools",
+    "w": null,
+    "w_name": 3
+  },
+  "summary": {
+    "completeness@10": 0.42452830188679247,
+    "context_catalog": 816284,
+    "context_definitions": 642.8584905660377,
+    "context_gold_share": 0.06298160391379852,
+    "context_loaded": 1136.0754716981132,
+    "context_page": 493.2169811320755,
+    "context_reduction": 0.9986082350362152,
+    "n": 212,
+    "ndcg@10": 0.5421653942189438,
+    "recall@10": 0.630188679245283
+  },
+  "tuning": {
+    "chosen": {
+      "ndcg@10": 0.5421653942189438,
+      "w": null,
+      "w_name": 3
+    },
+    "metric": "ndcg@10",
+    "queries": 212,
+    "split": "dev",
+    "table": [
+      {
+        "ndcg@10": 0.3905990148214675,
+        "w": null,
+        "w_name": 0
+      },
+      {
+        "ndcg@10": 0.5346581910713857,
+        "w": null,
+        "w_name": 1
+      },
+      {
+        "ndcg@10": 0.5398089265570092,
+        "w": null,
+        "w_name": 2
+      },
+      {
+        "ndcg@10": 0.5421653942189438,
+        "w": null,
+        "w_name": 3
+      }
+    ]
+  }
+}
