@@ -1,0 +1,98 @@
+{
+  "config": {
+    "allow_other_index": false,
+    "applicability": "4c81d25fe905c0939e9e380d6c507ab8f6919768c34774dc6666062676792c3c",
+    "caller": null,
+    "corpus": "gov",
+    "dedup": false,
+    "golden_sha256": "67a06ff6f41f7ab7106079d0cff7b94c20892439dbb36c5e4e67a704c3aea3e8",
+    "index": "54c12a3c29170005fd046a56a12b07a80a3fe63a86b80c762c0cffabbd9c0aec",
+    "index_phase1": true,
+    "index_system": "p1-struct-bc",
+    "kind": "temporal",
+    "seed": 20261116,
+    "sizes": {
+      "T1": 40,
+      "T2": 189,
+      "T3": 145,
+      "T4": 297,
+      "T5": 171
+    },
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "spec_sizes": {
+      "T1": 40,
+      "T2": 189,
+      "T3": 145,
+      "T4": 297,
+      "T5": 171
+    },
+    "store": ".cache/store-p2/gov"
+  },
+  "summary": {
+    "T1": {
+      "as_of": {
+        "failed": [],
+        "n": 40,
+        "offending_chunks": 0,
+        "passed": 40
+      }
+    },
+    "T2": {
+      "as_of": {
+        "failed": [],
+        "n": 189,
+        "offending_chunks": 0,
+        "other_version_chunks": 0,
+        "passed": 189,
+        "recall@10": 1.0
+      },
+      "default": {
+        "failed": [],
+        "head_found@10": 188,
+        "head_rank_mean": 1.0265957446808511,
+        "head_section_absent": 1,
+        "n": 189,
+        "offending_chunks": 0,
+        "passed": 189
+      }
+    },
+    "T3": {
+      "as_of": {
+        "failed": [],
+        "n": 145,
+        "offending_chunks": 0,
+        "passed": 145,
+        "recall@10": 0.993103448275862
+      },
+      "default": {
+        "failed": [],
+        "n": 145,
+        "offending_chunks": 0,
+        "passed": 145,
+        "recall@10": 0.0
+      }
+    },
+    "T4": {
+      "default": {
+        "failed": [],
+        "n": 297,
+        "offending_chunks": 0,
+        "passed": 297
+      }
+    },
+    "T5": {
+      "as_of": {
+        "control_grep_found": 171,
+        "control_read_ok": 171,
+        "control_search_found": 171,
+        "failed": [],
+        "grep_absent": 171,
+        "grep_truncated": 0,
+        "n": 171,
+        "passed": 171,
+        "read_refused": 171,
+        "search_absent": 171
+      }
+    }
+  }
+}
