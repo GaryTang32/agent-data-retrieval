@@ -1029,14 +1029,17 @@ def total_scan(scans: dict) -> dict:
 # -- the tool tools: search_tools and load_tool (Task 10; run in Task 11) ---------------------
 #
 # Leak probes (`tool_leak_probes`, 200): `tool-search` (100) searches a hidden tool's name and
-# summary; `tool-load` (100) loads a hidden tool by full id (even k) or 8-character prefix (odd
-# k), with a control id or prefix that names nothing. Callers and targets are drawn as for the
-# content families (`_pick`, the directory's users and `user:ghost`). `check_tool` judges the
-# kinds of §10.2 that apply: a returned tool id outside the view; hidden text (a hit or
-# definition that is not the visible tool's own, or a hidden tool id the caller did not give in
-# a refusal); a not-found message that differs from the control's; a count (hits,
-# `excluded_by_filter`) or a score that differs from the reference, an index of the caller's
-# visible tools only (`ToolIndex.subset`: B2 for tools, the row-exact dense kernel).
+# summary: the first 60 unfiltered, the last 40 with a `source_kind` filter, alternately `["mcp"]`
+# (on the ToolRet store it excludes the whole view) and `["mcp", "toolret"]` (on a mixed catalog
+# it admits some); `tool-load` (100) loads a hidden tool by full id (even k) or 8-character prefix
+# (odd k), with a control id or prefix that names nothing. Callers and targets are drawn as for
+# the content families (`_pick`, the directory's users and `user:ghost`). `check_tool` judges the
+# kinds of §10.2 that apply: a returned tool id outside the view; hidden text (a hit or definition
+# that is not the visible tool's own, or a hidden tool id the caller did not give in a refusal); a
+# not-found message that differs from the control's; a count (hits, or `excluded_by_filter`
+# against |view| - |tools of the view the filter admits|) or a score that differs from the
+# reference, an index of the caller's visible tools only (`ToolIndex.subset`: B2 for tools, the
+# row-exact dense kernel) searched under the same filter mask.
 #
 # Fail closed (`tool_failclosed_probes`, `run_tool_failclosed`): F1–F5 and "no entry" × the two
 # tool tools × 5 callers = 60, as for the content tools (same callers, variants and clones),
@@ -1050,6 +1053,8 @@ def total_scan(scans: dict) -> dict:
 # store commits a content snapshot with one more document.
 
 TOOL_FAMILY_SIZES = {"tool-search": 100, "tool-load": 100}
+TOOL_SEARCH_FILTERED = 0.4  # the share of tool-search probes with a filter (the last ones)
+TOOL_FILTERS = ({"source_kind": ["mcp"]}, {"source_kind": ["mcp", "toolret"]})
 TOOL_TOOLS = ("search_tools", "load_tool")
 TOOL_CONDITIONS = (*CONDITIONS, "F2-tools", "no-tool-snapshot")
 TOOL_EXPECTED = {"F2-tools": "F2", "no-tool-snapshot": "F2"}
@@ -1107,12 +1112,16 @@ def tool_leak_probes(ctx: ToolContext, seed: int = SEED,
     ids = ctx.ids()
     probes: list[Probe] = []
     taken: set = set()
-    for k in range(sizes["tool-search"]):
+    n_search = sizes["tool-search"]
+    plain = n_search - round(n_search * TOOL_SEARCH_FILTERED)
+    for k in range(n_search):
         caller, tid = _pick(ctx, seed, "tool-search", k, ctx.hidden, taken)
         r = ctx.index.rows[tid]
+        call: dict = {"query": f"{r.name} {r.summary}".strip()}
+        if k >= plain:
+            call["filters"] = TOOL_FILTERS[(k - plain) % len(TOOL_FILTERS)]
         probes.append(Probe(f"tool-search:{k:03d}", "tool-search", "search_tools", caller,
-                            {"tool_id": tid, "name": r.name, "summary": r.summary},
-                            {"query": f"{r.name} {r.summary}".strip()}))
+                            {"tool_id": tid, "name": r.name, "summary": r.summary}, call))
     taken = set()
     for k in range(sizes["tool-load"]):
         caller, tid = _pick(ctx, seed, "tool-load", k, ctx.hidden, taken)
@@ -1202,11 +1211,16 @@ def check_tool(probe: Probe, tools_for: Callable, ctx: ToolContext) -> ProbeResu
                 rows[h.tool_id].name, rows[h.tool_id].summary, rows[h.tool_id].source_kind,
                 rows[h.tool_id].source_uri) for h in res.hits)
         if in_directory:
+            view = [t for t in rows if t in seen]
+            kinds_of = (probe.call.get("filters") or {}).get("source_kind")
+            admitted = None if kinds_of is None else frozenset(
+                t for t in view if rows[t].source_kind in kinds_of)
+            excluded = 0 if admitted is None else len(view) - len(admitted)
             ref = ctx.reference(caller).retrieve(probe.call["query"], res.w, res.top,
-                                                 exact=True)
+                                                 allowed=admitted, exact=True)
             kinds["score_differs"] = [(h.tool_id, h.score) for h in res.hits] != ref
             kinds["count_includes_hidden"] = len(res.hits) != len(ref) or \
-                res.excluded_by_filter != 0
+                res.excluded_by_filter != excluded
     return ProbeResult(probe.probe_id, probe.family, probe.tool, caller, "ok", kinds,
                        any(bool(v) for v in kinds.values()), valid, note)
 
