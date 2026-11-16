@@ -405,7 +405,21 @@ def _role_clients(config: dict, given: dict[str, ModelClient | None], stub: bool
 def _system_names() -> tuple[str, ...]:
     from adr_eval import systems
 
-    return systems.NAMES
+    return systems.ALL_NAMES
+
+
+def _takes_as_of(system, item: GoldenItem) -> bool:
+    """Whether the harness passes the item's date: only to a system with `accepts_as_of`
+    (the Phase 2 configurations) and only for a `policy_asof` item (Phase 2 spec §10.1)."""
+    return bool(getattr(system, "accepts_as_of", False)) and item.qtype == "policy_asof"
+
+
+def retrieve_item(system, item: GoldenItem) -> list[tuple[str, float]]:
+    """`system.retrieve(item.question, as_of=item.as_of)` where `_takes_as_of`, else the
+    Phase 1 call `system.retrieve(item.question)`."""
+    if _takes_as_of(system, item):
+        return system.retrieve(item.question, as_of=item.as_of)
+    return system.retrieve(item.question)
 
 
 def _check_system(system: str) -> None:
@@ -449,7 +463,7 @@ def run(
     groups = evidence_groups.build_all(all_items, loaded.docs)
     index = systems.build(system, corpus, loaded, all_items, groups, config, rebuild=rebuild)
     source, w = index.source, index.w
-    retrieved = {i.id: [index.retrieve(i.question) for _ in range(repeats)] for i in items}
+    retrieved = {i.id: [retrieve_item(index, i) for _ in range(repeats)] for i in items}
     prices = load_prices(_repo_path(config.get("prices", "config/prices.json")))
     if stub and (generator is None or judge is None):
         sg, sj = stub_clients(all_items, index.chunks)
@@ -572,12 +586,15 @@ def run_retrieval(corpus: str, system: str, split: Literal["dev", "test"], confi
                           lexical_only=lexical_only)
     rows = []
     for item in items:
-        hits = built.retrieve(item.question)
+        hits = retrieve_item(built, item)
         ranked = [built.chunks[c] for c, _ in hits]
-        rows.append({"item_id": item.id, "qtype": item.qtype, "rarity": item.rarity,
-                     "ranked": [c for c, _ in hits], "scores": [s for _, s in hits],
-                     "metrics": retrieval_scores(
-                         item, ranked, groups.get(item.id) or [[e] for e in item.evidence])})
+        row = {"item_id": item.id, "qtype": item.qtype, "rarity": item.rarity,
+               "ranked": [c for c, _ in hits], "scores": [s for _, s in hits],
+               "metrics": retrieval_scores(
+                   item, ranked, groups.get(item.id) or [[e] for e in item.evidence])}
+        if getattr(built, "accepts_as_of", False):  # Phase 2 rows record the date passed
+            row["as_of"] = item.as_of.isoformat() if _takes_as_of(built, item) else None
+        rows.append(row)
     by_doc: dict[str, list[Chunk]] = {}
     for c in built.chunks.values():
         by_doc.setdefault(c.doc_id, []).append(c)

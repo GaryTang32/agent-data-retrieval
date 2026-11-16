@@ -506,3 +506,185 @@ def test_retrieval_compare_refuses_other_metrics_versions_and_splits(tmp_path, f
     assert main(["retrieval-compare", a["dir"].name, c["dir"].name, "--out", out]) == 2
     assert "different metrics versions" in capsys.readouterr().err
     assert main(["retrieval-compare", a["dir"].name, "nope", "--out", out]) == 2
+
+
+# -- Phase 2 configurations (spec §10.1) ----------------------------------------------------
+
+P2 = ("p2-identity", "p2-appl", "p2-dedup", "p2-default")
+
+
+@pytest.fixture
+def p2fakes(fakes, monkeypatch):
+    """`fakes`, and the same fake embedding model for the `adr_store` tools the Phase 2
+    systems search through."""
+    from adr_store import tools
+
+    monkeypatch.setattr(tools, "make_embedding_cache",
+                        lambda path=None, *, threads=1: fake_cache(Path(path)))
+    return fakes
+
+
+@pytest.fixture
+def p2config(config, tmp_path, monkeypatch):
+    monkeypatch.setattr(systems, "PHASE1_SUMMARIES", tmp_path / "summaries")
+    return {**config, "p2_store_dir": str(tmp_path / "store-p2")}
+
+
+def test_the_phase2_systems_are_registered_apart_from_phase1():
+    assert systems.P2_NAMES == P2
+    assert systems.ALL_NAMES == (*systems.NAMES, *P2)
+    assert set(systems.P2_SPECS) == set(P2)
+    f = {n: systems.P2_SPECS[n].filters for n in P2}
+    assert f["p2-identity"].include_superseded and f["p2-dedup"].include_superseded
+    assert not f["p2-appl"].include_superseded and not f["p2-default"].include_superseded
+    assert [systems.P2_SPECS[n].as_of for n in P2] == [False, True, False, True]
+    assert [systems.P2_SPECS[n].dedup for n in P2] == [False, False, True, True]
+
+
+def test_a_phase2_system_copies_the_store_derives_overlays_and_reuses_the_phase1_index(
+        mini, p2config, p2fakes):
+    from adr_store import applicability, dedup
+    from adr_store.retrieval.index import chunk_content_sha256
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    p2 = build("p2-default", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    assert (path / "HEAD").read_text() == (p1.store_path / "HEAD").read_text()
+    assert p2.fingerprint == p1.fingerprint and p2.w == p1.w and p2.accepts_as_of
+    idx = p2.tools.active_index()
+    app = applicability.load_overlay(path, idx.snapshot)
+    dd = dedup.load_overlay(path, idx.snapshot, idx.chunker,
+                            chunk_content_sha256(idx.chunks.values()))
+    assert app is not None and dd is not None
+    cfg = p2.run_config()
+    assert cfg["store"].endswith("store-p2/mini") and cfg["store_snapshot"] == idx.snapshot
+    assert cfg["phase1_system"] == "p1-struct-bc" and cfg["caller"] is None
+    assert cfg["acl"] is None and cfg["as_of_from_item"] is True
+    assert cfg["filters"] == applicability.Filters().to_dict()
+    assert (cfg["applicability"], cfg["dedup"]) == (app.overlay_id, dd.overlay_id)
+    assert (cfg["w_bc"], cfg["linear_w"]) == (p1.index.settings.w_bc, p1.w)
+    assert set(p2.chunks) == set(p1.chunks)
+    # a second build loads the copy and its overlays as they are
+    again = build("p2-identity", mini, p2config)
+    assert again.run_config()["dedup"] is None and again.run_config()["applicability"] == \
+        app.overlay_id
+    assert again.run_config()["filters"]["include_superseded"] is True
+
+
+def test_a_phase2_system_refuses_a_recorded_phase1_run_it_does_not_reproduce(
+        mini, p2config, p2fakes):
+    p1 = build("p1-struct-bc", mini, p2config)
+    summaries = systems.PHASE1_SUMMARIES
+    recorded = {"config": {"system": "p1-struct-bc", "lexical_only": False, "w": p1.w,
+                           "fingerprint": p1.fingerprint,
+                           "settings": {"w_bc": p1.index.settings.w_bc,
+                                        "store_snapshot": p1.index.snapshot}}}
+    d = summaries / "mini-p1-struct-bc-dev-retrieval-20261113T000000"
+    d.mkdir(parents=True)
+    (d / "retrieval.json").write_text(json.dumps(recorded))
+    other = summaries / "mini-p1-struct-bc-rr-dev-retrieval-20261113T000000"  # not the system
+    other.mkdir()
+    (other / "retrieval.json").write_text(json.dumps({"config": {"w": 0.123}}))
+    assert build("p2-identity", mini, p2config).run_config()["phase1_recorded"] == [d.name]
+    recorded["config"]["w"] = 0.5 if p1.w != 0.5 else 0.25
+    (d / "retrieval.json").write_text(json.dumps(recorded))
+    with pytest.raises(runner.RunError, match=f"(?s){d.name}.*w"):
+        build("p2-identity", mini, p2config)
+
+
+def test_a_phase2_store_of_other_documents_is_refused(mini, p2config, p2fakes):
+    from adr_store.store import Store
+
+    build("p2-identity", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    full = Store.open(path)
+    Store(path, None, {d: full._records[d] for d in full.doc_ids()[:2]}).commit()
+    with pytest.raises(runner.RunError, match="(?s)other documents.*remove"):
+        build("p2-identity", mini, p2config)
+
+
+@pytest.mark.parametrize("split", ["dev", "test"])
+def test_p2_identity_equals_p1_struct_bc_on_mini(split, tmp_path, p2fakes, capsys):
+    """Criterion A5 in CI: ranked ids and exact scores of every item, dev and test."""
+    a = _retrieval(tmp_path, "p1-struct-bc", split)
+    b = _retrieval(tmp_path, "p2-identity", split)
+    ra, rb = ({r["item_id"]: r for r in x["rows"]} for x in (a, b))
+    assert set(ra) == set(rb) and ra
+    for item_id, row in ra.items():
+        assert rb[item_id]["ranked"] == row["ranked"]
+        assert rb[item_id]["scores"] == row["scores"]
+    assert b["config"]["fingerprint"] == a["config"]["fingerprint"]
+    capsys.readouterr()
+    assert main(["retrieval-identical", str(a["dir"]), str(b["dir"])]) == 0
+    assert "identical" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("split", ["dev", "test"])
+def test_p2_appl_equals_p1_struct_bc_on_mini_but_the_dated_item_finds_nothing(
+        split, tmp_path, p2fakes, capsys):
+    """Mini has no chains, so the default filter excludes nothing; its documents' dates are
+    unknown, so `as_of` admits none of them (unknown never matches)."""
+    a = _retrieval(tmp_path, "p1-struct-bc", split)
+    b = _retrieval(tmp_path, "p2-appl", split)
+    ra, rb = ({r["item_id"]: r for r in x["rows"]} for x in (a, b))
+    dated = {i for i, r in ra.items() if r["qtype"] == "policy_asof"}
+    assert len(dated) == 1
+    for item_id, row in rb.items():
+        if item_id in dated:
+            assert row["ranked"] == [] and row["as_of"] is not None
+            assert ra[item_id]["ranked"]
+        else:
+            assert (row["ranked"], row["scores"]) == (ra[item_id]["ranked"],
+                                                      ra[item_id]["scores"])
+            assert row["as_of"] is None
+    assert "as_of" not in next(iter(ra.values()))
+    capsys.readouterr()
+    assert main(["retrieval-identical", str(a["dir"]), str(b["dir"])]) == 1
+    out = capsys.readouterr().out
+    assert "1 of" in out and next(iter(dated)) in out
+
+
+def _forge_one_cluster(path: Path, idx) -> str:
+    """Replace the p2 store's dedup overlay by one joining every chunk into one near cluster
+    (mini has no copies), so collapse would change every ranking."""
+    import hashlib
+
+    from adr_store import dedup
+    from adr_store.retrieval.index import chunk_content_sha256
+
+    members = sorted(idx.chunks)
+    edges = [(i, i + 1, 0.95) for i in range(len(members) - 1)]
+    cluster = dedup.Cluster(cluster_id=hashlib.sha256("\n".join(members).encode()).hexdigest(),
+                            members=members, kind="near", min_jaccard=0.95, edges=edges)
+    overlay = dedup.DedupOverlay(format_version="0.1", snapshot=idx.snapshot,
+                                 chunker=idx.chunker,
+                                 chunk_content_sha256=chunk_content_sha256(idx.chunks.values()),
+                                 params=dedup.PARAMS, clusters=[cluster], stats={})
+    dedup.overlay_path(path, idx.snapshot, idx.chunker).unlink()
+    return dedup.write_overlay(path, overlay)[0]
+
+
+def test_p2_identity_equals_p1_struct_bc_even_with_a_dedup_overlay_that_collapses(
+        mini, p2config, p2fakes):
+    """`p2-identity` and `p2-appl` pass dedup=False (never None), so an overlay in the store
+    does not change them; `p2-dedup` and `p2-default` pass dedup=True."""
+    p1 = build("p1-struct-bc", mini, p2config)
+    first = build("p2-identity", mini, p2config)
+    forged = _forge_one_cluster(Path(p2config["p2_store_dir"]) / "mini",
+                                first.tools.active_index())
+    calls = []
+    for name in P2:
+        s = build(name, mini, p2config)
+        assert s.run_config()["dedup_overlay"] == forged
+        real = s.tools.search
+        s.tools.search = lambda *a, real=real, name=name, **kw: calls.append(
+            (name, kw["dedup"])) or \
+            real(*a, **kw)
+        for item in mini[1]:
+            got = s.retrieve(item.question)
+            if name in ("p2-identity", "p2-appl"):
+                assert got == p1.retrieve(item.question)
+            else:
+                assert len(got) == 1  # one cluster: one slot
+    assert {(n, d) for n, d in calls} == {("p2-identity", False), ("p2-appl", False),
+                                          ("p2-dedup", True), ("p2-default", True)}

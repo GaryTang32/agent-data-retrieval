@@ -1,4 +1,5 @@
-"""`adr-eval` command line: fetch, golden, index, run, retrieval, report, doctor."""
+"""`adr-eval` command line: fetch, golden, index, run, retrieval, retrieval-compare,
+retrieval-identical, p2-compare, probes, report, doctor."""
 
 from __future__ import annotations
 
@@ -205,6 +206,38 @@ def _retrieval_compare(a: argparse.Namespace) -> int:
     return 0
 
 
+def _retrieval_identical(a: argparse.Namespace) -> int:
+    from adr_eval import phase2
+
+    run_a, run_b = _retrieval_dir(a.run_a, a.out), _retrieval_dir(a.run_b, a.out)
+    r = phase2.identical(load_retrieval(run_a), load_retrieval(run_b))
+    if r["identical"]:
+        print(f"identical: {r['n_shared']} items, ranked chunk ids and scores equal "
+              f"({run_a.name}, {run_b.name})")
+        return 0
+    print(f"not identical: {r['n_differing']} of {r['n_shared']} shared items differ; "
+          f"{len(r['only_a'])} only in {run_a.name}, {len(r['only_b'])} only in {run_b.name}")
+    for d in r["differences"][:a.show]:
+        print(f"  {d['item_id']}: rank {d['rank']}: {d['a']} vs {d['b']} "
+              f"({d['len_a']} vs {d['len_b']} hits)")
+    for side, ids in (("A", r["only_a"]), ("B", r["only_b"])):
+        if ids:
+            print(f"  only in {side}: {', '.join(ids[:a.show])}")
+    return 1
+
+
+def _p2_compare(a: argparse.Namespace) -> int:
+    from adr_eval import phase2
+
+    out = phase2.OUT_ROOT if a.out is None else a.out
+    run_a, run_b = _retrieval_dir(a.run_a, out), _retrieval_dir(a.run_b, out)
+    c = phase2.compare(run_a, run_b, a.store, margin=a.margin)
+    d = phase2.write_compare(c, out)
+    print((d / "compare.md").read_text(encoding="utf-8"))
+    print(f"written: {d / 'compare.json'}")
+    return 0
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -282,7 +315,7 @@ def _parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("run", help="run a registered system over a split")
     p.add_argument("corpus", choices=NAMES)
-    p.add_argument("--system", required=True, choices=systems.NAMES)
+    p.add_argument("--system", required=True, choices=systems.ALL_NAMES)
     p.add_argument("--repeats", type=int, default=None, help="default: config repeats")
     p.add_argument("--split", choices=("dev", "test"), default="test")
     p.add_argument("--max-dollars", type=float, default=None)
@@ -297,7 +330,7 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("retrieval", help="retrieval track only (no model calls): "
                                          "retrieval.json/retrieval.md for a system")
     p.add_argument("corpus", choices=NAMES)
-    p.add_argument("--system", required=True, choices=systems.NAMES)
+    p.add_argument("--system", required=True, choices=systems.ALL_NAMES)
     p.add_argument("--split", choices=("dev", "test"), default="test")
     p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
     p.add_argument("--lexical-only", action="store_true",
@@ -313,6 +346,29 @@ def _parser() -> argparse.ArgumentParser:
                    help="compare a lexical-only run with a full run (marked in the output)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.set_defaults(fn=_retrieval_compare)
+
+    p = sub.add_parser("retrieval-identical",
+                       help="exit 0 when two retrieval runs give the same items, ranked ids "
+                            "and exact scores, else 1 with the first differences")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--show", type=int, default=5, metavar="N",
+                   help="differences to print (default 5)")
+    p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
+    p.set_defaults(fn=_retrieval_identical)
+
+    p = sub.add_parser("p2-compare",
+                       help="Phase 2 comparison of two retrieval runs (run_b minus run_a): "
+                            "slot counts, item subsets and non-inferiority (A3, A4)")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store whose HEAD the runs searched (chunks and overlays)")
+    p.add_argument("--margin", type=float, default=0.02,
+                   help="non-inferiority margin (default 0.02, fixed in the spec)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="run output root (default runs); writes p2-compare-<a>--<b>/")
+    p.set_defaults(fn=_p2_compare)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

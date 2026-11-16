@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -841,3 +842,51 @@ def test_report_g2_for_rows_without_query_scores(tmp_path):
     assert g2["entity_f1"] is None and g2["entity_n"] == 0
     md = render_markdown(rep).split("## G2 query understanding")[1].split("## G1")[0]
     assert "| – | 0 | – | 0 | – | 0 |" in md
+
+
+# -- as_of (Phase 2 spec §10.1) ---------------------------------------------------------
+
+
+class _Recording:
+    """A system that records how it was called and returns nothing."""
+
+    def __init__(self, accepts: bool):
+        self.calls: list[tuple] = []
+        self.chunks, self.fingerprint, self.source, self.w = {}, "f" * 64, "built", None
+        if accepts:
+            self.accepts_as_of = True
+
+    def retrieve(self, question, *args, **kw):
+        self.calls.append((question, args, kw))
+        return []
+
+    def run_config(self):
+        return {}
+
+
+@pytest.mark.parametrize("accepts", [True, False])
+def test_the_runner_passes_as_of_only_to_systems_that_take_it_for_dated_items(
+        tmp_path, monkeypatch, accepts):
+    from adr_eval import runner, systems
+
+    fake = _Recording(accepts)
+    monkeypatch.setattr(systems, "build", lambda *a, **kw: fake)
+    run_id = runner.run_retrieval("mini", "p1-struct", "test", load_config(),
+                                  out_root=tmp_path)
+    rows = json.loads((tmp_path / run_id / "retrieval.json").read_text())["rows"]
+    items = {i["question"]: i for i in _test_items()}
+    assert len(fake.calls) == len(items)
+    for question, args, kw in fake.calls:
+        item = items[question]
+        if accepts and item["qtype"] == "policy_asof":
+            assert args == () and kw == {"as_of": date.fromisoformat(item["as_of"])}
+        else:
+            assert (args, kw) == ((), {})
+    dated = [r for r in rows if r["qtype"] == "policy_asof"]
+    assert dated
+    if accepts:
+        assert {r["item_id"]: r["as_of"] for r in rows} == {
+            i["id"]: (i["as_of"] if i["qtype"] == "policy_asof" else None)
+            for i in _test_items()}
+    else:
+        assert all("as_of" not in r for r in rows)
