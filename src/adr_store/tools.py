@@ -66,14 +66,20 @@ failed before they were known).
 
 Dedup (Phase 2 spec §4.5). `search(..., dedup=None)` collapses copies when a dedup overlay
 exists for the active index's chunks (`adr dedup build`; `dedup.load_overlay`, a damaged one
-is refused), `dedup=True` requires one ("no dedup overlay; run `adr dedup build`"), and
+is refused; an overlay of other chunks, e.g. before a rechunk, is not theirs), `dedup=True`
+requires one (refused with `dedup.missing`'s reason, which ends "run `adr dedup build`"), and
 `dedup=False` is the uncollapsed ranking (the overlay is not read). Collapse walks the index's
-top 200 fused candidates (a reranked index: its reranked top 50), masked by the filters as
-above, and gives one hit per connected component of a cluster's edges among the chunks the
-filters admit: the component's canonical chunk with the best-ranked member's score
-(`scored_by`) and the other admitted members as `alternates`. Without collapse `scored_by` is
-the hit itself and `alternates` is empty. The result carries `dedup` (the overlay id, or
-None) and so do log lines of `search`.
+full ranking (`StoreIndex.ranking`: the top 200 fused candidates, then every other candidate,
+ranked only if the 200 run out), masked by the filters as above, and gives one hit per
+connected component of a cluster's edges among the chunks the filters admit: the component's
+canonical chunk with the best-ranked member's score (`scored_by`) and the other admitted
+members as `alternates`. So a collapsed result has `top` hits unless fewer components match.
+A reranked index collapses its reranked top 50 only; when that gives fewer than `top` hits
+while the full ranking has more components, `short_by` says how many (0 otherwise, and
+always 0 without a reranker or without collapse). Without collapse `scored_by` is the hit
+itself and `alternates` is empty. The result carries `dedup` (the overlay id, or None) and
+`dedup_note` (None when collapsed, else why not: `dedup.OFF`, or `dedup.missing`'s reason);
+log lines of `search` carry `dedup`.
 
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
@@ -94,6 +100,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from itertools import chain
 from multiprocessing.connection import Connection
 from pathlib import Path
 from re import _parser as re_parser
@@ -115,7 +122,6 @@ GREP_BATCH_CHARS = 4_000_000  # text sent to the grep worker per request
 GREP_WORKER = grep_worker.__file__  # the worker's script
 WORKER_START = 60.0  # seconds the grep worker may take to start
 SEARCH_TOP = 10
-COLLAPSE_CANDIDATES = 200  # fused candidates a collapsed search walks (a reranked index: 50)
 CONTEXT_CHARS = 80  # characters of context on each side of a grep match
 MIN_PREFIX = 8
 DEFAULT_EMB_CACHE = Path(".cache/emb")
@@ -208,6 +214,8 @@ class SearchResult(_Result):
     filters: dict = field(default_factory=lambda: Filters().to_dict())
     excluded_by_filter: int = 0
     dedup: str | None = None  # the dedup overlay id when collapsed
+    dedup_note: str | None = None  # why not collapsed (None when collapsed)
+    short_by: int = 0  # slots a reranked collapse is missing although more components match
 
 
 @dataclass(frozen=True)
@@ -475,7 +483,8 @@ class Tools:
         self._active: dict | None = None
         self._chunks: dict[str, dict] | None = None
         self._overlay: Applicability | None | object = _UNLOADED
-        self._dedup: tuple[str, dedup_mod.Dedup | None] | None = None  # (index, overlay)
+        # (index fingerprint, overlay or None, why none)
+        self._dedup: tuple[str, dedup_mod.Dedup | None, str | None] | None = None
 
     @property
     def index_root(self) -> Path:
@@ -713,11 +722,18 @@ class Tools:
 
     def _dedup_overlay(self, idx: StoreIndex) -> dedup_mod.Dedup | None:
         """The dedup overlay of the index's chunks, or None (loaded once per index)."""
+        return self._dedup_state(idx)[0]
+
+    def _dedup_state(self, idx: StoreIndex) -> tuple[dedup_mod.Dedup | None, str | None]:
+        """(the dedup overlay of the index's chunks or None, why None), loaded once per
+        index."""
         if self._dedup is None or self._dedup[0] != idx.fingerprint:
-            dd = dedup_mod.load_overlay(self.store_path, self.snapshot, idx.chunker,
-                                        chunk_content_sha256(idx.chunks.values()))
-            self._dedup = (idx.fingerprint, dd)
-        return self._dedup[1]
+            content = chunk_content_sha256(idx.chunks.values())
+            dd = dedup_mod.load_overlay(self.store_path, self.snapshot, idx.chunker, content)
+            why = None if dd is not None else dedup_mod.missing(
+                self.store_path, self.snapshot, idx.chunker, content)
+            self._dedup = (idx.fingerprint, dd, why)
+        return self._dedup[1], self._dedup[2]
 
     def _chunk_rows(self) -> dict[str, dict]:
         """The active index's chunks, from the index as `search` loads it (so its fingerprint
@@ -748,22 +764,17 @@ class Tools:
                 raise ToolError(f"the index ({active['system']}) reranks its top {RERANK_TOP} "
                                 f"chunks only; ask for --top {RERANK_TOP} or fewer")
             idx, active = self._active_index()
-            dd = None if dedup is False else self._dedup_overlay(idx)
+            dd, why = (None, dedup_mod.OFF) if dedup is False else self._dedup_state(idx)
             if dedup is True and dd is None:
-                raise ToolError(dedup_mod.NO_OVERLAY)
+                raise ToolError(why)
+            short_by = 0
             if dd is None:
                 slots = [dedup_mod.Slot(cid, score, cid, ()) for cid, score in idx.retrieve(
                     query, fusion="linear", w=active["w"], top=top,
                     allowed_docs=applied.allowed)]
             else:
                 fields["dedup"] = dd.overlay_id
-                ranked = idx.retrieve(query, fusion="linear", w=active["w"],
-                                      top=RERANK_TOP if idx.reranker is not None else
-                                      COLLAPSE_CANDIDATES, allowed_docs=applied.allowed)
-                allowed = applied.allowed
-                slots = dedup_mod.collapse(
-                    ranked, dd, lambda cid: allowed is None or idx.chunks[cid].doc_id in allowed,
-                    idx.chunks, applied.overlay, applied.filters.as_of, top)
+                slots, short_by = self._collapsed(idx, active, query, top, applied, dd)
             hits = []
             for rank, slot in enumerate(slots, start=1):
                 c = idx.chunks[slot.chunk_id]
@@ -773,12 +784,42 @@ class Tools:
             res = SearchResult(query, top, self.snapshot, active["system"],
                                active["lexical_only"], idx.fingerprint, active["w"], hits,
                                **applied.fields(), excluded_by_filter=applied.excluded,
-                               dedup=None if dd is None else dd.overlay_id)
+                               dedup=None if dd is None else dd.overlay_id,
+                               dedup_note=why if dd is None else None, short_by=short_by)
             return res, [h.chunk_id for h in hits], {"index": idx.fingerprint}
 
         return self._call("search", {"query": query, "top": top,
                                      "filters": _filters_arg(filters), "dedup": dedup}, run,
                           fields)
+
+    @staticmethod
+    def _collapsed(idx: StoreIndex, active: dict, query: str, top: int, applied: _Applied,
+                   dd: dedup_mod.Dedup) -> tuple[list[dedup_mod.Slot], int]:
+        """(the collapsed slots, short_by). Without a reranker: the collapse of the index's
+        full ranking. A reranked index: the collapse of its reranked top 50, and how many
+        more slots the full ranking after those 50 would fill, up to `top`."""
+        allowed = applied.allowed
+
+        def admitted(cid: str) -> bool:
+            return allowed is None or idx.chunks[cid].doc_id in allowed
+
+        def collapse(ranked):
+            return dedup_mod.collapse(ranked, dd, admitted, idx.chunks, applied.overlay,
+                                      applied.filters.as_of, top)
+
+        def full():
+            return idx.ranking(query, w=active["w"], allowed_docs=allowed)
+
+        if idx.reranker is None:
+            return collapse(full()), 0
+        head = idx.retrieve(query, fusion="linear", w=active["w"], top=RERANK_TOP,
+                            allowed_docs=allowed)
+        slots = collapse(head)
+        if len(slots) == top:
+            return slots, 0
+        seen = {cid for cid, _ in head}
+        more = collapse(chain(head, ((cid, s) for cid, s in full() if cid not in seen)))
+        return slots, len(more) - len(slots)
 
     # -- read -------------------------------------------------------------------------
 
@@ -883,7 +924,7 @@ class Tools:
             doc = _resolve(doc, doc_ids, "document", f"snapshot {_short(self.snapshot)}")
             applied.refuse_excluded(doc)
             doc_ids = [doc]
-            excluded = int(applied.reason(doc) is not None)  # this document only: 0 here
+            excluded = 0  # of this one document, which refuse_excluded let through
         elif applied.allowed is not None:
             doc_ids = [d for d in doc_ids if d in applied.allowed]
         matches: list[GrepMatch] = []

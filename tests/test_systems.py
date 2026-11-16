@@ -660,7 +660,8 @@ def _forge_one_cluster(path: Path, idx) -> str:
                                  chunker=idx.chunker,
                                  chunk_content_sha256=chunk_content_sha256(idx.chunks.values()),
                                  params=dedup.PARAMS, clusters=[cluster], stats={})
-    dedup.overlay_path(path, idx.snapshot, idx.chunker).unlink()
+    dedup.overlay_path(path, idx.snapshot, idx.chunker,
+                       chunk_content_sha256(idx.chunks.values())).unlink()
     return dedup.write_overlay(path, overlay)[0]
 
 

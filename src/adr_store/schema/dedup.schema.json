@@ -63,7 +63,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The content of `<store>/dedup/<snapshot>/<overlay_key>.json`.",
+  "description": "The content of `<store>/dedup/<snapshot>/<overlay_key>-<content>.json`.",
   "properties": {
     "chunk_content_sha256": {
       "pattern": "^[0-9a-f]{64}$",

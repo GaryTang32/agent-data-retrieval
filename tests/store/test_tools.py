@@ -316,7 +316,8 @@ def test_search_returns_the_index_ranking_with_the_snapshot_on_every_hit(store):
 def test_search_json_shape(store):
     d = lexical(store).search(QUERY, top=2).to_dict()
     assert set(d) == {"query", "top", "snapshot", "system", "lexical_only", "fingerprint", "w",
-                      "hits", "applicability", "filters", "excluded_by_filter", "dedup"}
+                      "hits", "applicability", "filters", "excluded_by_filter", "dedup",
+                      "dedup_note", "short_by"}
     assert set(d["hits"][0]) == {"rank", "chunk_id", "doc_id", "char_start", "char_end",
                                  "breadcrumb", "score", "snapshot", "scored_by", "alternates"}
     json.dumps(d)

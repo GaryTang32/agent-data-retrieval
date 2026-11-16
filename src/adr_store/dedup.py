@@ -1,12 +1,17 @@
 r"""The dedup overlay: exact and near-duplicate chunks of one index's chunks, and collapse at
 query time (Phase 2 spec §4.5).
 
-    <store>/dedup/<snapshot_id>/<overlay_key>.json    the overlay (canonical JSON, write-once)
+    <store>/dedup/<snapshot_id>/<overlay_key>-<content>.json    the overlay (canonical JSON,
+                                                                write-once)
 
 `overlay_key` is the first 16 hex characters of the SHA-256 of the canonical JSON of
-{chunker configuration, `PARAMS`}; the overlay id is the SHA-256 of the file. The file also
-records `chunk_content_sha256` (as `StoreIndex` hashes its chunks), checked on load, so an
-overlay is only used with the chunks it was built over.
+{chunker configuration, `PARAMS`} and `<content>` the first 16 of the `chunk_content_sha256`
+of the chunks it was built over (as `StoreIndex` hashes its chunks: ids, breadcrumbs and
+texts); the overlay id is the SHA-256 of the file. So chunks rechunked under the same snapshot
+and chunker configuration (a chunker change that kept `CHUNKER_VERSION`) have no overlay
+until `adr dedup build` writes theirs beside the old one, which stays as it was; the file
+records the full `chunk_content_sha256`, checked on load. `missing` says why there is no
+overlay for a set of chunks (none at all, or only for other chunks or settings).
 
 Exact duplicates: chunks whose text (the body as stored) has the same SHA-256. Near
 duplicates: MinHash over word 5-shingles (`\w+` tokens, each lower-cased, joined by one space; a
@@ -30,7 +35,8 @@ visible ones. Walking the ranked candidates, the first member of each admitted c
 takes the slot; the slot shows the component's canonical member (`canonical`, §4.5 rules 1-4)
 with the best-ranked member's score (`scored_by`), and lists the other admitted members as
 `alternates` (exact or near, Jaccard to the shown member from their shingles), in canonical
-order. The walk stops at `top` slots.
+order. The walk stops at `top` slots. `ranked` may be lazy (`StoreIndex.ranking`): the walk reads
+it only as far as it needs, so the slots are those of collapsing the whole ranking.
 """
 
 from __future__ import annotations
@@ -62,6 +68,7 @@ PARAMS = {"exact": "sha256(text)", "tokens": r"\w+", "lower": True, "shingle": 5
           "a_range": [1, 2**32], "b_range": [0, 2**32], "bands": 16, "rows": 8,
           "threshold": 0.90}
 NO_OVERLAY = "no dedup overlay; run `adr dedup build`"
+OFF = "dedup off (dedup=false)"
 _TOKEN = re.compile(PARAMS["tokens"])
 _PRIME = np.uint64(PARAMS["prime"])
 
@@ -151,7 +158,7 @@ class Cluster(BaseModel):
 
 
 class DedupOverlay(BaseModel):
-    """The content of `<store>/dedup/<snapshot>/<overlay_key>.json`."""
+    """The content of `<store>/dedup/<snapshot>/<overlay_key>-<content>.json`."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, title="DedupOverlay")
 
@@ -321,15 +328,35 @@ def overlay_key(chunker: dict, params: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def overlay_path(store_path: Path, snapshot: str, chunker: dict) -> Path:
-    return Path(store_path) / OVERLAY_DIR / snapshot / f"{overlay_key(chunker, PARAMS)}.json"
+def _file_name(chunker: dict, params: dict, chunk_content_sha256: str) -> str:
+    return f"{overlay_key(chunker, params)}-{chunk_content_sha256[:16]}.json"
+
+
+def overlay_path(store_path: Path, snapshot: str, chunker: dict,
+                 chunk_content_sha256: str) -> Path:
+    """Where the overlay of these chunks (by chunker, content and `PARAMS`) is."""
+    return Path(store_path) / OVERLAY_DIR / snapshot / _file_name(chunker, PARAMS,
+                                                                   chunk_content_sha256)
+
+
+def missing(store_path: Path, snapshot: str, chunker: dict, chunk_content_sha256: str) -> str:
+    """Why these chunks have no overlay: `NO_OVERLAY` when the snapshot has none, else a
+    line naming the chunks' content and how many overlays there are for other chunks or
+    settings (the remedy is the same: `adr dedup build`)."""
+    others = sorted(p.name for p in (Path(store_path) / OVERLAY_DIR / snapshot).glob("*.json")
+                    if p.name != _file_name(chunker, PARAMS, chunk_content_sha256))
+    if not others:
+        return NO_OVERLAY
+    return (f"no dedup overlay for the index's chunks (content "
+            f"{chunk_content_sha256[:12]}); {len(others)} overlay(s) of this snapshot are "
+            f"for other chunks or settings; run `adr dedup build`")
 
 
 def write_overlay(store_path: Path, overlay: DedupOverlay) -> tuple[str, Path]:
     """Write the overlay once; returns (overlay id, path). The same bytes again are a no-op,
     other bytes under the same name are refused."""
-    path = Path(store_path) / OVERLAY_DIR / overlay.snapshot / \
-        f"{overlay_key(overlay.chunker, overlay.params)}.json"
+    path = Path(store_path) / OVERLAY_DIR / overlay.snapshot / _file_name(
+        overlay.chunker, overlay.params, overlay.chunk_content_sha256)
     data = canonical_json(overlay)
     if path.exists():
         if path.read_bytes() != data:
@@ -342,11 +369,11 @@ def write_overlay(store_path: Path, overlay: DedupOverlay) -> tuple[str, Path]:
 
 def load_overlay(store_path: Path, snapshot: str, chunker: dict, chunk_content_sha256: str,
                  overlay_id: str | None = None) -> Dedup | None:
-    """The dedup overlay of these chunks (by chunker and `PARAMS`), or None if there is none.
-    Refuses (StoreError) a file whose hash is not `overlay_id` (when given), that is not a
-    valid canonical overlay, or that describes another snapshot, chunker, parameters or
-    chunks."""
-    path = overlay_path(store_path, snapshot, chunker)
+    """The dedup overlay of these chunks (by chunker, content and `PARAMS`), or None if there
+    is none (`missing` says why). Refuses (StoreError) a file whose hash is not `overlay_id`
+    (when given), that is not a valid canonical overlay, or that describes another snapshot,
+    chunker, parameters or chunks than its name says."""
+    path = overlay_path(store_path, snapshot, chunker, chunk_content_sha256)
     if not path.is_file():
         return None
     data = path.read_bytes()
@@ -369,8 +396,8 @@ def load_overlay(store_path: Path, snapshot: str, chunker: dict, chunk_content_s
                          f"its name says")
     if overlay.chunk_content_sha256 != chunk_content_sha256:
         raise StoreError(f"{path}: built over other chunks (content "
-                         f"{overlay.chunk_content_sha256[:12]}, the index's "
-                         f"{chunk_content_sha256[:12]}); run `adr dedup build` again")
+                         f"{overlay.chunk_content_sha256[:12]}) than its name says (the "
+                         f"index's {chunk_content_sha256[:12]})")
     return Dedup(oid, overlay)
 
 
@@ -439,40 +466,50 @@ class Slot:
     alternates: tuple[Alternate, ...]
 
 
-def collapse(ranked: list[tuple[str, float]], dedup: Dedup,
+def collapse(ranked: Iterable[tuple[str, float]], dedup: Dedup,
              admitted: Callable[[str], bool], chunks: Mapping[str, StoreChunk],
              applicability: Applicability | None, as_of: date | None,
              top: int) -> list[Slot]:
-    """At most `top` slots from `ranked` (best first), one per admitted component; members
-    `admitted` rejects are never chosen, never listed and never join two components."""
+    """At most `top` slots from `ranked` (best first; read only as far as needed), one per
+    admitted component; members `admitted` rejects are never chosen, never listed and never
+    join two components."""
     slots: list[Slot] = []
     taken: set[str] = set()
     comps: dict[str, list[list[str]]] = {}
+    if top <= 0:
+        return slots
     for cid, score in ranked:
-        if len(slots) >= top:
-            break
         if cid in taken or not admitted(cid):
             continue
-        cluster = dedup.cluster_of(cid)
-        if cluster is None:
-            taken.add(cid)
-            slots.append(Slot(cid, score, cid, ()))
-            continue
-        if cluster not in comps:
-            comps[cluster] = dedup.components(cluster, admitted)
-        comp = next(c for c in comps[cluster] if cid in c)
-        taken.update(comp)
-        order = sorted(comp, key=lambda m: _canonical_key(m, chunks, applicability, as_of))
-        shown = order[0]
-        text = chunks[shown].text
-        sh = None
-        alternates = []
-        for m in order[1:]:
-            if chunks[m].text == text:
-                alternates.append(Alternate(m, chunks[m].doc_id, "exact", 1.0))
-                continue
-            sh = shingles(text) if sh is None else sh
-            alternates.append(Alternate(m, chunks[m].doc_id, "near",
-                                        _j6(jaccard(sh, shingles(chunks[m].text)))))
-        slots.append(Slot(shown, score, cid, tuple(alternates)))
+        slots.append(_slot(cid, score, dedup, admitted, comps, taken, chunks, applicability,
+                           as_of))
+        if len(slots) == top:  # not one item further: the rest may be costly to rank
+            break
     return slots
+
+
+def _slot(cid: str, score: float, dedup: Dedup, admitted: Callable[[str], bool],
+          comps: dict[str, list[list[str]]], taken: set[str], chunks: Mapping[str, StoreChunk],
+          applicability: Applicability | None, as_of: date | None) -> Slot:
+    """The slot `cid` takes (its admitted component, now taken)."""
+    cluster = dedup.cluster_of(cid)
+    if cluster is None:
+        taken.add(cid)
+        return Slot(cid, score, cid, ())
+    if cluster not in comps:
+        comps[cluster] = dedup.components(cluster, admitted)
+    comp = next(c for c in comps[cluster] if cid in c)
+    taken.update(comp)
+    order = sorted(comp, key=lambda m: _canonical_key(m, chunks, applicability, as_of))
+    shown = order[0]
+    text = chunks[shown].text
+    sh = None
+    alternates = []
+    for m in order[1:]:
+        if chunks[m].text == text:
+            alternates.append(Alternate(m, chunks[m].doc_id, "exact", 1.0))
+            continue
+        sh = shingles(text) if sh is None else sh
+        alternates.append(Alternate(m, chunks[m].doc_id, "near",
+                                    _j6(jaccard(sh, shingles(chunks[m].text)))))
+    return Slot(shown, score, cid, tuple(alternates))

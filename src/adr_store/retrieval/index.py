@@ -22,7 +22,21 @@ and the reranker run as without a mask, so a filter never starves the result.
 `allowed_docs=None` is the Phase 1 code path itself. `lexical` replaces the index's BM25
 channel by another `FieldBM25` over a subset of its chunks (per-view statistics, §6.2; same
 `w_bc`, `k1` and `b`); it is refused without `allowed_docs`, which masks the shared dense
-vectors to the same view.
+vectors to the same view. A lexical-only index takes BM25's top `max(CHANNEL_K, top)` (the
+fused depth), not `CHANNEL_K`, so `retrieve(top=200)` gives 200 chunks when 200 match; at
+`top <= CHANNEL_K` that is the same ranking.
+
+The full ranking (`ranking`, what dedup collapse walks; Phase 2 spec §4.5). Linear fusion
+normalises each channel by its own top `CHANNEL_K`, so fusing deeper lists would change the
+scores and order of the top ones; the full ranking instead extends the fused ranking without
+changing it. It is the fused ranking of the channels' top `CHANNEL_K` (all of it, at most
+`2 * CHANNEL_K` chunks: `retrieve(top=2 * CHANNEL_K)` without a reranker), then every other
+candidate chunk (every chunk the mask keeps; BM25 0 for one without a BM25 score) scored
+`w * l + (1 - w) * d`, where `l` and `d` are its channel scores min-max scaled by the same
+pools' minimum and range (1 when the range is 0; 0 for an empty pool), so at most 0, and
+ranked as fusion ranks (6 decimals, ties by chunk id). A lexical-only index's full ranking is
+BM25's, of every chunk with a positive score. The rest is computed only once the fused part is
+used up.
 """
 
 from __future__ import annotations
@@ -45,7 +59,7 @@ import numpy as np
 
 from adr_eval.models import jsonl_lines
 from adr_eval.retrieval.chunker import TOKENIZER_CONFIG, make_chunk_id
-from adr_eval.retrieval.fusion import linear, rrf
+from adr_eval.retrieval.fusion import linear, rank, rrf
 from adr_store.chunking import StoreChunk, chunk_store, chunker_config
 from adr_store.embedding import EmbeddingCache
 from adr_store.retrieval.dense import CachedDense, embedded_text
@@ -107,6 +121,24 @@ def fingerprint(snapshot: str, chunker: dict, settings: Settings, lexical: Field
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _scale(pool: Hits):
+    """Min-max scaling by `pool`'s minimum and range (1 when the range is 0); 0 for an empty
+    pool (linear fusion's `minmax`, applied to any score)."""
+    if not pool:
+        return lambda s: 0.0
+    lo, hi = min(s for _, s in pool), max(s for _, s in pool)
+    span = (hi - lo) or 1.0
+    return lambda s: (s - lo) / span
+
+
+def _tail(lex: Hits, dense: Hits, w: float, head: set[str]) -> Hits:
+    """The full ranking after the fused pool `head`: every dense candidate not in it, by
+    `w * l + (1 - w) * d` scaled as the channels' top `CHANNEL_K` (at most 0)."""
+    nl, nd, bm25 = _scale(lex[:CHANNEL_K]), _scale(dense[:CHANNEL_K]), dict(lex)
+    return rank({cid: w * nl(bm25.get(cid, 0.0)) + (1.0 - w) * nd(s)
+                 for cid, s in dense if cid not in head}, top=len(dense))
 
 
 def _fresh_dir(beside: Path, kind: str) -> Path:
@@ -281,6 +313,14 @@ class StoreIndex:
         if not isinstance(allowed_docs, (frozenset, set)):
             raise ValueError(f"allowed_docs must be a set of document ids, got "
                              f"{type(allowed_docs).__name__}")
+        lex, dense = self._channels(allowed_docs, lexical)
+        return self._fuse(query, fusion, w, top, lex, dense)
+
+    def _channels(self, allowed_docs: frozenset[str] | None, lexical: FieldBM25 | None):
+        """The two channels as `(query, k) -> Hits`, masked to `allowed_docs` (None: the
+        index's own, unmasked)."""
+        if allowed_docs is None:
+            return self.lexical_hits, self.dense_hits
         bm25 = self.lexical if lexical is None else lexical
         if lexical is not None:
             differs = [f"{name} {theirs}, not {ours}" for name, theirs, ours in (
@@ -291,28 +331,50 @@ class StoreIndex:
                 raise ValueError(f"the lexical index does not match this index: "
                                  f"{'; '.join(differs)}")
 
-        def lex(q):
-            return bm25.search(q, k=CHANNEL_K, mask=bm25.mask(allowed_docs))
+        def lex(q, k=CHANNEL_K):
+            return bm25.search(q, k=k, mask=bm25.mask(allowed_docs))
 
-        def dense(q):
+        def dense(q, k=CHANNEL_K):
             if self.dense is None:
                 raise ValueError("this index has no dense channel (built with dense=False)")
-            return self.dense.search(q, k=CHANNEL_K,
-                                     mask=doc_mask(self._dense_doc_ids, allowed_docs))
-        return self._fuse(query, fusion, w, top, lex, dense)
+            return self.dense.search(q, k=k, mask=doc_mask(self._dense_doc_ids, allowed_docs))
+        return lex, dense
+
+    def ranking(self, query: str, w: float | None = None, *,
+                allowed_docs: frozenset[str] | None = None,
+                lexical: FieldBM25 | None = None) -> Iterator[tuple[str, float]]:
+        """The full ranking of `query` (module docstring), lazily: linear fusion's ranking of
+        the channels' top `CHANNEL_K`, then every other candidate chunk; no reranking.
+        `allowed_docs` and `lexical` are as for `retrieve`."""
+        if allowed_docs is None and lexical is not None:
+            raise ValueError("a per-view lexical index needs the view's allowed_docs too")
+        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
+            raise ValueError(f"allowed_docs must be a set of document ids, got "
+                             f"{type(allowed_docs).__name__}")
+        lex_hits, dense_hits = self._channels(allowed_docs, lexical)
+        everything = len(self.chunks)
+        lex = lex_hits(query, everything)  # each channel sorts every row anyway
+        if self.dense is None:
+            yield from lex
+            return
+        if w is None:
+            raise ValueError("linear fusion needs a tuned weight w")
+        dense = dense_hits(query, everything)
+        head = linear(lex[:CHANNEL_K], dense[:CHANNEL_K], w, top=2 * CHANNEL_K)
+        yield from head
+        yield from _tail(lex, dense, w, {cid for cid, _ in head})
 
     def _fuse(self, query: str, fusion: str, w: float | None, top: int, lex_hits,
               dense_hits) -> Hits:
         n = RERANK_TOP if self.reranker is not None else top
-        lex = lex_hits(query)
         if self.dense is None:
-            fused = lex[:n]
+            fused = lex_hits(query, max(CHANNEL_K, n))[:n]
         elif fusion == "rrf":
-            fused = rrf([lex, dense_hits(query)], k=RRF_K, top=n)
+            fused = rrf([lex_hits(query), dense_hits(query)], k=RRF_K, top=n)
         else:
             if w is None:
                 raise ValueError("linear fusion needs a tuned weight w")
-            fused = linear(lex, dense_hits(query), w, top=n)
+            fused = linear(lex_hits(query), dense_hits(query), w, top=n)
         if self.reranker is None:
             return fused
         return self.reranker.rerank(

@@ -3,6 +3,7 @@ groups, MinHash/LSH near duplicates verified by exact Jaccard, canonical selecti
 over the members the caller's filters admit. Fixture chunks and gov-shaped fixture stores,
 lexical-only indexes; nothing reads `data/` or `.cache/`."""
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -12,6 +13,7 @@ from datetime import date
 import numpy as np
 import pytest
 
+from adr_eval.retrieval import fusion
 from adr_eval.retrieval.chunker import make_chunk_id
 from adr_store import applicability as ap
 from adr_store import dedup, records, tools
@@ -21,11 +23,13 @@ from adr_store.cli import main
 from adr_store.dedup import Alternate, Dedup, Slot
 from adr_store.records import canonical_json, sha256_text
 from adr_store.retrieval import StoreIndex
-from adr_store.retrieval.index import chunk_content_sha256
+from adr_store.retrieval import index as index_mod
+from adr_store.retrieval.index import CHANNEL_K, chunk_content_sha256
 from adr_store.store import StoreError
 from tests.store.test_applicability import ALL, GOV_CONFIG, V2024, V2025, V2026, doc_id, env
 from tests.store.test_applicability import make_store as make_gov_store
 from tests.store.test_chunking import doc
+from tests.store.test_retrieval import fake_cache, fake_reranker
 
 CHUNKER = chunker_config()
 SNAP = "5" * 64
@@ -219,14 +223,19 @@ def test_canonical_rule_1_in_force_at_the_reference_point():
                                  valid_from=date(2026, 1, 1)),
                         DB: dict(authority_tier=2, valid_from=date(2020, 1, 1))})
     assert dedup.canonical(members, chunks, app, None) == members[1]
-    # under as_of the dates decide: a is in force on 2026-06-01, b is not (it ended)
-    app = overlay_of(**{DA: dict(superseded_by="e" * 64, valid_from=date(2025, 1, 1),
+    # under as_of the dates decide, not the chain: b (superseded, an older version, a higher
+    # tier, a larger doc id) is the one in force on 2022-06-01; a, the head, starts in 2025
+    app = overlay_of(**{DA: dict(valid_from=date(2025, 1, 1), authority_tier=1,
                                  status="codified"),
-                        DB: dict(valid_from=date(2020, 1, 1), valid_to=date(2025, 1, 1),
+                        DB: dict(superseded_by=DA, valid_from=date(2020, 1, 1),
+                                 valid_to=date(2025, 1, 1), authority_tier=2,
                                  status="codified")})
+    assert dedup.canonical(members, chunks, app, date(2022, 6, 1)) == members[1]
     assert dedup.canonical(members, chunks, app, date(2026, 6, 1)) == members[0]
-    # a proposal is never in force
-    app = overlay_of(**{DA: dict(valid_from=date(2025, 1, 1), status="proposed_rule"),
+    assert dedup.canonical(members, chunks, app, None) == members[0]
+    # a proposal is never in force, even with the lower tier and the smaller doc id
+    app = overlay_of(**{DA: dict(valid_from=date(2025, 1, 1), status="proposed_rule",
+                                 authority_tier=1),
                         DB: dict(valid_from=date(2025, 1, 1), status="final_rule",
                                  authority_tier=4)})
     assert dedup.canonical(members, chunks, app, date(2026, 6, 1)) == members[1]
@@ -331,6 +340,26 @@ def test_collapse_shows_one_slot_per_admitted_component():
         assert len(keys) == len(set(keys))  # never two members of one admitted component
 
 
+def test_collapse_under_as_of_shows_the_version_in_force_when_both_are_admitted():
+    """Two versions of one chain in one component, both admitted (as include_superseded
+    admits them): under as_of the one in force is shown, though the head has the later
+    valid_from; without as_of the head is."""
+    members, chunks = two()
+    old, head = members[1], members[0]  # b is the old version, a the head
+    app = overlay_of(**{DA: dict(valid_from=date(2025, 1, 1), status="codified",
+                                 authority_tier=1),
+                        DB: dict(superseded_by=DA, valid_from=date(2020, 1, 1),
+                                 valid_to=date(2025, 1, 1), status="codified",
+                                 authority_tier=1)})
+    dd = loaded(build(chunks.values()))
+    ranked = [(head, 2.0), (old, 1.0)]
+    (slot,) = dedup.collapse(ranked, dd, lambda cid: True, chunks, app, date(2022, 6, 1), 10)
+    assert (slot.chunk_id, slot.scored_by) == (old, head)
+    assert [x.chunk_id for x in slot.alternates] == [head]
+    (slot,) = dedup.collapse(ranked, dd, lambda cid: True, chunks, app, None, 10)
+    assert slot.chunk_id == head
+
+
 def test_collapse_skips_a_ranked_chunk_that_is_not_admitted():
     a, b = chunk("a", 0, text(BASE)), chunk("b", 0, text(WORDS[200:300]))
     chunks = by_id([a, b])
@@ -368,14 +397,21 @@ def build_for(store) -> tuple[str, dedup.DedupOverlay]:
     return oid, ov
 
 
+def opath(store):
+    """The dedup overlay path of the store's active index's chunks."""
+    idx = active_index(store)
+    return dedup.overlay_path(store.path, store.snapshot_id, idx.chunker,
+                              chunk_content_sha256(idx.chunks.values()))
+
+
 def test_write_once_load_and_refusals(gov):
     idx = active_index(gov)
     content = chunk_content_sha256(idx.chunks.values())
     assert dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, content) is None
     oid, ov = build_for(gov)
-    path = dedup.overlay_path(gov.path, gov.snapshot_id, idx.chunker)
+    path = opath(gov)
     assert path == (gov.path / "dedup" / gov.snapshot_id /
-                    f"{dedup.overlay_key(idx.chunker, dedup.PARAMS)}.json")
+                    f"{dedup.overlay_key(idx.chunker, dedup.PARAMS)}-{content[:16]}.json")
     assert path.read_bytes() == canonical_json(ov)
     assert oid == hashlib.sha256(path.read_bytes()).hexdigest()
     assert dedup.write_overlay(gov.path, ov) == (oid, path)  # the same bytes: a no-op
@@ -384,8 +420,8 @@ def test_write_once_load_and_refusals(gov):
     assert got.overlay_id == oid
     with pytest.raises(StoreError, match="overlay id"):
         dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, content, overlay_id="0" * 64)
-    with pytest.raises(StoreError, match="chunks"):
-        dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, "0" * 64)
+    # other chunks (a rechunked index): another file name, so no overlay for them yet
+    assert dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, "0" * 64) is None
     other = ov.model_copy(update={"stats": {**ov.stats, "chunks": 0}})
     with pytest.raises(StoreError, match="different"):
         dedup.write_overlay(gov.path, other)
@@ -395,6 +431,7 @@ def test_write_once_load_and_refusals(gov):
 @pytest.mark.parametrize("damage,match", [
     (lambda d: {**d, "snapshot": "6" * 64}, "snapshot"),
     (lambda d: {**d, "params": {**d["params"], "threshold": 0.8}}, "parameters"),
+    (lambda d: {**d, "chunk_content_sha256": "8" * 64}, "other chunks"),
     (lambda d: {**d, "clusters": [{**d["clusters"][0], "cluster_id": "7" * 64}]}, "schema"),
     (lambda d: {**d, "clusters": [{**d["clusters"][0], "edges": []}]}, "schema"),
     (lambda d: {**d, "clusters": [d["clusters"][0], d["clusters"][0]]}, "schema"),
@@ -403,7 +440,7 @@ def test_write_once_load_and_refusals(gov):
 def test_load_refuses_a_damaged_overlay(gov, damage, match):
     _, ov = build_for(gov)
     idx = active_index(gov)
-    path = dedup.overlay_path(gov.path, gov.snapshot_id, idx.chunker)
+    path = opath(gov)
     data = json.loads(path.read_bytes())
     path.write_bytes((json.dumps(damage(data), sort_keys=True, separators=(",", ":"))
                       + "\n").encode())
@@ -414,7 +451,7 @@ def test_load_refuses_a_damaged_overlay(gov, damage, match):
 def test_load_refuses_non_canonical_bytes(gov):
     _, ov = build_for(gov)
     idx = active_index(gov)
-    path = dedup.overlay_path(gov.path, gov.snapshot_id, idx.chunker)
+    path = opath(gov)
     path.write_text(json.dumps(json.loads(path.read_bytes()), indent=1) + "\n")
     with pytest.raises(StoreError, match="canonical"):
         dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker, ov.chunk_content_sha256)
@@ -476,13 +513,14 @@ def test_dedup_is_on_by_default_once_an_overlay_exists(gov, monkeypatch):
     monkeypatch.setattr(StoreIndex, "retrieve", spy)
     t = tools.Tools(gov.path)
     res = t.search("vessels", top=5, filters={"include_superseded": True})
-    assert res.dedup == oid and tops == [200]
+    assert res.dedup == oid and res.dedup_note is None and res.short_by == 0
+    assert tops == []  # a collapsed search walks `ranking`, whose head is retrieve's top 200
     idx = active_index(gov)
     dd = dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker,
                             chunk_content_sha256(idx.chunks.values()))
     a = ap.load_overlay(gov.path, gov.snapshot_id)
-    slots = dedup.collapse(real(idx, "vessels", top=200), dd, lambda cid: True, idx.chunks, a,
-                           None, top=5)
+    slots = dedup.collapse(full_ranking(idx, "vessels", None), dd, lambda cid: True,
+                           idx.chunks, a, None, top=5)
     assert [(h.chunk_id, h.score, h.scored_by, h.alternates) for h in res.hits] == [
         (s.chunk_id, s.score, s.scored_by, list(s.alternates)) for s in slots]
     assert [h.rank for h in res.hits] == list(range(1, len(res.hits) + 1))
@@ -530,8 +568,7 @@ def test_near_copies_are_listed_with_their_jaccard(gov):
 
 def test_a_damaged_dedup_overlay_is_refused_on_search(gov):
     build_for(gov)
-    idx = active_index(gov)
-    path = dedup.overlay_path(gov.path, gov.snapshot_id, idx.chunker)
+    path = opath(gov)
     path.write_bytes(b"{}\n")
     with pytest.raises(tools.ToolError, match="dedup"):
         tools.Tools(gov.path).search("vessels")
@@ -542,8 +579,6 @@ def test_a_damaged_dedup_overlay_is_refused_on_search(gov):
 
 
 def test_a_reranked_index_collapses_its_reranked_top_50(gov, monkeypatch, tmp_path):
-    from tests.store.test_retrieval import fake_cache, fake_reranker
-
     monkeypatch.setattr(tools, "make_embedding_cache",
                         lambda path=None, *, threads=1: fake_cache(tmp_path / "emb"))
     monkeypatch.setattr(tools, "make_reranker", fake_reranker)
@@ -558,7 +593,7 @@ def test_a_reranked_index_collapses_its_reranked_top_50(gov, monkeypatch, tmp_pa
 
     monkeypatch.setattr(StoreIndex, "retrieve", spy)
     res = tools.Tools(gov.path).search("vessels", top=5, filters={"include_superseded": True})
-    assert tops == [50] and res.dedup is not None
+    assert tops == [50] and res.dedup is not None and res.short_by == 0
 
 
 # -- the command line -------------------------------------------------------------------------
@@ -572,8 +607,7 @@ def run(capsys, *argv):
 
 def test_cli_dedup_build_prints_the_cluster_table_and_writes_once(gov, capsys):
     code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
-    idx = active_index(gov)
-    path = dedup.overlay_path(gov.path, gov.snapshot_id, idx.chunker)
+    path = opath(gov)
     assert code == 0 and path.is_file() and "(written, built in" in out
     assert "all chunks" in out and "default view" in out and "threshold 0.9" in out
     first = path.read_bytes()
@@ -606,3 +640,242 @@ def test_cli_search_dedup_flags(gov, capsys):
     assert code == 0 and off["dedup"] is None and not any(h["alternates"] for h in off["hits"])
     code, out, _ = run(capsys, "search", COPIED, "--store", s, "--include-superseded")
     assert code == 0 and "dedup" in out and "alt" in out
+
+
+def test_cli_dedup_build_table_columns_line_up(gov, capsys):
+    code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
+    lines = out.splitlines()
+    head = next(i for i, line in enumerate(lines) if line.strip().startswith("view"))
+    table = lines[head:head + 3]
+    assert code == 0 and len(table) == 3 and "default view" in table[2]
+
+    def cells(line):  # cells are separated by two or more spaces
+        return [(m.start(), m.end()) for m in re.finditer(r"\S+(?: \S+)*", line)]
+
+    header = cells(table[0])
+    for row in table[1:]:
+        got = cells(row)
+        assert len(got) == len(header)
+        assert got[0][0] == header[0][0]  # the view column is left-aligned
+        assert [e for _, e in got[1:]] == [e for _, e in header[1:]]  # the others right-aligned
+
+
+# -- deepening: collapse never comes back short while admitted chunks are left ---------------
+
+def copies_body(n: str) -> bytes:
+    """A document of 120 sections, each holding "vessel" 1 to 7 times and words of its own."""
+    parts = [f"# Copy {n}\n"]
+    for i in range(120):
+        words = " ".join(f"s{i}w{j}" for j in range(45))
+        parts.append(f"## Section {i}\n\n{'vessel ' * (i % 7 + 1)}{words}.\n")
+    return "\n".join(parts).encode()
+
+
+def make_copies(path):
+    """Three copies of one 120-section document: 360 chunks matching "vessel", 120 clusters
+    of three (the fused pool of 200 collapses to fewer than 70)."""
+    return make_gov_store(path, [doc(copies_body(n), "md", f"file://copy-{n}.md")
+                                 for n in "abc"])
+
+
+@pytest.fixture
+def fake_models(monkeypatch, tmp_path):
+    monkeypatch.setattr(tools, "make_embedding_cache",
+                        lambda path=None, *, threads=1: fake_cache(tmp_path / "emb"))
+    monkeypatch.setattr(tools, "make_reranker", fake_reranker)
+
+
+@pytest.fixture(params=["lexical", "dense"])
+def copies(request, tmp_path, fake_models):
+    s = make_copies(tmp_path / "copies")
+    if request.param == "lexical":
+        tools.Tools(s.path).index("p1-struct", lexical_only=True)
+    else:
+        tools.Tools(s.path).index("p1-struct", weight=0.5)
+    build_for(s)
+    return s
+
+
+def full_ranking(idx, query, w, allowed=None):
+    """Brute force: every candidate of the index in the order collapse walks. Lexical only:
+    BM25's ranking of every chunk with a positive score. Fused: Phase 1's linear fusion of
+    the channels' top CHANNEL_K (all of it), then every other chunk by the same weights over
+    its channel scores scaled as that pool's (a chunk with no BM25 score has 0)."""
+    def channel(ch, mask):
+        return ch.search(query, k=10**9) if mask is None else ch.search(query, k=10**9,
+                                                                         mask=mask)
+
+    lex = channel(idx.lexical, None if allowed is None else idx.lexical.mask(allowed))
+    if idx.dense is None:
+        return lex
+    rows = [idx.chunks[c].doc_id for c in idx.dense.chunk_ids]
+    dense = channel(idx.dense, None if allowed is None else np.isin(rows, sorted(allowed)))
+    head = fusion.linear(lex[:CHANNEL_K], dense[:CHANNEL_K], w, top=10**9)
+
+    def scale(pool):
+        if not pool:
+            return lambda s: 0.0
+        lo, hi = min(s for _, s in pool), max(s for _, s in pool)
+        return lambda s: (s - lo) / ((hi - lo) or 1.0)
+
+    nl, nd, bm25 = scale(lex[:CHANNEL_K]), scale(dense[:CHANNEL_K]), dict(lex)
+    seen = {c for c, _ in head}
+    tail = {c: w * nl(bm25.get(c, 0.0)) + (1 - w) * nd(s) for c, s in dense if c not in seen}
+    return head + fusion.rank(tail, top=10**9)
+
+
+def reference(store, query, top, filters=None):
+    """The collapse of the brute-force full ranking, cut at `top`."""
+    t = tools.Tools(store.path)
+    idx, active = t.active_index(), json.loads(
+        (store.path / "index" / "active.json").read_text())
+    app = ap.load_overlay(store.path, store.snapshot_id)
+    f = ap.Filters.parse(filters)
+    allowed, excluded = (None, 0) if app is None else app.allowed_docs(store.doc_ids(), f)
+    allowed = None if excluded == 0 else allowed
+    dd = dedup.load_overlay(store.path, store.snapshot_id, idx.chunker,
+                            chunk_content_sha256(idx.chunks.values()))
+    ranked = full_ranking(idx, query, active["w"], allowed)
+    return dedup.collapse(ranked, dd, lambda c: allowed is None or idx.chunks[c].doc_id in
+                          allowed, idx.chunks, app, f.as_of, top)
+
+
+def slots_of(res):
+    return [(h.chunk_id, h.score, h.scored_by, h.alternates) for h in res.hits]
+
+
+def test_lexical_only_retrieve_reaches_the_fused_depth(tmp_path):
+    s = make_copies(tmp_path / "copies")
+    tools.Tools(s.path).index("p1-struct", lexical_only=True)
+    idx = active_index(s)
+    assert idx.retrieve("vessel", top=200) == idx.lexical.search("vessel", k=200)
+    assert len(idx.retrieve("vessel", top=200)) == 200
+    for top in (10, 100):  # the Phase 1 depths are unchanged
+        assert idx.retrieve("vessel", top=top) == idx.lexical.search("vessel", k=top)
+
+
+@pytest.mark.parametrize("top", [10, 50, 70, 100])
+def test_collapse_fills_top_from_the_full_ranking(copies, top):
+    res = tools.Tools(copies.path).search("vessel", top=top)
+    assert len(res.hits) == top and res.short_by == 0 and res.dedup is not None
+    want = reference(copies, "vessel", top)
+    assert slots_of(res) == [(s.chunk_id, s.score, s.scored_by, list(s.alternates))
+                             for s in want]
+    scores = [h.score for h in res.hits]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_ranking_is_the_fused_pool_then_every_other_candidate(copies):
+    idx = active_index(copies)
+    w = json.loads((copies.path / "index" / "active.json").read_text())["w"]
+    got = list(idx.ranking("vessel", w))
+    assert got == full_ranking(idx, "vessel", w)
+    head = idx.retrieve("vessel", w=w, top=2 * CHANNEL_K)
+    assert got[:len(head)] == head
+    ids = [c for c, _ in got]
+    assert len(ids) == len(set(ids))
+    if idx.dense is not None:
+        assert set(ids) == set(idx.chunks)  # every chunk is a dense candidate
+        assert all(s <= 0 for _, s in got[len(head):]) and all(s >= 0 for _, s in head)
+    some = frozenset(copies.doc_ids()[:2])
+    masked = list(idx.ranking("vessel", w, allowed_docs=some))
+    assert masked == full_ranking(idx, "vessel", w, some)
+    assert {idx.chunks[c].doc_id for c, _ in masked} == some
+
+
+def test_the_rest_of_the_ranking_is_only_computed_when_the_pool_runs_out(copies, monkeypatch):
+    def boom(*a, **kw):
+        raise AssertionError("the tail was computed")
+
+    monkeypatch.setattr(index_mod, "_tail", boom)
+    t = tools.Tools(copies.path)
+    assert len(t.search("vessel", top=10).hits) == 10
+    if active_index(copies).dense is not None:
+        with pytest.raises(AssertionError, match="tail"):
+            t.search("vessel", top=100)
+
+
+def test_short_by_is_zero_when_the_admitted_chunks_run_out(copies):
+    res = tools.Tools(copies.path).search("s3w1", top=10)
+    assert res.short_by == 0
+    idx = active_index(copies)
+    if idx.dense is None:  # only the three copies of section 3 match
+        assert len(res.hits) == 1 and len(res.hits[0].alternates) == 2
+
+
+def test_a_reranked_index_says_how_many_slots_it_is_short(tmp_path, fake_models, capsys):
+    s = make_copies(tmp_path / "copies")
+    tools.Tools(s.path).index("p1-struct-bc-rr", w_bc=1, weight=0.5)
+    build_for(s)
+    t = tools.Tools(s.path)
+    res = t.search("vessel", top=50)
+    idx = active_index(s)
+    head = idx.retrieve("vessel", w=0.5, top=50)  # the reranked top 50
+    assert slots_of(res) == [(x.chunk_id, x.score, x.scored_by, list(x.alternates)) for x in
+                             dedup.collapse(head, t._dedup_overlay(idx), lambda c: True,
+                                            idx.chunks, None, None, 50)]
+    seen = {c for c, _ in head}
+    more = head + [h for h in full_ranking(idx, "vessel", 0.5) if h[0] not in seen]
+    filled = dedup.collapse(more, t._dedup_overlay(idx), lambda c: True, idx.chunks, None,
+                            None, 50)
+    assert len(filled) == 50 and len(res.hits) < 50
+    assert res.short_by == 50 - len(res.hits)
+    assert t.search("vessel", top=5).short_by == 0
+    assert t.search("vessel", top=50, dedup=False).short_by == 0
+    code, out, _ = run(capsys, "search", "vessel", "--store", s.path, "--top", 50)
+    assert code == 0 and f"short by {res.short_by}" in out
+    code, out, _ = run(capsys, "search", "vessel", "--store", s.path, "--top", 5)
+    assert code == 0 and "short by" not in out
+
+
+# -- a rechunked index, another chunker ---------------------------------------------------------
+
+def test_a_rechunked_index_searches_without_collapse_until_dedup_build(gov, monkeypatch,
+                                                                         capsys):
+    oid, ov = build_for(gov)
+    old_path = opath(gov)
+    old = old_path.read_bytes()
+    before = active_index(gov)
+    real = index_mod.chunk_store
+    monkeypatch.setattr(index_mod, "chunk_store", lambda store, **kw: [
+        dataclasses.replace(c, breadcrumb=c.breadcrumb + " (rechunked)")
+        for c in real(store, **kw)])
+    tools.Tools(gov.path).index("p1-struct", lexical_only=True)
+    monkeypatch.undo()
+    idx = active_index(gov)
+    assert (idx.snapshot, idx.chunker, sorted(idx.chunks)) == (
+        before.snapshot, before.chunker, sorted(before.chunks))
+    assert chunk_content_sha256(idx.chunks.values()) != ov.chunk_content_sha256
+    t = tools.Tools(gov.path)
+    f = {"include_superseded": True}
+    res = t.search(COPIED, top=20, filters=f)
+    assert res.dedup is None and not any(h.alternates for h in res.hits)
+    assert "other chunks" in res.dedup_note and "adr dedup build" in res.dedup_note
+    assert hit_pairs(res) == hit_pairs(t.search(COPIED, top=20, filters=f, dedup=False))
+    with pytest.raises(tools.ToolError, match="other chunks.*adr dedup build"):
+        t.search(COPIED, top=20, filters=f, dedup=True)
+    code, out, _ = run(capsys, "search", COPIED, "--store", gov.path, "--include-superseded")
+    assert code == 0 and "other chunks" in out
+    code, out, _ = run(capsys, "dedup", "build", "--store", gov.path)
+    new_path = opath(gov)
+    assert code == 0 and "(written" in out and new_path != old_path
+    assert old_path.read_bytes() == old  # the old overlay is untouched
+    res = tools.Tools(gov.path).search(COPIED, top=20, filters=f)
+    assert res.dedup == hashlib.sha256(new_path.read_bytes()).hexdigest() != oid
+    assert res.dedup_note is None and any(h.alternates for h in res.hits)
+
+
+def test_an_overlay_for_another_chunker_is_ignored(gov):
+    idx = active_index(gov)
+    other = chunker_config(300, 40)
+    assert other != idx.chunker
+    ov = dedup.build(list(idx.chunks.values()), idx.snapshot, other)
+    _, path = dedup.write_overlay(gov.path, ov)
+    assert path.is_file() and path != opath(gov)
+    assert dedup.load_overlay(gov.path, gov.snapshot_id, idx.chunker,
+                              chunk_content_sha256(idx.chunks.values())) is None
+    t = tools.Tools(gov.path)
+    res = t.search(COPIED, top=20, filters={"include_superseded": True})
+    assert res.dedup is None and not any(h.alternates for h in res.hits)
+    with pytest.raises(tools.ToolError, match="adr dedup build"):
+        t.search(COPIED, dedup=True)

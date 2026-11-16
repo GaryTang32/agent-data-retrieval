@@ -494,6 +494,8 @@ def _search(a: argparse.Namespace) -> int:
     print(f"snapshot {res.snapshot[:12]}  index {res.system} {res.fingerprint[:12]}{lex}  "
           f"{len(res.hits)} hit(s)")
     _print_filters(res, res.excluded_by_filter)
+    if res.dedup_note not in (None, dedup.OFF, dedup.NO_OVERLAY):  # an overlay of other chunks
+        print(f"  dedup off: {res.dedup_note}")
     if res.dedup is None:  # the Phase 1 table
         print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  "
               f"breadcrumb")
@@ -509,6 +511,10 @@ def _search(a: argparse.Namespace) -> int:
         print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
               f"{f'{h.char_start}-{h.char_end}':<15}  {len(h.alternates):>3}  "
               f"{_cut(h.breadcrumb)}")
+    if res.short_by:
+        print(f"  short by {res.short_by}: the index reranks its top {tools.RERANK_TOP} "
+              f"chunks only, which collapse to {len(res.hits)} hit(s); the ranking below them "
+              f"has more (ask for --top {len(res.hits)} or fewer, or use --no-dedup)")
     return 0
 
 
@@ -588,15 +594,28 @@ def _applicability_derive(a: argparse.Namespace) -> int:
     return 0
 
 
+_DEDUP_COLUMNS = [("chunks", 7), ("exact clusters (chunks)", 23), ("redundant (tokens)", 30),
+                  ("near pairs (clusters)", 21), ("redundant at {t}", 17)]
+
+
+def _dedup_header(threshold: float) -> str:
+    """The cluster table's header: `view` left-aligned, the other columns right-aligned to
+    the widths `_dedup_row` uses."""
+    return "  " + f"{'view':<14}" + "".join(
+        f"  {label.format(t=f'{threshold:g}'):>{width}}" for label, width in _DEDUP_COLUMNS)
+
+
 def _dedup_row(label: str, f: dict) -> str:
     def pct(x):
         return "-" if x is None else f"{100 * x:.1f}%" if x == 0 or x >= 0.01 else \
             f"{100 * x:.2f}%"
 
-    return (f"  {label:<14} {f['chunks']:>7}  {f['exact_clusters']:>6} ({f['exact_chunks']})"
-            f"  {f['exact_redundant']:>6} = {pct(f['exact_redundant_share'])} "
-            f"({pct(f['exact_redundant_token_share'])} of tokens)"
-            f"  {f['near_pairs']:>5} ({f['clusters']})  {pct(f['redundant_share'])}")
+    cells = [str(f["chunks"]), f"{f['exact_clusters']} ({f['exact_chunks']})",
+             f"{f['exact_redundant']} = {pct(f['exact_redundant_share'])} "
+             f"({pct(f['exact_redundant_token_share'])} of tokens)",
+             f"{f['near_pairs']} ({f['clusters']})", pct(f["redundant_share"])]
+    return "  " + f"{label:<14}" + "".join(
+        f"  {cell:>{width}}" for cell, (_, width) in zip(cells, _DEDUP_COLUMNS, strict=True))
 
 
 def _dedup_build(a: argparse.Namespace) -> int:
@@ -609,7 +628,8 @@ def _dedup_build(a: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     overlay = dedup.build(list(idx.chunks.values()), idx.snapshot, idx.chunker)
     seconds = time.perf_counter() - t0
-    path = dedup.overlay_path(t.store_path, overlay.snapshot, idx.chunker)
+    path = dedup.overlay_path(t.store_path, overlay.snapshot, idx.chunker,
+                              overlay.chunk_content_sha256)
     existed = path.is_file()
     overlay_id, path = dedup.write_overlay(t.store_path, overlay)
     figures = {"all": dedup.figures(idx.chunks, overlay.clusters), "default": None}
@@ -635,9 +655,7 @@ def _dedup_build(a: argparse.Namespace) -> int:
           f"(Jaccard, every candidate verified)")
     print(f"  {st['distinct_texts']} distinct texts, {st['candidate_pairs']} candidate pairs, "
           f"{st['verified_candidates']} verified, {st['rejected_candidates']} rejected")
-    print(f"  {'view':<14} {'chunks':>7}  {'exact clusters (chunks)':<23}  "
-          f"{'redundant (tokens)':<28}  near pairs (clusters)  redundant at "
-          f"{p['threshold']:g}")
+    print(_dedup_header(p["threshold"]))
     print(_dedup_row("all chunks", figures["all"]))
     if figures["default"] is not None:
         print(_dedup_row("default view", figures["default"]))
