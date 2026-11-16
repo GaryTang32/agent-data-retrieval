@@ -101,11 +101,15 @@ def canonical_json(model: BaseModel) -> bytes:
 
 
 def schemas() -> dict[str, dict]:
-    """File name -> JSON Schema for every record model."""
+    """File name -> JSON Schema for every record model, Phase 1 records and Phase 2 overlays
+    (imported here: the overlay modules import this one)."""
+    from adr_store.applicability import ApplicabilityOverlay
+
     return {
         "source.schema.json": SourceRecord.model_json_schema(),
         "element.schema.json": Element.model_json_schema(),
         "document.schema.json": DocRecord.model_json_schema(),
+        "applicability.schema.json": ApplicabilityOverlay.model_json_schema(),
     }
 
 

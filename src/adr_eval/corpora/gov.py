@@ -73,6 +73,16 @@ def irm_version(html: bytes) -> str:
     raise ValueError("IRM page has neither a Manual Transmittal nor a last-reviewed date")
 
 
+def specific_agency(agencies: list[dict]) -> int | None:
+    """The index in a Federal Register `agencies` list of the most specific agency: the first
+    that is no other listed agency's parent (else the first listed); None for an empty list."""
+    parents = {a.get("parent_id") for a in agencies}
+    specific = [i for i, a in enumerate(agencies) if a.get("id") not in parents]
+    if specific:
+        return specific[0]
+    return 0 if agencies else None
+
+
 def _write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".part")
@@ -185,8 +195,7 @@ class GovAdapter:
                 continue
             fr = json.loads(corpus.docs[d.doc_id].text)
             agencies = fr.get("agencies") or []
-            parents = {a.get("parent_id") for a in agencies}
-            specific = [a for a in agencies if a.get("id") not in parents] or agencies
+            k = specific_agency(agencies)
             cfr_parts: list[str] = []
             for ref in fr.get("cfr_references") or []:
                 label = f"{ref['title']} CFR {ref['part']}"
@@ -196,7 +205,7 @@ class GovAdapter:
                 {
                     "id": fr["document_number"],
                     "type": fr.get("type"),
-                    "agency": specific[0].get("name") if specific else None,
+                    "agency": None if k is None else agencies[k].get("name"),
                     "publication_date": fr.get("publication_date"),
                     "year": int(fr["publication_date"][:4]),
                     "title": fr.get("title"),

@@ -1,7 +1,8 @@
 """`adr` command line: `adr ingest <corpus> --store <dir>` and `adr ingest --path <folder>
 --store <dir>` (below), and the retrieval tools `adr index`, `adr search`, `adr read` and
 `adr grep` (spec §9; the code is in `adr_store.tools`, this module only parses arguments and
-prints).
+prints), and `adr applicability derive` (Phase 2 spec §4.2: the applicability overlay of the
+store's HEAD snapshot, code in `adr_store.applicability`).
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
@@ -51,11 +52,12 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
+from adr_eval.corpora import REPO_ROOT
 from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import tools
+from adr_store import applicability, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -492,6 +494,53 @@ def _grep(a: argparse.Namespace) -> int:
     return 0
 
 
+GOV_CONFIG = REPO_ROOT / "corpora" / "gov" / "config.json"
+
+
+def _applicability_derive(a: argparse.Namespace) -> int:
+    """Derive the applicability overlay of HEAD, write it once (the same bytes again are a
+    no-op, other bytes are refused) with its report beside it, and print the report."""
+    store = Store.open(_store_of(a))
+    try:
+        gov_config = json.loads(Path(a.gov_config).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise _UsageError(f"cannot read the gov config {a.gov_config}: {_one_line(e)}") from e
+    try:
+        overlay, report = applicability.derive(store, gov_config)
+    except ValueError as e:
+        raise _UsageError(str(e)) from e
+    existed = applicability.overlay_path(store.path, overlay.snapshot).is_file()
+    overlay_id, path = applicability.write_overlay(store.path, overlay)
+    applicability.write_report(store.path, report)
+    if a.json:
+        print(json.dumps({"overlay_id": overlay_id, "path": str(path),
+                          "snapshot": overlay.snapshot, "report": report}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    print(f"applicability: overlay {overlay_id[:12]} for snapshot {overlay.snapshot[:12]} "
+          f"({'unchanged' if existed else 'written'})")
+    print(f"  {path}")
+    fams = ", ".join(f"{k} {v}" for k, v in report["families"].items())
+    print(f"  documents {report['documents']}: {fams}")
+    print("  status: " + ", ".join(f"{k} {v}" for k, v in report["status"].items()))
+    print("  validity basis: " + ", ".join(f"{k} {v}"
+                                           for k, v in report["validity_basis"].items() if v))
+    print("  authority tier: " + ", ".join(f"{k} {v}"
+                                           for k, v in report["authority_tier"].items()))
+    c = report["chains"]
+    print(f"  chains {c['count']}, {c['multi_version']} with more than one version "
+          f"({c['documents']} documents, {c['links']} supersession links); superseded "
+          f"documents {report['superseded_documents']}")
+    t = report["temporary_end_dates"]
+    print(f"  temporary end dates parsed {t['parsed']} of {t['of']}")
+    for f in report["fr_dates_parse_failures"]:
+        print(f"    not parsed: {f['document_number']} ({f['doc_id'][:12]}): "
+              f"{_cut(f['dates'], 2 * TABLE_FIELD)}")
+    for caveat in report["caveats"]:
+        print(f"  caveat: {caveat}")
+    return 0
+
+
 def _non_negative(s: str) -> int:
     v = int(s)
     if v < 0:
@@ -576,6 +625,19 @@ def _parser() -> argparse.ArgumentParser:
     gr.add_argument("--timeout", type=float, default=tools.GREP_TIMEOUT,
                     help=f"seconds the pattern may spend matching (default "
                          f"{tools.GREP_TIMEOUT:g}, at most {tools.GREP_TIMEOUT_MAX:g})")
+
+    app = sub.add_parser("applicability", help="the applicability overlay (Phase 2)")
+    app_sub = app.add_subparsers(dest="action", required=True)
+    der = app_sub.add_parser("derive", help="derive the applicability overlay of the store's "
+                                            "HEAD snapshot and write it once")
+    where = der.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    der.add_argument("--gov-config", type=Path, default=GOV_CONFIG,
+                     help="the gov corpus config, for eCFR issuers (default "
+                          "corpora/gov/config.json)")
+    der.add_argument("--json", action="store_true", help="print the result as JSON")
+    der.set_defaults(fn=_applicability_derive)
     return ap
 
 
