@@ -438,5 +438,122 @@
    1048.5
   ]
  },
+ "periodic_sync_loop": "every 20 minutes from 17:55 to 20:35 UTC: the three p2 content stores and every finished reference store, so the ACL snapshots stayed within max_sync_age_s (3,600 s) during the long runs; stopped at the end",
+ "real_stores_unchanged": {
+  "files_after": 7320,
+  "files_before": 7320,
+  "identical": true,
+  "what": ".cache/store and .cache/index: SHA-256, mtime_ns and size of every file, before Task 13's runs (17:32 UTC) and after them (20:37 UTC)"
+ },
+ "syncs_this_task": {
+  "bench": [
+   {
+    "changed": 0,
+    "content_snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "duration_s": [
+     0.500245,
+     0.722629
+    ],
+    "entries_sha256": [
+     "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2"
+    ],
+    "equal": true,
+    "first": "2026-11-16T17:38:47.343940Z",
+    "last": "2026-11-16T20:25:48.304206Z",
+    "outcomes": [
+     "ok"
+    ],
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "sequences": [
+     8,
+     16
+    ],
+    "syncs": 9,
+    "tool_snapshot": null
+   }
+  ],
+  "gov": [
+   {
+    "changed": 0,
+    "content_snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "duration_s": [
+     0.856706,
+     1.305231
+    ],
+    "entries_sha256": [
+     "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e"
+    ],
+    "equal": true,
+    "first": "2026-11-16T17:38:40.779631Z",
+    "last": "2026-11-16T20:25:43.930022Z",
+    "outcomes": [
+     "ok"
+    ],
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "sequences": [
+     6,
+     14
+    ],
+    "syncs": 9,
+    "tool_snapshot": null
+   }
+  ],
+  "research": [
+   {
+    "changed": 0,
+    "content_snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "duration_s": [
+     0.249409,
+     0.469078
+    ],
+    "entries_sha256": [
+     "7f8fb0e62d37989484cb47d7d89a60dbb205a2995fe2175ef0eae24d2d80f09f"
+    ],
+    "equal": true,
+    "first": "2026-11-16T17:38:44.062958Z",
+    "last": "2026-11-16T20:25:46.485101Z",
+    "outcomes": [
+     "ok"
+    ],
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "sequences": [
+     8,
+     16
+    ],
+    "syncs": 9,
+    "tool_snapshot": null
+   }
+  ],
+  "toolret": [
+   {
+    "changed": 1,
+    "content_snapshot": "de13b4a8eeacd4641764198953e8aafb5e8ca94db80915f9734f30ba7d128205",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "duration_s": [
+     0.754568,
+     1.731921
+    ],
+    "entries_sha256": [
+     "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2"
+    ],
+    "equal": true,
+    "first": "2026-11-16T17:36:59.104242Z",
+    "last": "2026-11-16T19:16:29.957311Z",
+    "outcomes": [
+     "ok"
+    ],
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "sequences": [
+     1,
+     11
+    ],
+    "syncs": 11,
+    "tool_snapshot": "a0dcedeff9abeb84f3d5994b8225c0d32408724fb087c2492fec644a66ef544e"
+   }
+  ]
+ },
  "what": "Task 13 (2D): D1 and the B3 MCP leg (the Task 12 tests run again), B1 and B5 through MCP (adr-eval mcp-probes), with the checks behind the 2D section"
 }
