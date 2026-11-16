@@ -317,7 +317,7 @@ def test_search_json_shape(store):
     d = lexical(store).search(QUERY, top=2).to_dict()
     assert set(d) == {"query", "top", "snapshot", "system", "lexical_only", "fingerprint", "w",
                       "hits", "applicability", "filters", "excluded_by_filter", "dedup",
-                      "dedup_note", "short_by"}
+                      "dedup_note", "short_by", "cursor", "next_cursor", "handle"}
     assert set(d["hits"][0]) == {"rank", "chunk_id", "doc_id", "char_start", "char_end",
                                  "breadcrumb", "score", "snapshot", "scored_by", "alternates"}
     json.dumps(d)
@@ -996,12 +996,12 @@ def test_cli_read_grep_index_json_keys(store, capsys):
     code, out, _ = run(capsys, "read", a_doc(store), "--store", s, "--end", 10, "--json")
     assert code == 0 and set(json.loads(out)) == {
         "snapshot", "doc_id", "uri", "path", "char_start", "char_end", "text_sha256", "element_id",
-        "chunk_id", "text", "applicability", "filters"}
+        "chunk_id", "text", "applicability", "filters", "handle"}
     code, out, _ = run(capsys, "grep", "refund", "--store", s, "--json")
     gr = json.loads(out)
     assert code == 0 and set(gr) == {"pattern", "ignore_case", "doc", "max", "snapshot",
                                      "truncated", "matches", "applicability", "filters",
-                                     "excluded_by_filter"}
+                                     "excluded_by_filter", "cursor", "next_cursor", "handle"}
     assert set(gr["matches"][0]) == {"doc_id", "char_start", "char_end", "line", "match",
                                      "context", "snapshot"}
 

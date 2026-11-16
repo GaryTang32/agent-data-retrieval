@@ -94,7 +94,7 @@ def test_search_tools_hits(store):
     res = tools.Tools(store).search_tools("git status of the working tree", top=5)
     d = res.to_dict()
     assert set(d) == {"query", "top", "tools_snapshot", "fingerprint", "lexical_only",
-                      "w_name", "w", "hits", "filters", "excluded_by_filter"}
+                      "w_name", "w", "hits", "filters", "excluded_by_filter", "handle"}
     head = (store / "tools" / "HEAD").read_text().strip()
     assert d["tools_snapshot"] == head and d["lexical_only"] and d["w"] is None
     assert 1 <= len(res.hits) <= 5 and [h.rank for h in res.hits] == list(
@@ -118,7 +118,7 @@ def test_load_tool_is_structurally_an_mcp_tool(store):
         d = res.to_dict()
         assert set(d) == {"tool_id", "definition", "source_kind", "source_uri",
                           "source_version", "operation", "license", "definition_tokens",
-                          "tools_snapshot"}
+                          "tools_snapshot", "handle"}
         assert d["tools_snapshot"] == head and d["definition_tokens"] == rec.definition_tokens
         defn = d["definition"]
         assert defn == tool_records.definition(rec)

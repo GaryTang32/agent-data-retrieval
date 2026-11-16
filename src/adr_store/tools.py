@@ -152,6 +152,31 @@ caller's visible tools only. With the ACL layer:
   `tool_error`, never returned).
 Log lines of the tool tools carry `tools_snapshot`, `tool_index`, `tool_view`, `filters` and
 `tool_error` beside the fields above.
+
+Snapshot handles and cursors (Phase 2 spec §9.2, §9.3; Task 12). Every result of the five tool
+calls carries `handle` (`adr_store.handles`: the content snapshot, the active index with its
+system and weight, the applicability and dedup overlays, the tool snapshot and the active
+tool index the call ran on; a part the store lacks is null), and each of them takes
+`handle=`: the call then runs on exactly those parts (`handles.resolve`: a part that is gone is
+"handle no longer available: <part>", parts that do not belong together a "bad handle"; never
+a fallback to HEAD), so a replay with a result's handle gives that result again. A handle is
+resolved after the caller's access (the ACL first: a caller without access learns nothing
+about a handle) and never stands in for it (ruling R15): F1–F5 are decided against HEAD and
+the current ACL snapshot whatever the handle names, an older content snapshot's documents are
+visible only as the current ACL lists them (a document it holds that the ACL no longer lists
+is "not found", byte for byte as one that never existed; a chain the current ACL thereby
+splits is F1), and an older tool snapshot's tools likewise. Without a handle, a result's
+handle is the store as the call found it: what the call used, and the rest as it is now
+(`handles.current`). A handle given is logged in `args`; every line carries `handle` (the
+result's, or the one given when the call failed). `search` and `grep` page with `cursor`, the
+previous result's `next_cursor`: for `search` a rank offset (ranks offset+1 to offset+top of
+the same ranking, at most `CHANNEL_K` deep, `RERANK_TOP` for a reranked index; `next_cursor`
+is set when the page is full and that depth is not reached), for `grep` "<doc_id>:<offset>"
+after the last match (the continuation of the same scan: the documents after that id, and that
+document from that offset when the caller sees it; a cursor naming a document the caller
+cannot see behaves as one naming none; `next_cursor` is set when the page was cut). An id,
+query, pattern or cursor that is not a string is refused ("<argument> must be a string, got
+<type>"), the same message whatever the store holds.
 """
 
 from __future__ import annotations
@@ -179,6 +204,7 @@ import numpy as np
 from adr_store import acl as acl_mod
 from adr_store import dedup as dedup_mod
 from adr_store import grep_worker
+from adr_store import handles as handles_mod
 from adr_store.acl import Access, AclDenied
 from adr_store.applicability import (
     Applicability,
@@ -217,6 +243,7 @@ CHAIN_CACHE = 8  # chain maps kept in memory, by content snapshot id
 _CHAINS: OrderedDict[str, dict[str, tuple[str, ...]]] = OrderedDict()
 OPERATOR_UNDER_ACL = ("{} is an operator call (the whole index, unfiltered) and does not run "
                       "with the ACL layer; use Tools(acl=False)")
+HANDLE_NO_DEDUP = "the handle names no dedup overlay"
 INDEX_UNDER_ACL = ("index is an operator call and does not run with the ACL layer; use "
                    "Tools(acl=False) (`adr index`)")
 
@@ -318,6 +345,9 @@ class SearchResult(_Result):
     dedup: str | None = None  # the dedup overlay id when collapsed
     dedup_note: str | None = None  # why not collapsed (None when collapsed)
     short_by: int = 0  # slots a reranked collapse is missing although more components match
+    cursor: str | None = None  # the cursor given (a rank offset), None for the first page
+    next_cursor: str | None = None  # the cursor of the next page, None when none can follow
+    handle: dict | None = None  # the snapshot handle of the parts the call ran on (§9.2)
 
 
 @dataclass(frozen=True)
@@ -334,6 +364,7 @@ class ReadResult(_Result):
     text: str
     applicability: str | None = None
     filters: dict = field(default_factory=lambda: Filters().to_dict())
+    handle: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -359,6 +390,9 @@ class GrepResult(_Result):
     applicability: str | None = None
     filters: dict = field(default_factory=lambda: Filters().to_dict())
     excluded_by_filter: int = 0
+    cursor: str | None = None  # the cursor given ("<doc_id>:<offset>"), None for the first page
+    next_cursor: str | None = None  # after the last match, when the page was cut (truncated)
+    handle: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -397,6 +431,7 @@ class SearchToolsResult(_Result):
     hits: list[ToolHit] = field(default_factory=list)
     filters: dict = field(default_factory=lambda: {"source_kind": None})
     excluded_by_filter: int = 0
+    handle: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -410,6 +445,7 @@ class LoadToolResult(_Result):
     license: str
     definition_tokens: int
     tools_snapshot: str
+    handle: dict | None = None
 
 
 # -- helpers ------------------------------------------------------------------------------
@@ -421,6 +457,7 @@ def _short(s: str) -> str:
 
 def _resolve(given: str, candidates: list[str], what: str, where: str) -> str:
     """The full id for `given`: itself, or the one sorted candidate it is a prefix of."""
+    _must_be_str(given, f"{what} id")
     i = bisect.bisect_left(candidates, given)
     if i < len(candidates) and candidates[i] == given:
         return given
@@ -436,6 +473,36 @@ def _resolve(given: str, candidates: list[str], what: str, where: str) -> str:
     if len(found) > 1:
         raise ToolError(f"{what} prefix {given!r} is ambiguous in {where}; give more of it")
     return found[0]
+
+
+def _must_be_str(value: object, name: str, *, optional: bool = False) -> None:
+    """ToolError when `value` is not a string (or None, when `optional`): the same message
+    whatever the store holds, so an id of the wrong type tells nothing about hidden ones."""
+    if not (isinstance(value, str) or (optional and value is None)):
+        raise ToolError(f"{name} must be a string, got {type(value).__name__}")
+
+
+def _search_cursor(cursor: object) -> int:
+    """The rank offset of a `search` cursor (decimal digits), 0 for None."""
+    if cursor is None:
+        return 0
+    _must_be_str(cursor, "cursor", optional=True)
+    if not cursor.isascii() or not cursor.isdigit() or len(cursor) > 6:
+        raise ToolError(f"bad cursor {cursor!r}: a search cursor is a rank offset (the "
+                        f"next_cursor of the previous page)")
+    return int(cursor)
+
+
+def _grep_cursor(cursor: object) -> tuple[str, int] | None:
+    """(doc_id, offset) of a `grep` cursor "<doc_id>:<offset>", None for None."""
+    if cursor is None:
+        return None
+    _must_be_str(cursor, "cursor", optional=True)
+    doc, sep, off = cursor.rpartition(":")
+    if not sep or not doc or not off.isascii() or not off.isdigit() or len(off) > 12:
+        raise ToolError(f"bad cursor {cursor!r}: a grep cursor is '<doc_id>:<offset>' (the "
+                        f"next_cursor of the previous page)")
+    return doc, int(off)
 
 
 def _load_tuning(path: Path, system: str, snapshot: str) -> dict:
@@ -668,10 +735,13 @@ class Tools:
             raise ToolError(f"acl must be true or false, got {acl!r}")
         self.store_path = Path(store_path)
         try:
-            self.store = Store.open(self.store_path)
+            self._head = Store.open(self.store_path)  # the store at HEAD, refreshed per call
         except StoreError as e:
             raise ToolError(str(e)) from e
-        self.snapshot: str = self.store.snapshot_id
+        # the snapshot a call reads: HEAD, or during a call with a handle the handle's
+        self.store: Store = self._head
+        self.snapshot: str = self._head.snapshot_id
+        self._pin: handles_mod.Resolved | None = None  # the handle of the call running
         self.emb_cache = Path(emb_cache)
         self.acl, self.caller, self.clock = acl, caller, clock
         self._lock = threading.RLock()
@@ -717,15 +787,20 @@ class Tools:
         return c if c is None or isinstance(c, str) else repr(c)
 
     def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]],
-              fields: dict | None = None, *, tool_call: bool = False):
+              fields: dict | None = None, *, tool_call: bool = False, handle: object = None):
         """Run one tool call and log it; `fn` returns (result, result ids, extra fields).
         `fields` are logged on every line, refused or not: `fn` fills in what it learns.
-        On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access,
-        which `fn` sees as `self._access_now` (`tool_call`: and checks the tool catalog
-        against it, `_check_tools`)."""
+        On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access
+        against it, which `fn` sees as `self._access_now` (`tool_call`: and checks the tool
+        catalog against it, `_check_tools`); then a `handle` pins the call to its parts
+        (`_pin_handle`: `self.store` and `self.snapshot` are the handle's for the call). A
+        handle given is logged in `args`; every line carries `handle`, the result's (or the
+        one given, when the call failed)."""
         with self._lock:
             when = datetime.now(UTC).isoformat()
             fields = {} if fields is None else fields
+            if handle is not None:
+                args = {**args, "handle": _filters_arg(handle)}
             acl_fields = {"caller": self._logged_caller(), "principals": None,
                           "acl_snapshot": None, "acl_decision": None if self.acl else "off",
                           "view": None, "not_visible": None}
@@ -735,8 +810,11 @@ class Tools:
             try:
                 self._refresh()
                 if self.acl:
-                    self._enter(acl_fields, tool_call)
+                    self._enter(acl_fields, tool_call, handle)
+                elif handle is not None:
+                    self._pin_handle(handle)
                 result, ids, extra = fn()
+                read = self.snapshot  # the content snapshot the call read
             except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
                 if isinstance(e, (ToolError, StoreError)):
                     error = str(e)
@@ -747,17 +825,19 @@ class Tools:
                 acl_fields["not_visible"] = self._not_visible
                 self._append_log({"time": when, "tool": tool, "args": args,
                                   "snapshot": self.snapshot, **fields, **acl_fields,
-                                  "results": [], "error": error})
+                                  "handle": args.get("handle"), "results": [],
+                                  "error": error})
                 if isinstance(e, StoreError):
                     raise ToolError(str(e)) from e
                 raise
             finally:
                 self._access_now, self._memo, self._in_call = None, {}, False
                 self._catalog_now = None
+                self._pin, self.store, self.snapshot = None, self._head, self._head.snapshot_id
             acl_fields["not_visible"] = self._not_visible
             self._append_log({"time": when, "tool": tool, "args": args,
-                              "snapshot": self.snapshot, **fields, **acl_fields, **extra,
-                              "results": ids})
+                              "snapshot": read, **fields, **acl_fields, **extra,
+                              "handle": getattr(result, "handle", None), "results": ids})
             return result
 
     # -- the content snapshot and access ------------------------------------------------
@@ -770,9 +850,9 @@ class Tools:
         except OSError as e:
             raise StoreError(f"{self.store_path}: no store here (HEAD unreadable: "
                              f"{type(e).__name__})") from e
-        if head != self.snapshot:
-            store = Store.open(self.store_path, head)
-            self.store, self.snapshot = store, store.snapshot_id
+        if head != self._head.snapshot_id:
+            self._head = Store.open(self.store_path, head)
+        self.store, self.snapshot = self._head, self._head.snapshot_id
 
     def _chains(self) -> dict[str, tuple[str, ...]]:
         """The snapshot's chains of two or more documents (`acl.chains`), cached by content
@@ -789,31 +869,91 @@ class Tools:
         return found
 
     def _resolve_access(self) -> Access:
-        """The caller's access now (AclDenied F1–F5). A snapshot that gives the caller some
-        but not all versions of a chain is F1 (all versions of a source share access, §5.2:
-        superseded_by and valid_to would show versions the caller cannot see)."""
-        access = acl_mod.resolve(self.store_path, self.caller, self.snapshot,
+        """The caller's access now (AclDenied F1–F5): `acl.resolve` against HEAD (F2: the ACL
+        snapshot must be for the store's HEAD content snapshot, whatever snapshot the call
+        reads), then the chain check on the snapshot the call reads."""
+        access = acl_mod.resolve(self.store_path, self.caller, self._head.snapshot_id,
                                  clock=self.clock, cache=self._acl_cache)
+        self._check_chains(access)
+        return access
+
+    def _check_chains(self, access: Access) -> None:
+        """F1 when the access gives the caller some but not all versions of a chain of the
+        snapshot the call reads (all versions of a source share access, §5.2: superseded_by
+        and valid_to would show versions the caller cannot see). An older snapshot (by
+        handle) is judged against the current ACL: a version it holds that the ACL no longer
+        lists is visible to no one, which may split its chain."""
         if acl_mod.split_chain(self._chains(), access.docs) is not None:
             raise AclDenied("F1", f"the ACL snapshot {access.acl_snapshot[:12]} splits a chain "
                                   f"across access lists (all versions of a source share "
                                   f"access); fix the policy and run `adr acl sync`",
                             access.acl_snapshot)
-        return access
 
-    def _enter(self, acl_fields: dict, tool_call: bool = False) -> None:
-        """Resolve the call's access (and for a tool tool, check the catalog against it); a
-        denial is an AccessDenied, logged with its code."""
+    def _enter(self, acl_fields: dict, tool_call: bool = False, handle: object = None) -> None:
+        """Resolve the call's access against HEAD (and for a tool tool, check the catalog
+        against it), then pin the call to its handle, then check the chains of the snapshot
+        it reads; a denial is an AccessDenied, logged with its code. The ACL comes first, so
+        a caller without access learns nothing about a handle (R15: a handle never bypasses
+        the ACL); a refused handle is logged `allowed` with its error."""
         try:
-            access = self._resolve_access()
+            access = acl_mod.resolve(self.store_path, self.caller, self._head.snapshot_id,
+                                     clock=self.clock, cache=self._acl_cache)
             if tool_call:
                 self._catalog_now = self._check_tools(access)
         except AclDenied as e:
             acl_fields.update(acl_decision=f"denied:{e.code}", acl_snapshot=e.acl_snapshot)
             raise AccessDenied(e.code, str(e)) from e
-        acl_fields.update(principals=list(access.principals), acl_snapshot=access.acl_snapshot,
-                          acl_decision="allowed", view=access.view)
+        allowed = {"principals": list(access.principals), "acl_snapshot": access.acl_snapshot,
+                   "acl_decision": "allowed", "view": access.view}
+        if handle is not None:
+            try:
+                self._pin_handle(handle)
+            except ToolError:
+                acl_fields.update(allowed)
+                raise
+        try:
+            self._check_chains(access)
+        except AclDenied as e:
+            acl_fields.update(acl_decision=f"denied:{e.code}", acl_snapshot=e.acl_snapshot)
+            raise AccessDenied(e.code, str(e)) from e
+        acl_fields.update(allowed)
         self._access_now, self._not_visible = access, []
+
+    def _pin_handle(self, handle: object) -> None:
+        """Pin the call to the parts `handle` names (`handles.resolve`: each must still exist,
+        else "handle no longer available: <part>"; no fallback to HEAD): the call reads the
+        handle's content snapshot, index, overlays, tool snapshot and tool index."""
+        pin = handles_mod.resolve(self.store_path, handle)
+        if pin.index is not None and pin.index["system"] not in SYSTEMS:
+            raise ToolError(f"bad handle: unknown system {pin.index['system']!r}")
+        self._pin, self.store, self.snapshot = pin, pin.store, pin.store.snapshot_id
+
+    def _result_handle(self) -> dict:
+        """The handle of the call's parts: the one given, or the store as the call found it
+        (what the call used, `self._memo`, and the rest as it is now: `handles.current`)."""
+        if self._pin is not None:
+            return self._pin.handle.model_dump()
+        known = {}
+        if "active" in self._memo:
+            known["index"] = self._memo["active"]
+        else:
+            try:
+                active = self._active_record()
+            except ToolError:
+                active = None
+            if active is not None and handles_mod.index_meta(
+                    self.store_path, active["fingerprint"]) is None:
+                active = None
+            known["index"] = active
+        for part in ("applicability", "dedup", "tools", "tool_index"):
+            if part in self._memo:
+                known[part] = self._memo[part]
+        if "dedup" not in known and known["index"] is not None and self._index is not None \
+                and self._index.fingerprint == known["index"]["fingerprint"]:
+            known["dedup"] = handles_mod.file_sha256(dedup_mod.overlay_path(
+                self.store_path, self.snapshot, self._index.chunker,
+                self._content_sha256(self._index)))
+        return handles_mod.current(self.store_path, self.snapshot, **known).model_dump()
 
     def _access(self) -> Access | None:
         """The caller's access to the store as it is now (None without the ACL layer); a
@@ -883,7 +1023,19 @@ class Tools:
 
     def _applicability(self) -> Applicability | None:
         """The applicability overlay of the snapshot, or None: a stat on every call, the
-        parse reused while the file is the same."""
+        parse reused while the file is the same. With a handle: the overlay it names (by id),
+        or none when it names none."""
+        overlay = self._applicability_file()
+        if self._pin is not None and (overlay is None or overlay.overlay_id !=
+                                      self._pin.applicability):
+            if self._pin.applicability is None:
+                overlay = None
+            else:  # the handle was checked on entry: the file changed since
+                raise handles_mod.unavailable("applicability")
+        self._memo["applicability"] = None if overlay is None else overlay.overlay_id
+        return overlay
+
+    def _applicability_file(self) -> Applicability | None:
         key = _stat_key(overlay_path(self.store_path, self.snapshot))
         if key is None:
             return None
@@ -1034,9 +1186,16 @@ class Tools:
     # -- the active index -------------------------------------------------------------
 
     def _active_record(self) -> dict:
-        """`active.json`, read (and checked) once per call; outside a call on every use."""
+        """`active.json`, read (and checked) once per call; outside a call on every use. With
+        a handle: the record of the index it names (`handles.Resolved.index`)."""
         if "active" in self._memo:
             return self._memo["active"]
+        if self._pin is not None:
+            if self._pin.index is None:
+                raise ToolError("the handle names no index; call without a handle, or with "
+                                "the handle of a result that has one")
+            self._memo["active"] = self._pin.index
+            return self._pin.index
         path = self.index_root / "active.json"
         if not path.is_file():
             raise ToolError(f"{self.store_path}: no index; run `adr index` first")
@@ -1121,7 +1280,13 @@ class Tools:
             why = None if dd is not None else dedup_mod.missing(
                 self.store_path, self.snapshot, idx.chunker, content)
             self._dedup = (key, dd, why)
-        return self._dedup[1], self._dedup[2]
+        dd, why = self._dedup[1], self._dedup[2]
+        if self._pin is not None and (dd is None or dd.overlay_id != self._pin.dedup):
+            if self._pin.dedup is not None:  # checked on entry: the file changed since
+                raise handles_mod.unavailable("dedup")
+            dd, why = None, why or HANDLE_NO_DEDUP  # an overlay made after the handle
+        self._memo["dedup"] = None if dd is None else dd.overlay_id
+        return dd, why
 
     def _chunk_rows(self) -> dict[str, dict]:
         """The active index's chunks, from the index as `search` loads it (so its fingerprint
@@ -1135,22 +1300,34 @@ class Tools:
 
     def search(self, query: str, top: int = SEARCH_TOP, *,
                filters: Filters | dict | None = None,
-               dedup: bool | None = None) -> SearchResult:
+               dedup: bool | None = None, cursor: str | None = None,
+               handle: handles_mod.Handle | dict | None = None) -> SearchResult:
         """The top chunks of the active index for `query` among the documents the filters
         admit; with dedup (None: on when a dedup overlay exists for the index's chunks),
-        one slot per admitted cluster component, showing its canonical member."""
+        one slot per admitted cluster component, showing its canonical member. `cursor` (a
+        rank offset, the `next_cursor` of the previous page) gives the page after it: ranks
+        offset+1 to offset+top of the same ranking, offset+top at most `CHANNEL_K` (a
+        reranked index: `RERANK_TOP`). `next_cursor` is set when the page is full and that
+        depth is not reached (the next page may be empty). `handle` pins the call (§9.2)."""
         fields = {**self._filter_fields(), "dedup": None}
 
         def run():
+            _must_be_str(query, "query")
             if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
                 raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
             if dedup is not None and not isinstance(dedup, bool):
                 raise ToolError(f"dedup must be true, false or null, got {dedup!r}")
+            offset = _search_cursor(cursor)
             applied = self._apply(filters, fields)
             active = self._active_record()
             if active["rerank"] and top > RERANK_TOP:
                 raise ToolError(f"the index ({active['system']}) reranks its top {RERANK_TOP} "
                                 f"chunks only; ask for --top {RERANK_TOP} or fewer")
+            limit = RERANK_TOP if active["rerank"] else CHANNEL_K
+            depth = offset + top
+            if depth > limit:
+                raise ToolError(f"cursor {cursor!r} with top {top} goes past rank {limit}, the "
+                                f"deepest this index ranks; ask for fewer")
             idx, active = self._active_index()
             dd, why = (None, dedup_mod.OFF) if dedup is False else self._dedup_state(idx)
             if dedup is True and dd is None:
@@ -1168,14 +1345,15 @@ class Tools:
             short_by = 0
             if dd is None:
                 slots = [dedup_mod.Slot(cid, score, cid, ()) for cid, score in idx.retrieve(
-                    query, fusion="linear", w=active["w"], top=top,
+                    query, fusion="linear", w=active["w"], top=depth,
                     allowed_docs=applied.allowed, lexical=lexical, exact=exact)]
             else:
                 fields["dedup"] = dd.overlay_id
-                slots, short_by = self._collapsed(idx, active, query, top, applied, dd,
+                slots, short_by = self._collapsed(idx, active, query, depth, applied, dd,
                                                   lexical, exact)
+            full = len(slots) == depth and depth < limit
             hits = []
-            for rank, slot in enumerate(slots, start=1):
+            for rank, slot in enumerate(slots[offset:], start=offset + 1):
                 c = idx.chunks[slot.chunk_id]
                 hits.append(Hit(rank, slot.chunk_id, c.doc_id, c.char_start, c.char_end,
                                 c.breadcrumb, slot.score, self.snapshot, slot.scored_by,
@@ -1184,12 +1362,15 @@ class Tools:
                                active["lexical_only"], idx.fingerprint, active["w"], hits,
                                **applied.fields(), excluded_by_filter=applied.excluded,
                                dedup=None if dd is None else dd.overlay_id,
-                               dedup_note=why if dd is None else None, short_by=short_by)
+                               dedup_note=why if dd is None else None, short_by=short_by,
+                               cursor=cursor, next_cursor=str(depth) if full else None,
+                               handle=self._result_handle())
             return res, [h.chunk_id for h in hits], {"index": idx.fingerprint}
 
-        return self._call("search", {"query": query, "top": top,
-                                     "filters": _filters_arg(filters), "dedup": dedup}, run,
-                          fields)
+        args = {"query": query, "top": top, "filters": _filters_arg(filters), "dedup": dedup}
+        if cursor is not None:
+            args["cursor"] = _filters_arg(cursor)
+        return self._call("search", args, run, fields, handle=handle)
 
     @staticmethod
     def _collapsed(idx: StoreIndex, active: dict, query: str, top: int, applied: _Applied,
@@ -1231,22 +1412,27 @@ class Tools:
 
     def read(self, doc_id: str, start: int | None = None, end: int | None = None, *,
              element: str | None = None, chunk: str | None = None,
-             filters: Filters | dict | None = None) -> ReadResult:
+             filters: Filters | dict | None = None,
+             handle: handles_mod.Handle | dict | None = None) -> ReadResult:
         """The exact text of a range of a document: `start`/`end` (either may be left out),
         an element, a chunk of the active index, or (none given) the whole document. A
-        document the filters exclude is refused with the reason."""
-        args = {"doc_id": doc_id, "start": start, "end": end, "element": element,
-                "chunk": chunk, "filters": _filters_arg(filters)}
+        document the filters exclude is refused with the reason. `handle` pins the call."""
+        args = {"doc_id": _filters_arg(doc_id), "start": start, "end": end,
+                "element": _filters_arg(element), "chunk": _filters_arg(chunk),
+                "filters": _filters_arg(filters)}
         fields = self._filter_fields()
 
         def run():
             res = self._read_impl(doc_id, start, end, element, chunk, filters, fields)
             return res, [[res.doc_id, res.char_start, res.char_end]], {}
 
-        return self._call("read", args, run, fields)
+        return self._call("read", args, run, fields, handle=handle)
 
     def _read_impl(self, doc_id, start, end, element, chunk, filters=None,
                    fields=None) -> ReadResult:
+        _must_be_str(doc_id, "doc_id")
+        _must_be_str(element, "element", optional=True)
+        _must_be_str(chunk, "chunk", optional=True)
         modes = (start is not None or end is not None, element is not None, chunk is not None)
         if sum(modes) > 1:
             raise ToolError("give one of --start/--end, --element or --chunk")
@@ -1289,27 +1475,41 @@ class Tools:
         part = text[start:end]
         return ReadResult(self.snapshot, doc_id, self.store.source(doc_id).uri,
                           self.store.path_of(doc_id), start, end, sha256_text(part),
-                          element_id, chunk_id, part, **applied.fields())
+                          element_id, chunk_id, part, **applied.fields(),
+                          handle=self._result_handle())
 
     # -- grep -------------------------------------------------------------------------
 
     def grep(self, pattern: str, doc: str | None = None, max: int = GREP_MAX,
              ignore_case: bool = False, timeout: float = GREP_TIMEOUT, *,
-             filters: Filters | dict | None = None) -> GrepResult:
+             filters: Filters | dict | None = None, cursor: str | None = None,
+             handle: handles_mod.Handle | dict | None = None) -> GrepResult:
         """Regular-expression matches in (doc_id, offset) order, at most `max`, within
-        `timeout` seconds of matching, in the documents the filters admit."""
-        args = {"pattern": pattern, "doc": doc, "max": max, "ignore_case": ignore_case,
-                "timeout": timeout, "filters": _filters_arg(filters)}
+        `timeout` seconds of matching, in the documents the filters admit. `cursor`
+        ("<doc_id>:<offset>", the `next_cursor` of the previous page: the last match's
+        document and end) gives the matches after it: those of the documents after that id,
+        and of that document (when the caller sees it) from that offset, exactly the
+        continuation of the same scan. A cursor naming a document the caller cannot see
+        behaves as one naming no document. `handle` pins the call."""
+        args = {"pattern": _filters_arg(pattern), "doc": _filters_arg(doc), "max": max,
+                "ignore_case": ignore_case, "timeout": timeout,
+                "filters": _filters_arg(filters)}
+        if cursor is not None:
+            args["cursor"] = _filters_arg(cursor)
         fields = self._filter_fields()
 
         def run():
-            res = self._grep_impl(pattern, doc, max, ignore_case, timeout, filters, fields)
+            res = self._grep_impl(pattern, doc, max, ignore_case, timeout, filters, fields,
+                                  cursor)
             return res, [[m.doc_id, m.char_start, m.char_end] for m in res.matches], {}
 
-        return self._call("grep", args, run, fields)
+        return self._call("grep", args, run, fields, handle=handle)
 
     def _grep_impl(self, pattern, doc, max_, ignore_case, timeout, filters=None,
-                   fields=None) -> GrepResult:
+                   fields=None, cursor=None) -> GrepResult:
+        _must_be_str(pattern, "pattern")
+        _must_be_str(doc, "doc", optional=True)
+        after = _grep_cursor(cursor)
         if isinstance(max_, bool) or not isinstance(max_, int) or max_ < 1:
             raise ToolError(f"max must be a positive integer, got {max_!r}")
         if isinstance(timeout, bool) or not isinstance(timeout, int | float) or \
@@ -1339,6 +1539,11 @@ class Tools:
             excluded = 0  # of this one document, which refuse_excluded let through
         elif applied.allowed is not None:
             doc_ids = [d for d in doc_ids if d in applied.allowed]
+        skip = {}  # doc_id -> matches starting before this offset are the previous pages'
+        if after is not None:
+            doc_ids = doc_ids[bisect.bisect_left(doc_ids, after[0]):]
+            if doc_ids and doc_ids[0] == after[0]:
+                skip[after[0]] = after[1]
         matches: list[GrepMatch] = []
         status = grep_worker.DONE
         with _GrepWorker(timeout) as worker:
@@ -1347,19 +1552,23 @@ class Tools:
                 batch, size = [], 0  # documents in order, up to GREP_BATCH_CHARS (at least one)
                 while i < len(doc_ids) and (not batch or size < GREP_BATCH_CHARS):
                     text = self.store.text(doc_ids[i])
-                    batch.append((doc_ids[i], text))
+                    batch.append((doc_ids[i], text) if doc_ids[i] not in skip else
+                                 (doc_ids[i], text, skip[doc_ids[i]]))
                     size += len(text)
                     i += 1
                 found, status = worker.scan(pattern, flags, max_ - len(matches), batch)
-                texts = dict(batch)
+                texts = {b[0]: b[1] for b in batch}
                 matches += [GrepMatch(d, start, end, line, texts[d][start:end],
                                       _context(texts[d], start, end), self.snapshot)
                             for d, start, end, line in found]
         if status == grep_worker.EMPTY:  # the minimum-width check should have caught it
             raise ToolError(empty)
-        return GrepResult(pattern, ignore_case, doc, max_, self.snapshot,
-                          status == grep_worker.MORE, matches, **applied.fields(),
-                          excluded_by_filter=excluded)
+        more = status == grep_worker.MORE
+        last = matches[-1] if matches else None
+        return GrepResult(pattern, ignore_case, doc, max_, self.snapshot, more, matches,
+                          **applied.fields(), excluded_by_filter=excluded, cursor=cursor,
+                          next_cursor=f"{last.doc_id}:{last.char_end}" if more and last
+                          else None, handle=self._result_handle())
 
     # -- tools as data ----------------------------------------------------------------
 
@@ -1426,6 +1635,16 @@ class Tools:
         if cat is None:
             raise ToolError(f"{self.store_path}: no tool catalog here (no tools/HEAD); run "
                             f"`adr tools ingest` first")
+        if self._pin is not None and self._pin.tools != cat.snapshot_id:
+            # the handle's tool snapshot (the ACL was checked against tools/HEAD on entry; a
+            # tool of the handle's snapshot that the current ACL does not list is invisible)
+            if self._pin.tools is None:
+                raise ToolError("the handle names no tool catalog")
+            try:
+                cat = self._open_catalog(self._pin.tools)
+            except StoreError:
+                raise handles_mod.unavailable("tools") from None
+        self._memo["tools"] = cat.snapshot_id
         return cat
 
     def tools_index(self, w_name: int, *, weight: float | None = None,
@@ -1486,20 +1705,15 @@ class Tools:
     def _tool_active(self, catalog: ToolCatalog) -> tuple[ToolIndex, dict]:
         """The active tool index (checked: for the catalog's snapshot, its fingerprint)."""
         path = self.tool_index_root / "active.json"
-        if not path.is_file():
-            raise ToolError(f"{self.store_path}: no tool index; run `adr tools index` first")
         fix = "run `adr tools index`"
-        try:
-            active = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(active, dict):
-                raise TypeError(f"not an object: {type(active).__name__}")
-            for k, kind in self._TOOL_ACTIVE_FIELDS.items():
-                v = active[k]
-                if not isinstance(v, kind) or (kind is not bool and isinstance(v, bool)):
-                    raise TypeError(f"{k} {_short(repr(v))}")
-        except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
-            raise ToolError(f"active tool index missing or damaged: {path}: "
-                            f"{type(e).__name__}: {e}; {fix}") from e
+        if self._pin is not None:
+            if self._pin.tool_index is None:
+                raise ToolError("the handle names no tool index; call without a handle, or "
+                                "with the handle of a result that has one")
+            active = self._pin.tool_index
+        else:
+            active = self._tool_active_record(path, fix)
+        self._memo["tool_index"] = active
         if active["tool_snapshot"] != catalog.snapshot_id:
             raise ToolError(f"the tool index is for tool snapshot "
                             f"{_short(active['tool_snapshot'])}, the tool catalog is at "
@@ -1537,6 +1751,23 @@ class Tools:
                                 f"{_short(idx.fingerprint)} is not the active one; {fix}")
             self._tool_index = idx
         return idx, active
+
+    def _tool_active_record(self, path: Path, fix: str) -> dict:
+        """`tools/index/active.json`, checked."""
+        if not path.is_file():
+            raise ToolError(f"{self.store_path}: no tool index; run `adr tools index` first")
+        try:
+            active = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(active, dict):
+                raise TypeError(f"not an object: {type(active).__name__}")
+            for k, kind in self._TOOL_ACTIVE_FIELDS.items():
+                v = active[k]
+                if not isinstance(v, kind) or (kind is not bool and isinstance(v, bool)):
+                    raise TypeError(f"{k} {_short(repr(v))}")
+        except (OSError, ValueError, KeyError, TypeError, RecursionError) as e:
+            raise ToolError(f"active tool index missing or damaged: {path}: "
+                            f"{type(e).__name__}: {e}; {fix}") from e
+        return active
 
     @staticmethod
     def _check_tool_meta(active: dict, meta: dict, what: str) -> None:
@@ -1610,16 +1841,16 @@ class Tools:
                 "tool_view": None, "tool_error": None}
 
     def search_tools(self, query: str, top: int = SEARCH_TOP, *,
-                     filters: dict | None = None) -> SearchToolsResult:
+                     filters: dict | None = None,
+                     handle: handles_mod.Handle | dict | None = None) -> SearchToolsResult:
         """The top tools of the active tool index for `query` among the caller's visible
-        tools that the filters admit (module docstring)."""
+        tools that the filters admit (module docstring). `handle` pins the call."""
         fields = self._tool_fields()
 
         def run():
             if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
                 raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
-            if not isinstance(query, str):
-                raise ToolError(f"query must be a string, got {type(query).__name__}")
+            _must_be_str(query, "query")
             kinds = self._tool_filters(filters)
             fields["filters"] = {"source_kind": kinds}
             cat = self._catalog()
@@ -1647,21 +1878,24 @@ class Tools:
                                     r.source_uri, score, cat.snapshot_id))
             res = SearchToolsResult(query, top, cat.snapshot_id, idx.fingerprint,
                                     active["lexical_only"], idx.w_name, active["w"], hits,
-                                    {"source_kind": kinds}, excluded)
+                                    {"source_kind": kinds}, excluded,
+                                    handle=self._result_handle())
             return res, [h.tool_id for h in hits], {}
 
-        return self._call("search_tools", {"query": query, "top": top,
+        return self._call("search_tools", {"query": _filters_arg(query), "top": top,
                                            "filters": _filters_arg(filters)}, run, fields,
-                          tool_call=True)
+                          tool_call=True, handle=handle)
 
-    def load_tool(self, tool_id: str) -> LoadToolResult:
+    def load_tool(self, tool_id: str, *,
+                  handle: handles_mod.Handle | dict | None = None) -> LoadToolResult:
         """The MCP Tool definition of a visible tool (full id or a unique prefix of at least
-        8 characters), its source fields and the tool snapshot (module docstring)."""
+        8 characters), its source fields and the tool snapshot (module docstring). `handle`
+        pins the call; a tool of the handle's tool snapshot that the current ACL does not
+        list is invisible, as one that does not exist."""
         fields = self._tool_fields()
 
         def run():
-            if not isinstance(tool_id, str):
-                raise ToolError(f"tool_id must be a string, got {type(tool_id).__name__}")
+            _must_be_str(tool_id, "tool_id")
             cat = self._catalog()
             fields["tools_snapshot"] = cat.snapshot_id
             where = f"tool snapshot {_short(cat.snapshot_id)}"
@@ -1672,6 +1906,8 @@ class Tools:
             else:
                 fields["tool_view"] = tool_view_id(access.tools)
                 visible = sorted(access.tools)
+                if self._pin is not None and cat.snapshot_id != access.tool_snapshot:
+                    visible = sorted(access.tools.intersection(everything))
                 everything = sorted(set(everything) | access.tools)
             tid = self._find(tool_id, visible, everything, "tool", where)
             try:
@@ -1687,7 +1923,9 @@ class Tools:
                 raise AssertionError("unreachable") from None
             res = LoadToolResult(rec.tool_id, tool_definition(rec), rec.source_kind,
                                  rec.source_uri, rec.source_version, rec.operation, rec.license,
-                                 rec.definition_tokens, cat.snapshot_id)
+                                 rec.definition_tokens, cat.snapshot_id,
+                                 handle=self._result_handle())
             return res, [rec.tool_id], {}
 
-        return self._call("load_tool", {"tool_id": tool_id}, run, fields, tool_call=True)
+        return self._call("load_tool", {"tool_id": _filters_arg(tool_id)}, run, fields,
+                          tool_call=True, handle=handle)
