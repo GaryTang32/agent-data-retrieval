@@ -1,8 +1,10 @@
 # tools: ToolRet, `toolbench` pool (local-only)
 
-The tool corpus of Phase 2C (spec §8.3): real RapidAPI endpoint descriptions from ToolBench,
-as packaged by ToolRet ([arXiv 2503.01763](https://arxiv.org/abs/2503.01763)), with ToolRet's
-1,100 `toolbench` queries and their gold tools. Like bench, it is **local-only** (ruling R13,
+The tool corpus of Phase 2C (spec §8.3), as packaged by ToolRet
+([arXiv 2503.01763](https://arxiv.org/abs/2503.01763)): 13,862 real RapidAPI endpoint
+descriptions from ToolBench and 197 Python-library and curl function descriptions from a
+different upstream (ToolRet's `toolbench-sam`), with ToolRet's 1,100 `toolbench` queries and
+their gold tools. Like bench, it is **local-only** (ruling R13,
 question Q2): the files are fetched into `data/tools/` (git-ignored) and nothing from them is
 committed except revisions, hashes and counts. This directory commits `config.json` (what is
 pinned), `manifest.json` (what was fetched: SHA-256 per file, the pool and the counts) and
@@ -88,6 +90,15 @@ Two things the records keep as the source gives them (notes, no change):
 
 ## Licence
 
-ToolBench data: Apache-2.0 (its README: "distributed under Apache License 2.0"). ToolRet code
-repository: Apache-2.0. The ToolRet dataset cards declare no licence (open question Q2), which
-is why the data stays local.
+- **The 13,862 `toolbench_tool_*` tools (config `web`):** ToolBench data, Apache-2.0 (its
+  README: "distributed under Apache License 2.0").
+- **The 197 `toolbench_sam_tool_*` tools (config `customized`): unclear.** They are not
+  ToolBench's RapidAPI data. The ToolRet-Tools and ToolRet-Queries dataset cards (at the pinned
+  revisions), the files' metadata and the ToolRet code README name neither their upstream nor a
+  licence (checked in Task 11). Their style (Python spreadsheet and DataFrame methods, curl
+  commands) matches SambaNova's ToolBench (Xu et al., 2023), whose repository carries an
+  Apache-2.0 LICENSE on its default branch; that attribution is an inference, not stated by
+  ToolRet. Their records carry `license` "Apache-2.0" anyway, because `config.json` gives one
+  licence for the whole pool (changing it would change the tool snapshot).
+- **ToolRet code repository:** Apache-2.0. **The ToolRet dataset cards declare no licence**
+  (open question Q2), which is why the data stays local.
