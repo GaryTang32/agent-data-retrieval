@@ -1,0 +1,20 @@
+{
+  "config": {
+    "catalog_doc_tokens": 1227462,
+    "lexical_only": true,
+    "split": "test",
+    "started": "2026-11-16T18:09:52.991580+00:00",
+    "system": "tools-bm25-raw",
+    "tools": 14059,
+    "top": 10,
+    "track": "tools"
+  },
+  "summary": {
+    "completeness@10": 0.38400900900900903,
+    "n": 888,
+    "ndcg@10": 0.5085242565255943,
+    "recall@10": 0.5782282282282283,
+    "top10_doc_tokens": 1123.463963963964
+  },
+  "tuning": null
+}
