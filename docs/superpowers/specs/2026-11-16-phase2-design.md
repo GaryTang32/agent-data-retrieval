@@ -336,9 +336,13 @@ stores:
 
 | Corpus | Documents | public / shared / tenant / group | A tenant user sees (min–max) | `outsider` sees | Distinct views |
 |---|---|---|---|---|---|
-| gov | 180 | 39 / 17 / 90 / 34 | 43–51% | 22% | 20 |
+| gov | 180 | 40 / 18 / 87 / 35 | 44–52% | 22% | 20 |
 | research | 245 | 46 / 24 / 100 / 75 | 38–46% | 19% | 20 |
 | bench | 2,000 | 436 / 213 / 884 / 467 | 45–49% | 22% | 20 |
+
+The gov row is the measured one (Task 6). The first simulation gave 39 / 17 / 90 / 34 (43–51%)
+because it keyed the four IRM documents by `doc_id`; the rule above keys them by their
+`irm:<chapter>` chain, as §4.2 assigns. Ruling: keep the rule, correct the table.
 
 The policy file can also hold attribute rules (by format or URI prefix), applied before the
 buckets. Phase 2 ships none.
