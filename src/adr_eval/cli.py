@@ -1,6 +1,6 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
 retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
-tools-retrieval, tools-probes, report, doctor."""
+tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
 from __future__ import annotations
 
@@ -168,6 +168,181 @@ def _tools_probes(a: argparse.Namespace) -> int:
     ok = (leak_summary["total"]["leaks"] == 0 and leak_summary["total"]["invalid"] == 0
           and fc_summary["total"]["passed"] == fc_summary["total"]["n"]
           and logs["total"]["complete"])
+    return 0 if ok else 1
+
+
+MCP_STORES = ("gov", "research", "bench", "tools")
+
+
+def _mcp_stores(a: argparse.Namespace, p2: Path) -> dict[str, Path]:
+    """label -> store path for `mcp-probes`: the corpora's p2 copies and the ToolRet store,
+    unless given as LABEL=PATH (labels: the corpora and `tools`)."""
+    if not a.store:
+        return {c: p2 / ("toolret" if c == "tools" else c) for c in MCP_STORES}
+    out = {}
+    for spec in a.store:
+        label, sep, path = spec.partition("=")
+        if not sep or label not in (*NAMES, "tools"):
+            raise runner.RunError(f"--store takes LABEL=PATH with LABEL one of "
+                                  f"{', '.join((*NAMES, 'tools'))}, got {spec!r}")
+        out[label] = Path(path)
+    return out
+
+
+def _mcp_probes(a: argparse.Namespace) -> int:
+    """`adr-eval mcp-probes` (B1 through MCP, B5 of its calls): the seeded subset of the leak
+    probes of every store (`adr_eval.probes.mcp`), each run through an `adr mcp` server of its
+    caller and judged as the API probes are; writes <out>/probes-mcp-<time>/."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_eval.probes import equivalence
+    from adr_eval.probes import mcp as mcp_probes
+    from adr_store import acl as acl_mod
+    from adr_store import tools as store_tools
+    from adr_store.mcp_client import McpTools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    emb = a.emb_cache if a.emb_cache is not None else \
+        runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    p2 = runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2")
+    stores = _mcp_stores(a, p2)
+    contexts: dict = {}
+    universe: list = []
+    cfg_stores: dict = {}
+    ops: dict = {}
+    nss: dict = {}
+    for label, path in stores.items():
+        if label == "tools":
+            if a.tool_index is None or len(a.tool_index) < store_tools.MIN_PREFIX:
+                raise runner.RunError(f"--tool-index needs at least {store_tools.MIN_PREFIX} "
+                                      f"characters of the tool index fingerprint")
+            try:
+                idx = store_tools.Tools(path, emb_cache=emb).active_tool_index()
+                store_tools.Tools(path, emb_cache=emb, acl=True,
+                                  caller="user:auditor").search_tools("probe", top=1)
+            except store_tools.ToolError as e:
+                raise runner.RunError(f"{path}: {e}\nfix: run `adr acl sync --store {path}`") \
+                    from e
+            if not idx.fingerprint.startswith(a.tool_index):
+                raise runner.RunError(f"{path}: the active tool index is "
+                                      f"{idx.fingerprint[:12]}, not {a.tool_index}")
+            ctx = acl_probes.tool_context(path, idx)
+            ps = acl_probes.tool_leak_probes(ctx, sizes=None if a.per_family is None else
+                                             dict.fromkeys(acl_probes.TOOL_FAMILY_SIZES,
+                                                           a.per_family))
+            sid, snap = acl_mod.read_head(path)
+            cfg_stores[label] = {"store": runner._display_path(Path(path)),
+                                 "tools_snapshot": idx.tool_snapshot,
+                                 "tool_index": idx.fingerprint, "acl_snapshot": sid,
+                                 "acl_sequence": snap.sequence,
+                                 "acl_entries_sha256": snap.entries_sha256}
+        else:
+            ns = argparse.Namespace(store=path, corpus=label, directory=a.directory,
+                                    policy=a.policy, allow_other_index=a.allow_other_index,
+                                    keep_views=a.keep_views, views=None)
+            tools, idx, system, phase1 = _probe_store(ns, emb)
+            cfg_stores[label] = _store_config(ns, tools, idx, system, phase1)
+            ctx = acl_probes.context(tools.store_path, idx)
+            ps = acl_probes.leak_probes(ctx, sizes=None if a.per_family is None else
+                                        dict.fromkeys(acl_probes.FAMILY_SIZES, a.per_family))
+            ops[label], nss[label] = tools, ns
+        contexts[label] = ctx
+        universe += [(label, p) for p in ps]
+        print(f"  {label}: {len(ps)} leak probes", file=sys.stderr)
+    selected = mcp_probes.select(universe, a.n)
+    counts = {"universe": mcp_probes.family_counts(universe),
+              "selected": mcp_probes.family_counts(selected)}
+    short = mcp_probes.short_families(counts["selected"])
+    refs: dict = {}
+    roots: dict = {}
+    infos: dict = {}
+    for label, tools in ops.items():
+        roots[label] = (Path(a.views) if a.views is not None else p2 / "views") / label
+        refs[label], infos[label] = _reference_stores(
+            nss[label], tools.store, equivalence.views(contexts[label].snap), emb,
+            roots[label])
+    logs_of = {}  # one scan per log file (two labels may name one store)
+    for label, path in stores.items():
+        logs_of.setdefault(acl_probes.log_path(path).resolve(), label)
+    offsets = {label: acl_probes.log_size(log) for log, label in logs_of.items()}
+    ref_offsets = {(label, p.name): acl_probes.log_size(acl_probes.log_path(p))
+                   for label, r in refs.items() for p in set(r.values())}
+    ref_tools: dict = {}
+
+    def reference_for(label, caller):
+        if caller not in refs.get(label, {}):
+            return None
+        if (label, caller) not in ref_tools:
+            ref_tools[(label, caller)] = store_tools.Tools(refs[label][caller], emb_cache=emb,
+                                                           acl=True, caller=caller)
+        return ref_tools[(label, caller)]
+
+    env = {"HF_HUB_OFFLINE": "1"}
+
+    def make_server(label, caller):
+        return McpTools(stores[label], caller, emb_cache=emb, env=env, cwd=runner.REPO_ROOT,
+                        timeout=a.timeout)
+
+    results, calls = mcp_probes.run_subset(selected, contexts=contexts,
+                                           reference_for=reference_for,
+                                           make_server=make_server)
+    mcp_scans = {label: acl_probes.scan_log(log, offsets[label])
+                 for log, label in logs_of.items()}
+    ref_scans = {f"{label}/{name}": acl_probes.scan_log(
+        acl_probes.log_path(root / name), off)
+        for (label, name), off in ref_offsets.items() for root in [roots[label]]}
+    n_calls = sum(sum(v.values()) for v in calls.values())
+    logs = {"mcp": {"total": acl_probes.total_scan(mcp_scans), "by_store": mcp_scans,
+                    "calls": calls, "calls_total": n_calls},
+            "reference": {"total": acl_probes.total_scan(ref_scans) if ref_scans else None,
+                          "by_store": ref_scans}}
+    removed = {label: _remove_views(nss[label], refs[label], roots[label]) for label in refs}
+    summary = mcp_probes.summarize(results)
+    cfg = {"kind": "mcp", "seed": probes.SEED, "n": a.n, "stores": cfg_stores,
+           "per_family": a.per_family,
+           "universe": len(universe), "counts": counts, "short_families": short,
+           "min_per_family": mcp_probes.MIN_PER_FAMILY, "server_env": env,
+           "views": infos, "views_removed": removed}
+    rows = "".join(f"| {name} | {counts['universe']['families'].get(name, 0)} | {b['n']} | "
+                   f"{b['leaks']} | {b['invalid']} | {b['callers']} | "
+                   f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                   for name, b in summary["families"].items())
+    spec_rows = "".join(f"| {f} | {counts['universe']['spec_families'][f]} | {b['n']} | "
+                        f"{b['leaks']} | {b['invalid']} |\n"
+                        for f, b in summary["spec_families"].items())
+    mt = logs["mcp"]["total"]
+    md = (f"# ACL probes through MCP (B1 subset)\n\nThe {a.n} of {len(universe)} leak probes "
+          f"with the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed {probes.SEED}), each "
+          f"through an `adr mcp` server of its caller. No model calls.\n\n| family | universe | "
+          f"probes | leaks | invalid | callers | outcomes |\n|---|---|---|---|---|---|---|\n"
+          + rows + "\n| spec family | universe | probes | leaks | invalid |\n"
+          "|---|---|---|---|---|\n" + spec_rows
+          + f"\nTotal: {summary['total']['n']} probes, {summary['total']['leaks']} leaks, "
+            f"{summary['total']['invalid']} invalid. Spec families under "
+            f"{mcp_probes.MIN_PER_FAMILY}: {short or 'none'}.\n\n## Log fields (MCP calls)\n\n"
+            f"{n_calls} calls through MCP; {mt['lines']} log lines in the probed stores, "
+            f"{mt['complete_lines']} with caller, principals, acl_snapshot and acl_decision; "
+            f"{mt['allowed']} allowed, {mt['allowed_unresolved']} of them unresolved.\n")
+    d = runner._new_run_dir(Path(a.out or probes.OUT_ROOT),
+                            f"probes-mcp-{started:%Y%m%dT%H%M%S}")
+    files = {"probes.json": {"seed": probes.SEED, "n": a.n, "selected": [
+                 {"store": label, "key": mcp_probes.sample_key(label, p.probe_id),
+                  **p.to_dict()} for label, p in selected]},
+             "results.json": {"results": [{"store": label, **r.to_dict()}
+                                          for label, r in results]},
+             "summary.json": {"config": cfg, "summary": summary, "logs": logs}}
+    for name, data in files.items():
+        (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False,
+                                         default=str) + "\n", encoding="utf-8")
+    (d / "summary.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(selected)} probes through MCP; wall-clock {time.perf_counter() - t0:.1f} s")
+    ok = (summary["total"]["leaks"] == 0 and summary["total"]["invalid"] == 0
+          and mt["complete"] and mt["lines"] == n_calls)
     return 0 if ok else 1
 
 
@@ -950,6 +1125,37 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-tools-<time>/")
     p.set_defaults(fn=_tools_probes)
+
+    p = sub.add_parser("mcp-probes",
+                       help="B1 through MCP (no model calls): the seeded 300 of the leak probes "
+                            "of every store, each through an `adr mcp` server of its caller "
+                            "(Phase 2)")
+    p.add_argument("--store", action="append", default=None, metavar="LABEL=PATH",
+                   help="a store to sample from (labels: the corpora and tools; default the "
+                        "p2 copies of gov, research and bench and the ToolRet store)")
+    p.add_argument("--tool-index", default=None, metavar="FP",
+                   help="the fingerprint (or a prefix of 8+ characters) of the tools store's "
+                        "active tool index; refused unless it is that")
+    p.add_argument("--n", type=int, default=300, help="probes to select (default 300)")
+    p.add_argument("--per-family", type=int, default=None, metavar="N",
+                   help="N leak probes per family in the universe instead of the spec's (a "
+                        "quick check; recorded)")
+    p.add_argument("--views", type=Path, default=None, metavar="DIR",
+                   help="root of the reference stores, one folder per corpus (default "
+                        "<p2_store_dir>/views; built or reused, removed unless --keep-views)")
+    p.add_argument("--keep-views", action="store_true", help="keep the reference stores")
+    p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
+                   help="the directory reference stores sync from")
+    p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
+                   help="the policy reference stores sync from")
+    p.add_argument("--allow-other-index", action="store_true",
+                   help="probe a content store whose active index is not the Phase 1 one")
+    p.add_argument("--timeout", type=float, default=300.0,
+                   help="seconds an MCP call may take (the first call loads the index)")
+    p.add_argument("--emb-cache", type=Path, default=None, help="embedding cache directory")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-mcp-<time>/")
+    p.set_defaults(fn=_mcp_probes)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")
