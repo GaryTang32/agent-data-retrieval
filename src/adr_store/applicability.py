@@ -600,6 +600,40 @@ def admits(env: Envelope, f: Filters) -> bool:
                                             or env.authority_tier > f.max_tier))
 
 
+def _listed(values: tuple[str, ...]) -> str:
+    return ", ".join(values)
+
+
+def exclusion_reason(env: Envelope, f: Filters) -> str | None:
+    """Why the filters exclude the document (one line, the first rule of `admits` that fails),
+    or None when they admit it."""
+    if f.as_of is None:
+        if env.superseded_by is not None and not f.include_superseded:
+            return f"superseded by {env.superseded_by[:12]}…"
+    else:
+        d = f.as_of.isoformat()
+        if env.valid_from is None:
+            return f"valid_from unknown, so not in force on {d}"
+        span = (f"in force from {env.valid_from.isoformat()}"
+                + ("" if env.valid_to is None else f" until {env.valid_to.isoformat()}"))
+        if f.as_of < env.valid_from or (env.valid_to is not None and f.as_of >= env.valid_to):
+            return f"{span}, not in force on {d}"
+        if env.status == "proposed_rule" and (f.status is None
+                                              or "proposed_rule" not in f.status):
+            return "a proposed rule, excluded under as_of unless status names proposed_rule"
+    if f.status is not None and (env.status == "unknown" or env.status not in f.status):
+        return f"status {env.status} is not one of {_listed(f.status)}"
+    if f.jurisdiction is not None and (env.jurisdiction is None
+                                       or env.jurisdiction not in f.jurisdiction):
+        return (f"jurisdiction {env.jurisdiction or 'unknown'} is not one of "
+                f"{_listed(f.jurisdiction)}")
+    if f.max_tier is not None and (env.authority_tier is None
+                                   or env.authority_tier > f.max_tier):
+        tier = "unknown" if env.authority_tier is None else env.authority_tier
+        return f"authority tier {tier} is above {f.max_tier}"
+    return None
+
+
 class Applicability:
     """A loaded overlay: its id, the snapshot it describes and the envelopes by doc id."""
 

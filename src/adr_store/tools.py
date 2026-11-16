@@ -45,6 +45,24 @@ POSIX-only (it is handed its pipes as file descriptors).
 Document, element and chunk ids may be given as a unique prefix of at least 8 characters;
 results always carry full ids.
 
+Applicability filters (Phase 2 spec §4.4, §6.1). `search`, `grep` and `read` take the same
+`filters` (`applicability.Filters`, or a dict as `Filters.parse` takes it; None is the
+default). The applicability overlay of the store's HEAD snapshot is loaded when present (a
+damaged one is refused). The default excludes superseded documents, `include_superseded`
+drops that, `as_of`, `status`, `jurisdiction` and `max_tier` as §4.4. Search masks the
+excluded documents inside the index before each channel's top-k cut (a filter never starves
+the result); when the filters exclude nothing it is the Phase 1 call itself. Grep scans only
+the admitted documents. A read, or a doc-scoped grep, of a document the filters exclude is
+refused with the reason ("document <id> is excluded by the filters (<reason>); pass
+include_superseded or another as_of"): filters are not secret. Without an overlay, filters
+that read envelope fields (`Filters.needs_overlay`) are refused ("no applicability overlay;
+run `adr applicability derive`") and the default and `include_superseded` exclude nothing
+(the Phase 1 behaviour). Results carry `applicability` (the overlay id, or None), `filters`
+(the filters applied, as `Filters.to_dict`) and, for search and grep, `excluded_by_filter`
+(how many documents of the snapshot the filters excluded; the caller's view once views
+exist). Log lines of these tools carry the caller's `filters` in `args`, and `filters` and
+`applicability` beside them (null when the call failed before they were known).
+
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
 single `O_APPEND` write, after the result is computed; the log is never read, so it cannot
@@ -69,6 +87,7 @@ from pathlib import Path
 from re import _parser as re_parser
 
 from adr_store import grep_worker
+from adr_store.applicability import Applicability, Filters, exclusion_reason, load_overlay
 from adr_store.embedding import EmbeddingCache
 from adr_store.records import sha256_text
 from adr_store.retrieval import Settings, StoreIndex
@@ -86,6 +105,7 @@ SEARCH_TOP = 10
 CONTEXT_CHARS = 80  # characters of context on each side of a grep match
 MIN_PREFIX = 8
 DEFAULT_EMB_CACHE = Path(".cache/emb")
+NO_OVERLAY = "no applicability overlay; run `adr applicability derive`"
 
 
 class ToolError(Exception):
@@ -168,6 +188,9 @@ class SearchResult(_Result):
     fingerprint: str
     w: float | None
     hits: list[Hit] = field(default_factory=list)
+    applicability: str | None = None
+    filters: dict = field(default_factory=lambda: Filters().to_dict())
+    excluded_by_filter: int = 0
 
 
 @dataclass(frozen=True)
@@ -182,6 +205,8 @@ class ReadResult(_Result):
     element_id: str | None
     chunk_id: str | None
     text: str
+    applicability: str | None = None
+    filters: dict = field(default_factory=lambda: Filters().to_dict())
 
 
 @dataclass(frozen=True)
@@ -204,6 +229,9 @@ class GrepResult(_Result):
     snapshot: str
     truncated: bool
     matches: list[GrepMatch] = field(default_factory=list)
+    applicability: str | None = None
+    filters: dict = field(default_factory=lambda: Filters().to_dict())
+    excluded_by_filter: int = 0
 
 
 # -- helpers ------------------------------------------------------------------------------
@@ -277,6 +305,45 @@ def _context(text: str, start: int, end: int) -> str:
     out = ("…" if left > line_start else "") + text[left:start] + match + text[end:right] + \
         ("…" if right < line_end else "")
     return _CONTROL.sub(" ", out)
+
+
+def _filters_arg(filters: object) -> object:
+    """The caller's `filters` as logged: a `Filters` as its dict, anything else as JSON."""
+    if isinstance(filters, Filters):
+        return filters.to_dict()
+    try:
+        return json.loads(json.dumps(filters, default=str))
+    except (TypeError, ValueError, RecursionError):
+        return repr(filters)
+
+
+@dataclass(frozen=True)
+class _Applied:
+    """The filters of one call and what they admit: `allowed` None when they exclude
+    nothing (the Phase 1 path)."""
+
+    filters: Filters
+    overlay: Applicability | None
+    allowed: frozenset[str] | None
+    excluded: int
+
+    def reason(self, doc_id: str) -> str | None:
+        if self.overlay is None:
+            return None
+        return exclusion_reason(self.overlay.records[doc_id], self.filters)
+
+    def refuse_excluded(self, doc_id: str) -> None:
+        reason = self.reason(doc_id)
+        if reason is not None:
+            raise ToolError(f"document {doc_id} is excluded by the filters ({reason}); pass "
+                            f"include_superseded or another as_of")
+
+    def fields(self) -> dict:
+        return {"applicability": None if self.overlay is None else self.overlay.overlay_id,
+                "filters": self.filters.to_dict()}
+
+
+_UNLOADED = object()
 
 
 # the fields of active.json the tools use, with their types
@@ -390,6 +457,7 @@ class Tools:
         self._index: StoreIndex | None = None
         self._active: dict | None = None
         self._chunks: dict[str, dict] | None = None
+        self._overlay: Applicability | None | object = _UNLOADED
 
     @property
     def index_root(self) -> Path:
@@ -413,10 +481,13 @@ class Tools:
         finally:
             os.close(fd)
 
-    def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]]):
-        """Run one tool call and log it; `fn` returns (result, result ids, extra fields)."""
+    def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]],
+              fields: dict | None = None):
+        """Run one tool call and log it; `fn` returns (result, result ids, extra fields).
+        `fields` are logged on every line, refused or not: `fn` fills in what it learns."""
         entry = {"time": datetime.now(UTC).isoformat(), "tool": tool, "args": args,
                  "snapshot": self.snapshot}
+        fields = {} if fields is None else fields
         try:
             result, ids, extra = fn()
         except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
@@ -426,12 +497,40 @@ class Tools:
                 error = "interrupted"
             else:
                 error = f"unexpected {type(e).__name__}: {e}"
-            self._append_log({**entry, "results": [], "error": error})
+            self._append_log({**entry, **fields, "results": [], "error": error})
             if isinstance(e, StoreError):
                 raise ToolError(str(e)) from e
             raise
-        self._append_log({**entry, **extra, "results": ids})
+        self._append_log({**entry, **fields, **extra, "results": ids})
         return result
+
+    # -- applicability ------------------------------------------------------------------
+
+    def _applicability(self) -> Applicability | None:
+        """The applicability overlay of the snapshot, or None (loaded once)."""
+        if self._overlay is _UNLOADED:
+            self._overlay = load_overlay(self.store_path, self.snapshot)
+        return self._overlay
+
+    def _apply(self, filters: object, fields: dict) -> _Applied:
+        """Parse the caller's filters and work out what they admit (logged in `fields`)."""
+        try:
+            f = Filters.parse(filters)
+        except (ValueError, TypeError) as e:
+            raise ToolError(f"bad filters: {e}") from e
+        fields["filters"] = f.to_dict()
+        overlay = self._applicability()
+        if overlay is None:
+            if f.needs_overlay():
+                raise ToolError(NO_OVERLAY)
+            return _Applied(f, None, None, 0)
+        fields["applicability"] = overlay.overlay_id
+        allowed, excluded = overlay.allowed_docs(self.store.doc_ids(), f)
+        return _Applied(f, overlay, None if excluded == 0 else allowed, excluded)
+
+    @staticmethod
+    def _filter_fields() -> dict:
+        return {"filters": None, "applicability": None}
 
     # -- index ------------------------------------------------------------------------
 
@@ -600,11 +699,16 @@ class Tools:
 
     # -- search -----------------------------------------------------------------------
 
-    def search(self, query: str, top: int = SEARCH_TOP) -> SearchResult:
-        """The top chunks of the active index for `query`."""
+    def search(self, query: str, top: int = SEARCH_TOP, *,
+               filters: Filters | dict | None = None) -> SearchResult:
+        """The top chunks of the active index for `query` among the documents the filters
+        admit."""
+        fields = self._filter_fields()
+
         def run():
             if isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= CHANNEL_K:
                 raise ToolError(f"top must be between 1 and {CHANNEL_K}, got {top!r}")
+            applied = self._apply(filters, fields)
             active = self._active_record()
             if active["rerank"] and top > RERANK_TOP:
                 raise ToolError(f"the index ({active['system']}) reranks its top {RERANK_TOP} "
@@ -612,37 +716,46 @@ class Tools:
             idx, active = self._active_index()
             hits = []
             for rank, (cid, score) in enumerate(
-                    idx.retrieve(query, fusion="linear", w=active["w"], top=top), start=1):
+                    idx.retrieve(query, fusion="linear", w=active["w"], top=top,
+                                 allowed_docs=applied.allowed), start=1):
                 c = idx.chunks[cid]
                 hits.append(Hit(rank, cid, c.doc_id, c.char_start, c.char_end, c.breadcrumb,
                                 score, self.snapshot))
             res = SearchResult(query, top, self.snapshot, active["system"],
-                               active["lexical_only"], idx.fingerprint, active["w"], hits)
+                               active["lexical_only"], idx.fingerprint, active["w"], hits,
+                               **applied.fields(), excluded_by_filter=applied.excluded)
             return res, [h.chunk_id for h in hits], {"index": idx.fingerprint}
 
-        return self._call("search", {"query": query, "top": top}, run)
+        return self._call("search", {"query": query, "top": top,
+                                     "filters": _filters_arg(filters)}, run, fields)
 
     # -- read -------------------------------------------------------------------------
 
     def read(self, doc_id: str, start: int | None = None, end: int | None = None, *,
-             element: str | None = None, chunk: str | None = None) -> ReadResult:
+             element: str | None = None, chunk: str | None = None,
+             filters: Filters | dict | None = None) -> ReadResult:
         """The exact text of a range of a document: `start`/`end` (either may be left out),
-        an element, a chunk of the active index, or (none given) the whole document."""
+        an element, a chunk of the active index, or (none given) the whole document. A
+        document the filters exclude is refused with the reason."""
         args = {"doc_id": doc_id, "start": start, "end": end, "element": element,
-                "chunk": chunk}
+                "chunk": chunk, "filters": _filters_arg(filters)}
+        fields = self._filter_fields()
 
         def run():
-            res = self._read_impl(doc_id, start, end, element, chunk)
+            res = self._read_impl(doc_id, start, end, element, chunk, filters, fields)
             return res, [[res.doc_id, res.char_start, res.char_end]], {}
 
-        return self._call("read", args, run)
+        return self._call("read", args, run, fields)
 
-    def _read_impl(self, doc_id, start, end, element, chunk) -> ReadResult:
+    def _read_impl(self, doc_id, start, end, element, chunk, filters=None,
+                   fields=None) -> ReadResult:
         modes = (start is not None or end is not None, element is not None, chunk is not None)
         if sum(modes) > 1:
             raise ToolError("give one of --start/--end, --element or --chunk")
+        applied = self._apply(filters, {} if fields is None else fields)
         where = f"snapshot {_short(self.snapshot)}"
         doc_id = _resolve(doc_id, self.store.doc_ids(), "document", where)
+        applied.refuse_excluded(doc_id)
         text = self.store.text(doc_id)
         element_id = chunk_id = None
         if element is not None:
@@ -673,24 +786,27 @@ class Tools:
         part = text[start:end]
         return ReadResult(self.snapshot, doc_id, self.store.source(doc_id).uri,
                           self.store.path_of(doc_id), start, end, sha256_text(part),
-                          element_id, chunk_id, part)
+                          element_id, chunk_id, part, **applied.fields())
 
     # -- grep -------------------------------------------------------------------------
 
     def grep(self, pattern: str, doc: str | None = None, max: int = GREP_MAX,
-             ignore_case: bool = False, timeout: float = GREP_TIMEOUT) -> GrepResult:
+             ignore_case: bool = False, timeout: float = GREP_TIMEOUT, *,
+             filters: Filters | dict | None = None) -> GrepResult:
         """Regular-expression matches in (doc_id, offset) order, at most `max`, within
-        `timeout` seconds of matching."""
+        `timeout` seconds of matching, in the documents the filters admit."""
         args = {"pattern": pattern, "doc": doc, "max": max, "ignore_case": ignore_case,
-                "timeout": timeout}
+                "timeout": timeout, "filters": _filters_arg(filters)}
+        fields = self._filter_fields()
 
         def run():
-            res = self._grep_impl(pattern, doc, max, ignore_case, timeout)
+            res = self._grep_impl(pattern, doc, max, ignore_case, timeout, filters, fields)
             return res, [[m.doc_id, m.char_start, m.char_end] for m in res.matches], {}
 
-        return self._call("grep", args, run)
+        return self._call("grep", args, run, fields)
 
-    def _grep_impl(self, pattern, doc, max_, ignore_case, timeout) -> GrepResult:
+    def _grep_impl(self, pattern, doc, max_, ignore_case, timeout, filters=None,
+                   fields=None) -> GrepResult:
         if isinstance(max_, bool) or not isinstance(max_, int) or max_ < 1:
             raise ToolError(f"max must be a positive integer, got {max_!r}")
         if isinstance(timeout, bool) or not isinstance(timeout, int | float) or \
@@ -709,10 +825,14 @@ class Tools:
                  f"at every position; make it match at least one character")
         if min_width == 0 or rx.search("") is not None:
             raise ToolError(empty)
+        applied = self._apply(filters, {} if fields is None else fields)
         doc_ids = self.store.doc_ids()
         if doc is not None:
             doc = _resolve(doc, doc_ids, "document", f"snapshot {_short(self.snapshot)}")
+            applied.refuse_excluded(doc)
             doc_ids = [doc]
+        elif applied.allowed is not None:
+            doc_ids = [d for d in doc_ids if d in applied.allowed]
         matches: list[GrepMatch] = []
         status = grep_worker.DONE
         with _GrepWorker(timeout) as worker:
@@ -732,4 +852,5 @@ class Tools:
         if status == grep_worker.EMPTY:  # the minimum-width check should have caught it
             raise ToolError(empty)
         return GrepResult(pattern, ignore_case, doc, max_, self.snapshot,
-                          status == grep_worker.MORE, matches)
+                          status == grep_worker.MORE, matches, **applied.fields(),
+                          excluded_by_filter=applied.excluded)

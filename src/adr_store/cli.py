@@ -7,6 +7,10 @@ store's HEAD snapshot, code in `adr_store.applicability`).
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
 `--json` prints the result as JSON, otherwise a short table; every result names its snapshot.
+`adr search`, `adr grep` and `adr read` take the applicability filters (Phase 2 spec §4.4):
+`--include-superseded`, `--as-of YYYY-MM-DD`, `--status S` and `--jurisdiction J`
+(repeatable) and `--max-tier N`; with none given the call passes no filters (the default:
+superseded documents excluded when the store has an applicability overlay).
 A refused call (unknown id, range out of bounds, bad pattern, a pattern that runs past
 `adr grep --timeout`, a missing or damaged index) exits 2 with a message on stderr; every tool
 call, refused or not, writes one line to the store's retrieval log, and an unexpected error
@@ -452,14 +456,41 @@ def _index(a: argparse.Namespace) -> int:
     return 0
 
 
+def _filters(a: argparse.Namespace) -> dict | None:
+    """The filters the flags give, or None when no filter flag is given."""
+    f = {}
+    if a.include_superseded:
+        f["include_superseded"] = True
+    for key in ("as_of", "status", "jurisdiction", "max_tier"):
+        if getattr(a, key) is not None:
+            f[key] = getattr(a, key)
+    return f or None
+
+
+def _print_filters(res, excluded: int | None) -> None:
+    """One line naming the filters of a result and what they excluded; none without an
+    overlay (the table is then Phase 1's)."""
+    if res.applicability is None:
+        return
+    f = res.filters
+    parts = [f"as_of {f['as_of']}" if f["as_of"] is not None else
+             "include_superseded" if f["include_superseded"] else "default"]
+    parts += [f"{k} {','.join(map(str, f[k]))}" for k in ("status", "jurisdiction") if f[k]]
+    if f["max_tier"] is not None:
+        parts.append(f"max_tier {f['max_tier']}")
+    tail = "" if excluded is None else f", {excluded} document(s) excluded"
+    print(f"  filters {'; '.join(parts)} (overlay {res.applicability[:12]}){tail}")
+
+
 def _search(a: argparse.Namespace) -> int:
-    res = _tools(a).search(a.query, top=a.top)
+    res = _tools(a).search(a.query, top=a.top, filters=_filters(a))
     if a.json:
         _print_json(res)
         return 0
     lex = ", lexical only" if res.lexical_only else ""
     print(f"snapshot {res.snapshot[:12]}  index {res.system} {res.fingerprint[:12]}{lex}  "
           f"{len(res.hits)} hit(s)")
+    _print_filters(res, res.excluded_by_filter)
     print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  breadcrumb")
     for h in res.hits:
         print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
@@ -468,7 +499,8 @@ def _search(a: argparse.Namespace) -> int:
 
 
 def _read(a: argparse.Namespace) -> int:
-    res = _tools(a).read(a.doc_id, a.start, a.end, element=a.element, chunk=a.chunk)
+    res = _tools(a).read(a.doc_id, a.start, a.end, element=a.element, chunk=a.chunk,
+                         filters=_filters(a))
     if a.json:
         _print_json(res)
         return 0
@@ -482,12 +514,13 @@ def _read(a: argparse.Namespace) -> int:
 
 def _grep(a: argparse.Namespace) -> int:
     res = _tools(a).grep(a.pattern, doc=a.doc, max=a.max, ignore_case=a.ignore_case,
-                         timeout=a.timeout)
+                         timeout=a.timeout, filters=_filters(a))
     if a.json:
         _print_json(res)
         return 0
     more = f" (stopped at --max {res.max})" if res.truncated else ""
     print(f"snapshot {res.snapshot[:12]}  {len(res.matches)} match(es){more}")
+    _print_filters(res, res.excluded_by_filter)
     for m in res.matches:
         print(f"{m.doc_id[:12]}  {m.char_start}-{m.char_end}  line {m.line}  "
               f"{_cut(m.context, 2 * TABLE_FIELD)}")
@@ -569,6 +602,22 @@ def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
     return p
 
 
+def _filter_flags(p: argparse.ArgumentParser) -> None:
+    f = p.add_argument_group("applicability filters (Phase 2; need an applicability overlay, "
+                             "except --include-superseded)")
+    f.add_argument("--include-superseded", action="store_true",
+                   help="keep superseded documents (the Phase 1 view)")
+    f.add_argument("--as-of", default=None, metavar="YYYY-MM-DD",
+                   help="only documents in force on this date (replaces the superseded "
+                        "default; excludes proposed rules unless --status names them)")
+    f.add_argument("--status", action="append", default=None, metavar="S",
+                   help="keep this status (repeatable)")
+    f.add_argument("--jurisdiction", action="append", default=None, metavar="J",
+                   help="keep this jurisdiction (repeatable)")
+    f.add_argument("--max-tier", type=int, default=None, metavar="N",
+                   help="keep authority tier N or lower (1 to 4)")
+
+
 def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools.")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -606,6 +655,7 @@ def _parser() -> argparse.ArgumentParser:
     se.add_argument("query")
     se.add_argument("--top", type=_positive, default=tools.SEARCH_TOP,
                     help=f"number of chunks (default {tools.SEARCH_TOP})")
+    _filter_flags(se)
 
     rd = _tool_parser(sub, "read", "the exact text of a document range", _read)
     rd.add_argument("doc_id", help="document id (or a unique prefix of 8+ characters)")
@@ -613,6 +663,7 @@ def _parser() -> argparse.ArgumentParser:
     rd.add_argument("--end", type=int, default=None)
     rd.add_argument("--element", default=None, help="an element id of the document")
     rd.add_argument("--chunk", default=None, help="a chunk id of the active index")
+    _filter_flags(rd)
 
     gr = _tool_parser(sub, "grep", "regular-expression matches in (doc_id, offset) order",
                       _grep)
@@ -625,6 +676,7 @@ def _parser() -> argparse.ArgumentParser:
     gr.add_argument("--timeout", type=float, default=tools.GREP_TIMEOUT,
                     help=f"seconds the pattern may spend matching (default "
                          f"{tools.GREP_TIMEOUT:g}, at most {tools.GREP_TIMEOUT_MAX:g})")
+    _filter_flags(gr)
 
     app = sub.add_parser("applicability", help="the applicability overlay (Phase 2)")
     app_sub = app.add_subparsers(dest="action", required=True)

@@ -316,7 +316,7 @@ def test_search_returns_the_index_ranking_with_the_snapshot_on_every_hit(store):
 def test_search_json_shape(store):
     d = lexical(store).search(QUERY, top=2).to_dict()
     assert set(d) == {"query", "top", "snapshot", "system", "lexical_only", "fingerprint", "w",
-                      "hits"}
+                      "hits", "applicability", "filters", "excluded_by_filter"}
     assert set(d["hits"][0]) == {"rank", "chunk_id", "doc_id", "char_start", "char_end",
                                  "breadcrumb", "score", "snapshot"}
     json.dumps(d)
@@ -502,13 +502,14 @@ def test_every_call_appends_exactly_one_log_line(store):
     assert idx["args"] == {"system": "p1-struct", "lexical_only": True, "w_bc": None,
                            "weight": None, "tuning": None, "threads": 1}
     assert idx["results"] == [info.fingerprint]
-    assert srch["args"] == {"query": QUERY, "top": 3}
+    assert srch["args"] == {"query": QUERY, "top": 3, "filters": None}
     assert srch["results"] == [h.chunk_id for h in res.hits]
     assert srch["index"] == info.fingerprint
-    assert rdl["args"] == {"doc_id": d, "start": 2, "end": 9, "element": None, "chunk": None}
+    assert rdl["args"] == {"doc_id": d, "start": 2, "end": 9, "element": None, "chunk": None,
+                           "filters": None}
     assert rdl["results"] == [[d, rd.char_start, rd.char_end]]
     assert grl["args"] == {"pattern": "refund", "doc": None, "max": 2, "ignore_case": False,
-                           "timeout": tools.GREP_TIMEOUT}
+                           "timeout": tools.GREP_TIMEOUT, "filters": None}
     assert grl["results"] == [[m.doc_id, m.char_start, m.char_end] for m in gr.matches]
 
 
@@ -994,11 +995,12 @@ def test_cli_read_grep_index_json_keys(store, capsys):
     code, out, _ = run(capsys, "read", a_doc(store), "--store", s, "--end", 10, "--json")
     assert code == 0 and set(json.loads(out)) == {
         "snapshot", "doc_id", "uri", "path", "char_start", "char_end", "text_sha256", "element_id",
-        "chunk_id", "text"}
+        "chunk_id", "text", "applicability", "filters"}
     code, out, _ = run(capsys, "grep", "refund", "--store", s, "--json")
     gr = json.loads(out)
     assert code == 0 and set(gr) == {"pattern", "ignore_case", "doc", "max", "snapshot",
-                                     "truncated", "matches"}
+                                     "truncated", "matches", "applicability", "filters",
+                                     "excluded_by_filter"}
     assert set(gr["matches"][0]) == {"doc_id", "char_start", "char_end", "line", "match",
                                      "context", "snapshot"}
 
