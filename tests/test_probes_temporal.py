@@ -4,6 +4,7 @@ chapter. No model calls; lexical-only index."""
 
 import json
 import re
+from collections import defaultdict
 from datetime import date, timedelta
 
 import pytest
@@ -150,6 +151,56 @@ def test_build_gives_the_five_sets(gov, items, overlay):
     assert len({p.probe_id for p in probes}) == len(probes)
     again = temporal.build(gov, items, overlay)
     assert [p.to_dict() for p in again] == [p.to_dict() for p in probes]
+
+
+@pytest.mark.parametrize("text, line", [
+    ("§ 1.1 Title.\nBody", "§ 1.1 Title."),
+    ("\u200b\n§ 165.T08-0413 Safety Zone.\nBody", "§ 165.T08-0413 Safety Zone."),
+    ("\ufeff \u200c\n\n  \u200d\t\n\u200b§ 2.2 Title.\u200b \nBody", "§ 2.2 Title."),
+    ("\n\u200b\n", ""),
+])
+def test_first_line_skips_lines_of_only_whitespace_and_format_characters(text, line):
+    assert temporal.first_line(text) == line
+
+
+@pytest.fixture(scope="module")
+def gov_zw(tmp_path_factory):
+    """As `gov`, with a line of only format characters (category Cf) opening the older
+    versions of § 117.189 (a changed section, T2) and § 117.261 (a removed one, T3), as
+    § 165.T08-0413 of the real corpus opens with a zero-width space line."""
+    root = tmp_path_factory.mktemp("gov-zw")
+    GovAdapter(HTTP / "gov" / "config.json").download(root, RecordedFetcher(HTTP / "gov"))
+    new = next(root.rglob(f"part-117/{NEW}.xml"))
+    new.write_bytes(_remove_section(new.read_bytes(), "117.261"))
+    old = next(root.rglob(f"part-117/{OLD}.xml"))
+    xml = old.read_bytes()
+    for number, line in (("117.189", b"<P>&#xFEFF; &#x200C;</P>"), ("117.261", b"<P>&#x200B;</P>")):
+        xml, n = re.subn(rf'(<DIV8 N="{re.escape(number)}"[^>]*>)'.encode(),
+                         lambda m, line=line: m.group(1) + line, xml)
+        assert n == 1
+    old.write_bytes(xml)
+    m = GovAdapter(HTTP / "gov" / "config.json").build_manifest(root)
+    write_manifest(m, root / "manifest.json")
+    return load_corpus(root / "manifest.json", root)
+
+
+def test_section_queries_skip_a_leading_line_of_format_characters(gov_zw, items):
+    removed = GovAdapter().removed_sections(gov_zw)
+    assert [s.text.split("\n", 1)[0] for s, _, _ in removed] == ["\u200b"]
+    by = {(p.set, p.mode): p for p in temporal.build(gov_zw, items[:0], _NoT5())}
+    for mode in ("default", "as_of"):
+        assert by["T3", mode].query == (
+            "§ 117.261 Atlantic Intracoastal Waterway from St. Marys River to Key Largo.")
+        assert by["T2", mode].query == "§ 117.189 Sacramento River."
+
+
+class _NoT5:
+    """An applicability overlay whose every document has a `valid_from` (T5 needs one)."""
+
+    class _R:
+        valid_from = date(2024, 1, 1)
+
+    records = defaultdict(_R)
 
 
 def test_the_probes_pass_on_the_tools(gov, items, overlay, store):

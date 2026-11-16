@@ -3,8 +3,10 @@ golden items and the store's applicability overlay; run through `adr_store.tools
 
 - T1: every `policy_asof` item with a date, `as_of` = the item's. Pass: no chunk (hit or
   alternate) of a document not in force on `as_of`.
-- T2: every changed section (`version_pairs`), query = its heading ("§ N Title."). Default
-  mode, pass: no chunk of a superseded document; the head version's section rank is reported.
+- T2: every changed section (`version_pairs`), query = its heading ("§ N Title.": the first
+  line of its text not empty once whitespace and format characters are stripped, see
+  `first_line`). Default mode, pass: no chunk of a superseded document; the head version's
+  section rank is reported.
   `as_of` = the older version's date, pass: no chunk not in force on `as_of` (so none of
   another version); the old section's Recall@10 and other-version chunks are reported.
 - T3: every removed section (`removed_sections`), query = its heading. Default mode as T2;
@@ -30,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 
@@ -62,6 +65,26 @@ class Probe:
 # -- building ------------------------------------------------------------------------------
 
 
+def _blank(ch: str) -> bool:
+    return ch.isspace() or unicodedata.category(ch) == "Cf"
+
+
+def first_line(text: str) -> str:
+    """The first line of `text` that is not empty once whitespace and Unicode format
+    characters (category Cf: zero-width space, BOM, ZWNJ, ZWJ, ...) are stripped from its
+    ends, so stripped; "" if there is none. Some eCFR sections open with a line holding only
+    a zero-width space, the heading on the next line."""
+    for line in text.split("\n"):
+        i, j = 0, len(line)
+        while i < j and _blank(line[i]):
+            i += 1
+        while j > i and _blank(line[j - 1]):
+            j -= 1
+        if i < j:
+            return line[i:j]
+    return ""
+
+
 def _title(loaded: LoadedCorpus, doc) -> str:
     text = loaded.docs[doc.doc_id].text
     if family_of(doc.uri) == "fr":
@@ -73,7 +96,7 @@ def _title(loaded: LoadedCorpus, doc) -> str:
         if m:
             title = " ".join(m.group(1).decode("utf-8", "replace").split())
             return title.removesuffix(_IRM_SUFFIX).strip()
-    return text.strip().split("\n", 1)[0][:200]
+    return first_line(text)[:200]
 
 
 def substring(text: str, doc_id: str, n: int = SUBSTRING) -> str:
@@ -114,7 +137,8 @@ def build(loaded: LoadedCorpus, items: list[GoldenItem],
         number = old.uri.rsplit("#", 1)[1]
         chain, versions = chain_of[old.doc_id]
         old_doc = next(d for d in versions if d.doc_id == old.doc_id)
-        start, end, heading = spans_of(old_doc)[number]
+        start, end, _heading = spans_of(old_doc)[number]
+        heading = first_line(old.text)
         head = versions[-1]
         head_span = spans_of(head).get(number)
         target = {"chain": chain, "section": number, "old_doc": old.doc_id,
@@ -127,7 +151,7 @@ def build(loaded: LoadedCorpus, items: list[GoldenItem],
     for section, start, end in adapter.removed_sections(loaded):
         number = section.uri.rsplit("#", 1)[1]
         chain, _ = chain_of[section.doc_id]
-        heading = section.text.split("\n", 1)[0]
+        heading = first_line(section.text)
         target = {"chain": chain, "section": number, "doc": section.doc_id,
                   "span": [start, end]}
         pid = f"T3:{chain}:{number}:{section.source_version}"
