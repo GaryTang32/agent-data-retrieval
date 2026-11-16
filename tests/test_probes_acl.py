@@ -399,6 +399,8 @@ def test_the_90_failclosed_probes_return_no_content(store, config, tmp_path):
     assert s["conditions"]["no_entry"]["top10_before"] == 15
     assert (store.path / "acl" / "HEAD").read_bytes() == head  # the store itself unchanged
     assert not any((tmp_path / "clones").glob("failclosed-*"))
+    # nothing is left under the clone root, the "no entry" policy included
+    assert not (tmp_path / "clones").exists() or not any((tmp_path / "clones").iterdir())
     total = probes_acl.total_scan(logs)
     assert total["lines"] == 95 and total["complete"]  # 90 calls and 5 read controls
     assert total["decisions"]["allowed"] == 20
@@ -493,6 +495,27 @@ def test_an_allowed_line_needs_its_resolved_fields_non_null(tmp_path):
         (7, 7, 5, 4)
     assert not probes_acl.total_scan({"a": s})["complete"]
     log.write_text("".join(json.dumps(x) + "\n" for x in lines[:3]))
+    assert probes_acl.total_scan({"a": probes_acl.scan_log(log)})["complete"]
+
+
+def test_an_allowed_tool_call_line_needs_its_tool_view_and_tool_snapshot(tmp_path):
+    """An allowed `search_tools` or `load_tool` line must also carry a non-null `tool_view`
+    and `tools_snapshot`; the content tools' lines have neither field."""
+    log = tmp_path / "retrieval.jsonl"
+    ok = {"caller": "user:a", "principals": ["public"], "acl_snapshot": "x",
+          "acl_decision": "allowed", "view": "v"}
+    tool_ok = {**ok, "tool": "search_tools", "tool_view": "tv", "tools_snapshot": "ts"}
+    denied = {"tool": "load_tool", "caller": "user:ghost", "principals": None,
+              "acl_snapshot": "x", "acl_decision": "denied:F4", "view": None,
+              "tool_view": None, "tools_snapshot": None}
+    lines = [{**ok, "tool": "search"}, tool_ok, {**tool_ok, "tool": "load_tool"}, denied,
+             {**tool_ok, "tool_view": None}, {**tool_ok, "tools_snapshot": None},
+             {k: v for k, v in tool_ok.items() if k != "tool_view"}]
+    log.write_text("".join(json.dumps(x) + "\n" for x in lines))
+    s = probes_acl.scan_log(log)
+    assert (s["lines"], s["allowed"], s["allowed_unresolved"]) == (7, 6, 3)
+    assert not probes_acl.total_scan({"a": s})["complete"]
+    log.write_text("".join(json.dumps(x) + "\n" for x in lines[:4]))
     assert probes_acl.total_scan({"a": probes_acl.scan_log(log)})["complete"]
 
 

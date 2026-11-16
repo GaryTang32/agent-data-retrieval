@@ -61,17 +61,21 @@ The query field is used; `instruction` is not.
 `adr tools ingest --toolret` turns each tool into a tool record (`adr_store.tool_records.
 from_toolret`): `source_uri` `toolret:mangopy/ToolRet-Tools@<revision>/<config>#<toolret id>`
 with the tool's own config (`web` or `customized`; gold ids map to `tool_id`s through it),
-`source_version` the revision, `license` from `config.json`, parameters as an object schema
+`source_version` the revision, `license` the tool file's own licence in `config.json`
+(`Apache-2.0` for `web`, `NOASSERTION` for `customized`), parameters as an object schema
 with `required`, `operation` = category, API name and method, or null for the
 `toolbench_sam` tools, which have none of those fields. `toolbench_sam_tool_95` has an empty
 name; a ToolRet document whose name is empty or whitespace is named by its ToolRet id.
 
 Measured: 14,059 records, 100% structural conformance (C1), 816,284 definition tokens in all
 (the 197 `toolbench_sam` records 9,348); the tool snapshot is
-`51536a400bba75506fa53cd2addfa95111707a46827177b8f5ee2474c7cbf39d` on every ingest, into the
+`a0dcedeff9abeb84f3d5994b8225c0d32408724fb087c2492fec644a66ef544e` on every ingest, into the
 same store or a new one (the content snapshot of the tools-only store is the empty one,
-`de13b4a8eeac…`). The first ingest of the 13,862 web tools alone gave `a6a3a6cc171d…`; the
-web records are byte-identical in both.
+`de13b4a8eeac…`). Earlier snapshots: `51536a400bba…` (Tasks 9–12), where all 14,059 records
+said `Apache-2.0`; Task 13 gave each tools file its own licence, which changed the 197
+`toolbench_sam` records' `license` field only (the 14,059 `tool_id`s are unchanged, since a
+`tool_id` does not include the licence). The first ingest of the 13,862 web tools alone gave
+`a6a3a6cc171d…`; the web records are byte-identical in all three.
 
 ACL (`adr acl sync`, tools keyed by `tool_id` through the bucket rule of spec §5.2): public
 2,832, two tenants 1,392, one tenant 6,337, one group 3,498 (20.1 / 9.9 / 45.1 / 24.9%).
@@ -98,7 +102,8 @@ Two things the records keep as the source gives them (notes, no change):
   licence (checked in Task 11). Their style (Python spreadsheet and DataFrame methods, curl
   commands) matches SambaNova's ToolBench (Xu et al., 2023), whose repository carries an
   Apache-2.0 LICENSE on its default branch; that attribution is an inference, not stated by
-  ToolRet. Their records carry `license` "Apache-2.0" anyway, because `config.json` gives one
-  licence for the whole pool (changing it would change the tool snapshot).
+  ToolRet. Their records therefore say `license` "NOASSERTION" (`config.json` gives each tools
+  file its own licence since Task 13; until then one pool-wide "Apache-2.0" was copied into
+  all 14,059 records, and `load_tool` returned it to agents).
 - **ToolRet code repository:** Apache-2.0. **The ToolRet dataset cards declare no licence**
   (open question Q2), which is why the data stays local.

@@ -64,15 +64,17 @@ five directory users (`user:auditor`, `user:outsider` and three by seeded hash);
 unreadable, an unparsable snapshot, a schema-invalid one, a file whose hash is not its id), F2
 (a new content snapshot without the target), F3 (synced with a clock 2 h behind for three
 callers, 1 h ahead for two) and "no entry" (re-synced from the policy plus an attribute rule
-mapping the target's uri to `[]`) run on `cp -a` clones of the store, removed afterwards; F4
-and F5 on the store itself. Pass: F1–F5 refuse with that code and return nothing; "no entry"
+mapping the target's uri to `[]`, its policy file written inside the clone) run on `cp -a`
+clones of the store, removed afterwards with everything in them; F4 and F5 on the store
+itself. Pass: F1–F5 refuse with that code and return nothing; "no entry"
 returns nothing of the target (no hit, alternate, scoring chunk or match of it, its secret
 nowhere, and `read` refused exactly as an id that names nothing).
 
 **Log fields** (`log_size`, `scan_log`, B5): every line written has `caller`, `principals`,
 `acl_snapshot` and `acl_decision`, and every `allowed` line has a non-null `caller`,
-`principals`, `acl_snapshot` and `view` (a denied line may hold nulls where access was not
-resolved; an `off` line has no ACL layer).
+`principals`, `acl_snapshot` and `view`, and an allowed `search_tools` or `load_tool` line
+also a non-null `tool_view` and `tools_snapshot` (a denied line may hold nulls where access was
+not resolved; an `off` line has no ACL layer).
 
 **The tool tools** (`search_tools`, `load_tool`): 200 leak probes, 80 fail-closed probes and
 their judges, in the last section of this module (`adr-eval tools-probes`).
@@ -126,6 +128,8 @@ STALE = timedelta(hours=2)
 AHEAD = timedelta(hours=1)
 REQUIRED = ("caller", "principals", "acl_snapshot", "acl_decision")
 RESOLVED = ("caller", "principals", "acl_snapshot", "view")  # non-null on an allowed line
+TOOL_CALLS = ("search_tools", "load_tool")
+TOOL_RESOLVED = ("tool_view", "tools_snapshot")  # also non-null on an allowed tool-call line
 _HEX = re.compile(r"[0-9a-f]{8,}")
 
 
@@ -928,7 +932,7 @@ def run_failclosed(probes: list[Probe], store_path: Path, clone_root: Path, ctx:
                     run(clone, [p for p in ps if p.target["variant"] == variant])
             else:  # no entry
                 pol = _no_entry_policy(policy, ps[0].target["uri"],
-                                       clone_root / "policy-no-entry.json")
+                                       clone / "policy-no-entry.json")
                 before = acl.read_head(clone)[1].docs
                 acl.sync(clone, directory, pol, clock=clock)
                 after = acl.read_head(clone)[1].docs
@@ -981,7 +985,9 @@ def log_size(path: Path) -> int:
 
 def scan_log(path: Path, offset: int = 0) -> dict:
     """The log lines written after byte `offset`: how many, how many lack each of
-    `REQUIRED`, and their decisions and tools."""
+    `REQUIRED`, and their decisions and tools; `allowed_unresolved` counts the allowed lines
+    with a null (or absent) field of `RESOLVED`, or for `search_tools` and `load_tool` also
+    of `TOOL_RESOLVED`."""
     out = {"lines": 0, "complete_lines": 0, "missing": dict.fromkeys(REQUIRED, 0),
            "allowed": 0, "allowed_unresolved": 0, "decisions": {}, "tools": {}}
     try:
@@ -1003,7 +1009,8 @@ def scan_log(path: Path, offset: int = 0) -> dict:
             out["missing"][k] += 1
         if rec.get("acl_decision") == "allowed":
             out["allowed"] += 1
-            out["allowed_unresolved"] += any(rec.get(k) is None for k in RESOLVED)
+            need = RESOLVED + TOOL_RESOLVED if rec.get("tool") in TOOL_CALLS else RESOLVED
+            out["allowed_unresolved"] += any(rec.get(k) is None for k in need)
         decisions[str(rec.get("acl_decision"))] += 1
         tools[str(rec.get("tool"))] += 1
     out["decisions"] = dict(sorted(decisions.items()))
@@ -1411,7 +1418,7 @@ def run_tool_failclosed(probes: list[Probe], store_path: Path, clone_root: Path,
                 run(clone, ps)
             else:  # no entry
                 pol = _no_entry_policy(policy, ps[0].target["uri"],
-                                       clone_root / "policy-tool-no-entry.json")
+                                       clone / "policy-tool-no-entry.json")
                 before = acl.read_head(clone)[1].tools
                 acl.sync(clone, directory, pol, clock=clock)
                 after = acl.read_head(clone)[1].tools

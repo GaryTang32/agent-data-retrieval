@@ -159,6 +159,8 @@ def test_tool_failclosed_probes_pass(store, tmp_path, config):
     assert scan["complete"] and scan["lines"] >= len(ps)
     assert set(scan["tools"]) == {"search_tools", "load_tool"}
     assert not (tmp_path / "clones" / "tool-failclosed-F1").exists()
+    # nothing is left under the clone root, the "no entry" policy included
+    assert not (tmp_path / "clones").exists() or not any((tmp_path / "clones").iterdir())
 
 
 def test_cli_tools_probes(store, tmp_path, config, capsys):

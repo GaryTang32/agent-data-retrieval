@@ -102,6 +102,18 @@ def test_committed_config_pins_the_spec_revisions():
     assert all(len(f["sha256"]) == 64 for f in cfg["files"].values())
 
 
+def test_committed_config_gives_each_tools_file_its_own_licence():
+    """The web tools are ToolBench's (Apache-2.0); no source states a licence for the
+    customized (`toolbench_sam`) tools, so their records say NOASSERTION; there is no
+    pool-wide licence."""
+    cfg = toolret.load_config()
+    assert "license" not in cfg
+    assert cfg["files"]["tools_web"]["license"] == "Apache-2.0"
+    assert cfg["files"]["tools_customized"]["license"] == "NOASSERTION"
+    assert "NOASSERTION" in cfg["license_summary"]
+    assert "toolbench_sam" in cfg["license_summary"]
+
+
 # -- splits -----------------------------------------------------------------------------------
 
 def test_split_assignment_is_fixed():
@@ -118,6 +130,12 @@ def test_tools_keeps_the_toolbench_tools_of_both_configs_sorted(root, config_pat
     rows = toolret.tools(root, config_path)
     assert [r["id"] for r in rows] == TOOL_IDS  # no toolACE (web) or toolalpaca (customized)
     assert all(isinstance(r["documentation"], str) for r in rows)
+    cfg = json.loads(config_path.read_text())
+    for r in rows:
+        key = "tools_web" if r["config"] == "web" else "tools_customized"
+        assert r["license"] == cfg["files"][key]["license"]
+    assert {r["license"] for r in rows if r["id"].startswith("toolbench_sam_")} == \
+        {"NOASSERTION"}
     cfg = {r["id"]: r["config"] for r in rows}
     assert cfg["toolbench_sam_tool_95"] == "customized" and cfg["toolbench_tool_0"] == "web"
     assert {r["revision"] for r in rows} == {"e06c38c75612b6536bd959e08cdd345894aba6a7"}
@@ -173,8 +191,11 @@ def test_fetch_downloads_verifies_and_writes_the_manifest(tmp_path, blobs, confi
     assert files["queries"]["bytes"] == len(blobs["queries"])
     assert written["counts"]["tools"] == 8
     assert written["tool_selection"] == [
-        {"file": "tools_web", "config": "web", "prefix": "toolbench_tool_"},
-        {"file": "tools_customized", "config": "customized", "prefix": "toolbench_sam_tool_"}]
+        {"file": "tools_web", "config": "web", "prefix": "toolbench_tool_",
+         "license": "Apache-2.0"},
+        {"file": "tools_customized", "config": "customized", "prefix": "toolbench_sam_tool_",
+         "license": "NOASSERTION"}]
+    assert "license" not in written and "NOASSERTION" in written["license_summary"]
     first = manifest.read_bytes()
     toolret.fetch(tmp_path / "d", config_path, manifest, fetcher=_mock_fetcher(blobs, calls))
     assert len(calls) == 3  # present and verified: no request
@@ -252,10 +273,14 @@ def test_cli_ingest_toolret_twice_gives_the_same_snapshot(root, config_path, mon
     rec = by_uri[tool_records.toolret_uri("mangopy/ToolRet-Tools", rev, "web",
                                           "toolbench_tool_2")]
     assert rec.name == "Ledgerly_Convert_Currency" and rec.source_version == rev
-    assert rec.license == json.loads(config_path.read_text())["license"]
+    assert rec.license == "Apache-2.0"
     sam = by_uri[tool_records.toolret_uri("mangopy/ToolRet-Tools", rev, "customized",
                                           "toolbench_sam_tool_95")]
     assert sam.name == "toolbench_sam_tool_95" and sam.operation is None  # empty name
+    assert {cat.get(t).license for t in cat.ids()
+            if "/customized#" in cat.get(t).source_uri} == {"NOASSERTION"}
+    assert {cat.get(t).license for t in cat.ids()
+            if "/web#" in cat.get(t).source_uri} == {"Apache-2.0"}
 
 
 def test_default_tool_store_is_redirected_in_tests():

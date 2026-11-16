@@ -580,7 +580,7 @@ subset:
 | Queries | 1,100 (`mangopy/ToolRet-Queries`, revision `b8c76ad3349ff17497b6bdb28bb5b8f61a0f6445`, config `toolbench`); 2.39 gold tools per query; every gold tool is in the 14,059 |
 | Size | 1,227,462 tokens of raw documentation (mean 87, median 58 per tool) |
 | Splits | dev = the queries whose SHA-256 of the id is 0 mod 5 (about 220), test = the rest; fixed before any tuning |
-| Licence | ToolBench data: Apache-2.0 (its README: "distributed under Apache License 2.0"). ToolRet code repository: Apache-2.0. The ToolRet dataset cards declare no licence (open question Q2). The 197 `toolbench_sam` tools are not ToolBench's RapidAPI data: ToolRet names neither their upstream nor a licence, so their licence is unclear (Task 11; `results/phase2/README.md`, 2C) |
+| Licence | ToolBench data: Apache-2.0 (its README: "distributed under Apache License 2.0"). ToolRet code repository: Apache-2.0. The ToolRet dataset cards declare no licence (open question Q2). The 197 `toolbench_sam` tools are not ToolBench's RapidAPI data: ToolRet names neither their upstream nor a licence, so their licence is unclear (Task 11; `results/phase2/README.md`, 2C), and since Task 13 their records say `NOASSERTION` (a licence per tools file in `corpora/tools/config.json`) |
 | Handling | As bench: files fetched into `data/tools/` (git-ignored), pinned by SHA-256 in `corpora/tools/manifest.json`; never committed |
 
 The query field is used; ToolRet's added `instruction` field is not.

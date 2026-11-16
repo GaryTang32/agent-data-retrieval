@@ -770,7 +770,7 @@ def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.Tool
         try:
             recs.append(tool_records.from_toolret(
                 doc, tool_records.toolret_uri(r["repo"], r["revision"], r["config"], r["id"]),
-                r["revision"], cfg["license"], toolret_id=r["id"]))
+                r["revision"], r["license"], toolret_id=r["id"]))
         except tool_records.AdapterError as e:
             raise _UsageError(f"ToolRet tool {r['id']}: {e}") from e
     files = [cfg["files"][k] for k in cfg["tool_files"]]

@@ -12,7 +12,9 @@ bytes. Nothing from ToolRet is committed but revisions, hashes and counts.
 - `tools(root)`: the tool pool of spec §8.3, 14,059 tools: of each tools file (`tool_files`),
   the rows whose id starts with that file's prefix (`toolbench_tool_` in `web`,
   `toolbench_sam_tool_` in `customized`), as `{"id", "documentation", "repo", "revision",
-  "config"}` (`documentation` is the raw JSON string), sorted by id.
+  "config", "license"}` (`documentation` is the raw JSON string; `license` is the file's own,
+  `files.<name>.license` of the config: `Apache-2.0` for `web`, `NOASSERTION` for
+  `customized`, whose licence no source states), sorted by id.
 - `queries(root)`: `ToolQuery(id, query, gold, split)` sorted by id; `gold` are the ToolRet
   ids of the labels with relevance > 0, in label order without repeats. The query field is
   used; ToolRet's `instruction` is not.
@@ -101,14 +103,15 @@ def _read(root: Path | None, config: dict, key: str) -> list[dict]:
 
 
 def tools(root: Path | None = None, config_path: Path | None = None) -> list[dict]:
-    """The tool pool: `{"id", "documentation", "repo", "revision", "config"}`, sorted by
-    id (module docstring)."""
+    """The tool pool: `{"id", "documentation", "repo", "revision", "config", "license"}`,
+    sorted by id (module docstring)."""
     config = load_config(config_path)
     rows = []
     for key in config["tool_files"]:
         entry = config["files"][key]
         rows += [{"id": r["id"], "documentation": r["documentation"], "repo": entry["repo"],
-                  "revision": entry["revision"], "config": entry["config"]}
+                  "revision": entry["revision"], "config": entry["config"],
+                  "license": entry["license"]}
                  for r in _read(root, config, key) if r["id"].startswith(entry["prefix"])]
     ids = [r["id"] for r in rows]
     if len(set(ids)) != len(ids):
@@ -173,10 +176,11 @@ def fetch(root: Path | None = None, config_path: Path | None = None,
                       "config": entry["config"], "path": entry["path"],
                       "url": file_url(entry), "local": entry["local"],
                       "bytes": dest.stat().st_size, "sha256": sha256_file(dest)})
-    manifest = {"corpus": config["corpus"], "license": config["license"],
+    manifest = {"corpus": config["corpus"],
                 "license_summary": config["license_summary"],
                 "tool_selection": [{"file": k, "config": config["files"][k]["config"],
-                                    "prefix": config["files"][k]["prefix"]}
+                                    "prefix": config["files"][k]["prefix"],
+                                    "license": config["files"][k]["license"]}
                                    for k in config["tool_files"]],
                 "files": files,
                 "counts": stats(root, config_path)}
