@@ -44,7 +44,14 @@ token count are those computed here; Task 12 adds validation by `mcp.types.Tool`
   NUMBER -> number, BOOLEAN -> boolean, ARRAY -> array, OBJECT -> object; none or unknown: no
   type), its description when not empty and its default when not "" or null; the first of two
   parameters with one name wins, and a name listed as required is required (in the order
-  listed). `operation` = `{category, api_name, method}`; no title and no output schema.
+  listed; a parameter with an empty name is skipped). The name is the document's, or its
+  ToolRet id when that is empty or whitespace (`toolbench_sam_tool_95`). `operation` =
+  `{category, api_name, method}`, or null when the document has neither `category_name` nor
+  `method` (the `toolbench_sam` tools have only a name and a description); no title and no
+  output schema.
+
+A malformed source (a list where an object is needed, a non-string name, and so on) raises
+`AdapterError` (a ValueError) naming the place.
 """
 
 from __future__ import annotations
@@ -66,6 +73,11 @@ _METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 _NAME_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
 
 SourceKind = Literal["mcp", "openapi", "toolret"]
+
+
+class AdapterError(ValueError):
+    """A source is malformed where an adapter needs structure (a list, an object, a string);
+    raised with the place named, instead of a traceback or a guessed record."""
 
 
 class ToolRecord(BaseModel):
@@ -191,18 +203,28 @@ def conformance(rec: ToolRecord) -> list[str]:
 def from_mcp(tools_list: dict, server: str, source_uri: str, version: str,
              license: str) -> list[ToolRecord]:
     """One record per tool of a `tools/list` result, in the server's order."""
+    if not isinstance(tools_list, dict) or not isinstance(tools_list.get("tools", []), list):
+        raise AdapterError(f"{server}: not a tools/list result (an object with a tools list)")
     out, seen = [], set()
-    for t in tools_list.get("tools", []):
+    for i, t in enumerate(tools_list.get("tools", [])):
+        if not isinstance(t, dict):
+            raise AdapterError(f"{server}: tools[{i}] is not an object")
         name = t.get("name")
         if not isinstance(name, str):
-            raise ValueError(f"{server}: a tool without a string name")
+            raise AdapterError(f"{server}: tools[{i}] has no string name")
         if name in seen:
-            raise ValueError(f"{server}: two tools are named {name!r}")
+            raise AdapterError(f"{server}: two tools are named {name!r}")
         seen.add(name)
         schema = t.get("inputSchema")
-        if isinstance(schema, dict) and schema.get("type") == "object" \
-                and "properties" not in schema:
+        if not isinstance(schema, dict):
+            raise AdapterError(f"{server}: tool {name!r} has no inputSchema object")
+        if schema.get("type") == "object" and "properties" not in schema:
             schema = {**schema, "properties": {}}
+        for key in ("title", "description"):
+            if t.get(key) is not None and not isinstance(t[key], str):
+                raise AdapterError(f"{server}: tool {name!r} {key} is not a string")
+        if t.get("outputSchema") is not None and not isinstance(t["outputSchema"], dict):
+            raise AdapterError(f"{server}: tool {name!r} outputSchema is not an object")
         out.append(make_record(
             name=name, title=t.get("title"), description=t.get("description") or "",
             input_schema=schema, output_schema=t.get("outputSchema"), source_kind="mcp",
@@ -310,12 +332,24 @@ def _free_key(props: dict, name: str, alt: str) -> str:
     return key
 
 
-def _operation_input(res: _Resolver, item: dict, op: dict) -> dict:
+def _list(value, where: str) -> list:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise AdapterError(f"{where} is not a list")
+    return value
+
+
+def _operation_input(res: _Resolver, item: dict, op: dict, where: str) -> dict:
     params: dict[tuple[str, str], dict] = {}
-    for p in (item.get("parameters") or []) + (op.get("parameters") or []):
+    for i, p in enumerate(_list(item.get("parameters"), f"{where}: path item parameters")
+                          + _list(op.get("parameters"), f"{where}: parameters")):
         p = res.resolve(p)
-        if isinstance(p, dict) and isinstance(p.get("name"), str) and p["name"]:
-            params[(p["name"], str(p.get("in", "")))] = p
+        if p == {}:  # a missing or cut $ref (counted in stats)
+            continue
+        if not isinstance(p, dict) or not isinstance(p.get("name"), str) or not p["name"]:
+            raise AdapterError(f"{where}: parameter {i} is not an object with a string name")
+        params[(p["name"], str(p.get("in", "")))] = p
     props: dict = {}
     required: list[str] = []
     for (name, loc), p in params.items():
@@ -327,7 +361,9 @@ def _operation_input(res: _Resolver, item: dict, op: dict) -> dict:
         if loc == "path" or p.get("required") is True:
             required.append(key)
     body = res.resolve(op.get("requestBody"))
-    if isinstance(body, dict):
+    if body is not None and not isinstance(body, dict):
+        raise AdapterError(f"{where}: requestBody is not an object")
+    if isinstance(body, dict) and isinstance(body.get("content"), dict):
         key = _free_key(props, "body", "body__requestBody")
         props[key] = _with_description(_media_schema(body.get("content")),
                                        body.get("description"))
@@ -358,22 +394,29 @@ def from_openapi(spec: dict, source_uri: str, version: str, license: str, *,
                  stats: dict | None = None) -> list[ToolRecord]:
     """One record per operation of an OpenAPI 3.x document (module docstring). `stats`, when
     given, receives the counts of `$ref`s cut or left unresolved (`REF_STATS`)."""
+    if not isinstance(spec, dict):
+        raise AdapterError(f"{source_uri}: not a JSON object")
     if not str(spec.get("openapi", "")).startswith("3."):
-        raise ValueError(f"{source_uri}: not an OpenAPI 3.x document "
-                         f"(openapi {spec.get('openapi')!r}, swagger {spec.get('swagger')!r})")
+        raise AdapterError(f"{source_uri}: not an OpenAPI 3.x document "
+                           f"(openapi {spec.get('openapi')!r}, swagger {spec.get('swagger')!r})")
     res = _Resolver(spec, stats)
     paths = spec.get("paths") or {}
+    if not isinstance(paths, dict):
+        raise AdapterError(f"{source_uri}: paths is not an object")
     out, used = [], set()
     for path in sorted(paths):
         res.start()
         item = res.resolve(paths[path]) if isinstance(paths[path], dict) and \
             "$ref" in paths[path] else paths[path]
         if not isinstance(item, dict):
-            continue
+            raise AdapterError(f"{source_uri}: paths[{path!r}] is not an object")
         for method in _METHODS:
             op = item.get(method)
-            if not isinstance(op, dict):
+            if op is None:
                 continue
+            where = f"{source_uri}: {method.upper()} {path}"
+            if not isinstance(op, dict):
+                raise AdapterError(f"{where} is not an object")
             op_id = op.get("operationId")
             op_id = op_id if isinstance(op_id, str) and op_id else None
             base = op_id or _NAME_CHARS.sub("_", f"{method}{path}").strip("_")
@@ -386,7 +429,7 @@ def from_openapi(spec: dict, source_uri: str, version: str, license: str, *,
             desc = op.get("description") if isinstance(op.get("description"), str) else None
             out.append(make_record(
                 name=name, title=summary or None, description=desc or summary or "",
-                input_schema=_operation_input(res, item, op),
+                input_schema=_operation_input(res, item, op, where),
                 output_schema=_operation_output(res, op), source_kind="openapi",
                 source_uri=source_uri, source_version=version,
                 operation={"method": method.upper(), "path": path, "operationId": op_id},
@@ -415,13 +458,39 @@ def toolret_uri(repo: str, revision: str, config: str, toolret_id: str) -> str:
     return f"toolret:{repo}@{revision}/{config}#{toolret_id}"
 
 
-def from_toolret(doc: dict, source_uri: str, version: str, license: str) -> ToolRecord:
-    """The record of one ToolBench-style documentation dict (module docstring)."""
+_TOOLBENCH_API_FIELDS = ("category_name", "method")
+
+
+def from_toolret(doc: dict, source_uri: str, version: str, license: str, *,
+                 toolret_id: str | None = None) -> ToolRecord:
+    """The record of one ToolBench-style documentation dict (module docstring). A name that
+    is empty or only whitespace is replaced by the ToolRet id (`toolret_id`, else the
+    fragment of `source_uri` after `#`)."""
+    where = toolret_id or source_uri
+    if not isinstance(doc, dict):
+        raise AdapterError(f"{where}: the documentation is not a JSON object")
+    name = doc.get("name")
+    if not isinstance(name, str):
+        raise AdapterError(f"{where}: name is {type(name).__name__}, not a string")
+    if not name.strip():
+        name = toolret_id or source_uri.rpartition("#")[2]
+        if not name:
+            raise AdapterError(f"{where}: empty name and no ToolRet id to name the tool")
+    description = doc.get("description")
+    if description is None:
+        description = ""
+    elif not isinstance(description, str):
+        raise AdapterError(f"{where}: description is not a string")
+    params: dict[str, list] = {}
+    for key in ("required_parameters", "optional_parameters"):
+        params[key] = _list(doc.get(key), f"{where}: {key}")
+        for i, p in enumerate(params[key]):
+            if not isinstance(p, dict) or not isinstance(p.get("name"), str):
+                raise AdapterError(f"{where}: {key}[{i}] is not an object with a string name")
     props: dict = {}
-    for p in list(doc.get("required_parameters") or []) + \
-            list(doc.get("optional_parameters") or []):
-        name = p.get("name")
-        if not isinstance(name, str) or not name or name in props:
+    for p in params["required_parameters"] + params["optional_parameters"]:
+        pname = p["name"]
+        if not pname or pname in props:
             continue
         schema: dict = {}
         jtype = _toolret_type(p.get("type"))
@@ -431,19 +500,19 @@ def from_toolret(doc: dict, source_uri: str, version: str, license: str) -> Tool
             schema["description"] = p["description"]
         if p.get("default") not in ("", None):
             schema["default"] = p["default"]
-        props[name] = schema
+        props[pname] = schema
     required: list[str] = []
-    for p in doc.get("required_parameters") or []:
-        name = p.get("name")
-        if name in props and name not in required:
-            required.append(name)
+    for p in params["required_parameters"]:
+        if p["name"] in props and p["name"] not in required:
+            required.append(p["name"])
     input_schema: dict = {"type": "object", "properties": props}
     if required:
         input_schema["required"] = required
+    operation = None
+    if any(k in doc for k in _TOOLBENCH_API_FIELDS):
+        operation = {"category": doc.get("category_name"), "api_name": doc.get("name"),
+                     "method": doc.get("method")}
     return make_record(
-        name=str(doc.get("name", "")), title=None, description=str(doc.get("description", "")),
-        input_schema=input_schema, output_schema=None, source_kind="toolret",
-        source_uri=source_uri, source_version=version,
-        operation={"category": doc.get("category_name"), "api_name": doc.get("name"),
-                   "method": doc.get("method")},
-        license=license)
+        name=name, title=None, description=description, input_schema=input_schema,
+        output_schema=None, source_kind="toolret", source_uri=source_uri,
+        source_version=version, operation=operation, license=license)

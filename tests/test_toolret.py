@@ -218,3 +218,22 @@ def test_cli_ingest_toolret_twice_gives_the_same_snapshot(root, config_path, mon
 
 def test_default_tool_store_is_redirected_in_tests():
     assert REPO not in Path(cli.TOOL_STORE).resolve().parents
+
+
+def test_cli_ingest_toolret_malformed_row_is_an_error(tmp_path, blobs, monkeypatch, capsys):
+    bad = _rows("tools") + [{"id": "toolbench_tool_99",
+                             "documentation": json.dumps({"name": None, "description": "d"})}]
+    blobs = {**blobs, "tools": _parquet(bad)}
+    cfg = _config(blobs)
+    cfg_path = tmp_path / "cfg.json"
+    cfg_path.write_text(json.dumps(cfg))
+    root = tmp_path / "bad-root"
+    for key, data in blobs.items():
+        (root / cfg["files"][key]["local"]).parent.mkdir(parents=True, exist_ok=True)
+        (root / cfg["files"][key]["local"]).write_bytes(data)
+    monkeypatch.setattr(toolret, "CONFIG_PATH", cfg_path)
+    code = cli.main(["tools", "ingest", "--toolret", "--root", str(root), "--store",
+                     str(tmp_path / "s")])
+    err = capsys.readouterr().err
+    assert code == 2 and "toolbench_tool_99" in err and "unexpected" not in err
+    assert not (tmp_path / "s" / "tools" / "HEAD").exists()

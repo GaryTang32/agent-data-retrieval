@@ -129,6 +129,22 @@ def test_mcp_adapter_on_the_handmade_fixture():
     assert all(tool_records.conformance(r) == [] for r in recs)
 
 
+@pytest.mark.parametrize("tools_list", [
+    [1],                                                             # not an object
+    {"tools": {"a": 1}},                                             # tools not a list
+    {"tools": ["a"]},                                                # a tool not an object
+    {"tools": [{"name": 3, "inputSchema": {"type": "object"}}]},
+    {"tools": [{"name": "a"}]},                                      # no inputSchema
+    {"tools": [{"name": "a", "inputSchema": "x"}]},
+    {"tools": [{"name": "a", "title": 5, "inputSchema": {"type": "object"}}]},
+    {"tools": [{"name": "a", "description": ["x"], "inputSchema": {"type": "object"}}]},
+    {"tools": [{"name": "a", "inputSchema": {"type": "object"}, "outputSchema": "x"}]},
+])
+def test_mcp_malformed_input_is_an_adapter_error(tools_list):
+    with pytest.raises(tool_records.AdapterError):
+        tool_records.from_mcp(tools_list, "s", "fixture:s", "1", "MIT")
+
+
 def test_mcp_adapter_refuses_duplicate_names():
     tl = {"tools": [{"name": "a", "inputSchema": {"type": "object"}}] * 2}
     with pytest.raises(ValueError, match="a"):
@@ -285,6 +301,38 @@ def test_openapi_duplicate_names_are_numbered():
     assert names == ["same", "same__2"]
 
 
+_O = {"openapi": "3.0.0"}
+
+
+@pytest.mark.parametrize("spec", [
+    [1],                                                              # not an object
+    {**_O, "paths": [1]},                                             # paths a list
+    {**_O, "paths": {"/a": "x"}},                                     # path item a string
+    {**_O, "paths": {"/a": {"get": [1]}}},                            # operation a list
+    {**_O, "paths": {"/a": {"get": {"parameters": {"name": "x"}}}}},  # parameters a dict
+    {**_O, "paths": {"/a": {"parameters": "x", "get": {}}}},          # path-item parameters
+    {**_O, "paths": {"/a": {"get": {"parameters": [5]}}}},            # a parameter an int
+    {**_O, "paths": {"/a": {"get": {"parameters": [{"name": 5, "in": "query"}]}}}},
+    {**_O, "paths": {"/a": {"post": {"requestBody": [1]}}}},          # body a list
+])
+def test_openapi_malformed_input_is_an_adapter_error(spec):
+    with pytest.raises(tool_records.AdapterError):
+        tool_records.from_openapi(spec, "u", "1", "x")
+
+
+def test_openapi_missing_refs_are_counted_and_add_no_body():
+    spec = {**_O, "paths": {
+        "/a": {"post": {"parameters": [{"$ref": "#/components/parameters/Gone"}],
+                        "requestBody": {"$ref": "#/components/requestBodies/Gone"}}},
+        "/b": {"post": {"requestBody": {"content": {"application/json": {
+            "schema": {"$ref": "#/components/schemas/Gone"}}}}}}}}
+    stats: dict = {}
+    a, b = tool_records.from_openapi(spec, "u", "1", "x", stats=stats)
+    assert a.input_schema == {"type": "object", "properties": {}}  # no spurious body
+    assert b.input_schema == {"type": "object", "properties": {"body": {}}}
+    assert stats["missing_refs"] == 3 and stats["external_refs"] == 0
+
+
 def test_openapi_handmade_conforms():
     assert all(tool_records.conformance(r) == [] for r in handmade_openapi())
 
@@ -340,6 +388,46 @@ def test_toolret_types_defaults_and_duplicates():
     assert s == {"type": "object", "properties": {}}  # no required key when none
     s = toolret_record(rows["toolbench_tool_1"]).input_schema
     assert s["properties"]["hourly"] == {"type": "boolean", "default": False}
+
+
+@pytest.mark.parametrize("doc", [
+    [1],                                                         # not an object
+    {"description": "no name"},
+    {"name": None, "description": "d"},
+    {"name": 5, "description": "d"},
+    {"name": "a", "description": 5},
+    {"name": "a", "required_parameters": "x"},
+    {"name": "a", "optional_parameters": {"name": "x"}},
+    {"name": "a", "required_parameters": ["x"]},
+    {"name": "a", "required_parameters": [{"name": 5, "type": "STRING"}]},
+])
+def test_toolret_malformed_input_is_an_adapter_error(doc):
+    with pytest.raises(tool_records.AdapterError):
+        tool_records.from_toolret(doc, "toolret:r@v/web#toolbench_tool_9", "v", "Apache-2.0")
+
+
+def test_toolret_empty_name_becomes_the_toolret_id():
+    uri = tool_records.toolret_uri("mangopy/ToolRet-Tools", "v", "customized",
+                                   "toolbench_sam_tool_95")
+    for name in ("", "  \n"):
+        rec = tool_records.from_toolret({"description": "worksheet.f()\n", "name": name},
+                                        uri, "v", "Apache-2.0")
+        assert rec.name == "toolbench_sam_tool_95"
+        assert rec.source_uri == uri and tool_records.conformance(rec) == []
+    rec = tool_records.from_toolret({"name": "", "description": "d"}, uri, "v", "x",
+                                    toolret_id="explicit_id")
+    assert rec.name == "explicit_id"
+
+
+def test_toolret_operation_is_null_without_api_fields():
+    uri = "toolret:r@v/customized#toolbench_sam_tool_0"
+    rec = tool_records.from_toolret({"name": "worksheet.cell", "description": "d"}, uri,
+                                    "v", "x")
+    assert rec.operation is None
+    assert rec.input_schema == {"type": "object", "properties": {}}
+    rec = tool_records.from_toolret({"name": "a", "description": "d", "method": "GET"},
+                                    uri, "v", "x")
+    assert rec.operation == {"category": None, "api_name": "a", "method": "GET"}
 
 
 def test_toolret_records_conform():
@@ -531,3 +619,40 @@ def test_cli_ingest_refuses_nonconforming_tools(tmp_path, capsys):
     err = capsys.readouterr().err
     assert code == 1 and "ghost" in err and "search_notes" in err
     assert not (tmp_path / "s" / "tools" / "HEAD").exists()
+
+
+@pytest.mark.parametrize("kind,doc", [
+    ("--openapi", {"openapi": "3.0.0", "paths": {"/a": {"get": {"parameters": {"n": 1}}}}}),
+    ("--openapi", {"openapi": "3.0.0", "paths": [1]}),
+    ("--openapi", [1]),
+    ("--mcp", {"server": "s", "source_uri": "u", "license": "MIT", "version": "1",
+               "tools_list": {"tools": {"a": 1}}}),
+    ("--mcp", {"server": "s", "source_uri": "u", "license": "MIT", "version": "1",
+               "tools_list": {"tools": [{"name": "a", "title": 5,
+                                         "inputSchema": {"type": "object"}}]}}),
+])
+def test_cli_ingest_malformed_source_is_an_error_not_a_traceback(tmp_path, capsys, kind, doc):
+    f = tmp_path / "src.json"
+    f.write_text(json.dumps(doc))
+    args = ["tools", "ingest", kind, str(f), "--store", str(tmp_path / "s")]
+    if kind == "--openapi":
+        args += ["--source-uri", "fixture:x", "--license", "CC0-1.0"]
+    code = cli.main(args)
+    err = capsys.readouterr().err
+    assert code == 2 and err.startswith("error: ") and "unexpected" not in err
+    assert not (tmp_path / "s" / "tools" / "HEAD").exists()
+
+
+def test_cli_ingest_reports_missing_refs(tmp_path, capsys):
+    spec = {"openapi": "3.0.0", "paths": {"/a": {"post": {
+        "parameters": [{"$ref": "#/components/parameters/Gone"}],
+        "requestBody": {"$ref": "#/components/requestBodies/Gone"}}}}}
+    f = tmp_path / "spec.json"
+    f.write_text(json.dumps(spec))
+    base = ["tools", "ingest", "--openapi", str(f), "--source-uri", "fixture:x",
+            "--license", "CC0-1.0", "--store", str(tmp_path / "s")]
+    assert cli.main(base + ["--json"]) == 0
+    res = json.loads(capsys.readouterr().out)
+    assert res["refs"]["missing_refs"] == 2 and res["refs"]["cycle_cuts"] == 0
+    assert cli.main(base) == 0
+    assert "2 missing $refs" in capsys.readouterr().out

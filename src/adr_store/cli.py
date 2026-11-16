@@ -752,21 +752,36 @@ def _acl_show(a: argparse.Namespace) -> int:
 TOOL_STORE = Path(".cache/store-p2/toolret")
 
 
-def _tool_source(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolRecord]]:
-    """(description of the source, its tool records) for `adr tools ingest`."""
-    if a.toolret:
-        from adr_eval.corpora import toolret
+def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolRecord]]:
+    from adr_eval.corpora import toolret
 
-        cfg = toolret.load_config(toolret.CONFIG_PATH)
-        entry = cfg["files"]["tools"]
-        rows = toolret.tools(a.root if a.root is not None else toolret.DATA_DIR,
-                             toolret.CONFIG_PATH)
-        recs = [tool_records.from_toolret(
-            json.loads(r["documentation"]),
-            tool_records.toolret_uri(entry["repo"], entry["revision"], entry["config"],
-                                     r["id"]),
-            entry["revision"], cfg["license"]) for r in rows]
-        return f"toolret {entry['repo']}@{entry['revision'][:12]}/{entry['config']}", recs
+    cfg = toolret.load_config(toolret.CONFIG_PATH)
+    entry = cfg["files"]["tools"]
+    rows = toolret.tools(a.root if a.root is not None else toolret.DATA_DIR,
+                         toolret.CONFIG_PATH)
+    recs = []
+    for r in rows:
+        try:
+            doc = json.loads(r["documentation"])
+        except ValueError as e:
+            raise _UsageError(f"ToolRet tool {r['id']}: documentation is not JSON: "
+                              f"{_one_line(e)}") from e
+        try:
+            recs.append(tool_records.from_toolret(
+                doc, tool_records.toolret_uri(entry["repo"], entry["revision"],
+                                              entry["config"], r["id"]),
+                entry["revision"], cfg["license"], toolret_id=r["id"]))
+        except tool_records.AdapterError as e:
+            raise _UsageError(f"ToolRet tool {r['id']}: {e}") from e
+    return f"toolret {entry['repo']}@{entry['revision'][:12]}/{entry['config']}", recs
+
+
+def _tool_source(a: argparse.Namespace, refs: dict
+                 ) -> tuple[str, list[tool_records.ToolRecord]]:
+    """(description of the source, its tool records) for `adr tools ingest`; an OpenAPI
+    source fills `refs` with its $ref counts."""
+    if a.toolret:
+        return _toolret_records(a)
     path = a.mcp or a.openapi
     try:
         doc = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -790,7 +805,7 @@ def _tool_source(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolReco
                               "every record, and the source_uri of its tool_id)")
         version = a.source_version or str((doc.get("info") or {}).get("version", ""))
         return f"OpenAPI {path}", tool_records.from_openapi(doc, a.source_uri, version,
-                                                            a.license)
+                                                            a.license, stats=refs)
     except (ValueError, TypeError, AttributeError) as e:
         raise _UsageError(f"{path}: {_one_line(e)}") from e
 
@@ -802,7 +817,8 @@ def _tools_ingest(a: argparse.Namespace) -> int:
         raise _UsageError("--mcp and --openapi need --store (the default store "
                           f"{TOOL_STORE} is the ToolRet one)")
     store = a.store if a.store is not None else TOOL_STORE
-    source, recs = _tool_source(a)
+    refs: dict = {}
+    source, recs = _tool_source(a, refs)
     failed = [(r, p) for r in recs if (p := tool_records.conformance(r))]
     if failed:
         for r, problems in failed:
@@ -821,7 +837,8 @@ def _tools_ingest(a: argparse.Namespace) -> int:
     res = {"store": str(store), "source": source, "records": len(recs),
            "added": len(cat) - before, "tools": len(cat), "tool_snapshot": sid,
            "content_snapshot": Store.open(store).snapshot_id, "conformance": 1.0,
-           "definition_tokens": sum(r.definition_tokens for r in recs)}
+           "definition_tokens": sum(r.definition_tokens for r in recs),
+           "refs": refs or None}
     if a.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return 0
@@ -829,6 +846,11 @@ def _tools_ingest(a: argparse.Namespace) -> int:
           f"catalog {sid[:12]} holds {len(cat)} tools")
     print(f"  store {store} (content snapshot {res['content_snapshot'][:12]}); definitions "
           f"{res['definition_tokens']} tokens")
+    if refs:
+        print(f"  $refs: {refs['missing_refs']} missing $refs and {refs['external_refs']} "
+              f"external ones left as {{}}; cut to {{}}: {refs['cycle_cuts']} cycles, "
+              f"{refs['depth_cuts']} at depth {tool_records.REF_DEPTH}, "
+              f"{refs['budget_cuts']} past the {tool_records.NODE_BUDGET} node budget")
     return 0
 
 
