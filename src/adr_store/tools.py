@@ -103,8 +103,14 @@ access list meets the caller's principals; no entry or an empty list: no one):
   byte for byte the message of a nonexistent one (an invisible document that the filters
   would exclude is "not found" too: the filter message is for visible documents).
 - every count (`excluded_by_filter`, `truncated`, matches, `short_by`) covers the view.
-`index` is an operator call and is refused with the ACL layer. `acl=False` is the tools
-without an ACL layer, as in Phase 1.
+- the dense channel scores each row by `dense.row_scores` (a function of row and query
+  alone), a full view included, so scores equal a view-only store's bit for bit; acl=False
+  keeps the Phase 1 matrix product (the two may differ in the last float32 bits).
+- a view that holds some but not all versions of a chain is denied F1 (all versions of a
+  source share access; `adr acl sync` refuses a policy that splits one).
+`index`, `active_index` and `active_system` are operator calls, refused with the ACL layer
+(`index` after access is resolved: logged `allowed` with the refusal as its error, or
+`denied:F<n>`). `acl=False` is the tools without an ACL layer, as in Phase 1.
 
 Every call, including a refused or failed one, appends one JSON line to the log (UTC time,
 tool, arguments, snapshot id, result ids, and the error for a refused or failed call) with a
@@ -169,6 +175,10 @@ NO_OVERLAY = "no applicability overlay; run `adr applicability derive`"
 VIEW_CACHE = 32  # per-view BM25 indexes kept in memory (LRU by index fingerprint and view)
 _VIEW_LEXICAL: OrderedDict[tuple[str, str], FieldBM25] = OrderedDict()
 _VIEW_LOCK = threading.Lock()
+CHAIN_CACHE = 8  # chain maps kept in memory, by content snapshot id
+_CHAINS: OrderedDict[str, dict[str, tuple[str, ...]]] = OrderedDict()
+OPERATOR_UNDER_ACL = ("{} is an operator call (the whole index, unfiltered) and does not run "
+                      "with the ACL layer; use Tools(acl=False)")
 INDEX_UNDER_ACL = ("index is an operator call and does not run with the ACL layer; use "
                    "Tools(acl=False) (`adr index`)")
 
@@ -554,7 +564,12 @@ class Tools:
     `acl=False` is the tools without an ACL layer (Phase 1 behaviour; log `acl_decision`
     "off"). `acl=True` resolves the caller's access on entry to every call (`acl.resolve`,
     one ACL snapshot per call, `clock` for F3) and enforces it; `caller` is a `user:`
-    principal. Calls on one instance run one at a time."""
+    principal. Calls on one instance run one at a time.
+
+    Only the tool methods (`search`, `read`, `grep`) serve a caller; the MCP layer (Task 12)
+    must call nothing else. `index`, `active_index` and `active_system` are operator calls,
+    refused with the ACL layer (`index` after resolving access, so it is logged with the
+    caller's decision)."""
 
     def __init__(self, store_path: Path, *, emb_cache: Path = DEFAULT_EMB_CACHE,
                  acl: bool = False, caller: str | None = None,
@@ -609,11 +624,11 @@ class Tools:
         return c if c is None or isinstance(c, str) else repr(c)
 
     def _call(self, tool: str, args: dict, fn: Callable[[], tuple[object, list, dict]],
-              fields: dict | None = None, *, acl_check: bool = True):
+              fields: dict | None = None):
         """Run one tool call and log it; `fn` returns (result, result ids, extra fields).
         `fields` are logged on every line, refused or not: `fn` fills in what it learns.
-        On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access
-        (`acl_check`), which `fn` sees as `self._access_now`."""
+        On entry the call re-reads HEAD and, with the ACL layer, resolves the caller's access,
+        which `fn` sees as `self._access_now`."""
         with self._lock:
             when = datetime.now(UTC).isoformat()
             fields = {} if fields is None else fields
@@ -624,7 +639,7 @@ class Tools:
             self._in_call = True
             try:
                 self._refresh()
-                if self.acl and acl_check:
+                if self.acl:
                     self._enter(acl_fields)
                 result, ids, extra = fn()
             except BaseException as e:  # refused, unexpected or interrupted: logged, re-raised
@@ -663,10 +678,32 @@ class Tools:
             store = Store.open(self.store_path, head)
             self.store, self.snapshot = store, store.snapshot_id
 
+    def _chains(self) -> dict[str, tuple[str, ...]]:
+        """The snapshot's chains of two or more documents (`acl.chains`), cached by content
+        snapshot id (a snapshot's documents never change)."""
+        with _VIEW_LOCK:
+            if self.snapshot in _CHAINS:
+                _CHAINS.move_to_end(self.snapshot)
+                return _CHAINS[self.snapshot]
+        found = acl_mod.chains(self.store)
+        with _VIEW_LOCK:
+            _CHAINS[self.snapshot] = found
+            while len(_CHAINS) > CHAIN_CACHE:
+                _CHAINS.popitem(last=False)
+        return found
+
     def _resolve_access(self) -> Access:
-        """The caller's access now (AclDenied F1–F5)."""
-        return acl_mod.resolve(self.store_path, self.caller, self.snapshot, clock=self.clock,
-                               cache=self._acl_cache)
+        """The caller's access now (AclDenied F1–F5). A snapshot that gives the caller some
+        but not all versions of a chain is F1 (all versions of a source share access, §5.2:
+        superseded_by and valid_to would show versions the caller cannot see)."""
+        access = acl_mod.resolve(self.store_path, self.caller, self.snapshot,
+                                 clock=self.clock, cache=self._acl_cache)
+        if acl_mod.split_chain(self._chains(), access.docs) is not None:
+            raise AclDenied("F1", f"the ACL snapshot {access.acl_snapshot[:12]} splits a chain "
+                                  f"across access lists (all versions of a source share "
+                                  f"access); fix the policy and run `adr acl sync`",
+                            access.acl_snapshot)
+        return access
 
     def _enter(self, acl_fields: dict) -> None:
         """Resolve the call's access; a denial is an AccessDenied, logged with its code."""
@@ -709,11 +746,13 @@ class Tools:
                 self._not_visible += _hidden_matches(given, visible, everything)
             raise
 
-    def projection(self) -> np.ndarray:
+    def _projection(self) -> np.ndarray:
         """The caller's visibility mask over the active index's chunks (in its chunk order):
-        a pure function of (index, ACL snapshot, caller); all true without the ACL layer."""
+        a pure function of (index, ACL snapshot, caller); all true without the ACL layer.
+        Private: it carries the index's global chunk count."""
         access = self._access()
-        idx = self.active_index()
+        with self._lock:
+            idx = self._active_index()[0]
         doc_ids = np.array([c.doc_id for c in idx.chunks.values()], dtype=str)
         if access is None:
             return np.ones(len(doc_ids), dtype=bool)
@@ -798,7 +837,7 @@ class Tools:
             info = self._index_impl(system, lexical_only, w_bc, weight, tuning, threads)
             return info, [info.fingerprint], {}
 
-        return self._call("index", args, run, acl_check=False)
+        return self._call("index", args, run)
 
     def _settings(self, system: str, lexical_only: bool, w_bc: int | None,
                   weight: float | None, tuning: Path | None):
@@ -941,14 +980,20 @@ class Tools:
         return self._index, active
 
     def active_index(self) -> StoreIndex:
-        """The active index, loaded and checked as `search` loads it (not logged; no ACL)."""
+        """The active index, loaded and checked as `search` loads it (not logged). An
+        operator call: refused with the ACL layer."""
+        if self.acl:
+            raise ToolError(OPERATOR_UNDER_ACL.format("active_index"))
         with self._lock:
             if not self._in_call:
                 self._refresh()
             return self._active_index()[0]
 
     def active_system(self) -> str:
-        """The system name the active index was built as (`active.json`, checked)."""
+        """The system name the active index was built as (`active.json`, checked). An
+        operator call: refused with the ACL layer."""
+        if self.acl:
+            raise ToolError(OPERATOR_UNDER_ACL.format("active_system"))
         with self._lock:
             if not self._in_call:
                 self._refresh()
@@ -1011,6 +1056,10 @@ class Tools:
             dd, why = (None, dedup_mod.OFF) if dedup is False else self._dedup_state(idx)
             if dedup is True and dd is None:
                 raise ToolError(why)
+            # with the ACL layer, dense scores are row-exact (`dense.row_scores`), a full view
+            # included, so they equal a view-only store's bit for bit; they may differ from
+            # the acl=False scores (the Phase 1 matrix product) in the last float32 bits
+            exact = self._access_now is not None
             lexical = None
             if self._access_now is not None:
                 lexical = self._view_lexical(idx, self._access_now)
@@ -1021,11 +1070,11 @@ class Tools:
             if dd is None:
                 slots = [dedup_mod.Slot(cid, score, cid, ()) for cid, score in idx.retrieve(
                     query, fusion="linear", w=active["w"], top=top,
-                    allowed_docs=applied.allowed, lexical=lexical)]
+                    allowed_docs=applied.allowed, lexical=lexical, exact=exact)]
             else:
                 fields["dedup"] = dd.overlay_id
                 slots, short_by = self._collapsed(idx, active, query, top, applied, dd,
-                                                  lexical)
+                                                  lexical, exact)
             hits = []
             for rank, slot in enumerate(slots, start=1):
                 c = idx.chunks[slot.chunk_id]
@@ -1045,13 +1094,13 @@ class Tools:
 
     @staticmethod
     def _collapsed(idx: StoreIndex, active: dict, query: str, top: int, applied: _Applied,
-                   dd: dedup_mod.Dedup, lexical: FieldBM25 | None = None
-                   ) -> tuple[list[dedup_mod.Slot], int]:
+                   dd: dedup_mod.Dedup, lexical: FieldBM25 | None = None,
+                   exact: bool = False) -> tuple[list[dedup_mod.Slot], int]:
         """(the collapsed slots, short_by). Without a reranker: the collapse of the index's
         full ranking. A reranked index: the collapse of its reranked top 50, and how many
         more slots the full ranking after those 50 would fill, up to `top`. `applied.allowed`
         is the view's admitted documents (members outside it never join, show or count) and
-        `lexical` the view's BM25."""
+        `lexical` the view's BM25; `exact` the row-exact dense kernel."""
         allowed = applied.allowed
 
         def admitted(cid: str) -> bool:
@@ -1062,14 +1111,16 @@ class Tools:
                                       applied.filters.as_of, top)
 
         def full():
-            return idx.ranking(query, w=active["w"], allowed_docs=allowed, lexical=lexical)
+            return idx.ranking(query, w=active["w"], allowed_docs=allowed, lexical=lexical,
+                               exact=exact)
 
         if idx.reranker is None:
             return collapse(full()), 0
         # the reranked head and the full ranking from one search of each channel (the
         # query is embedded once)
         head, rest = idx.retrieve_and_ranking(query, w=active["w"], top=RERANK_TOP,
-                                              allowed_docs=allowed, lexical=lexical)
+                                              allowed_docs=allowed, lexical=lexical,
+                                              exact=exact)
         slots = collapse(head)
         if len(slots) == top:
             return slots, 0

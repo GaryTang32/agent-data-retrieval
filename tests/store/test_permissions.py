@@ -220,19 +220,20 @@ def test_the_projection_equals_the_snapshot_lists_for_every_chunk(tmp_path, conf
                                                                   caller):
     s = make(tmp_path / "dense", config, dense=True)
     t = as_(s, caller)
-    idx = t.active_index()
+    idx = tools.Tools(s.path).active_index()
     snap = snapshot_of(s)
     ps = set(snap.directory[caller])
     want = [bool(ps & set(snap.docs.get(c.doc_id, []))) for c in idx.chunks.values()]
-    assert t.projection().tolist() == want
+    assert t._projection().tolist() == want
     # the masks the channels use in a search are that projection (no filter excludes)
     from adr_store.retrieval.dense import CachedDense
     seen = {}
     real_dense, real_lex = CachedDense.search, FieldBM25.search
 
-    def dense_search(self, q, k=100, mask=None):
+    def dense_search(self, q, k=100, mask=None, **kw):
         seen["dense"] = None if mask is None else mask.copy()
-        return real_dense(self, q, k=k, mask=mask)
+        seen["exact"] = kw.get("exact")
+        return real_dense(self, q, k=k, mask=mask, **kw)
 
     def lex_search(self, q, k=100, mask=None):
         seen["lex"] = (list(self.chunk_ids), None if mask is None else mask.copy())
@@ -243,6 +244,7 @@ def test_the_projection_equals_the_snapshot_lists_for_every_chunk(tmp_path, conf
     t.search("vessel", filters={"include_superseded": True}, dedup=False)
     by_row = {c.chunk_id: w for c, w in zip(idx.chunks.values(), want, strict=True)}
     dense_want = [by_row[cid] for cid in idx.dense.chunk_ids]
+    assert seen["exact"] is True  # the row-exact kernel under the ACL layer
     if all(want):
         assert seen["dense"] is None or seen["dense"].all()
     else:
@@ -254,7 +256,7 @@ def test_the_projection_equals_the_snapshot_lists_for_every_chunk(tmp_path, conf
 
 def test_per_view_bm25_equals_bm25_over_the_view_s_chunks(store):
     t = as_(store, "user:acme-0")
-    idx = t.active_index()
+    idx = tools.Tools(store.path).active_index()
     access = t._access()
     view = t._view_lexical(idx, access)
     chunks = [c for c in idx.chunks.values() if c.doc_id in access.docs]
@@ -292,7 +294,7 @@ def test_the_view_cache_is_an_lru_of_32_by_fingerprint_and_view(store, monkeypat
 
 def _hits(res):
     return ([(h.rank, h.chunk_id, h.doc_id, h.char_start, h.char_end, h.breadcrumb,
-              round(h.score, 6), h.scored_by, [(a.chunk_id, a.doc_id, a.kind, a.jaccard)
+              h.score, h.scored_by, [(a.chunk_id, a.doc_id, a.kind, a.jaccard)
                                                for a in h.alternates]) for h in res.hits],
             res.excluded_by_filter, res.short_by, res.dedup is None)
 
@@ -302,19 +304,37 @@ def _matches(res):
              for m in res.matches], res.truncated, res.excluded_by_filter)
 
 
+def more_queries(n: int = 40) -> list[str]:
+    """Seeded queries of 1 to 4 words of the fixture texts (the reviewer's B2 check)."""
+    import random
+
+    vocab = sorted({w.lower() for d in DOCS for w in d[0].text.split() if w.isalpha()})
+    rng = random.Random(1)
+    return [" ".join(rng.sample(vocab, rng.randint(1, 4))) for _ in range(n)]
+
+
+ALL_USERS = sorted(json.loads((REPO / "config/acl/directory.json").read_text())["users"])
+
+
 @pytest.mark.parametrize("dense", [False, True])
 def test_search_and_grep_equal_a_store_of_the_callers_documents(tmp_path, config, fake_models,
                                                                 dense):
+    """Every user of the directory: ids and scores bit for bit (not only to 6 decimals);
+    the reference store is called as the same user, who sees all of it."""
     s = make(tmp_path / "full", config, dense=dense, with_dedup=True)
-    for caller in USERS:
-        mine = visible(s, caller)
-        ref_store = make(tmp_path / f"ref-{caller[5:]}", config,
-                         [d for d in DOCS if did(d) in mine], dense=dense, with_dedup=True,
-                         sync=False)
-        t, ref = as_(s, caller), tools.Tools(ref_store.path)
-        for q in QUERIES:
+    refs = {}
+    queries = QUERIES + more_queries()
+    for caller in ALL_USERS:
+        mine = frozenset(visible(s, caller))
+        if mine not in refs:
+            refs[mine] = make(tmp_path / f"ref-{len(refs)}", config,
+                              [d for d in DOCS if did(d) in mine], dense=dense,
+                              with_dedup=True)
+        assert visible(refs[mine], caller) == set(mine)
+        t, ref = as_(s, caller), as_(refs[mine], caller)
+        for q in queries:
             for kw in ({}, {"filters": {"include_superseded": True}, "dedup": False},
-                       {"top": 3}):
+                       {"top": 30}):
                 assert _hits(t.search(q, **kw)) == _hits(ref.search(q, **kw)), (caller, q, kw)
         for p in PATTERNS:
             for kw in ({}, {"max": 2}, {"filters": {"include_superseded": True}}):
@@ -332,7 +352,8 @@ def test_no_result_names_a_document_outside_the_view(store, caller):
             res = t.search(q, **kw)
             assert result_ids(res) <= mine
             assert {h.scored_by for h in res.hits} <= {
-                c for c, ch in t.active_index().chunks.items() if ch.doc_id in mine}
+                c for c, ch in tools.Tools(store.path).active_index().chunks.items()
+                if ch.doc_id in mine}
     for p in PATTERNS:
         assert result_ids(t.grep(p, filters={"include_superseded": True})) <= mine
 
@@ -384,7 +405,7 @@ def test_an_invisible_document_reads_as_a_nonexistent_one(store):
 
 def test_an_invisible_chunk_or_element_reads_as_a_nonexistent_one(store):
     t = as_(store, "user:acme-0")
-    idx = t.active_index()
+    idx = tools.Tools(store.path).active_index()
     mine = visible(store, "user:acme-0")
     hidden_chunk = next(c for c in idx.chunks.values() if c.doc_id == did(ACME1))
     none = absent_like(hidden_chunk.chunk_id, idx.chunks)
@@ -648,9 +669,27 @@ def test_log_fields_on_allowed_denied_failed_and_off_calls(store):
 
 
 def test_the_index_tool_is_refused_with_acls(store):
-    with pytest.raises(tools.ToolError, match="acl"):
+    """Access is resolved first (F-codes apply); an allowed caller is then refused: the line
+    says acl_decision "allowed" with the refusal as its error."""
+    with pytest.raises(tools.ToolError, match="acl") as e:
         as_(store, "user:auditor").index("p1-struct", lexical_only=True)
-    assert set(log_lines(store)[-1]) >= ACL_FIELDS
+    assert not isinstance(e.value, tools.AccessDenied)
+    line = log_lines(store)[-1]
+    assert set(line) >= ACL_FIELDS and line["acl_decision"] == "allowed"
+    assert line["error"] == tools.INDEX_UNDER_ACL and line["results"] == []
+    with pytest.raises(tools.AccessDenied):
+        as_(store, "user:ghost").index("p1-struct", lexical_only=True)
+    assert log_lines(store)[-1]["acl_decision"] == "denied:F4"
+
+
+def test_operator_methods_are_refused_with_acls(store):
+    """Only the tool methods serve a caller: the index and its global counts do not."""
+    t = as_(store, "user:auditor")
+    for fn in (t.active_index, t.active_system):
+        with pytest.raises(tools.ToolError, match="operator"):
+            fn()
+    assert not hasattr(t, "projection")
+    assert tools.Tools(store.path).active_system() == "p1-struct"
 
 
 # -- the command line ---------------------------------------------------------------------------
@@ -693,3 +732,141 @@ def test_access_cache_is_bounded(store):
     t = as_(store, "user:acme-0")
     t.search("vessel")
     assert isinstance(t._acl_cache, OrderedDict) and len(t._acl_cache) == 1
+
+
+# -- the chain invariant: all versions of a source share access (spec §5.2) --------------------
+
+SPLIT_RULES = [{"match": {"uri_prefix": "https://www.ecfr.gov/api/versioner/v1/full/2026-"},
+                "access": ["group:acme/0"]},
+               {"match": {"uri_prefix": "https://www.ecfr.gov/"}, "access": ["public"]},
+               *RULES[:-1]]
+
+
+def test_sync_refuses_a_policy_that_splits_a_chain(tmp_path):
+    good = write_config(tmp_path / "good")
+    s = make(tmp_path / "s", good)
+    before = (s.path / "acl" / "HEAD").read_bytes()
+    bad = write_config(tmp_path / "bad", SPLIT_RULES)
+    with pytest.raises(acl.SyncError) as e:
+        acl.sync(s.path, *bad, clock=fixed(T0))
+    msg = str(e.value)
+    assert "unchanged" in msg and not e.value.head_moved
+    assert "ecfr:33:99" in msg
+    for d in (V2024, V2025, V2026):
+        assert doc_id(d) in msg
+    assert (s.path / "acl" / "HEAD").read_bytes() == before
+    last = json.loads((s.path / "acl" / "sync.jsonl").read_text().splitlines()[-1])
+    assert last["outcome"] == "error" and "ecfr:33:99" in last["error"]
+
+
+def test_a_rule_over_a_whole_chain_or_one_document_syncs(tmp_path):
+    rules = [{"match": {"uri_prefix": "https://www.ecfr.gov/"}, "access": ["public"]},
+             {"match": {"uri_prefix": "file://acl/acme/plan.md"}, "access": ["group:globex/1"]},
+             *RULES]
+    s = make(tmp_path / "s", write_config(tmp_path / "c", rules))
+    snap = snapshot_of(s)
+    assert {tuple(snap.docs[doc_id(d)]) for d in (V2024, V2025, V2026)} == {("public",)}
+    assert snap.docs[did(ACME)] == ["group:globex/1"]
+    t = as_(s, "user:outsider")
+    assert "superseded by" in err(t.read, doc_id(V2025))  # its own chain: not secret
+    assert t.read(doc_id(V2026)).doc_id == doc_id(V2026)
+
+
+@pytest.mark.parametrize("caller,code", [("user:acme-1", "F1"), ("user:acme-4", None),
+                                         ("user:outsider", None)])
+def test_a_snapshot_that_splits_a_chain_denies_f1_to_a_view_it_splits(store, caller, code):
+    """A hand-written snapshot gives the 2026 version another list: a view that holds some
+    but not all versions is denied (no superseded_by or valid_to of a hidden version)."""
+    snap = snapshot_of(store)
+    put_snapshot(store, snap.model_copy(update={"docs": {**snap.docs,
+                                                         doc_id(V2026): ["group:acme/0"]}}))
+    t = as_(store, caller)
+    if code is None:
+        t.search("vessels")
+        assert log_lines(store)[-1]["acl_decision"] == "allowed"
+        return
+    assert_denied(store, t, code)
+    assert "chain" in err(t.read, doc_id(V2025))
+    assert doc_id(V2026)[:8] not in err(t.read, doc_id(V2025))
+
+
+# -- dense scores under the ACL layer: a function of (row, query) alone --------------------------
+
+def test_the_dense_kernel_is_bit_exact_whatever_the_other_rows():
+    from adr_store.retrieval.dense import row_scores
+
+    rng = np.random.default_rng(20261116)
+    for dim in (8, 384):
+        big = rng.standard_normal((5000, dim)).astype(np.float32)
+        big /= np.linalg.norm(big, axis=1, keepdims=True)
+        q = rng.standard_normal(dim).astype(np.float32)
+        q /= np.linalg.norm(q)
+        whole = row_scores(big, q)
+        assert whole.dtype == np.float32 and whole.shape == (5000,)
+        for rows in (np.arange(16), np.arange(38), rng.choice(5000, 38, replace=False)):
+            sub = big[rows]
+            assert np.array_equal(row_scores(sub, q), whole[rows])
+            buf = np.empty(sub.size + 1, dtype=np.float32)  # a misaligned copy
+            mis = buf[1:].reshape(sub.shape)
+            mis[:] = sub
+            assert np.array_equal(row_scores(mis, q), whole[rows])
+            for i, r in enumerate(rows):
+                assert row_scores(sub[i:i + 1], q)[0] == whole[r]
+
+
+def test_acl_searches_use_the_row_exact_kernel_and_acl_off_the_phase1_one(tmp_path, config,
+                                                                         fake_models,
+                                                                         monkeypatch):
+    from adr_store.retrieval import dense as dense_mod
+
+    s = make(tmp_path / "s", write_config(tmp_path / "c", [r for r in RULES if r["access"]]),
+             dense=True)
+    used = []
+    real = dense_mod.row_scores
+    monkeypatch.setattr(dense_mod, "row_scores", lambda v, q: used.append(len(v)) or real(v, q))
+    tools.Tools(s.path).search("vessel")
+    assert used == []  # acl=False: the Phase 1 matrix product, unchanged
+    n = len(tools.Tools(s.path).active_index().chunks)
+    as_(s, "user:auditor").search("vessel")  # sees every chunk: the fast path
+    as_(s, "user:outsider").search("vessel")
+    assert used and all(u == n for u in used)
+
+
+# -- no applicability overlay; the overlay cache follows the file -------------------------------
+
+def test_the_view_applies_on_a_store_without_an_overlay(tmp_path, config):
+    s = make_gov_store(tmp_path / "s", DOCS)
+    tools.Tools(s.path).index("p1-struct", lexical_only=True)
+    acl.sync(s.path, *config, clock=fixed(T0))
+    for caller in USERS:
+        t, mine = as_(s, caller), visible(s, caller)
+        res = t.search("vessel harbour refund", top=50)
+        assert res.applicability is None and res.excluded_by_filter == 0
+        assert result_ids(res) <= mine
+        assert result_ids(t.grep("vessel")) <= mine
+        hidden = sorted(set(s.doc_ids()) - mine)
+        if hidden:
+            assert err(t.read, hidden[0]) == err(t.read, absent_like(hidden[0], s.doc_ids()))
+    assert did(NOBODY) not in result_ids(as_(s, "user:auditor").grep("quokkalith"))
+
+
+def test_a_rewritten_overlay_is_read_again_on_the_next_call(store):
+    t = as_(store, "user:acme-1")
+    t.search("vessels")
+    app = ap.overlay_path(store.path, store.snapshot_id)
+    data = app.read_bytes()
+    app.unlink()
+    app.write_bytes(data[:-2] + b"x\n")  # another file under the name: a new stat
+    with pytest.raises(tools.ToolError, match="not a valid overlay|canonical"):
+        t.search("vessels")
+    app.unlink()
+    app.write_bytes(data)
+    assert t.search("vessels").applicability is not None
+    idx = tools.Tools(store.path).active_index()
+    dd = dedup.overlay_path(store.path, store.snapshot_id, idx.chunker,
+                            chunk_content_sha256(idx.chunks.values()))
+    data = dd.read_bytes()
+    dd.unlink()
+    dd.write_bytes(data.replace(b'"format_version":"0.1"', b'"format_version":"9.9"'))
+    with pytest.raises(tools.ToolError, match="dedup overlay"):
+        t.search("vessels")
