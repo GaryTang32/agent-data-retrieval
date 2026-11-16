@@ -805,3 +805,70 @@ def test_p2_compare_refuses_runs_it_cannot_compare(tmp_path, p2fakes, capsys, ed
                  "--out", str(tmp_path / "cmp")]) == 2
     assert match in capsys.readouterr().err
     assert not (tmp_path / "cmp").exists()
+
+
+def test_a_phase2_store_copy_that_loses_a_race_uses_the_winner_s(mini, p2config, p2fakes,
+                                                                 monkeypatch):
+    """Two builders copy the Phase 1 store at once: each copies into its own part
+    directory and renames it into place; the one that loses uses the winner's copy."""
+    import shutil
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    real = shutil.copytree
+    calls = []
+
+    def racing(src, dst, *a, **kw):
+        if Path(src) != p1.store_path:  # another copy (an index save)
+            return real(src, dst, *a, **kw)
+        calls.append(Path(dst))
+        if len(calls) == 1:  # another builder finishes its copy first
+            real(src, path, **kw)
+            (path / "winner").write_text("")
+        return real(src, dst, **kw)
+
+    monkeypatch.setattr(shutil, "copytree", racing)
+    p2 = build("p2-identity", mini, p2config)
+    assert calls and calls[0] != path and calls[0].parent == path.parent
+    assert (path / "winner").is_file() and p2.tools.store_path == path
+    assert (path / "HEAD").read_text() == (p1.store_path / "HEAD").read_text()
+    assert sorted(p.name for p in path.parent.iterdir()) == ["mini"]  # no part left
+
+
+def test_an_interrupted_phase2_store_copy_leaves_no_store(mini, p2config, p2fakes,
+                                                          monkeypatch):
+    import shutil
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    real = shutil.copytree
+
+    def failing(src, dst, *a, **kw):
+        if Path(src) != p1.store_path:
+            return real(src, dst, *a, **kw)
+        real(src, dst, *a, **kw)  # the whole copy, HEAD included, then the failure
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(shutil, "copytree", failing)
+    with pytest.raises(runner.RunError, match="no space left"):
+        build("p2-identity", mini, p2config)
+    assert not path.exists() and list(path.parent.iterdir()) == []
+    monkeypatch.setattr(shutil, "copytree", real)
+    assert build("p2-identity", mini, p2config).tools.store_path == path
+
+
+def test_the_recorded_corpora_need_a_committed_phase1_summary(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    p1 = SimpleNamespace(w=0.5, fingerprint="f" * 64, index=SimpleNamespace(
+        settings=SimpleNamespace(w_bc=1), snapshot="5" * 64))
+    monkeypatch.setattr(systems, "PHASE1_SUMMARIES", tmp_path / "none")
+    for corpus in ("gov", "research", "bench"):
+        with pytest.raises(runner.RunError, match=f"(?s)no committed.*{corpus}"):
+            systems._check_recorded(corpus, p1, lexical_only=False)
+        assert systems._check_recorded(corpus, p1, lexical_only=True) == []
+    assert systems._check_recorded("mini", p1, lexical_only=False) == []
+    monkeypatch.undo()
+    for corpus in systems.RECORDED_CORPORA:  # the committed summaries are there
+        assert list(systems.PHASE1_SUMMARIES.glob(
+            f"{corpus}-p1-struct-bc-*-retrieval-*/retrieval.json"))

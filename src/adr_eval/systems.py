@@ -358,6 +358,7 @@ def _store_system(name: str):
 
 P2_REFERENCE = "p1-struct-bc"  # the Phase 1 system whose index and weights they reuse
 PHASE1_SUMMARIES = runner.REPO_ROOT / "results" / "phase1" / "run-summaries"
+RECORDED_CORPORA = ("gov", "research", "bench")  # Phase 1 recorded these; mini is a fixture
 
 
 @dataclass(frozen=True)
@@ -441,45 +442,91 @@ class P2System:
                 "dedup_overlay": self.dedup}
 
 
+def phase1_summaries(corpus: str) -> list[Path]:
+    """The committed `p1-struct-bc` retrieval summaries of `corpus` (dev, then test)."""
+    return [path for split in ("dev", "test") for path in sorted(PHASE1_SUMMARIES.glob(
+        f"{corpus}-{P2_REFERENCE}-{split}-retrieval-*/retrieval.json"))]
+
+
+def phase1_fingerprints(corpus: str) -> set[str]:
+    """The index fingerprints of the committed `p1-struct-bc` retrieval summaries of
+    `corpus` (the Phase 1 index the Phase 2 configurations and probes must search)."""
+    return {json.loads(p.read_text(encoding="utf-8"))["config"]["fingerprint"]
+            for p in phase1_summaries(corpus)}
+
+
 def _check_recorded(corpus: str, p1: StoreSystem, lexical_only: bool) -> list[str]:
     """The committed `p1-struct-bc` retrieval summaries of `corpus` that the rebuilt system
-    reproduces (`w`, `w_bc`, store snapshot, fingerprint); any other is a `RunError`. A
+    reproduces (`w`, `w_bc`, store snapshot, fingerprint); any other is a `RunError`, and so
+    is a corpus of `RECORDED_CORPORA` with none (mini and other fixtures have none). A
     lexical-only build is compared with none (the recorded runs are full ones)."""
     if lexical_only:
         return []
     got = {"w": p1.w, "w_bc": p1.index.settings.w_bc, "store_snapshot": p1.index.snapshot,
            "fingerprint": p1.fingerprint}
     checked = []
-    for split in ("dev", "test"):
-        for path in sorted(PHASE1_SUMMARIES.glob(
-                f"{corpus}-{P2_REFERENCE}-{split}-retrieval-*/retrieval.json")):
-            cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
-            want = {"w": cfg["w"], "w_bc": cfg["settings"]["w_bc"],
-                    "store_snapshot": cfg["settings"]["store_snapshot"],
-                    "fingerprint": cfg["fingerprint"]}
-            differ = [f"{k} {want[k]!r} recorded, {got[k]!r} rebuilt" for k in want
-                      if want[k] != got[k]]
-            if differ:
-                raise runner.RunError(
-                    f"{path.parent.name}: the rebuilt {P2_REFERENCE} does not reproduce the "
-                    f"recorded run: {'; '.join(differ)}\nfix: restore the Phase 1 store and "
-                    f"index the run was made with")
-            checked.append(path.parent.name)
+    paths = phase1_summaries(corpus)
+    if not paths and corpus in RECORDED_CORPORA:
+        raise runner.RunError(
+            f"no committed {P2_REFERENCE} retrieval summary of {corpus} under "
+            f"{PHASE1_SUMMARIES} ({corpus}-{P2_REFERENCE}-<split>-retrieval-*/retrieval.json):"
+            f" the Phase 2 configurations must reproduce a recorded Phase 1 run\nfix: restore "
+            f"results/phase1/run-summaries from git")
+    for path in paths:
+        cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
+        want = {"w": cfg["w"], "w_bc": cfg["settings"]["w_bc"],
+                "store_snapshot": cfg["settings"]["store_snapshot"],
+                "fingerprint": cfg["fingerprint"]}
+        differ = [f"{k} {want[k]!r} recorded, {got[k]!r} rebuilt" for k in want
+                  if want[k] != got[k]]
+        if differ:
+            raise runner.RunError(
+                f"{path.parent.name}: the rebuilt {P2_REFERENCE} does not reproduce the "
+                f"recorded run: {'; '.join(differ)}\nfix: restore the Phase 1 store and "
+                f"index the run was made with")
+        checked.append(path.parent.name)
     return checked
 
 
-def _p2_store(corpus: str, loaded: LoadedCorpus, config: dict, p1: StoreSystem):
-    """The p2 store, copied from the Phase 1 store when missing and checked as
-    `ensure_store` checks a store; it must hold the corpus's documents at the snapshot of
-    the Phase 1 index."""
+def _copy_store(src: Path, path: Path) -> None:
+    """Copy the store at `src` to `path` atomically: into `.<name>.part-<pid>` beside it,
+    then one rename, so `path` is either missing or a whole copy. A builder whose rename
+    finds `path` already there (another one copied it meanwhile) uses that copy; the part
+    directory is removed in every case."""
+    import os
     import shutil
 
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.parent / f".{path.name}.part-{os.getpid()}"
+    shutil.rmtree(part, ignore_errors=True)  # left by a killed process of this pid
+    try:
+        try:
+            shutil.copytree(src, part, symlinks=True)
+        except OSError as e:
+            raise runner.RunError(f"{path}: copying the Phase 1 store {src} failed: {e}") \
+                from e
+        try:
+            os.rename(part, path)
+        except OSError as e:
+            if not (path / "HEAD").is_file():
+                raise runner.RunError(f"{path}: could not move the copy {part} into place: "
+                                      f"{e}\nfix: remove {path} so that it is copied again") \
+                    from e
+            # another builder's whole copy won the race: use it (checked by the caller)
+    finally:
+        shutil.rmtree(part, ignore_errors=True)
+
+
+def _p2_store(corpus: str, loaded: LoadedCorpus, config: dict, p1: StoreSystem):
+    """The p2 store, copied from the Phase 1 store when missing (`_copy_store`) and checked
+    as `ensure_store` checks a store; it must hold the corpus's documents at the snapshot of
+    the Phase 1 index."""
     path = p2_store_dir(config, corpus)
     if not (path / "HEAD").is_file():
         if path.exists():
             raise runner.RunError(f"{path}: exists but holds no store (no HEAD)\nfix: remove "
                                   f"{path} so that it is copied again")
-        shutil.copytree(p1.store_path, path, symlinks=True)
+        _copy_store(p1.store_path, path)
     store = _checked_store(path, loaded, "copied")
     want = sorted(d.doc_id for d in loaded.manifest.documents)
     if store.doc_ids() != want or store.snapshot_id != p1.index.snapshot:
