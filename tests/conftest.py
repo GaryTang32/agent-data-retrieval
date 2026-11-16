@@ -56,7 +56,8 @@ def _isolate_writable_state(writable_state, monkeypatch):
     """Keep tests from writing the repo's .cache/: the shipped config's index, LLM cache, store
     and embedding cache dirs and DenseIndex's default embedding cache point at the session
     directory instead.
-    The Phase 2 harness's store copies (`p2_store_dir`) go there too.
+    The Phase 2 harness's store copies (`p2_store_dir`) and the default output root of
+    `adr-eval p2-compare` and `adr-eval probes` go there too.
     The `adr` tools' default embedding cache and `StoreIndex`'s default one point there too,
     and so does the store directory `adr --corpus <name>` and `adr index <name>` use.
     The fastembed model store (.cache/fastembed) is only read."""
@@ -86,6 +87,9 @@ def _isolate_writable_state(writable_state, monkeypatch):
     monkeypatch.setattr(store_index, "_default_cache",
                         lambda: EmbeddingCache(writable_state / "emb-store-index"))
     monkeypatch.setattr(cli, "STORE_ROOT", writable_state / "cli-store")
+    from adr_eval import phase2
+
+    monkeypatch.setattr(phase2, "OUT_ROOT", writable_state / "runs")
 
 
 @pytest.fixture

@@ -688,3 +688,36 @@ def test_p2_identity_equals_p1_struct_bc_even_with_a_dedup_overlay_that_collapse
                 assert len(got) == 1  # one cluster: one slot
     assert {(n, d) for n, d in calls} == {("p2-identity", False), ("p2-appl", False),
                                           ("p2-dedup", True), ("p2-default", True)}
+
+
+def test_p2_compare_writes_slots_subsets_and_verdicts(tmp_path, p2fakes, capsys):
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-default")
+    store = systems.p2_store_dir(runner.load_config(), "mini")
+    out = tmp_path / "runs"
+    capsys.readouterr()
+    assert main(["p2-compare", a["dir"].name, b["dir"].name, "--store", str(store),
+                 "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert printed.startswith("# Phase 2 comparison: p2-default minus p1-struct-bc")
+    d = out / f"p2-compare-{a['dir'].name}--{b['dir'].name}"
+    c = json.loads((d / "compare.json").read_text())
+    assert (d / "compare.md").read_text().startswith("# Phase 2 comparison")
+    assert c["margin"] == 0.02 and c["n_resamples"] == 10_000 and c["seed"] == 20261108
+    # mini: one dated test item (which p2-default answers with nothing), no chains
+    assert c["subset_sizes"] == {"asof": 1, "in_force": 5, "superseded_only": 0, "scored": 6}
+    assert c["criteria"]["A4"] == {"subset": "in_force", "pass": True, "n": 5}
+    assert c["subsets"]["in_force"]["keys"]["ndcg@10"]["mean_diff"] == 0.0
+    assert c["criteria"]["A3"]["subset"] == "asof"
+    assert set(c["slots"]) == {"a", "b"}
+    assert c["slots"]["b"]["asof"]["n_slots"] == 0
+    assert c["slots"]["a"]["all"]["superseded_slots"] == 0
+    assert c["applicability"] and c["dedup"]
+    # a run of another store snapshot is refused
+    path = b["dir"] / "retrieval.json"
+    data = json.loads(path.read_text())
+    data["config"]["settings"]["store_snapshot"] = "0" * 64
+    path.write_text(json.dumps(data))
+    assert main(["p2-compare", a["dir"].name, b["dir"].name, "--store", str(store),
+                 "--out", str(out)]) == 2
+    assert "not the store's HEAD" in capsys.readouterr().err
