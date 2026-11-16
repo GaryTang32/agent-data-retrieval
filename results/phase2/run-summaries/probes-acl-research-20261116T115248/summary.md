@@ -1,6 +1,6 @@
-# ACL probes: bench
+# ACL probes: research
 
-Store `.cache/store-p2/bench` (snapshot `7d8d1f8adda6`, ACL snapshot `02bcbbfcf6e7` sequence 6), index `8c7bb39d032b`, 20 reference stores. Seed 20261116. No model calls.
+Store `.cache/store-p2/research` (snapshot `97c415b1aa71`, ACL snapshot `01030d5fdaf2` sequence 7), index `d3902b136e26`, 20 reference stores. Seed 20261116. No model calls.
 
 ## Leak probes
 
@@ -16,17 +16,17 @@ Total: 280 probes, 0 leaks, 0 invalid.
 
 ## Fail closed
 
-| condition | probes | passed | with content | outcomes |
-|---|---|---|---|---|
-| F1 | 15 | 15 | 0 | denied:F1 15 |
-| F2 | 15 | 15 | 0 | denied:F2 15 |
-| F3 | 15 | 15 | 0 | denied:F3 15 |
-| F4 | 15 | 15 | 0 | denied:F4 15 |
-| F5 | 15 | 15 | 0 | denied:F5 15 |
-| no_entry | 15 | 15 | 0 | ok 10, refused 5 |
+| condition | probes | passed | with content | visible before | top 10 before | outcomes |
+|---|---|---|---|---|---|---|
+| F1 | 15 | 15 | 0 | 15 | 15 | denied:F1 15 |
+| F2 | 15 | 15 | 0 | 15 | 15 | denied:F2 15 |
+| F3 | 15 | 15 | 0 | 15 | 15 | denied:F3 15 |
+| F4 | 15 | 15 | 0 | 0 | 0 | denied:F4 15 |
+| F5 | 15 | 15 | 0 | 0 | 0 | denied:F5 15 |
+| no_entry | 15 | 15 | 0 | 15 | 15 | ok 10, refused 5 |
 
 Total: 90 probes, 90 passed, 0 with content.
 
 ## Log fields
 
-640 log lines, 640 with caller, principals, acl_snapshot and acl_decision.
+655 log lines, 655 with caller, principals, acl_snapshot and acl_decision; 565 allowed, 0 of them with a null caller, principals, acl_snapshot or view.

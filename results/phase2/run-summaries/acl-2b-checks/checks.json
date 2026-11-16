@@ -18,6 +18,63 @@
       "search": 31
     }
   },
+  "b5_rescan_with_allowed_fields": {
+    "b3 test stores": {
+      "allowed": 78,
+      "allowed_unresolved": 0,
+      "decisions": {
+        "allowed": 78,
+        "denied:F2": 9,
+        "denied:F3": 6,
+        "denied:F4": 9,
+        "off": 5
+      },
+      "lines": 107,
+      "missing_a_field": 0
+    },
+    "p2-bench (08:54-11:36)": {
+      "allowed": 7250,
+      "allowed_unresolved": 0,
+      "decisions": {
+        "allowed": 7250,
+        "denied:F4": 30,
+        "denied:F5": 15,
+        "off": 8
+      },
+      "lines": 7303,
+      "missing_a_field": 0
+    },
+    "p2-gov (08:54-11:36)": {
+      "allowed": 5527,
+      "allowed_unresolved": 0,
+      "decisions": {
+        "allowed": 5527,
+        "denied:F4": 29,
+        "denied:F5": 15,
+        "off": 8
+      },
+      "lines": 5579,
+      "missing_a_field": 0
+    },
+    "p2-research (08:54-11:36)": {
+      "allowed": 5438,
+      "allowed_unresolved": 0,
+      "decisions": {
+        "allowed": 5438,
+        "denied:F4": 30,
+        "denied:F5": 15,
+        "off": 8
+      },
+      "lines": 5491,
+      "missing_a_field": 0
+    },
+    "total": {
+      "allowed": 18293,
+      "allowed_unresolved": 0,
+      "lines": 18480,
+      "missing_a_field": 0
+    }
+  },
   "p2_store_syncs": {
     "bench": [
       {
@@ -79,6 +136,16 @@
         "outcome": "ok",
         "sequence": 6,
         "started": "2026-11-16T10:46:06.382502Z"
+      },
+      {
+        "acl_snapshot": "7208eb5d13d2fd680490c3e9b618dab3d62c7113c7808b9264d1530d984651f0",
+        "changed": false,
+        "duration_s": 0.675216,
+        "entries_sha256": "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2",
+        "lag_s": 18313.808479,
+        "outcome": "ok",
+        "sequence": 7,
+        "started": "2026-11-16T12:04:14.834538Z"
       }
     ],
     "gov": [
@@ -121,6 +188,16 @@
         "outcome": "ok",
         "sequence": 4,
         "started": "2026-11-16T09:49:56.685695Z"
+      },
+      {
+        "acl_snapshot": "d628341589ecaf180571c93fb427969bc40ff211ff78e802f6042cdef41a58ac",
+        "changed": false,
+        "duration_s": 1.249807,
+        "entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+        "lag_s": 16990.610633,
+        "outcome": "ok",
+        "sequence": 5,
+        "started": "2026-11-16T11:42:11.062015Z"
       }
     ],
     "research": [
@@ -183,6 +260,16 @@
         "outcome": "ok",
         "sequence": 6,
         "started": "2026-11-16T10:30:26.765665Z"
+      },
+      {
+        "acl_snapshot": "01030d5fdaf2f5e8d99e1a5aa632bce9549117577be3ddcbc8efcc5123ee0403",
+        "changed": false,
+        "duration_s": 0.484441,
+        "entries_sha256": "7f8fb0e62d37989484cb47d7d89a60dbb205a2995fe2175ef0eae24d2d80f09f",
+        "lag_s": 17624.781228,
+        "outcome": "ok",
+        "sequence": 7,
+        "started": "2026-11-16T11:52:45.997954Z"
       }
     ]
   },
@@ -201,6 +288,7 @@
     }
   },
   "real_stores_unchanged": {
+    "checked_after": "the fix-round runs",
     "files": 7320,
     "sha256_and_mtime_equal": true
   },
