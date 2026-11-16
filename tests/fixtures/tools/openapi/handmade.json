@@ -1,0 +1,93 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Handmade Tree Service", "version": "1.2.0"},
+  "paths": {
+    "/trees/{treeId}/nodes": {
+      "parameters": [
+        {"name": "treeId", "in": "path", "required": true, "description": "The tree",
+         "schema": {"type": "string"}}
+      ],
+      "get": {
+        "operationId": "listNodes",
+        "summary": "List the nodes of a tree",
+        "description": "Returns the nodes of a tree, a page at a time.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Limit"},
+          {"name": "id", "in": "query", "schema": {"type": "string"},
+           "description": "Only this node id"},
+          {"name": "X-Trace", "in": "header", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of nodes",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Page"}}}
+          }
+        }
+      },
+      "post": {
+        "operationId": "addNode",
+        "summary": "Add a node",
+        "requestBody": {
+          "required": true,
+          "description": "The node to add",
+          "content": {
+            "application/xml": {"schema": {"type": "string"}},
+            "application/json": {"schema": {"$ref": "#/components/schemas/Node"}}
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new node",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Node"}}}
+          }
+        }
+      }
+    },
+    "/trees/{treeId}/nodes/{id}": {
+      "delete": {
+        "parameters": [
+          {"name": "treeId", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "id", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "id", "in": "query", "schema": {"type": "boolean"},
+           "description": "A query parameter with the same name as a path parameter"}
+        ],
+        "responses": {
+          "204": {"description": "Deleted"}
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "A list, not an object",
+            "content": {"application/json": {"schema": {"type": "array", "items": {"type": "string"}}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1},
+                "description": "Page size"}
+    },
+    "schemas": {
+      "Node": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "children": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}
+        },
+        "required": ["name"]
+      },
+      "Page": {
+        "type": "object",
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}},
+          "next": {"type": "string", "nullable": true}
+        }
+      }
+    }
+  }
+}

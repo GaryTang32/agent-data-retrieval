@@ -1,0 +1,47 @@
+{
+  "server": "handmade-notes",
+  "package": null,
+  "version": "0.1.0",
+  "source_uri": "fixture:mcp/handmade-notes",
+  "license": "CC0-1.0",
+  "command": null,
+  "tools_list": {
+    "tools": [
+      {
+        "name": "search_notes",
+        "title": "Search notes",
+        "description": "Find notes whose text matches a query. Returns note ids and titles.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "Words to look for"},
+            "limit": {"type": "integer", "minimum": 1, "default": 10}
+          },
+          "required": ["query"]
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "ids": {"type": "array", "items": {"type": "string"}}
+          },
+          "required": ["ids"]
+        }
+      },
+      {
+        "name": "list_notebooks",
+        "description": "List every notebook.",
+        "inputSchema": {"type": "object"}
+      },
+      {
+        "name": "delete_note",
+        "description": "Delete a note by id.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {"note_id": {"type": "string"}},
+          "required": ["note_id"]
+        },
+        "annotations": {"destructiveHint": true}
+      }
+    ]
+  }
+}
