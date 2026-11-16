@@ -473,11 +473,11 @@ def collapse(ranked: Iterable[tuple[str, float]], dedup: Dedup,
     """At most `top` slots from `ranked` (best first; read only as far as needed), one per
     admitted component; members `admitted` rejects are never chosen, never listed and never
     join two components."""
+    if isinstance(top, bool) or not isinstance(top, int) or top < 1:
+        raise ValueError(f"top must be a positive integer, got {top!r}")
     slots: list[Slot] = []
     taken: set[str] = set()
     comps: dict[str, list[list[str]]] = {}
-    if top <= 0:
-        return slots
     for cid, score in ranked:
         if cid in taken or not admitted(cid):
             continue

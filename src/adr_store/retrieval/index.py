@@ -137,8 +137,21 @@ def _tail(lex: Hits, dense: Hits, w: float, head: set[str]) -> Hits:
     """The full ranking after the fused pool `head`: every dense candidate not in it, by
     `w * l + (1 - w) * d` scaled as the channels' top `CHANNEL_K` (at most 0)."""
     nl, nd, bm25 = _scale(lex[:CHANNEL_K]), _scale(dense[:CHANNEL_K]), dict(lex)
-    return rank({cid: w * nl(bm25.get(cid, 0.0)) + (1.0 - w) * nd(s)
-                 for cid, s in dense if cid not in head}, top=len(dense))
+    ranked = rank({cid: w * nl(bm25.get(cid, 0.0)) + (1.0 - w) * nd(s)
+                   for cid, s in dense if cid not in head}, top=len(dense))
+    return [(cid, 0.0 if s == 0 else s) for cid, s in ranked]  # -0.0 (rounded) is 0.0
+
+
+def _full_ranking(lex: Hits, dense: Hits | None,
+                  w: float | None) -> Iterator[tuple[str, float]]:
+    """The full ranking (module docstring) of a query's complete channel lists (`dense`
+    None: a lexical-only index)."""
+    if dense is None:
+        yield from lex
+        return
+    head = linear(lex[:CHANNEL_K], dense[:CHANNEL_K], w, top=2 * CHANNEL_K)
+    yield from head
+    yield from _tail(lex, dense, w, {cid for cid, _ in head})
 
 
 def _fresh_dir(beside: Path, kind: str) -> Path:
@@ -340,29 +353,55 @@ class StoreIndex:
             return self.dense.search(q, k=k, mask=doc_mask(self._dense_doc_ids, allowed_docs))
         return lex, dense
 
-    def ranking(self, query: str, w: float | None = None, *,
-                allowed_docs: frozenset[str] | None = None,
-                lexical: FieldBM25 | None = None) -> Iterator[tuple[str, float]]:
-        """The full ranking of `query` (module docstring), lazily: linear fusion's ranking of
-        the channels' top `CHANNEL_K`, then every other candidate chunk; no reranking.
-        `allowed_docs` and `lexical` are as for `retrieve`."""
+    def _view_channels(self, w: float | None, allowed_docs: frozenset[str] | None,
+                       lexical: FieldBM25 | None):
+        """The channels of `ranking` and `retrieve_and_ranking`, their arguments checked."""
         if allowed_docs is None and lexical is not None:
             raise ValueError("a per-view lexical index needs the view's allowed_docs too")
         if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
             raise ValueError(f"allowed_docs must be a set of document ids, got "
                              f"{type(allowed_docs).__name__}")
-        lex_hits, dense_hits = self._channels(allowed_docs, lexical)
-        everything = len(self.chunks)
-        lex = lex_hits(query, everything)  # each channel sorts every row anyway
-        if self.dense is None:
-            yield from lex
-            return
-        if w is None:
+        if self.dense is not None and w is None:
             raise ValueError("linear fusion needs a tuned weight w")
-        dense = dense_hits(query, everything)
-        head = linear(lex[:CHANNEL_K], dense[:CHANNEL_K], w, top=2 * CHANNEL_K)
-        yield from head
-        yield from _tail(lex, dense, w, {cid for cid, _ in head})
+        return self._channels(allowed_docs, lexical)
+
+    def _lists(self, query: str, lex_hits, dense_hits) -> tuple[Hits, Hits | None]:
+        """Each channel's complete list for `query` (one search each: one query embedding);
+        each channel sorts every row anyway."""
+        everything = len(self.chunks)
+        return (lex_hits(query, everything),
+                None if self.dense is None else dense_hits(query, everything))
+
+    def ranking(self, query: str, w: float | None = None, *,
+                allowed_docs: frozenset[str] | None = None,
+                lexical: FieldBM25 | None = None) -> Iterator[tuple[str, float]]:
+        """The full ranking of `query` (module docstring), lazily: linear fusion's ranking of
+        the channels' top `CHANNEL_K`, then every other candidate chunk; no reranking.
+        `allowed_docs` and `lexical` are as for `retrieve`. The arguments are checked when
+        called (ValueError), not when the ranking is first read."""
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical)
+
+        def lazily() -> Iterator[tuple[str, float]]:
+            yield from _full_ranking(*self._lists(query, lex_hits, dense_hits), w)
+
+        return lazily()
+
+    def retrieve_and_ranking(self, query: str, w: float | None = None, top: int = TOP_N, *,
+                             allowed_docs: frozenset[str] | None = None,
+                             lexical: FieldBM25 | None = None
+                             ) -> tuple[Hits, Iterator[tuple[str, float]]]:
+        """`(retrieve(query, "linear", w, top, ...), ranking(query, w, ...))` from one search
+        of each channel, so the query is embedded once (a reranked collapse that needs both:
+        its reranked head, and how far the full ranking would fill it)."""
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical)
+        lex, dense = self._lists(query, lex_hits, dense_hits)
+
+        def cut(hits):
+            return lambda q, k=CHANNEL_K: hits[:k]
+
+        head = self._fuse(query, "linear", w, top, cut(lex), None if dense is None else
+                          cut(dense))
+        return head, _full_ranking(lex, dense, w)
 
     def _fuse(self, query: str, fusion: str, w: float | None, top: int, lex_hits,
               dense_hits) -> Hits:

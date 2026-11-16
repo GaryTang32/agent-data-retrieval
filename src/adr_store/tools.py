@@ -816,13 +816,15 @@ class Tools:
 
         if idx.reranker is None:
             return collapse(full()), 0
-        head = idx.retrieve(query, fusion="linear", w=active["w"], top=RERANK_TOP,
-                            allowed_docs=allowed)
+        # the reranked head and the full ranking from one search of each channel (the
+        # query is embedded once)
+        head, rest = idx.retrieve_and_ranking(query, w=active["w"], top=RERANK_TOP,
+                                              allowed_docs=allowed)
         slots = collapse(head)
         if len(slots) == top:
             return slots, 0
         seen = {cid for cid, _ in head}
-        more = collapse(chain(head, ((cid, s) for cid, s in full() if cid not in seen)))
+        more = collapse(chain(head, ((cid, s) for cid, s in rest if cid not in seen)))
         return slots, len(more) - len(slots)
 
     # -- read -------------------------------------------------------------------------

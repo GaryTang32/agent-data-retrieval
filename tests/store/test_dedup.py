@@ -585,13 +585,13 @@ def test_a_reranked_index_collapses_its_reranked_top_50(gov, monkeypatch, tmp_pa
     tools.Tools(gov.path).index("p1-struct-bc-rr", w_bc=1, weight=0.5)
     build_for(gov)
     tops = []
-    real = StoreIndex.retrieve
+    real = StoreIndex.retrieve_and_ranking
 
     def spy(self, *args, **kw):
         tops.append(kw.get("top"))
         return real(self, *args, **kw)
 
-    monkeypatch.setattr(StoreIndex, "retrieve", spy)
+    monkeypatch.setattr(StoreIndex, "retrieve_and_ranking", spy)
     res = tools.Tools(gov.path).search("vessels", top=5, filters={"include_superseded": True})
     assert tops == [50] and res.dedup is not None and res.short_by == 0
 
@@ -783,6 +783,64 @@ def test_ranking_is_the_fused_pool_then_every_other_candidate(copies):
     assert {idx.chunks[c].doc_id for c, _ in masked} == some
 
 
+def test_ranking_with_a_view_s_bm25_yields_only_the_allowed_documents(copies):
+    """The view's BM25 covers two of the three documents, the view admits one: no chunk of
+    the other two is ever yielded (the view's statistics, the view's mask)."""
+    from adr_store.retrieval.lexical import FieldBM25
+
+    idx = active_index(copies)
+    w = json.loads((copies.path / "index" / "active.json").read_text())["w"]
+    two = set(copies.doc_ids()[:2])
+    view = FieldBM25(idx.lexical.w_bc, idx.lexical.bm25.k1, idx.lexical.bm25.b)
+    view.build([c for c in idx.chunks.values() if c.doc_id in two])
+    one = frozenset(copies.doc_ids()[:1])
+    got = list(idx.ranking("vessel", w, allowed_docs=one, lexical=view))
+    assert got and {idx.chunks[c].doc_id for c, _ in got} == one
+    assert len(got) == sum(c.doc_id in one for c in idx.chunks.values())  # every one of them
+
+
+def test_ranking_refuses_bad_arguments_when_called_not_when_iterated(copies):
+    from adr_store.retrieval.lexical import FieldBM25
+
+    idx = active_index(copies)
+    view = FieldBM25(idx.lexical.w_bc, idx.lexical.bm25.k1, idx.lexical.bm25.b)
+    view.build(list(idx.chunks.values()))
+    some = frozenset(copies.doc_ids()[:1])
+    with pytest.raises(ValueError, match="allowed_docs too"):
+        idx.ranking("vessel", 0.5, lexical=view)
+    with pytest.raises(ValueError, match="set of document ids"):
+        idx.ranking("vessel", 0.5, allowed_docs=list(some))
+    other = FieldBM25(idx.lexical.w_bc + 1)
+    other.build(list(idx.chunks.values()))
+    with pytest.raises(ValueError, match="does not match"):
+        idx.ranking("vessel", 0.5, allowed_docs=some, lexical=other)
+    if idx.dense is not None:
+        with pytest.raises(ValueError, match="tuned weight"):
+            idx.ranking("vessel", None)
+    else:
+        assert list(idx.ranking("vessel", None)) == idx.lexical.search("vessel", k=10**9)
+
+
+def test_collapse_refuses_a_top_below_one():
+    c = [chunk("a", 0, text(BASE))]
+    for top in (0, -1):
+        with pytest.raises(ValueError, match="top"):
+            dedup.collapse([(c[0].chunk_id, 1.0)], loaded(build(c)), lambda m: True, by_id(c),
+                           None, None, top)
+
+
+def test_the_tail_of_the_ranking_has_no_negative_zero():
+    """A score that rounds to zero from below is 0.0, not -0.0 (one JSON spelling)."""
+    pool = [(f"p{i:03d}", 0.5 - i / 1000) for i in range(CHANNEL_K)]  # the dense pool
+    lo = pool[-1][1]
+    lex = [("p000", 2.0), ("p001", 1.0)]
+    dense = [*pool, ("c", lo - 1e-9), ("d", lo)]  # c just below the pool's minimum
+    tail = index_mod._tail(lex, dense, 0.0, {cid for cid, _ in pool})
+    assert [cid for cid, _ in tail] == ["c", "d"]
+    assert all(s == 0.0 and str(s) == "0.0" for _, s in tail)
+    assert json.dumps(tail) == '[["c", 0.0], ["d", 0.0]]'
+
+
 def test_the_rest_of_the_ranking_is_only_computed_when_the_pool_runs_out(copies, monkeypatch):
     def boom(*a, **kw):
         raise AssertionError("the tail was computed")
@@ -801,6 +859,31 @@ def test_short_by_is_zero_when_the_admitted_chunks_run_out(copies):
     idx = active_index(copies)
     if idx.dense is None:  # only the three copies of section 3 match
         assert len(res.hits) == 1 and len(res.hits[0].alternates) == 2
+
+
+def test_a_reranked_search_short_of_top_embeds_the_query_once(tmp_path, fake_models,
+                                                              monkeypatch):
+    """`short_by` reuses the reranked head's channel lists: one dense search (one query
+    embedding) per search, filtered or not."""
+    from adr_store.retrieval.dense import CachedDense
+
+    s = make_copies(tmp_path / "copies")
+    tools.Tools(s.path).index("p1-struct-bc-rr", w_bc=1, weight=0.5)
+    build_for(s)
+    t = tools.Tools(s.path)
+    t.active_index()
+    calls = []
+    real = CachedDense.search
+
+    def spy(self, query, *a, **kw):
+        calls.append(query)
+        return real(self, query, *a, **kw)
+
+    monkeypatch.setattr(CachedDense, "search", spy)
+    for filters in (None, {"include_superseded": True}):
+        calls.clear()
+        res = t.search("vessel", top=50, filters=filters)
+        assert res.short_by > 0 and calls == ["vessel"]
 
 
 def test_a_reranked_index_says_how_many_slots_it_is_short(tmp_path, fake_models, capsys):
