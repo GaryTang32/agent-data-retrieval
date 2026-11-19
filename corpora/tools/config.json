@@ -1,0 +1,44 @@
+{
+  "corpus": "tools",
+  "name": "ToolRet, toolbench pool (toolbench and toolbench-sam tools)",
+  "paper": "https://arxiv.org/abs/2503.01763",
+  "license_summary": "Each tools file has its own licence (files.<name>.license). The 13,862 toolbench_tool_* tools (config web): ToolBench data (RapidAPI endpoint documentation), Apache-2.0 per the ToolBench README. The 197 toolbench_sam_tool_* tools (config customized): NOASSERTION. They are not ToolBench's RapidAPI data but Python-library and curl function descriptions from a different upstream (ToolRet's toolbench-sam); the ToolRet dataset cards, the files' metadata and the ToolRet code README name neither their upstream nor a licence (their content matches SambaNova's ToolBench, whose repository is Apache-2.0, but that is an inference ToolRet does not state). ToolRet code: Apache-2.0; the ToolRet dataset cards declare no licence (Phase 2 spec Q2). Local-only: never committed",
+  "tool_files": [
+    "tools_web",
+    "tools_customized"
+  ],
+  "dev_modulus": 5,
+  "files": {
+    "tools_web": {
+      "repo": "mangopy/ToolRet-Tools",
+      "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
+      "config": "web",
+      "path": "web/tools-00000-of-00001.parquet",
+      "sha256": "57faceebd778b2cb74571dca0e71e8bc8078c11ba05dce0efc562e818d3950e6",
+      "bytes": 8143446,
+      "local": "ToolRet-Tools/web/tools-00000-of-00001.parquet",
+      "prefix": "toolbench_tool_",
+      "license": "Apache-2.0"
+    },
+    "tools_customized": {
+      "repo": "mangopy/ToolRet-Tools",
+      "revision": "e06c38c75612b6536bd959e08cdd345894aba6a7",
+      "config": "customized",
+      "path": "customized/tools-00000-of-00001.parquet",
+      "sha256": "e3d0cf64f5d5321751401677c820c5e8c7df79bfd67a85c01e275fe573cbde41",
+      "bytes": 384413,
+      "local": "ToolRet-Tools/customized/tools-00000-of-00001.parquet",
+      "prefix": "toolbench_sam_tool_",
+      "license": "NOASSERTION"
+    },
+    "queries": {
+      "repo": "mangopy/ToolRet-Queries",
+      "revision": "b8c76ad3349ff17497b6bdb28bb5b8f61a0f6445",
+      "config": "toolbench",
+      "path": "toolbench/queries-00000-of-00001.parquet",
+      "sha256": "2bb32ea009d6ece37b1b785330247aacac037a20dd4522632cb3359809c8837d",
+      "bytes": 922485,
+      "local": "ToolRet-Queries/toolbench/queries-00000-of-00001.parquet"
+    }
+  }
+}

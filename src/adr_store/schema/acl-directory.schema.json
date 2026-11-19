@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "The synthetic directory (§5.2): tenants, groups (group principal -> its tenant) and\nusers (user principal -> its groups).",
+  "properties": {
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "groups": {
+      "patternProperties": {
+        "^group:[a-z][a-z0-9-]*/[0-9a-z-]+$": {
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "type": "string"
+        }
+      },
+      "title": "Groups",
+      "type": "object"
+    },
+    "tenants": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Tenants",
+      "type": "array"
+    },
+    "users": {
+      "patternProperties": {
+        "^user:[a-z][a-z0-9-]*$": {
+          "items": {
+            "pattern": "^group:[a-z][a-z0-9-]*/[0-9a-z-]+$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "title": "Users",
+      "type": "object"
+    }
+  },
+  "required": [
+    "format_version",
+    "tenants",
+    "groups",
+    "users"
+  ],
+  "title": "AclDirectory",
+  "type": "object"
+}

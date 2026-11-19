@@ -1,0 +1,354 @@
+{
+  "acl_syncs_this_task": [
+    {
+      "acl_snapshot": "d86528d242283557888d9a155e8cfb38ecf44c1c9de6e67cecdb8b52f78f07c2",
+      "changed": false,
+      "duration_s": 0.821502,
+      "entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+      "finished": "2026-11-16T14:59:30.988856Z",
+      "outcome": "ok",
+      "sequence": 5
+    },
+    {
+      "acl_snapshot": "b05ed3be2bf4617fe6305e7604b863175d1a52c119c67ead02478c007098220e",
+      "changed": false,
+      "duration_s": 1.230915,
+      "entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+      "finished": "2026-11-16T15:35:06.192839Z",
+      "outcome": "ok",
+      "sequence": 6
+    },
+    {
+      "acl_snapshot": "2fc0b78e5254d2ba23a8e7161fa05bc2eb2f85a2907d6d67f9374c213bf4e79f",
+      "changed": false,
+      "duration_s": 0.745459,
+      "entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+      "finished": "2026-11-16T15:38:27.447119Z",
+      "outcome": "ok",
+      "sequence": 7
+    },
+    {
+      "acl_snapshot": "9904f89bfe934728189f98e80111ea8f628525fdf83b93d8c654d215f5a00110",
+      "changed": false,
+      "duration_s": 0.956556,
+      "entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+      "finished": "2026-11-16T15:46:00.792238Z",
+      "outcome": "ok",
+      "sequence": 8
+    },
+    {
+      "acl_snapshot": "134ef5a13de0ae6c9b227963d3009828617990fb1250bd6853b2505012de93c3",
+      "changed": false,
+      "duration_s": 0.986167,
+      "entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+      "finished": "2026-11-16T15:52:29.033925Z",
+      "outcome": "ok",
+      "sequence": 9
+    }
+  ],
+  "b3_tool_revocation_tests": {
+    "command": "pytest tests/store/test_revocation.py -q -W error",
+    "log_scan": {
+      "content_tests": {
+        "allowed": 78,
+        "allowed_unresolved": 0,
+        "complete_lines": 107,
+        "decisions": {
+          "allowed": 78,
+          "denied:F2": 9,
+          "denied:F3": 6,
+          "denied:F4": 9,
+          "off": 5
+        },
+        "lines": 107,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "tools": {
+          "grep": 31,
+          "index": 5,
+          "read": 40,
+          "search": 31
+        }
+      },
+      "logs": {
+        "content": 5,
+        "tool": 5
+      },
+      "tool_tests": {
+        "allowed": 54,
+        "allowed_unresolved": 0,
+        "complete_lines": 80,
+        "decisions": {
+          "allowed": 54,
+          "denied:F2": 6,
+          "denied:F3": 4,
+          "denied:F4": 6,
+          "off": 10
+        },
+        "lines": 80,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "tools": {
+          "index": 5,
+          "load_tool": 38,
+          "read": 3,
+          "search_tools": 29,
+          "tools_index": 5
+        }
+      }
+    },
+    "passed": "10 of 10 (5 content, 5 tool)"
+  },
+  "b5_task_log_lines": {
+    "all_task_lines": {
+      "allowed": 26700,
+      "allowed_unresolved": 0,
+      "complete_lines": 26734,
+      "decisions": {
+        "allowed": 26700,
+        "denied:F4": 20,
+        "denied:F5": 10,
+        "off": 4
+      },
+      "lines": 26734,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "tools": {
+        "load_tool": 24213,
+        "search_tools": 2517,
+        "tools_index": 4
+      }
+    },
+    "note": "every line written to the toolret store's log from the task start: the four tools-retrieval runs on the store (24,204), the probes' precheck (10), the probe run (316) and the latency measurement (2,204). The probe run's own scan, with its clones, is in probes-tools-20261116T155230/summary.json (381 lines)",
+    "offset": 47698352,
+    "probes_and_latency": {
+      "allowed": 2500,
+      "allowed_unresolved": 0,
+      "complete_lines": 2530,
+      "decisions": {
+        "allowed": 2500,
+        "denied:F4": 20,
+        "denied:F5": 10
+      },
+      "lines": 2530,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "tools": {
+        "load_tool": 2213,
+        "search_tools": 317
+      }
+    },
+    "task_start": "2026-11-16T14:58:47",
+    "tools_retrieval_runs": {
+      "allowed": 24200,
+      "allowed_unresolved": 0,
+      "complete_lines": 24204,
+      "decisions": {
+        "allowed": 24200,
+        "off": 4
+      },
+      "lines": 24204,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "tools": {
+        "load_tool": 22000,
+        "search_tools": 2200,
+        "tools_index": 4
+      }
+    }
+  },
+  "c2_c3": {
+    "C2": {
+      "baseline_top10_doc_tokens_mean": 1123.463963963964,
+      "catalog_definition_tokens": 816284,
+      "definitions_mean": 746.009009009009,
+      "gold_loaded_mean": 1.3716216216216217,
+      "gold_share_mean": 0.0634725504318388,
+      "gold_share_median": 0.04662290347242541,
+      "gold_share_of_totals": 0.06656800570175637,
+      "loaded_max": 5081,
+      "loaded_mean": 1240.3322072072071,
+      "loaded_median": 1081.5,
+      "loaded_min": 520,
+      "max_reduction": 0.9993629668105708,
+      "mean_reduction": 0.9984805138809444,
+      "min_reduction": 0.9937754507009815,
+      "page_mean": 494.3231981981982,
+      "pass": true,
+      "queries_with_no_gold_loaded": 180,
+      "threshold": 0.8
+    },
+    "C3": {
+      "lower_gt_-0.02": true,
+      "pass": true,
+      "point_ge_baseline": true
+    },
+    "baseline_run": "tools-tools-bm25-raw-test-20261116T153702",
+    "bootstrap": {
+      "alpha": 0.05,
+      "resamples": 10000,
+      "seed": 20261108
+    },
+    "chosen_run": "tools-tools-hybrid-test-20261116T153716",
+    "how": "chosen = tools-hybrid (best dev Completeness@10), baseline = tools-bm25-raw, test split, per-query rows aligned by id; adr_eval.scoring.stats.paired_bootstrap_ci (chosen - baseline) and bootstrap_mean_ci, 10,000 resamples, seed 20261108; gold_share = mean over queries of loaded gold definition tokens / loaded tokens",
+    "metrics": {
+      "completeness@10": {
+        "baseline": 0.38400900900900903,
+        "baseline_ci": [
+          0.3524774774774775,
+          0.4166666666666667
+        ],
+        "chosen": 0.41103603603603606,
+        "chosen_ci": [
+          0.3783783783783784,
+          0.4436936936936937
+        ],
+        "diff": 0.02702702702702703,
+        "diff_ci": [
+          0.0022522522522522522,
+          0.05292792792792793
+        ],
+        "losses": 56,
+        "wins": 80
+      },
+      "ndcg@10": {
+        "baseline": 0.5085242565255943,
+        "baseline_ci": [
+          0.4848207285847163,
+          0.532223742570782
+        ],
+        "chosen": 0.5292996840501991,
+        "chosen_ci": [
+          0.5053084333464015,
+          0.5530541892354012
+        ],
+        "diff": 0.02077542752460496,
+        "diff_ci": [
+          0.004754251235917856,
+          0.03695662609002018
+        ],
+        "losses": 252,
+        "wins": 309
+      },
+      "recall@10": {
+        "baseline": 0.5782282282282283,
+        "baseline_ci": [
+          0.5530217717717718,
+          0.6034914602102104
+        ],
+        "chosen": 0.6032469969969969,
+        "chosen_ci": [
+          0.5779086899399398,
+          0.6289043731231232
+        ],
+        "diff": 0.02501876876876877,
+        "diff_ci": [
+          0.006287537537537537,
+          0.04410707582582583
+        ],
+        "losses": 110,
+        "wins": 143
+      }
+    },
+    "n": 888
+  },
+  "determinism": {
+    "config_differences": [
+      "started",
+      "acl_snapshot (each --sync writes a new snapshot; entries_sha256 3906197e26ef... equal)"
+    ],
+    "fresh_process": true,
+    "rows_identical": true,
+    "runs": [
+      "tools-tools-hybrid-test-20261116T153716",
+      "tools-tools-hybrid-test-20261116T154432"
+    ],
+    "summary_identical": true,
+    "tuning_identical": true
+  },
+  "embedding": {
+    "cache_bytes_on_disk": "55 MB (.cache/emb)",
+    "first_vector_utc": "2026-11-16T15:01:08",
+    "last_vector_utc": "2026-11-16T15:33:38",
+    "model": "BAAI/bge-small-en-v1.5 (fastembed ONNX, model hash 51f1bd0addd6...), already in .cache/fastembed; HF_HUB_OFFLINE=1",
+    "newly_embedded": 14059,
+    "note": "part of the tools-hybrid dev run (tuning builds the w_name 0 base index); the B3 test run and the real-store hashing ran beside it for about a minute each",
+    "texts": 14059,
+    "threads": "0 (all 4 cores)",
+    "wall_min": 32.5
+  },
+  "latency": {
+    "how": "fresh process per caller, Tools(acl=True) on the active index c93ceea6fae2, the first 101 test queries: the first search_tools (index and model load), then 100 searches and their 1,000 top-10 load_tool calls",
+    "user:auditor": {
+      "caller": "user:auditor",
+      "first_load_ms": 20.25451499503106,
+      "first_search_ms": 2227.242437998939,
+      "load": {
+        "max_ms": 41.86761099845171,
+        "median_ms": 22.96657549959491,
+        "min_ms": 16.657357999065425,
+        "n": 1000,
+        "p95_ms": 30.689045997860376
+      },
+      "search": {
+        "max_ms": 317.55900500138523,
+        "median_ms": 191.4454059988202,
+        "min_ms": 139.29919299698668,
+        "n": 100,
+        "p95_ms": 251.0067839975818
+      }
+    },
+    "user:initech-0": {
+      "caller": "user:initech-0",
+      "first_load_ms": 25.27063300658483,
+      "first_search_ms": 2649.064400997304,
+      "load": {
+        "max_ms": 33.78715099825058,
+        "median_ms": 15.996568501577713,
+        "min_ms": 11.872450995724648,
+        "n": 1000,
+        "p95_ms": 21.965350999380462
+      },
+      "search": {
+        "max_ms": 190.57330099894898,
+        "median_ms": 116.85413600207539,
+        "min_ms": 87.94986800057814,
+        "n": 100,
+        "p95_ms": 158.91351200116333
+      }
+    }
+  },
+  "licence_check": {
+    "inference": "the 197 toolbench_sam tools match SambaNova's ToolBench (Python spreadsheet/DataFrame methods, curl commands), whose repository's default-branch LICENSE is Apache-2.0; the attribution is not stated by ToolRet",
+    "parquet_metadata": "only the Hugging Face features schema",
+    "toolret_code_readme": "mangopy/tool-retrieval-benchmark README (default branch): no mention of toolbench-sam or a data licence",
+    "toolret_queries_card": "mangopy/ToolRet-Queries README at b8c76ad3349f...: no licence field; lists config toolbench-sam without an upstream",
+    "toolret_tools_card": "mangopy/ToolRet-Tools README at e06c38c75612...: no licence field, no upstream named for config customized",
+    "verdict": "unclear"
+  },
+  "real_stores_unchanged": {
+    "files": 7320,
+    "sha256_and_mtime_equal": true
+  },
+  "what": "Phase 2 Task 11 (2C.4) checks on .cache/store-p2/toolret. No model calls; HF_HUB_OFFLINE=1 for every command. No ToolRet text here: ids are tool_ids (hashes), run names and counts."
+}

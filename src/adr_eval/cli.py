@@ -1,8 +1,11 @@
-"""`adr-eval` command line: fetch, golden, index, run, retrieval, report, doctor."""
+"""`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
+retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
+tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
@@ -23,6 +26,7 @@ from adr_eval.corpora.registry import (
     fetch_corpus,
     get_adapter,
 )
+from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.models import GoldenItem, jsonl_lines, write_items
 from adr_eval.report import (
     compare,
@@ -38,6 +42,320 @@ from adr_eval.report import (
 def _fetch(a: argparse.Namespace) -> int:
     fetch_corpus(a.corpus)
     print(f"{a.corpus}: all manifest files present and verified")
+    return 0
+
+
+def _tools_fetch(a: argparse.Namespace) -> int:
+    """Download the pinned ToolRet files into data/tools and write corpora/tools/manifest.json
+    (Phase 2 spec §8.3; local-only, like bench)."""
+    from adr_eval.corpora import toolret
+
+    root = a.root if a.root is not None else toolret.DATA_DIR
+    m = toolret.fetch(root, toolret.CONFIG_PATH, toolret.MANIFEST_PATH)
+    c = m["counts"]
+    for f in m["files"]:
+        print(f"{f['name']}: {f['repo']}@{f['revision'][:12]} {f['path']} ({f['bytes']} bytes, "
+              f"sha256 {f['sha256'][:12]})")
+    pool = " + ".join(f"{t['prefix']}* ({t['config']})" for t in m["tool_selection"])
+    print(f"tools: {c['tools']} tools ({pool}), {c['queries']} queries, mean "
+          f"{c['gold_mean']:.2f} gold tools ({c['gold_distinct']} distinct, "
+          f"{c['gold_missing']} missing from the tools), {c['doc_tokens']} documentation "
+          f"tokens (mean {c['doc_tokens_mean']:.1f}, median {c['doc_tokens_median']:g}), "
+          f"dev {c['dev']} / test {c['test']}")
+    print(f"  manifest {toolret.MANIFEST_PATH}")
+    return 0
+
+
+def _tools_probes(a: argparse.Namespace) -> int:
+    """`adr-eval tools-probes --store S` (B1, B4, B5 for `search_tools` and `load_tool`): the
+    200 tool leak probes against per-caller reference indexes and the 80 tool fail-closed
+    probes (clones under --clones, removed); writes <out>/probes-tools-<time>/."""
+    import shutil
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_store import tools as store_tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    emb = a.emb_cache if a.emb_cache is not None else store_tools.DEFAULT_EMB_CACHE
+    if len(a.index) < store_tools.MIN_PREFIX:
+        raise runner.RunError(f"--index needs at least {store_tools.MIN_PREFIX} characters of "
+                              f"the tool index fingerprint, got {a.index!r}")
+    try:
+        idx = store_tools.Tools(a.store, emb_cache=emb).active_tool_index()
+    except store_tools.ToolError as e:
+        raise runner.RunError(str(e)) from e
+    if not idx.fingerprint.startswith(a.index):
+        raise runner.RunError(f"{a.store}: the active tool index is {idx.fingerprint[:12]}, not "
+                              f"{a.index}; run `adr tools index` with the chosen system's "
+                              f"values first (the probes run against the active index)")
+    ctx = acl_probes.tool_context(a.store, idx)
+
+    def make_tools(path, caller):
+        return store_tools.Tools(path, emb_cache=emb, acl=True, caller=caller)
+
+    sizes = None if a.per_family is None else dict.fromkeys(acl_probes.TOOL_FAMILY_SIZES,
+                                                            a.per_family)
+    leak = acl_probes.tool_leak_probes(ctx, sizes=sizes)
+    users = acl_probes.failclosed_callers(ctx)
+    fc = acl_probes.tool_failclosed_probes(ctx, acl_probes.tool_precheck(a.store, make_tools),
+                                           users)
+    store_log = acl_probes.log_path(a.store)
+    offset = acl_probes.log_size(store_log)
+    made: dict = {}
+
+    def tools_for(caller):
+        if caller not in made:
+            made[caller] = make_tools(a.store, caller)
+        return made[caller]
+
+    leak_results = [acl_probes.check_tool(p, tools_for, ctx) for p in leak]
+    config = runner.load_config()
+    clones = Path(a.clones) if a.clones is not None else \
+        runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / "clones" / "tools"
+    fc_results, fc_logs = acl_probes.run_tool_failclosed(
+        fc, a.store, clones, ctx, make_tools=make_tools, directory=a.directory,
+        policy=a.policy)
+    if clones.is_dir() and not any(clones.iterdir()):
+        shutil.rmtree(clones)
+    scans = {"store": acl_probes.scan_log(store_log, offset),
+             **{k: v for k, v in fc_logs.items() if k != "store"}}
+    logs = {"total": acl_probes.total_scan(scans), "by_store": scans}
+    leak_summary = acl_probes.summarize(leak_results)
+    fc_summary = acl_probes.summarize_failclosed(fc_results)
+    sid, snap = acl_probes.acl.read_head(a.store)
+    cfg = {"kind": "tools", "store": str(a.store), "tools_snapshot": idx.tool_snapshot,
+           "tool_index": idx.fingerprint, "acl_snapshot": sid, "acl_sequence": snap.sequence,
+           "seed": probes.SEED, "sizes": sizes or acl_probes.TOOL_FAMILY_SIZES,
+           "failclosed_callers": users, "failclosed_target": fc[0].target["tool_id"]}
+    rows = "".join(f"| {name} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
+                   f"{', '.join(f'{k} {v}' for k, v in b['checked_kinds'].items())} |\n"
+                   for name, b in leak_summary["families"].items())
+    fc_rows = "".join(f"| {name} | {b['n']} | {b['passed']} | {b['content']} | "
+                      f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                      for name, b in fc_summary["conditions"].items())
+    md = (f"# ACL probes: tools\n\nStore `{cfg['store']}` (tool snapshot "
+          f"`{cfg['tools_snapshot'][:12]}`, ACL snapshot `{sid[:12]}` sequence {snap.sequence}),"
+          f" tool index `{idx.fingerprint[:12]}`. Seed {probes.SEED}. No model calls.\n\n"
+          f"## Leak probes\n\n| family | probes | leaks | invalid | callers | kinds checked |\n"
+          f"|---|---|---|---|---|---|\n" + rows +
+          f"\nTotal: {leak_summary['total']['n']} probes, {leak_summary['total']['leaks']} "
+          f"leaks, {leak_summary['total']['invalid']} invalid.\n\n## Fail closed\n\n"
+          f"| condition | probes | passed | with content | outcomes |\n|---|---|---|---|---|\n"
+          + fc_rows + f"\nTotal: {fc_summary['total']['n']} probes, "
+          f"{fc_summary['total']['passed']} passed, {fc_summary['total']['content']} with "
+          f"content.\n\n## Log fields\n\n{logs['total']['lines']} log lines, "
+          f"{logs['total']['complete_lines']} with caller, principals, acl_snapshot and "
+          f"acl_decision; {logs['total']['allowed']} allowed, "
+          f"{logs['total']['allowed_unresolved']} of them unresolved.\n")
+    d = Path(a.out or probes.OUT_ROOT) / f"probes-tools-{started:%Y%m%dT%H%M%S}"
+    d.mkdir(parents=True, exist_ok=False)
+    files = {"probes.json": {"seed": probes.SEED, "leak": [p.to_dict() for p in leak],
+                             "failclosed": [p.to_dict() for p in fc]},
+             "results.json": {"leak": [r.to_dict() for r in leak_results],
+                              "failclosed": fc_results},
+             "summary.json": {"config": cfg, "leak": leak_summary, "failclosed": fc_summary,
+                              "logs": logs}}
+    for name, data in files.items():
+        (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False,
+                                         default=str) + "\n", encoding="utf-8")
+    (d / "probes.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(leak)} tool leak and {len(fc)} tool fail-closed probes; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    ok = (leak_summary["total"]["leaks"] == 0 and leak_summary["total"]["invalid"] == 0
+          and fc_summary["total"]["passed"] == fc_summary["total"]["n"]
+          and logs["total"]["complete"])
+    return 0 if ok else 1
+
+
+MCP_STORES = ("gov", "research", "bench", "tools")
+
+
+def _mcp_stores(a: argparse.Namespace, p2: Path) -> dict[str, Path]:
+    """label -> store path for `mcp-probes`: the corpora's p2 copies and the ToolRet store,
+    unless given as LABEL=PATH (labels: the corpora and `tools`)."""
+    if not a.store:
+        return {c: p2 / ("toolret" if c == "tools" else c) for c in MCP_STORES}
+    out = {}
+    for spec in a.store:
+        label, sep, path = spec.partition("=")
+        if not sep or label not in (*NAMES, "tools"):
+            raise runner.RunError(f"--store takes LABEL=PATH with LABEL one of "
+                                  f"{', '.join((*NAMES, 'tools'))}, got {spec!r}")
+        out[label] = Path(path)
+    return out
+
+
+def _mcp_probes(a: argparse.Namespace) -> int:
+    """`adr-eval mcp-probes` (B1 through MCP, B5 of its calls): the seeded subset of the leak
+    probes of every store (`adr_eval.probes.mcp`), each run through an `adr mcp` server of its
+    caller and judged as the API probes are; writes <out>/probes-mcp-<time>/."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_eval.probes import equivalence
+    from adr_eval.probes import mcp as mcp_probes
+    from adr_store import acl as acl_mod
+    from adr_store import tools as store_tools
+    from adr_store.mcp_client import McpTools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    emb = a.emb_cache if a.emb_cache is not None else \
+        runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    p2 = runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2")
+    stores = _mcp_stores(a, p2)
+    contexts: dict = {}
+    universe: list = []
+    cfg_stores: dict = {}
+    ops: dict = {}
+    nss: dict = {}
+    for label, path in stores.items():
+        if label == "tools":
+            if a.tool_index is None or len(a.tool_index) < store_tools.MIN_PREFIX:
+                raise runner.RunError(f"--tool-index needs at least {store_tools.MIN_PREFIX} "
+                                      f"characters of the tool index fingerprint")
+            try:
+                idx = store_tools.Tools(path, emb_cache=emb).active_tool_index()
+                store_tools.Tools(path, emb_cache=emb, acl=True,
+                                  caller="user:auditor").search_tools("probe", top=1)
+            except store_tools.ToolError as e:
+                raise runner.RunError(f"{path}: {e}\nfix: run `adr acl sync --store {path}`") \
+                    from e
+            if not idx.fingerprint.startswith(a.tool_index):
+                raise runner.RunError(f"{path}: the active tool index is "
+                                      f"{idx.fingerprint[:12]}, not {a.tool_index}")
+            ctx = acl_probes.tool_context(path, idx)
+            ps = acl_probes.tool_leak_probes(ctx, sizes=None if a.per_family is None else
+                                             dict.fromkeys(acl_probes.TOOL_FAMILY_SIZES,
+                                                           a.per_family))
+            sid, snap = acl_mod.read_head(path)
+            cfg_stores[label] = {"store": runner._display_path(Path(path)),
+                                 "tools_snapshot": idx.tool_snapshot,
+                                 "tool_index": idx.fingerprint, "acl_snapshot": sid,
+                                 "acl_sequence": snap.sequence,
+                                 "acl_entries_sha256": snap.entries_sha256}
+        else:
+            ns = argparse.Namespace(store=path, corpus=label, directory=a.directory,
+                                    policy=a.policy, allow_other_index=a.allow_other_index,
+                                    keep_views=a.keep_views, views=None)
+            tools, idx, system, phase1 = _probe_store(ns, emb)
+            cfg_stores[label] = _store_config(ns, tools, idx, system, phase1)
+            ctx = acl_probes.context(tools.store_path, idx)
+            ps = acl_probes.leak_probes(ctx, sizes=None if a.per_family is None else
+                                        dict.fromkeys(acl_probes.FAMILY_SIZES, a.per_family))
+            ops[label], nss[label] = tools, ns
+        contexts[label] = ctx
+        universe += [(label, p) for p in ps]
+        print(f"  {label}: {len(ps)} leak probes", file=sys.stderr)
+    selected = mcp_probes.select(universe, a.n)
+    counts = {"universe": mcp_probes.family_counts(universe),
+              "selected": mcp_probes.family_counts(selected)}
+    short = mcp_probes.short_families(counts["selected"])
+    refs: dict = {}
+    roots: dict = {}
+    infos: dict = {}
+    for label, tools in ops.items():
+        roots[label] = (Path(a.views) if a.views is not None else p2 / "views") / label
+        refs[label], infos[label] = _reference_stores(
+            nss[label], tools.store, equivalence.views(contexts[label].snap), emb,
+            roots[label])
+    logs_of = {}  # one scan per log file (two labels may name one store)
+    for label, path in stores.items():
+        logs_of.setdefault(acl_probes.log_path(path).resolve(), label)
+    offsets = {label: acl_probes.log_size(log) for log, label in logs_of.items()}
+    ref_offsets = {(label, p.name): acl_probes.log_size(acl_probes.log_path(p))
+                   for label, r in refs.items() for p in set(r.values())}
+    ref_tools: dict = {}
+
+    def reference_for(label, caller):
+        if caller not in refs.get(label, {}):
+            return None
+        if (label, caller) not in ref_tools:
+            ref_tools[(label, caller)] = store_tools.Tools(refs[label][caller], emb_cache=emb,
+                                                           acl=True, caller=caller)
+        return ref_tools[(label, caller)]
+
+    env = {"HF_HUB_OFFLINE": "1"}
+
+    def make_server(label, caller):
+        return McpTools(stores[label], caller, emb_cache=emb, env=env, cwd=runner.REPO_ROOT,
+                        timeout=a.timeout)
+
+    results, calls = mcp_probes.run_subset(selected, contexts=contexts,
+                                           reference_for=reference_for,
+                                           make_server=make_server)
+    mcp_scans = {label: acl_probes.scan_log(log, offsets[label])
+                 for log, label in logs_of.items()}
+    ref_scans = {f"{label}/{name}": acl_probes.scan_log(
+        acl_probes.log_path(root / name), off)
+        for (label, name), off in ref_offsets.items() for root in [roots[label]]}
+    n_calls = sum(sum(v.values()) for v in calls.values())
+    logs = {"mcp": {"total": acl_probes.total_scan(mcp_scans), "by_store": mcp_scans,
+                    "calls": calls, "calls_total": n_calls},
+            "reference": {"total": acl_probes.total_scan(ref_scans) if ref_scans else None,
+                          "by_store": ref_scans}}
+    removed = {label: _remove_views(nss[label], refs[label], roots[label]) for label in refs}
+    summary = mcp_probes.summarize(results)
+    cfg = {"kind": "mcp", "seed": probes.SEED, "n": a.n, "stores": cfg_stores,
+           "per_family": a.per_family,
+           "universe": len(universe), "counts": counts, "short_families": short,
+           "min_per_family": mcp_probes.MIN_PER_FAMILY, "server_env": env,
+           "views": infos, "views_removed": removed}
+    rows = "".join(f"| {name} | {counts['universe']['families'].get(name, 0)} | {b['n']} | "
+                   f"{b['leaks']} | {b['invalid']} | {b['callers']} | "
+                   f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                   for name, b in summary["families"].items())
+    spec_rows = "".join(f"| {f} | {counts['universe']['spec_families'][f]} | {b['n']} | "
+                        f"{b['leaks']} | {b['invalid']} |\n"
+                        for f, b in summary["spec_families"].items())
+    mt = logs["mcp"]["total"]
+    md = (f"# ACL probes through MCP (B1 subset)\n\nThe {a.n} of {len(universe)} leak probes "
+          f"with the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed {probes.SEED}), each "
+          f"through an `adr mcp` server of its caller. No model calls.\n\n| family | universe | "
+          f"probes | leaks | invalid | callers | outcomes |\n|---|---|---|---|---|---|---|\n"
+          + rows + "\n| spec family | universe | probes | leaks | invalid |\n"
+          "|---|---|---|---|---|\n" + spec_rows
+          + f"\nTotal: {summary['total']['n']} probes, {summary['total']['leaks']} leaks, "
+            f"{summary['total']['invalid']} invalid. Spec families under "
+            f"{mcp_probes.MIN_PER_FAMILY}: {short or 'none'}.\n\n## Log fields (MCP calls)\n\n"
+            f"{n_calls} calls through MCP; {mt['lines']} log lines in the probed stores, "
+            f"{mt['complete_lines']} with caller, principals, acl_snapshot and acl_decision; "
+            f"{mt['allowed']} allowed, {mt['allowed_unresolved']} of them unresolved.\n")
+    d = runner._new_run_dir(Path(a.out or probes.OUT_ROOT),
+                            f"probes-mcp-{started:%Y%m%dT%H%M%S}")
+    files = {"probes.json": {"seed": probes.SEED, "n": a.n, "selected": [
+                 {"store": label, "key": mcp_probes.sample_key(label, p.probe_id),
+                  **p.to_dict()} for label, p in selected]},
+             "results.json": {"results": [{"store": label, **r.to_dict()}
+                                          for label, r in results]},
+             "summary.json": {"config": cfg, "summary": summary, "logs": logs}}
+    for name, data in files.items():
+        (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False,
+                                         default=str) + "\n", encoding="utf-8")
+    (d / "summary.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(selected)} probes through MCP; wall-clock {time.perf_counter() - t0:.1f} s")
+    ok = (summary["total"]["leaks"] == 0 and summary["total"]["invalid"] == 0
+          and mt["complete"] and mt["lines"] == n_calls)
+    return 0 if ok else 1
+
+
+def _tools_retrieval(a: argparse.Namespace) -> int:
+    """`adr-eval tools-retrieval` (Phase 2 spec §8.4): one tool system over one ToolRet split;
+    writes <out>/tools-<system>-<split>-<time>/tools.{json,md}."""
+    from adr_eval import tools_eval
+
+    d = tools_eval.run(a.system, a.split, a.store, root=a.root, lexical_only=a.lexical_only,
+                       out=a.out, emb_cache=a.emb_cache, threads=a.threads, sync=a.sync)
+    rec = json.loads((d / "tools.json").read_text(encoding="utf-8"))
+    print((d / "tools.md").read_text(encoding="utf-8"), end="")
+    print(f"{d}: {rec['summary']['n']} queries")
     return 0
 
 
@@ -205,6 +523,383 @@ def _retrieval_compare(a: argparse.Namespace) -> int:
     return 0
 
 
+def _retrieval_identical(a: argparse.Namespace) -> int:
+    from adr_eval import phase2
+
+    run_a, run_b = _retrieval_dir(a.run_a, a.out), _retrieval_dir(a.run_b, a.out)
+    r = phase2.identical(load_retrieval(run_a), load_retrieval(run_b))
+    if r["identical"]:
+        print(f"identical: {r['n_shared']} items, ranked chunk ids and scores equal "
+              f"({run_a.name}, {run_b.name})")
+        return 0
+    print(f"not identical: {r['n_differing']} of {r['n_shared']} shared items differ; "
+          f"{len(r['only_a'])} only in {run_a.name}, {len(r['only_b'])} only in {run_b.name}")
+    for d in r["differences"][:a.show]:
+        print(f"  {d['item_id']}: rank {d['rank']}: {d['a']} vs {d['b']} "
+              f"({d['len_a']} vs {d['len_b']} hits)")
+    for side, ids in (("A", r["only_a"]), ("B", r["only_b"])):
+        if ids:
+            print(f"  only in {side}: {', '.join(ids[:a.show])}")
+    return 1
+
+
+def _p2_compare(a: argparse.Namespace) -> int:
+    from adr_eval import phase2
+
+    out = phase2.OUT_ROOT if a.out is None else a.out
+    run_a, run_b = _retrieval_dir(a.run_a, out), _retrieval_dir(a.run_b, out)
+    c = phase2.compare(run_a, run_b, a.store, margin=a.margin)
+    d = phase2.write_compare(c, out)
+    print((d / "compare.md").read_text(encoding="utf-8"))
+    print(f"written: {d / 'compare.json'}")
+    return 0
+
+
+def _probes(a: argparse.Namespace) -> int:
+    if a.kind == "temporal":
+        if a.corpus != "gov":
+            raise runner.RunError(f"the temporal probes are for gov, not {a.corpus}")
+        return _probes_temporal(a)
+    return _probes_acl(a) if a.kind == "acl" else _probes_equivalence(a)
+
+
+def _probes_temporal(a: argparse.Namespace) -> int:
+    """`adr-eval probes temporal gov`: build T1-T5, run them through the tools of `--store`,
+    write `<out>/probes-temporal-gov-<ts>/probes.{json,md}` (no wall-clock in the files)."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import temporal
+    from adr_store.applicability import load_overlay
+    from adr_store.tools import ToolError, Tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    loaded = runner.load_checked_corpus(a.corpus)
+    items = runner.load_golden(a.corpus, loaded)
+    try:
+        tools = Tools(a.store, emb_cache=runner.REPO_ROOT / config.get(
+            "embedding_cache_dir", ".cache/emb"))
+        idx = tools.active_index()
+    except ToolError as e:
+        raise runner.RunError(f"{a.store}: {e}") from e
+    if tools.store.doc_ids() != sorted(d.doc_id for d in loaded.manifest.documents):
+        raise runner.RunError(f"{a.store}: the store does not hold the {a.corpus} corpus's "
+                              f"documents")
+    system = tools.active_system()
+    recorded = systems.phase1_fingerprints(a.corpus)
+    phase1 = system == systems.P2_REFERENCE and idx.fingerprint in recorded
+    if not phase1 and not a.allow_other_index:
+        raise runner.RunError(
+            f"{a.store}: the active index is {system} {idx.fingerprint[:12]}, not "
+            f"{systems.P2_REFERENCE} with the fingerprint of a committed Phase 1 run of "
+            f"{a.corpus} ({', '.join(f[:12] for f in sorted(recorded)) or 'none committed'})"
+            f"\nfix: activate it (`adr index {systems.P2_REFERENCE} --store {a.store}` with "
+            f"the recorded weights; an `adr-eval retrieval` run of a p2 system does so) or "
+            f"pass --allow-other-index to probe this index (recorded in the output)")
+    overlay = load_overlay(tools.store_path, tools.snapshot)
+    if overlay is None:
+        raise runner.RunError(f"{a.store}: no applicability overlay; run `adr applicability "
+                              f"derive --store {a.store}`")
+    built = temporal.build(loaded, items, overlay)
+    try:
+        result = temporal.run(built, tools, caller=a.as_user, dedup=a.dedup)
+    except (ValueError, ToolError) as e:
+        raise runner.RunError(str(e)) from e
+    sizes = dict(Counter(p.set for p in built if p.mode == "as_of" or p.set == "T4"))
+    golden = runner.golden_items_path(a.corpus)
+    data = {"config": {"corpus": a.corpus, "kind": "temporal",
+                       "store": runner._display_path(tools.store_path),
+                       "snapshot": tools.snapshot, "index": idx.fingerprint,
+                       "index_system": system, "index_phase1": phase1,
+                       "allow_other_index": a.allow_other_index,
+                       "applicability": result["applicability"], "dedup": result["dedup"],
+                       "caller": a.as_user, "seed": probes.SEED, "sizes": sizes,
+                       "spec_sizes": temporal.SPEC_SIZES,
+                       "golden_sha256": hashlib.sha256(golden.read_bytes()).hexdigest()
+                       if golden.is_file() else None},
+            "summary": result["summary"], "probes": result["probes"]}
+    out = probes.OUT_ROOT if a.out is None else a.out
+    d = runner._new_run_dir(Path(out), f"probes-temporal-{a.corpus}-{started:%Y%m%dT%H%M%S}")
+    (d / "probes.json").write_text(json.dumps(data, indent=2, sort_keys=True,
+                                              ensure_ascii=False) + "\n", encoding="utf-8")
+    md = temporal.render_markdown(data)
+    (d / "probes.md").write_text(md, encoding="utf-8")
+    print(md)
+    print(f"{d}: {len(built)} probes; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0
+
+
+def _probe_store(a: argparse.Namespace, emb: Path):
+    """(operator Tools of `--store`, its active index, system, whether it is the recorded
+    Phase 1 index) for the ACL and equivalence probes; the index must be the Phase 1 one
+    unless --allow-other-index, and the auditor's access must resolve (a fresh ACL snapshot
+    for the store's HEAD) before anything is built."""
+    from adr_store.tools import ToolError, Tools
+
+    try:
+        tools = Tools(a.store, emb_cache=emb)
+        idx = tools.active_index()
+        system = tools.active_system()
+    except ToolError as e:
+        raise runner.RunError(f"{a.store}: {e}") from e
+    phase1 = system == systems.P2_REFERENCE and idx.fingerprint in \
+        systems.phase1_fingerprints(a.corpus)
+    if not phase1 and not a.allow_other_index:
+        raise runner.RunError(
+            f"{a.store}: the active index is {system} {idx.fingerprint[:12]}, not "
+            f"{systems.P2_REFERENCE} with the fingerprint of a committed Phase 1 run of "
+            f"{a.corpus}; pass --allow-other-index to probe this index")
+    try:
+        Tools(a.store, emb_cache=emb, acl=True, caller="user:auditor")._access()
+    except ToolError as e:
+        raise runner.RunError(f"{a.store}: {e}\nfix: run `adr acl sync --store {a.store}`") \
+            from e
+    return tools, idx, system, phase1
+
+
+def _views_root(a: argparse.Namespace, config: dict) -> Path:
+    if a.views is not None:
+        return Path(a.views)
+    return runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / "views" / \
+        a.corpus
+
+
+def _reference_stores(a, store, views, emb: Path, root: Path) -> tuple[dict, list[dict]]:
+    """(caller -> reference store path for every user of every view, their descriptions):
+    each view's store at `<root>/<view[:12]>`, built or reused (`ensure_view_store`)."""
+    from adr_eval.probes import equivalence
+
+    paths, info = {}, []
+    for v in views:
+        path = root / v.view[:12]
+        _, how = equivalence.ensure_view_store(store, v.docs, path, emb_cache=emb,
+                                               directory=a.directory, policy=a.policy)
+        for u in v.users:
+            paths[u] = path
+        info.append({**v.summary(), **equivalence.describe(path), "how": how})
+        print(f"  reference store {path.name}: {len(v.docs)} documents, {how}",
+              file=sys.stderr)
+    return paths, info
+
+
+def _remove_views(a: argparse.Namespace, paths: dict, root: Path) -> list[str]:
+    import shutil
+
+    if a.keep_views:
+        return []
+    removed = sorted({str(runner._display_path(p)) for p in paths.values()})
+    for p in sorted(set(paths.values())):
+        shutil.rmtree(p)
+    if root.is_dir() and not any(root.iterdir()):
+        root.rmdir()
+    return removed
+
+
+def _store_config(a, tools, idx, system, phase1) -> dict:
+    from adr_store import acl as acl_mod
+
+    sid, snap = acl_mod.read_head(tools.store_path)
+    return {"corpus": a.corpus, "store": runner._display_path(tools.store_path),
+            "snapshot": tools.snapshot, "index": idx.fingerprint, "index_system": system,
+            "index_phase1": phase1, "allow_other_index": a.allow_other_index,
+            "acl_snapshot": sid, "acl_sequence": snap.sequence,
+            "acl_entries_sha256": snap.entries_sha256,
+            "directory_sha256": snap.directory_sha256, "policy_sha256": snap.policy_sha256}
+
+
+def _write_probe_run(a, kind: str, started, files: dict, md: str) -> Path:
+    from adr_eval import probes
+
+    out = probes.OUT_ROOT if a.out is None else a.out
+    d = runner._new_run_dir(Path(out), f"probes-{kind}-{a.corpus}-{started:%Y%m%dT%H%M%S}")
+    for name, data in files.items():
+        (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False)
+                              + "\n", encoding="utf-8")
+    (d / "summary.md").write_text(md, encoding="utf-8")
+    return d
+
+
+def _probes_equivalence(a: argparse.Namespace) -> int:
+    """`adr-eval probes equivalence <corpus>` (B2): every view of the store's ACL snapshot
+    against its reference store (built under --views, kept with --keep-views)."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_eval.probes import equivalence
+    from adr_store.tools import Tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    tools, idx, system, phase1 = _probe_store(a, emb)
+    cfg = _store_config(a, tools, idx, system, phase1)
+    golden = runner.golden_items_path(a.corpus)
+    items = [GoldenItem.model_validate_json(x) for x in
+             jsonl_lines(golden.read_text(encoding="utf-8"))]
+    qs = equivalence.questions(items, a.questions)
+    from adr_store import acl as acl_mod
+
+    snap = acl_mod.read_head(tools.store_path)[1]
+    vs = equivalence.views(snap)
+    root = _views_root(a, config)
+    refs, info = _reference_stores(a, tools.store, vs, emb, root)
+    offsets = {"store": acl_probes.log_size(acl_probes.log_path(tools.store_path)),
+               **{p.name: acl_probes.log_size(acl_probes.log_path(p))
+                  for p in set(refs.values())}}
+    checks = []
+    for v in vs:
+        t = Tools(tools.store_path, emb_cache=emb, acl=True, caller=v.caller)
+        ref = Tools(refs[v.caller], emb_cache=emb, acl=True, caller=v.caller)
+        checks += equivalence.compare_view(t, ref, v, qs)
+        print(f"  view {v.view[:12]} ({v.caller}): "
+              f"{sum(c.identical for c in checks if c.view == v.view)} of "
+              f"{sum(c.view == v.view for c in checks)} identical", file=sys.stderr)
+    scans = {"store": acl_probes.scan_log(acl_probes.log_path(tools.store_path),
+                                          offsets["store"]),
+             **{p.name: acl_probes.scan_log(acl_probes.log_path(p), offsets[p.name])
+                for p in set(refs.values())}}
+    logs = {"total": acl_probes.total_scan(scans), "by_store": scans}
+    summary = equivalence.summarize(checks)
+    removed = _remove_views(a, refs, root)
+    config_out = {**cfg, "kind": "equivalence", "seed": probes.SEED,
+                  "questions": len(qs), "golden_sha256": hashlib.sha256(
+                      golden.read_bytes()).hexdigest(),
+                  "views": info, "views_removed": removed}
+    probe_set = {"seed": probes.SEED, "questions": [
+        {"item_id": i.id, "question": i.question, "qtype": i.qtype,
+         "as_of": None if i.as_of is None else i.as_of.isoformat(),
+         "grep": equivalence.grep_pattern(i.question)} for i in qs],
+        "views": [v.summary() for v in vs], "modes": list(equivalence.MODES)}
+    md = (f"# Equivalence probes (B2): {a.corpus}\n\nStore `{cfg['store']}` (snapshot "
+          f"`{cfg['snapshot'][:12]}`, ACL snapshot `{cfg['acl_snapshot'][:12]}` sequence "
+          f"{cfg['acl_sequence']}), index `{cfg['index'][:12]}`. {len(vs)} views x "
+          f"{len(qs)} questions x search and grep x {len(equivalence.MODES)} modes. Seed "
+          f"{probes.SEED}. No model calls.\n\n| tool/mode | checks | identical | refused | "
+          f"empty |\n|---|---|---|---|---|\n" + "".join(
+              f"| {k} | {b['n']} | {b['identical']} | {b['refused']} | {b['empty']} |\n"
+              for k, b in summary["by_tool_mode"].items())
+          + f"\nIdentical: {summary['identical']} of {summary['n']}. Log lines: "
+            f"{logs['total']['lines']}, all with caller, principals, acl_snapshot and "
+            f"acl_decision: {logs['total']['complete']}.\n")
+    d = _write_probe_run(a, "equivalence", started,
+                         {"probes.json": probe_set,
+                          "results.json": {"checks": [c.to_dict() for c in checks]},
+                          "summary.json": {"config": config_out, "summary": summary,
+                                           "logs": logs}}, md)
+    print(md)
+    print(f"{d}: {summary['n']} checks; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0 if summary["differing"] == 0 else 1
+
+
+def _probes_acl(a: argparse.Namespace) -> int:
+    """`adr-eval probes acl <corpus>` (B1, B4, B5 for the content tools): the leak probes
+    against the reference stores (built or reused under --views) and the fail-closed probes
+    (clones under --clones, removed)."""
+    from datetime import UTC, datetime
+
+    from adr_eval import probes
+    from adr_eval.probes import acl as acl_probes
+    from adr_eval.probes import equivalence
+    from adr_store.tools import Tools
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    tools, idx, system, phase1 = _probe_store(a, emb)
+    cfg = _store_config(a, tools, idx, system, phase1)
+    ctx = acl_probes.context(tools.store_path, idx)
+    vs = equivalence.views(ctx.snap)
+    root = _views_root(a, config)
+    refs, info = _reference_stores(a, tools.store, vs, emb, root)
+    store_log = acl_probes.log_path(tools.store_path)
+    offsets = {"store": acl_probes.log_size(store_log),
+               **{p.name: acl_probes.log_size(acl_probes.log_path(p))
+                  for p in set(refs.values())}}
+    sizes = None if a.per_family is None else dict.fromkeys(acl_probes.FAMILY_SIZES,
+                                                            a.per_family)
+    leak = acl_probes.leak_probes(ctx, sizes=sizes)
+    def make_tools(path, caller):
+        return Tools(path, emb_cache=emb, acl=True, caller=caller)
+
+    fc = acl_probes.failclosed_probes(ctx, before=acl_probes.tools_precheck(
+        tools.store_path, make_tools))
+    results: dict[str, object] = {}
+    for caller in sorted({p.caller for p in leak}, key=str):  # one caller's Tools at a time
+        mine = Tools(tools.store_path, emb_cache=emb, acl=True, caller=caller)
+        ref = None if caller not in refs else Tools(refs[caller], emb_cache=emb, acl=True,
+                                                    caller=caller)
+        for p in leak:
+            if p.caller == caller:
+                results[p.probe_id] = acl_probes.check(p, lambda c, m=mine: m,
+                                                       lambda c, r=ref: r, ctx)
+    leak_results = [results[p.probe_id] for p in leak]
+    clones = Path(a.clones) if a.clones is not None else \
+        runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / "clones" / a.corpus
+    fc_results, fc_logs = acl_probes.run_failclosed(
+        fc, tools.store_path, clones, ctx, directory=a.directory, policy=a.policy,
+        make_tools=make_tools)
+    if clones.is_dir() and not any(p for p in clones.iterdir() if p.is_dir()):
+        import shutil
+
+        shutil.rmtree(clones)
+    scans = {"store": acl_probes.scan_log(store_log, offsets["store"]),
+             **{p.name: acl_probes.scan_log(acl_probes.log_path(p), offsets[p.name])
+                for p in set(refs.values())},
+             **{k: v for k, v in fc_logs.items() if k != "store"}}
+    logs = {"total": acl_probes.total_scan(scans), "by_store": scans}
+    leak_summary = acl_probes.summarize(leak_results)
+    fc_summary = acl_probes.summarize_failclosed(fc_results)
+    removed = _remove_views(a, refs, root)
+    config_out = {**cfg, "kind": "acl", "seed": probes.SEED,
+                  "sizes": sizes or acl_probes.FAMILY_SIZES,
+                  "views": info, "views_removed": removed,
+                  "failclosed_callers": acl_probes.failclosed_callers(ctx)}
+    md_rows = "".join(
+        f"| {name} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
+        f"{', '.join(f'{k} {v}' for k, v in b['checked_kinds'].items())} |\n"
+        for name, b in leak_summary["families"].items())
+    fc_rows = "".join(f"| {name} | {b['n']} | {b['passed']} | {b['content']} | "
+                      f"{b['visible_before']} | {b['top10_before']} | "
+                      f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                      for name, b in fc_summary["conditions"].items())
+    md = (f"# ACL probes: {a.corpus}\n\nStore `{cfg['store']}` (snapshot "
+          f"`{cfg['snapshot'][:12]}`, ACL snapshot `{cfg['acl_snapshot'][:12]}` sequence "
+          f"{cfg['acl_sequence']}), index `{cfg['index'][:12]}`, {len(vs)} reference stores. "
+          f"Seed {probes.SEED}. No model calls.\n\n## Leak probes\n\n| family | probes | "
+          f"leaks | invalid | callers | kinds checked |\n|---|---|---|---|---|---|\n"
+          + md_rows + f"\nTotal: {leak_summary['total']['n']} probes, "
+          f"{leak_summary['total']['leaks']} leaks, {leak_summary['total']['invalid']} "
+          f"invalid.\n\n## Fail closed\n\n| condition | probes | passed | with content | "
+          f"visible before | top 10 before | outcomes |\n|---|---|---|---|---|---|---|\n"
+          + fc_rows
+          + f"\nTotal: {fc_summary['total']['n']} probes, {fc_summary['total']['passed']} "
+            f"passed, {fc_summary['total']['content']} with content.\n\n## Log fields\n\n"
+            f"{logs['total']['lines']} log lines, {logs['total']['complete_lines']} with "
+            f"caller, principals, acl_snapshot and acl_decision; {logs['total']['allowed']} "
+            f"allowed, {logs['total']['allowed_unresolved']} of them with a null caller, "
+            f"principals, acl_snapshot or view.\n")
+    probe_set = {"seed": probes.SEED, "leak": [p.to_dict() for p in leak],
+                 "failclosed": [p.to_dict() for p in fc]}
+    d = _write_probe_run(a, "acl", started,
+                         {"probes.json": probe_set,
+                          "results.json": {"leak": [r.to_dict() for r in leak_results],
+                                           "failclosed": fc_results},
+                          "summary.json": {"config": config_out, "leak": leak_summary,
+                                           "failclosed": fc_summary, "logs": logs}}, md)
+    print(md)
+    print(f"{d}: {len(leak)} leak and {len(fc)} fail-closed probes; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    ok = (leak_summary["total"]["leaks"] == 0 and leak_summary["total"]["invalid"] == 0
+          and fc_summary["total"]["passed"] == fc_summary["total"]["n"]
+          and logs["total"]["complete"])
+    return 0 if ok else 1
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -266,6 +961,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("corpus", choices=NAMES)
     p.set_defaults(fn=_fetch)
 
+    p = sub.add_parser("tools-fetch", help="download and verify the pinned ToolRet files "
+                                           "(local-only) and write corpora/tools/manifest.json")
+    p.add_argument("--root", type=Path, default=None,
+                   help="data directory (default data/tools)")
+    p.set_defaults(fn=_tools_fetch)
+
     p = sub.add_parser("golden", help="generate or verify the golden set")
     p.add_argument("corpus", choices=NAMES)
     mode = p.add_mutually_exclusive_group(required=True)
@@ -282,12 +983,14 @@ def _parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("run", help="run a registered system over a split")
     p.add_argument("corpus", choices=NAMES)
-    p.add_argument("--system", required=True, choices=systems.NAMES)
+    p.add_argument("--system", required=True, choices=systems.ALL_NAMES)
     p.add_argument("--repeats", type=int, default=None, help="default: config repeats")
     p.add_argument("--split", choices=("dev", "test"), default="test")
     p.add_argument("--max-dollars", type=float, default=None)
     p.add_argument("--dry-run", action="store_true", help="estimate calls and cost only")
-    p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
+    p.add_argument("--rebuild", action="store_true",
+                   help="rebuild a stale saved index (a p2 system: the Phase 1 p1-struct-bc "
+                        "index it reuses)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.add_argument("--stub", action="store_true",
                    help="deterministic stub generator and judge (tests and demos)")
@@ -297,9 +1000,11 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("retrieval", help="retrieval track only (no model calls): "
                                          "retrieval.json/retrieval.md for a system")
     p.add_argument("corpus", choices=NAMES)
-    p.add_argument("--system", required=True, choices=systems.NAMES)
+    p.add_argument("--system", required=True, choices=systems.ALL_NAMES)
     p.add_argument("--split", choices=("dev", "test"), default="test")
-    p.add_argument("--rebuild", action="store_true", help="rebuild a stale saved index")
+    p.add_argument("--rebuild", action="store_true",
+                   help="rebuild a stale saved index (a p2 system: the Phase 1 p1-struct-bc "
+                        "index it reuses)")
     p.add_argument("--lexical-only", action="store_true",
                    help="the system's BM25 channel alone (no embedding; a diagnostic)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
@@ -313,6 +1018,144 @@ def _parser() -> argparse.ArgumentParser:
                    help="compare a lexical-only run with a full run (marked in the output)")
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.set_defaults(fn=_retrieval_compare)
+
+    p = sub.add_parser("retrieval-identical",
+                       help="exit 0 when two retrieval runs give the same items, ranked ids "
+                            "and exact scores, else 1 with the first differences")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--show", type=int, default=5, metavar="N",
+                   help="differences to print (default 5)")
+    p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
+    p.set_defaults(fn=_retrieval_identical)
+
+    p = sub.add_parser("p2-compare",
+                       help="Phase 2 comparison of two retrieval runs (run_b minus run_a): "
+                            "slot counts, item subsets and non-inferiority (A3, A4)")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store whose HEAD the runs searched (chunks and overlays)")
+    p.add_argument("--margin", type=float, default=0.02,
+                   help="non-inferiority margin (default 0.02, fixed in the spec)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="run output root (default runs); writes p2-compare-<a>--<b>/")
+    p.set_defaults(fn=_p2_compare)
+
+    p = sub.add_parser("probes", help="Phase 2 probe sets (no model calls): temporal (gov), "
+                                      "acl (leak and fail-closed), equivalence (B2)")
+    p.add_argument("kind", choices=("temporal", "acl", "equivalence"))
+    p.add_argument("corpus", choices=NAMES)
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store to probe (its active index and overlays)")
+    p.add_argument("--views", type=Path, default=None, metavar="DIR",
+                   help="acl, equivalence: where the reference stores are built or reused "
+                        "(default <p2_store_dir>/views/<corpus>)")
+    p.add_argument("--keep-views", action="store_true",
+                   help="acl, equivalence: keep the reference stores (default: removed)")
+    p.add_argument("--clones", type=Path, default=None, metavar="DIR",
+                   help="acl: where the fail-closed clones go (default "
+                        "<p2_store_dir>/clones/<corpus>; removed)")
+    acl_config = runner.REPO_ROOT / "config" / "acl"
+    p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
+                   help="acl, equivalence: the directory the reference stores and clones sync "
+                        "from (default config/acl/directory.json)")
+    p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
+                   help="acl, equivalence: the policy (default config/acl/policy.json)")
+    p.add_argument("--questions", type=int, default=50, metavar="N",
+                   help="equivalence: golden questions per view (default 50)")
+    p.add_argument("--per-family", type=int, default=None, metavar="N",
+                   help="acl: N leak probes per family instead of the spec's counts (a quick "
+                        "check; recorded in the output)")
+    p.add_argument("--as", dest="as_user", default=None, metavar="USER",
+                   help="search as this caller (needs the ACL layer of Phase 2B)")
+    p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
+                   help="collapse copies in search (default on)")
+    p.add_argument("--allow-other-index", action="store_true",
+                   help="probe an active index that is not p1-struct-bc with a recorded "
+                        "Phase 1 fingerprint (recorded in the output)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-<kind>-<corpus>-<ts>/")
+    p.set_defaults(fn=_probes)
+
+    p = sub.add_parser("tools-retrieval",
+                       help="tool retrieval on ToolRet (no model calls): tools.json/tools.md for "
+                            "a tool system (Phase 2)")
+    p.add_argument("--system", required=True,
+                   choices=("tools-bm25-raw", "tools-bm25f", "tools-hybrid"))
+    p.add_argument("--split", choices=("dev", "test"), required=True)
+    p.add_argument("--store", type=Path, default=None,
+                   help="the tools-only store (tools-bm25f, tools-hybrid; e.g. "
+                        ".cache/store-p2/toolret); its active tool index is replaced by the "
+                        "tuned one")
+    p.add_argument("--root", type=Path, default=None,
+                   help="the ToolRet data directory (default data/tools)")
+    p.add_argument("--lexical-only", action="store_true",
+                   help="tools-hybrid: the BM25 channel alone (no embedding)")
+    p.add_argument("--emb-cache", type=Path, default=None,
+                   help="embedding cache directory (dense index only)")
+    p.add_argument("--threads", type=int, default=1,
+                   help="threads of the embedding model while building (vectors unchanged)")
+    p.add_argument("--sync", action="store_true",
+                   help="run one ACL sync cycle (committed directory and policy) first")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes tools-<system>-<split>-<time>/")
+    p.set_defaults(fn=_tools_retrieval)
+
+    p = sub.add_parser("tools-probes",
+                       help="ACL probes of search_tools and load_tool (no model calls): 200 "
+                            "leak and 80 fail-closed probes (Phase 2)")
+    p.add_argument("--store", type=Path, required=True,
+                   help="the store to probe (its tool catalog, active tool index and ACL)")
+    p.add_argument("--clones", type=Path, default=None, metavar="DIR",
+                   help="where the fail-closed clones go (default <p2_store_dir>/clones/tools; "
+                        "removed)")
+    tools_acl = runner.REPO_ROOT / "config" / "acl"
+    p.add_argument("--directory", type=Path, default=tools_acl / "directory.json",
+                   help="the directory the clones sync from (default config/acl/directory.json)")
+    p.add_argument("--policy", type=Path, default=tools_acl / "policy.json",
+                   help="the policy (default config/acl/policy.json)")
+    p.add_argument("--index", required=True, metavar="FP",
+                   help="the fingerprint (or a prefix of 8+ characters) of the tool index to "
+                        "probe; refused unless it is the store's active tool index")
+    p.add_argument("--per-family", type=int, default=None, metavar="N",
+                   help="N leak probes per family instead of 100 (a quick check; recorded)")
+    p.add_argument("--emb-cache", type=Path, default=None,
+                   help="embedding cache directory (a dense tool index)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-tools-<time>/")
+    p.set_defaults(fn=_tools_probes)
+
+    p = sub.add_parser("mcp-probes",
+                       help="B1 through MCP (no model calls): the seeded 300 of the leak probes "
+                            "of every store, each through an `adr mcp` server of its caller "
+                            "(Phase 2)")
+    p.add_argument("--store", action="append", default=None, metavar="LABEL=PATH",
+                   help="a store to sample from (labels: the corpora and tools; default the "
+                        "p2 copies of gov, research and bench and the ToolRet store)")
+    p.add_argument("--tool-index", default=None, metavar="FP",
+                   help="the fingerprint (or a prefix of 8+ characters) of the tools store's "
+                        "active tool index; refused unless it is that")
+    p.add_argument("--n", type=int, default=300, help="probes to select (default 300)")
+    p.add_argument("--per-family", type=int, default=None, metavar="N",
+                   help="N leak probes per family in the universe instead of the spec's (a "
+                        "quick check; recorded)")
+    p.add_argument("--views", type=Path, default=None, metavar="DIR",
+                   help="root of the reference stores, one folder per corpus (default "
+                        "<p2_store_dir>/views; built or reused, removed unless --keep-views)")
+    p.add_argument("--keep-views", action="store_true", help="keep the reference stores")
+    p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
+                   help="the directory reference stores sync from")
+    p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
+                   help="the policy reference stores sync from")
+    p.add_argument("--allow-other-index", action="store_true",
+                   help="probe a content store whose active index is not the Phase 1 one")
+    p.add_argument("--timeout", type=float, default=300.0,
+                   help="seconds an MCP call may take (the first call loads the index)")
+    p.add_argument("--emb-cache", type=Path, default=None, help="embedding cache directory")
+    p.add_argument("--out", type=Path, default=None,
+                   help="output root (default runs); writes probes-mcp-<time>/")
+    p.set_defaults(fn=_mcp_probes)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")
@@ -341,7 +1184,8 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(a, "corpus", None):
             check_local_files(a.corpus)
         return a.fn(a)
-    except (runner.RunError, HashMismatch, LocalFilesMissing, ExtractionError) as e:
+    except (runner.RunError, HashMismatch, LocalFilesMissing, ExtractionError,
+            ToolRetMissing) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

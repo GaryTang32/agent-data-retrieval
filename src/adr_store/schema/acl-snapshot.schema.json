@@ -1,0 +1,110 @@
+{
+  "additionalProperties": false,
+  "description": "The content of `<store>/acl/snapshots/<id>.json` (§5.3). Principal strings are not\nchecked here: an off-grammar one is F5 (`check_principals`), not a schema error.",
+  "properties": {
+    "content_snapshot": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Snapshot",
+      "type": "string"
+    },
+    "directory": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Directory",
+      "type": "object"
+    },
+    "directory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Directory Sha256",
+      "type": "string"
+    },
+    "docs": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Docs",
+      "type": "object"
+    },
+    "entries_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Entries Sha256",
+      "type": "string"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "future_skew_s": {
+      "minimum": 0,
+      "title": "Future Skew S",
+      "type": "integer"
+    },
+    "max_sync_age_s": {
+      "exclusiveMinimum": 0,
+      "title": "Max Sync Age S",
+      "type": "integer"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "synced_at": {
+      "format": "date-time",
+      "title": "Synced At",
+      "type": "string"
+    },
+    "tool_snapshot": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tool Snapshot"
+    },
+    "tools": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Tools",
+      "type": "object"
+    }
+  },
+  "required": [
+    "format_version",
+    "sequence",
+    "synced_at",
+    "content_snapshot",
+    "tool_snapshot",
+    "directory_sha256",
+    "policy_sha256",
+    "max_sync_age_s",
+    "future_skew_s",
+    "directory",
+    "docs",
+    "tools",
+    "entries_sha256"
+  ],
+  "title": "AclSnapshot",
+  "type": "object"
+}

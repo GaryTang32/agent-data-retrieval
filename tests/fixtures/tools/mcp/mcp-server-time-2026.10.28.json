@@ -1,0 +1,160 @@
+{
+  "captured": "2026-11-16",
+  "command": "mcp-server-time --local-timezone UTC",
+  "license": "MIT",
+  "package": "mcp-server-time",
+  "protocol_version": "2025-06-18",
+  "server": "mcp-server-time",
+  "server_info": {
+    "name": "mcp-time",
+    "version": "2026.10.28"
+  },
+  "source_uri": "pypi:mcp-server-time@2026.10.28",
+  "tools_list": {
+    "tools": [
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Get current time in a specific timezone",
+        "inputSchema": {
+          "properties": {
+            "timezone": {
+              "description": "IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'UTC' as local timezone if no timezone provided by the user.",
+              "title": "Timezone",
+              "type": "string"
+            }
+          },
+          "required": [
+            "timezone"
+          ],
+          "title": "get_current_timeArguments",
+          "type": "object"
+        },
+        "name": "get_current_time",
+        "outputSchema": {
+          "properties": {
+            "datetime": {
+              "title": "Datetime",
+              "type": "string"
+            },
+            "day_of_week": {
+              "title": "Day Of Week",
+              "type": "string"
+            },
+            "is_dst": {
+              "title": "Is Dst",
+              "type": "boolean"
+            },
+            "timezone": {
+              "title": "Timezone",
+              "type": "string"
+            }
+          },
+          "required": [
+            "timezone",
+            "datetime",
+            "day_of_week",
+            "is_dst"
+          ],
+          "title": "TimeResult",
+          "type": "object"
+        }
+      },
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false,
+          "readOnlyHint": true
+        },
+        "description": "Convert time between timezones",
+        "inputSchema": {
+          "properties": {
+            "source_timezone": {
+              "description": "Source IANA timezone name (e.g., 'America/New_York', 'Europe/London'). Use 'UTC' as local timezone if no source timezone provided by the user.",
+              "title": "Source Timezone",
+              "type": "string"
+            },
+            "target_timezone": {
+              "description": "Target IANA timezone name (e.g., 'Asia/Tokyo', 'America/San_Francisco'). Use 'UTC' as local timezone if no target timezone provided by the user.",
+              "title": "Target Timezone",
+              "type": "string"
+            },
+            "time": {
+              "description": "Time to convert in 24-hour format (HH:MM)",
+              "title": "Time",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_timezone",
+            "time",
+            "target_timezone"
+          ],
+          "title": "convert_timeArguments",
+          "type": "object"
+        },
+        "name": "convert_time",
+        "outputSchema": {
+          "$defs": {
+            "TimeResult": {
+              "properties": {
+                "datetime": {
+                  "title": "Datetime",
+                  "type": "string"
+                },
+                "day_of_week": {
+                  "title": "Day Of Week",
+                  "type": "string"
+                },
+                "is_dst": {
+                  "title": "Is Dst",
+                  "type": "boolean"
+                },
+                "timezone": {
+                  "title": "Timezone",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "timezone",
+                "datetime",
+                "day_of_week",
+                "is_dst"
+              ],
+              "title": "TimeResult",
+              "type": "object"
+            }
+          },
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/TimeResult"
+            },
+            "target": {
+              "$ref": "#/$defs/TimeResult"
+            },
+            "time_difference": {
+              "title": "Time Difference",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "target",
+            "time_difference"
+          ],
+          "title": "TimeConversionResult",
+          "type": "object"
+        }
+      }
+    ]
+  },
+  "tools_list_sha256": "852dbce3bd6d75213fee934c586f7b260b513ed023dce1ec2bd54bd83cc23f0b",
+  "version": "2026.10.28",
+  "wheel": "mcp_server_time-2026.10.28-py3-none-any.whl",
+  "wheel_sha256": "4b8a1865e8c45da2d2247e72ca83ea087e5c8bc597c9ca93c63e9103aeb46c31"
+}

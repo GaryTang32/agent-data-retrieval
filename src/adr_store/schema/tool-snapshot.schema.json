@@ -1,0 +1,47 @@
+{
+  "$defs": {
+    "ToolEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "record_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Record Sha256",
+          "type": "string"
+        },
+        "tool_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Tool Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_id",
+        "record_sha256"
+      ],
+      "title": "ToolEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `<store>/tools/snapshots/<id>.json`: tool ids in sorted order.",
+  "properties": {
+    "format_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/ToolEntry"
+      },
+      "title": "Tools",
+      "type": "array"
+    }
+  },
+  "required": [
+    "tools"
+  ],
+  "title": "ToolSnapshot",
+  "type": "object"
+}

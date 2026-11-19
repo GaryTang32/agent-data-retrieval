@@ -1,0 +1,25 @@
+{
+  "buckets": [
+    {
+      "access": "public",
+      "below": 20
+    },
+    {
+      "access": "two_tenants",
+      "below": 30
+    },
+    {
+      "access": "tenant",
+      "below": 75
+    },
+    {
+      "access": "group",
+      "below": 100
+    }
+  ],
+  "format_version": "0.1",
+  "future_skew_s": 300,
+  "max_sync_age_s": 3600,
+  "rules": [],
+  "salt": "adr-acl-v1"
+}

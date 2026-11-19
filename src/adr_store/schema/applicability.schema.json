@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "Envelope": {
+      "additionalProperties": false,
+      "description": "The applicability of one document (spec §4.2). `valid_to` is exclusive.",
+      "properties": {
+        "authority_tier": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authority Tier"
+        },
+        "chain_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Chain Id"
+        },
+        "doc_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "issuer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Issuer"
+        },
+        "jurisdiction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Jurisdiction"
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "codified",
+            "final_rule",
+            "temporary_rule",
+            "proposed_rule",
+            "notice",
+            "guidance",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "superseded_by": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Superseded By"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Valid From"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Valid To"
+        },
+        "validity_basis": {
+          "enum": [
+            "ecfr_snapshot",
+            "fr_effective_on",
+            "fr_publication_date",
+            "fr_dates_text",
+            "irm_transmittal",
+            "unknown"
+          ],
+          "title": "Validity Basis",
+          "type": "string"
+        },
+        "version_label": {
+          "title": "Version Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "doc_id",
+        "chain_id",
+        "version_label",
+        "supersedes",
+        "superseded_by",
+        "valid_from",
+        "valid_to",
+        "validity_basis",
+        "status",
+        "jurisdiction",
+        "issuer",
+        "authority_tier",
+        "provenance"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where one derived field came from; `char_start`/`char_end` is a range of the\ndocument's canonical text (for `fr.dates`).",
+      "properties": {
+        "char_end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char End"
+        },
+        "char_start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Char Start"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "source"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `<store>/applicability/<snapshot>/envelope-1.json`: every document of the\nsnapshot, by doc id. `config_sha256` is the SHA-256 of the gov config fields the deriver\nread (`config_read`), null when it read none (no eCFR document).",
+  "properties": {
+    "config_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Config Sha256"
+    },
+    "deriver": {
+      "title": "Deriver",
+      "type": "string"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "records": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Envelope"
+      },
+      "title": "Records",
+      "type": "object"
+    },
+    "snapshot": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format_version",
+    "snapshot",
+    "deriver",
+    "config_sha256",
+    "records"
+  ],
+  "title": "ApplicabilityOverlay",
+  "type": "object"
+}

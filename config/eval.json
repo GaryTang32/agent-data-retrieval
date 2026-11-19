@@ -9,5 +9,6 @@
   "concurrency": 4,
   "prices": "config/prices.json",
   "cache_dir": ".cache/llm",
-  "index_dir": ".cache/index"
+  "index_dir": ".cache/index",
+  "p2_caller": "user:auditor"
 }

@@ -14,6 +14,32 @@ into a temporary directory beside `dir` and renames it into place; `load(dir)` r
 stored fingerprint that does not match the one recomputed on load, and a chunk whose id is
 not `make_chunk_id` of its document and offsets. Saves and loads of one index directory are
 serialized by `flock` on a sibling lock file (POSIX only).
+
+Filtering (Phase 2 spec §6.1). `retrieve(..., allowed_docs=D)` keeps only chunks of the
+documents in `D`: each channel masks its rows before its top-`CHANNEL_K` cut (a mask built
+with `np.isin` from the channel's per-row doc ids, in the channel's own order), then fusion
+and the reranker run as without a mask, so a filter never starves the result.
+`allowed_docs=None` is the Phase 1 code path itself. `lexical` replaces the index's BM25
+channel by another `FieldBM25` over a subset of its chunks (per-view statistics, §6.2; same
+`w_bc`, `k1` and `b`); it is refused without `allowed_docs`, which masks the shared dense
+vectors to the same view. A lexical-only index takes BM25's top `max(CHANNEL_K, top)` (the
+fused depth), not `CHANNEL_K`, so `retrieve(top=200)` gives 200 chunks when 200 match; at
+`top <= CHANNEL_K` that is the same ranking. `exact=True` (the ACL layer, masked or not) scores
+the dense channel with `dense.row_scores`, a function of (row, query) alone, so a view's
+scores equal those of a view-only index bit for bit; the default is the Phase 1 matrix
+product, which may differ from it in the last float32 bits.
+
+The full ranking (`ranking`, what dedup collapse walks; Phase 2 spec §4.5). Linear fusion
+normalises each channel by its own top `CHANNEL_K`, so fusing deeper lists would change the
+scores and order of the top ones; the full ranking instead extends the fused ranking without
+changing it. It is the fused ranking of the channels' top `CHANNEL_K` (all of it, at most
+`2 * CHANNEL_K` chunks: `retrieve(top=2 * CHANNEL_K)` without a reranker), then every other
+candidate chunk (every chunk the mask keeps; BM25 0 for one without a BM25 score) scored
+`w * l + (1 - w) * d`, where `l` and `d` are its channel scores min-max scaled by the same
+pools' minimum and range (1 when the range is 0; 0 for an empty pool), so at most 0, and
+ranked as fusion ranks (6 decimals, ties by chunk id). A lexical-only index's full ranking is
+BM25's, of every chunk with a positive score. The rest is computed only once the fused part is
+used up.
 """
 
 from __future__ import annotations
@@ -36,11 +62,11 @@ import numpy as np
 
 from adr_eval.models import jsonl_lines
 from adr_eval.retrieval.chunker import TOKENIZER_CONFIG, make_chunk_id
-from adr_eval.retrieval.fusion import linear, rrf
+from adr_eval.retrieval.fusion import linear, rank, rrf
 from adr_store.chunking import StoreChunk, chunk_store, chunker_config
 from adr_store.embedding import EmbeddingCache
 from adr_store.retrieval.dense import CachedDense, embedded_text
-from adr_store.retrieval.lexical import FieldBM25, check_w_bc
+from adr_store.retrieval.lexical import FieldBM25, check_w_bc, doc_mask
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.store import Store
 
@@ -98,6 +124,37 @@ def fingerprint(snapshot: str, chunker: dict, settings: Settings, lexical: Field
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _scale(pool: Hits):
+    """Min-max scaling by `pool`'s minimum and range (1 when the range is 0); 0 for an empty
+    pool (linear fusion's `minmax`, applied to any score)."""
+    if not pool:
+        return lambda s: 0.0
+    lo, hi = min(s for _, s in pool), max(s for _, s in pool)
+    span = (hi - lo) or 1.0
+    return lambda s: (s - lo) / span
+
+
+def _tail(lex: Hits, dense: Hits, w: float, head: set[str]) -> Hits:
+    """The full ranking after the fused pool `head`: every dense candidate not in it, by
+    `w * l + (1 - w) * d` scaled as the channels' top `CHANNEL_K` (at most 0)."""
+    nl, nd, bm25 = _scale(lex[:CHANNEL_K]), _scale(dense[:CHANNEL_K]), dict(lex)
+    ranked = rank({cid: w * nl(bm25.get(cid, 0.0)) + (1.0 - w) * nd(s)
+                   for cid, s in dense if cid not in head}, top=len(dense))
+    return [(cid, 0.0 if s == 0 else s) for cid, s in ranked]  # -0.0 (rounded) is 0.0
+
+
+def _full_ranking(lex: Hits, dense: Hits | None,
+                  w: float | None) -> Iterator[tuple[str, float]]:
+    """The full ranking (module docstring) of a query's complete channel lists (`dense`
+    None: a lexical-only index)."""
+    if dense is None:
+        yield from lex
+        return
+    head = linear(lex[:CHANNEL_K], dense[:CHANNEL_K], w, top=2 * CHANNEL_K)
+    yield from head
+    yield from _tail(lex, dense, w, {cid for cid, _ in head})
 
 
 def _fresh_dir(beside: Path, kind: str) -> Path:
@@ -182,6 +239,8 @@ class StoreIndex:
         self.embedding = embedding
         self.fingerprint = fingerprint(snapshot, chunker, settings, lexical, embedding,
                                        self.reranker, list(self.chunks.values()))
+        self._dense_doc_ids = None if dense is None else np.array(
+            [self.chunks[cid].doc_id for cid in dense.chunk_ids], dtype=str)
 
     # -- building --------------------------------------------------------------------
 
@@ -252,21 +311,122 @@ class StoreIndex:
         return self.dense.search(query, k=k)
 
     def retrieve(self, query: str, fusion: Literal["linear", "rrf"] = "linear",
-                 w: float | None = None, top: int = TOP_N) -> Hits:
+                 w: float | None = None, top: int = TOP_N, *,
+                 allowed_docs: frozenset[str] | None = None,
+                 lexical: FieldBM25 | None = None, exact: bool = False) -> Hits:
         """The top chunks for `query`: fused (or BM25's, without a dense channel), then
-        reranked when the settings say so."""
+        reranked when the settings say so. `allowed_docs` keeps the chunks of those documents
+        only, masked in each channel before its cut (None: every chunk, the Phase 1 path);
+        `lexical` is a BM25 index over a subset of the chunks used in place of the index's,
+        with the same `w_bc`, `k1` and `b`; it needs `allowed_docs` (the view's documents),
+        which masks the dense channel. `exact` scores the dense channel row by row (module
+        docstring)."""
         if fusion not in ("linear", "rrf"):
             raise ValueError(f"unknown fusion {fusion!r}")
+        if allowed_docs is None and lexical is None and not exact:
+            return self._fuse(query, fusion, w, top, self.lexical_hits, self.dense_hits)
+        if allowed_docs is None and lexical is not None:  # dense would be left unmasked
+            raise ValueError("a per-view lexical index needs the view's allowed_docs too")
+        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
+            raise ValueError(f"allowed_docs must be a set of document ids, got "
+                             f"{type(allowed_docs).__name__}")
+        lex, dense = self._channels(allowed_docs, lexical, exact)
+        return self._fuse(query, fusion, w, top, lex, dense)
+
+    def _channels(self, allowed_docs: frozenset[str] | None, lexical: FieldBM25 | None,
+                  exact: bool = False):
+        """The two channels as `(query, k) -> Hits`, masked to `allowed_docs` (None: the
+        index's own, unmasked); `exact`: the dense channel by `row_scores`."""
+        if allowed_docs is None and not exact:
+            return self.lexical_hits, self.dense_hits
+        if allowed_docs is None:
+            def dense_all(q, k=CHANNEL_K):
+                if self.dense is None:
+                    raise ValueError("this index has no dense channel (built with dense=False)")
+                return self.dense.search(q, k=k, exact=True)
+            return self.lexical_hits, dense_all
+        bm25 = self.lexical if lexical is None else lexical
+        if lexical is not None:
+            differs = [f"{name} {theirs}, not {ours}" for name, theirs, ours in (
+                ("w_bc", lexical.w_bc, self.lexical.w_bc),
+                ("k1", lexical.bm25.k1, self.lexical.bm25.k1),
+                ("b", lexical.bm25.b, self.lexical.bm25.b)) if theirs != ours]
+            if differs:
+                raise ValueError(f"the lexical index does not match this index: "
+                                 f"{'; '.join(differs)}")
+
+        def lex(q, k=CHANNEL_K):
+            return bm25.search(q, k=k, mask=bm25.mask(allowed_docs))
+
+        def dense(q, k=CHANNEL_K):
+            if self.dense is None:
+                raise ValueError("this index has no dense channel (built with dense=False)")
+            return self.dense.search(q, k=k, mask=doc_mask(self._dense_doc_ids, allowed_docs),
+                                     exact=exact)
+        return lex, dense
+
+    def _view_channels(self, w: float | None, allowed_docs: frozenset[str] | None,
+                       lexical: FieldBM25 | None, exact: bool = False):
+        """The channels of `ranking` and `retrieve_and_ranking`, their arguments checked."""
+        if allowed_docs is None and lexical is not None:
+            raise ValueError("a per-view lexical index needs the view's allowed_docs too")
+        if allowed_docs is not None and not isinstance(allowed_docs, (frozenset, set)):
+            raise ValueError(f"allowed_docs must be a set of document ids, got "
+                             f"{type(allowed_docs).__name__}")
+        if self.dense is not None and w is None:
+            raise ValueError("linear fusion needs a tuned weight w")
+        return self._channels(allowed_docs, lexical, exact)
+
+    def _lists(self, query: str, lex_hits, dense_hits) -> tuple[Hits, Hits | None]:
+        """Each channel's complete list for `query` (one search each: one query embedding);
+        each channel sorts every row anyway."""
+        everything = len(self.chunks)
+        return (lex_hits(query, everything),
+                None if self.dense is None else dense_hits(query, everything))
+
+    def ranking(self, query: str, w: float | None = None, *,
+                allowed_docs: frozenset[str] | None = None,
+                lexical: FieldBM25 | None = None,
+                exact: bool = False) -> Iterator[tuple[str, float]]:
+        """The full ranking of `query` (module docstring), lazily: linear fusion's ranking of
+        the channels' top `CHANNEL_K`, then every other candidate chunk; no reranking.
+        `allowed_docs` and `lexical` are as for `retrieve`. The arguments are checked when
+        called (ValueError), not when the ranking is first read."""
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical, exact)
+
+        def lazily() -> Iterator[tuple[str, float]]:
+            yield from _full_ranking(*self._lists(query, lex_hits, dense_hits), w)
+
+        return lazily()
+
+    def retrieve_and_ranking(self, query: str, w: float | None = None, top: int = TOP_N, *,
+                             allowed_docs: frozenset[str] | None = None,
+                             lexical: FieldBM25 | None = None, exact: bool = False
+                             ) -> tuple[Hits, Iterator[tuple[str, float]]]:
+        """`(retrieve(query, "linear", w, top, ...), ranking(query, w, ...))` from one search
+        of each channel, so the query is embedded once (a reranked collapse that needs both:
+        its reranked head, and how far the full ranking would fill it)."""
+        lex_hits, dense_hits = self._view_channels(w, allowed_docs, lexical, exact)
+        lex, dense = self._lists(query, lex_hits, dense_hits)
+
+        def cut(hits):
+            return lambda q, k=CHANNEL_K: hits[:k]
+
+        head = self._fuse(query, "linear", w, top, cut(lex), None if dense is None else
+                          cut(dense))
+        return head, _full_ranking(lex, dense, w)
+
+    def _fuse(self, query: str, fusion: str, w: float | None, top: int, lex_hits,
+              dense_hits) -> Hits:
         n = RERANK_TOP if self.reranker is not None else top
-        lex = self.lexical_hits(query)
         if self.dense is None:
-            fused = lex[:n]
+            fused = lex_hits(query, max(CHANNEL_K, n))[:n]
         elif fusion == "rrf":
-            fused = rrf([lex, self.dense_hits(query)], k=RRF_K, top=n)
+            fused = rrf([lex_hits(query), dense_hits(query)], k=RRF_K, top=n)
         else:
             if w is None:
                 raise ValueError("linear fusion needs a tuned weight w")
-            fused = linear(lex, self.dense_hits(query), w, top=n)
+            fused = linear(lex_hits(query), dense_hits(query), w, top=n)
         if self.reranker is None:
             return fused
         return self.reranker.rerank(

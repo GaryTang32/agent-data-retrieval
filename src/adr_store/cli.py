@@ -1,11 +1,30 @@
 """`adr` command line: `adr ingest <corpus> --store <dir>` and `adr ingest --path <folder>
 --store <dir>` (below), and the retrieval tools `adr index`, `adr search`, `adr read` and
 `adr grep` (spec §9; the code is in `adr_store.tools`, this module only parses arguments and
-prints).
+prints), `adr applicability derive` (Phase 2 spec §4.2: the applicability overlay of the
+store's HEAD snapshot, code in `adr_store.applicability`), `adr dedup build` (Phase 2 spec
+§4.5: the dedup overlay of the active index's chunks, code in `adr_store.dedup`), and `adr acl
+sync` and `adr acl show` (Phase 2 spec §5.3: one sync cycle of the ACL snapshot from the
+directory and policy, and the principals of a chunk, a document or a user; code in
+`adr_store.acl`), and `adr tools ingest` (Phase 2 spec §8.1, §8.3: tool records from a
+captured MCP `tools/list` result, an OpenAPI 3.x JSON document or the local ToolRet corpus into
+a store's tool catalog; code in `adr_store.tool_records` and `adr_store.tool_catalog`), and
+`adr mcp --store <dir> --as USER` (Phase 2 spec §9.3: the five tools over MCP on stdio as one
+caller; code in `adr_store.mcp_server`, needs the `[mcp]` extra). `adr`
+is not a security boundary (Phase 2 spec §7.1): whoever can run it
+can read the store directory.
 
 The tools take the store as `--store <dir>` or `--corpus <name>` (the store
 `.cache/store/<name>`); `adr index` takes a corpus name or a store directory as its argument.
 `--json` prints the result as JSON, otherwise a short table; every result names its snapshot.
+`adr search`, `adr grep` and `adr read` take the applicability filters (Phase 2 spec §4.4):
+`--include-superseded`, `--as-of YYYY-MM-DD`, `--status S` and `--jurisdiction J`
+(repeatable) and `--max-tier N`; with none given the call passes no filters (the default:
+superseded documents excluded when the store has an applicability overlay). `adr search
+--dedup/--no-dedup` turns collapse on or off (default: on when the active index's chunks have
+a dedup overlay). `adr search`, `adr read` and `adr grep` take `--as USER`: the call runs as
+that caller with the ACL layer (Phase 2 spec §5.4: the caller's view only, F1–F5 deny); for
+tests and simulation only, since `adr` is not a security boundary.
 A refused call (unknown id, range out of bounds, bad pattern, a pattern that runs past
 `adr grep --timeout`, a missing or damaged index) exits 2 with a message on stderr; every tool
 call, refused or not, writes one line to the store's retrieval log, and an unexpected error
@@ -51,11 +70,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
-from adr_eval.corpora.base import Document, ExtractionError, sha256_bytes
+from adr_eval.corpora import REPO_ROOT
+from adr_eval.corpora.base import Document, ExtractionError, HashMismatch, sha256_bytes
 from adr_eval.corpora.extract import extract_text
 from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_files
+from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.runner import RunError, load_checked_corpus
-from adr_store import tools
+from adr_store import acl, applicability, dedup, mcp_server, tool_catalog, tool_records, tools
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -417,7 +438,12 @@ def _store_of(a: argparse.Namespace) -> Path:
 
 
 def _tools(a: argparse.Namespace) -> tools.Tools:
-    return tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    """The tools of a search, read or grep: with `--as USER`, as that caller with the ACL
+    layer (for tests and simulation, `NOT_A_BOUNDARY`), else without it."""
+    caller = getattr(a, "as_user", None)
+    if caller is None:
+        return tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    return tools.Tools(_store_of(a), emb_cache=a.emb_cache, acl=True, caller=caller)
 
 
 def _print_json(result) -> None:
@@ -450,23 +476,68 @@ def _index(a: argparse.Namespace) -> int:
     return 0
 
 
+def _filters(a: argparse.Namespace) -> dict | None:
+    """The filters the flags give, or None when no filter flag is given."""
+    f = {}
+    if a.include_superseded:
+        f["include_superseded"] = True
+    for key in ("as_of", "status", "jurisdiction", "max_tier"):
+        if getattr(a, key) is not None:
+            f[key] = getattr(a, key)
+    return f or None
+
+
+def _print_filters(res, excluded: int | None) -> None:
+    """One line naming the filters of a result and what they excluded; none without an
+    overlay (the table is then Phase 1's)."""
+    if res.applicability is None:
+        return
+    f = res.filters
+    parts = [f"as_of {f['as_of']}" if f["as_of"] is not None else
+             "include_superseded" if f["include_superseded"] else "default"]
+    parts += [f"{k} {','.join(map(str, f[k]))}" for k in ("status", "jurisdiction") if f[k]]
+    if f["max_tier"] is not None:
+        parts.append(f"max_tier {f['max_tier']}")
+    tail = "" if excluded is None else f", {excluded} document(s) excluded"
+    print(f"  filters {'; '.join(parts)} (overlay {res.applicability[:12]}){tail}")
+
+
 def _search(a: argparse.Namespace) -> int:
-    res = _tools(a).search(a.query, top=a.top)
+    res = _tools(a).search(a.query, top=a.top, filters=_filters(a), dedup=a.dedup)
     if a.json:
         _print_json(res)
         return 0
     lex = ", lexical only" if res.lexical_only else ""
     print(f"snapshot {res.snapshot[:12]}  index {res.system} {res.fingerprint[:12]}{lex}  "
           f"{len(res.hits)} hit(s)")
-    print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  breadcrumb")
+    _print_filters(res, res.excluded_by_filter)
+    if res.dedup_note not in (None, dedup.OFF, dedup.NO_OVERLAY):  # an overlay of other chunks
+        print(f"  dedup off: {res.dedup_note}")
+    if res.dedup is None:  # the Phase 1 table
+        print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  "
+              f"breadcrumb")
+        for h in res.hits:
+            print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
+                  f"{f'{h.char_start}-{h.char_end}':<15}  {_cut(h.breadcrumb)}")
+        return 0
+    print(f"  dedup overlay {res.dedup[:12]}: one hit per cluster, the canonical copy shown; "
+          f"alt = other copies")
+    print(f"{'rank':>4}  {'score':>10}  {'chunk':<12}  {'doc':<12}  {'range':<15}  {'alt':>3}  "
+          f"breadcrumb")
     for h in res.hits:
         print(f"{h.rank:>4}  {h.score:>10.4f}  {h.chunk_id[:12]}  {h.doc_id[:12]}  "
-              f"{f'{h.char_start}-{h.char_end}':<15}  {_cut(h.breadcrumb)}")
+              f"{f'{h.char_start}-{h.char_end}':<15}  {len(h.alternates):>3}  "
+              f"{_cut(h.breadcrumb)}")
+    if res.short_by:
+        print(f"  short by {res.short_by}: the index reranks its top {tools.RERANK_TOP} "
+              f"chunks only, which collapse to {len(res.hits)} hit(s); the ranking below them "
+              f"has more (ask for --top {len(res.hits)} or fewer, or use --no-dedup)")
     return 0
 
 
 def _read(a: argparse.Namespace) -> int:
-    res = _tools(a).read(a.doc_id, a.start, a.end, element=a.element, chunk=a.chunk)
+    res = _tools(a).read(a.doc_id, a.start, a.end, element=a.element, chunk=a.chunk,
+                         filters=_filters(a))
     if a.json:
         _print_json(res)
         return 0
@@ -480,16 +551,354 @@ def _read(a: argparse.Namespace) -> int:
 
 def _grep(a: argparse.Namespace) -> int:
     res = _tools(a).grep(a.pattern, doc=a.doc, max=a.max, ignore_case=a.ignore_case,
-                         timeout=a.timeout)
+                         timeout=a.timeout, filters=_filters(a))
     if a.json:
         _print_json(res)
         return 0
     more = f" (stopped at --max {res.max})" if res.truncated else ""
     print(f"snapshot {res.snapshot[:12]}  {len(res.matches)} match(es){more}")
+    _print_filters(res, res.excluded_by_filter)
     for m in res.matches:
         print(f"{m.doc_id[:12]}  {m.char_start}-{m.char_end}  line {m.line}  "
               f"{_cut(m.context, 2 * TABLE_FIELD)}")
     return 0
+
+
+GOV_CONFIG = REPO_ROOT / "corpora" / "gov" / "config.json"
+
+
+def _applicability_derive(a: argparse.Namespace) -> int:
+    """Derive the applicability overlay of HEAD, write it once (the same bytes again are a
+    no-op, other bytes are refused) with its report beside it, and print the report."""
+    store = Store.open(_store_of(a))
+    try:
+        gov_config = json.loads(Path(a.gov_config).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise _UsageError(f"cannot read the gov config {a.gov_config}: {_one_line(e)}") from e
+    try:
+        overlay, report = applicability.derive(store, gov_config)
+    except ValueError as e:
+        raise _UsageError(str(e)) from e
+    existed = applicability.overlay_path(store.path, overlay.snapshot).is_file()
+    overlay_id, path = applicability.write_overlay(store.path, overlay)
+    applicability.write_report(store.path, report)
+    if a.json:
+        print(json.dumps({"overlay_id": overlay_id, "path": str(path),
+                          "snapshot": overlay.snapshot, "report": report}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    print(f"applicability: overlay {overlay_id[:12]} for snapshot {overlay.snapshot[:12]} "
+          f"({'unchanged' if existed else 'written'})")
+    print(f"  {path}")
+    fams = ", ".join(f"{k} {v}" for k, v in report["families"].items())
+    print(f"  documents {report['documents']}: {fams}")
+    print("  status: " + ", ".join(f"{k} {v}" for k, v in report["status"].items()))
+    print("  validity basis: " + ", ".join(f"{k} {v}"
+                                           for k, v in report["validity_basis"].items() if v))
+    print("  authority tier: " + ", ".join(f"{k} {v}"
+                                           for k, v in report["authority_tier"].items()))
+    c = report["chains"]
+    print(f"  chains {c['count']}, {c['multi_version']} with more than one version "
+          f"({c['documents']} documents, {c['links']} supersession links); superseded "
+          f"documents {report['superseded_documents']}")
+    t = report["temporary_end_dates"]
+    print(f"  temporary end dates parsed {t['parsed']} of {t['of']}")
+    for f in report["fr_dates_parse_failures"]:
+        print(f"    not parsed: {f['document_number']} ({f['doc_id'][:12]}): "
+              f"{_cut(f['dates'], 2 * TABLE_FIELD)}")
+    for caveat in report["caveats"]:
+        print(f"  caveat: {caveat}")
+    return 0
+
+
+# widths fit 5-digit counts and 100.0% shares ("99999 = 100.0% (100.0% of tokens)": 33)
+_DEDUP_COLUMNS = [("chunks", 7), ("exact clusters (chunks)", 23), ("redundant (tokens)", 33),
+                  ("near pairs (clusters)", 21), ("redundant at {t}", 17)]
+
+
+def _dedup_header(threshold: float) -> str:
+    """The cluster table's header: `view` left-aligned, the other columns right-aligned to
+    the widths `_dedup_row` uses."""
+    return "  " + f"{'view':<14}" + "".join(
+        f"  {label.format(t=f'{threshold:g}'):>{width}}" for label, width in _DEDUP_COLUMNS)
+
+
+def _dedup_row(label: str, f: dict) -> str:
+    def pct(x):
+        return "-" if x is None else f"{100 * x:.1f}%" if x == 0 or x >= 0.01 else \
+            f"{100 * x:.2f}%"
+
+    cells = [str(f["chunks"]), f"{f['exact_clusters']} ({f['exact_chunks']})",
+             f"{f['exact_redundant']} = {pct(f['exact_redundant_share'])} "
+             f"({pct(f['exact_redundant_token_share'])} of tokens)",
+             f"{f['near_pairs']} ({f['clusters']})", pct(f["redundant_share"])]
+    return "  " + f"{label:<14}" + "".join(
+        f"  {cell:>{width}}" for cell, (_, width) in zip(cells, _DEDUP_COLUMNS, strict=True))
+
+
+def _dedup_build(a: argparse.Namespace) -> int:
+    """Build the dedup overlay of the active index's chunks, write it once (the same bytes
+    again are a no-op, other bytes are refused) and print the cluster table (spec §4.5): all
+    chunks, and the default view (superseded documents excluded) when the store has an
+    applicability overlay."""
+    t = tools.Tools(_store_of(a), emb_cache=a.emb_cache)
+    idx = t.active_index()
+    t0 = time.perf_counter()
+    overlay = dedup.build(list(idx.chunks.values()), idx.snapshot, idx.chunker)
+    seconds = time.perf_counter() - t0
+    path = dedup.overlay_path(t.store_path, overlay.snapshot, idx.chunker,
+                              overlay.chunk_content_sha256)
+    existed = path.is_file()
+    overlay_id, path = dedup.write_overlay(t.store_path, overlay)
+    figures = {"all": dedup.figures(idx.chunks, overlay.clusters), "default": None}
+    app = applicability.load_overlay(t.store_path, t.snapshot)
+    if app is not None:
+        allowed, _ = app.allowed_docs(t.store.doc_ids(), applicability.Filters())
+        figures["default"] = dedup.figures(idx.chunks, overlay.clusters,
+                                           lambda cid: idx.chunks[cid].doc_id in allowed)
+    if a.json:
+        print(json.dumps({"overlay_id": overlay_id, "path": str(path), "existed": existed,
+                          "snapshot": overlay.snapshot, "index": idx.fingerprint,
+                          "params": overlay.params, "stats": overlay.stats,
+                          "figures": figures, "seconds": round(seconds, 3)}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    p, st = overlay.params, overlay.stats
+    print(f"dedup: overlay {overlay_id[:12]} for snapshot {overlay.snapshot[:12]}, index "
+          f"{idx.fingerprint[:12]} ({'unchanged' if existed else 'written'}, built in "
+          f"{seconds:.1f} s)")
+    print(f"  {path}")
+    print(f"  exact {p['exact']}; near: MinHash {p['num_perm']} over word {p['shingle']}-shingles, "
+          f"LSH {p['bands']} x {p['rows']}, seed {p['seed']}, threshold {p['threshold']:g} "
+          f"(Jaccard, every candidate verified)")
+    print(f"  {st['distinct_texts']} distinct texts, {st['candidate_pairs']} candidate pairs, "
+          f"{st['verified_candidates']} verified, {st['rejected_candidates']} rejected")
+    print(_dedup_header(p["threshold"]))
+    print(_dedup_row("all chunks", figures["all"]))
+    if figures["default"] is not None:
+        print(_dedup_row("default view", figures["default"]))
+    return 0
+
+
+_KIND_LABELS = {"public": "public", "two_tenants": "two tenants", "tenant": "one tenant",
+                "group": "one group", "rule": "by attribute rule"}
+NOT_A_BOUNDARY = ("`adr` is not a security boundary: whoever can run it can read the store "
+                  "directory. The enforcement point is the Tools API, served over MCP "
+                  "(Phase 2 spec §7.1).")
+
+
+def _acl_sync(a: argparse.Namespace) -> int:
+    """Run one sync cycle and print what it wrote."""
+    res = acl.sync(_store_of(a), a.directory, a.policy)
+    if a.json:
+        print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    print(f"acl: snapshot {res.acl_snapshot[:12]} sequence {res.sequence} for content snapshot "
+          f"{res.content_snapshot[:12]} (access {'changed' if res.changed else 'unchanged'}"
+          f"{'' if res.previous is None else f' since {res.previous[:12]}'})")
+    print(f"  {res.path}")
+    print(f"  documents {res.documents}: " + ", ".join(
+        f"{_KIND_LABELS[k]} {n}" for k, n in res.kinds.items() if n or k != "rule"))
+    if res.tool_snapshot is not None:
+        print(f"  tools {res.tools} (tool snapshot {res.tool_snapshot[:12]}): " + ", ".join(
+            f"{_KIND_LABELS[k]} {n}" for k, n in res.tool_kinds.items() if n or k != "rule"))
+    print(f"  entries {res.entries_sha256[:12]}; sync {res.duration_s:.3f} s; lag "
+          f"{res.lag_s:.1f} s since the directory or policy changed")
+    return 0
+
+
+def _acl_show(a: argparse.Namespace) -> int:
+    """The principals of a chunk (through the active index), a document, or a user, as the
+    current ACL snapshot has them."""
+    store_path = _store_of(a)
+    sid, snap = acl.read_head(store_path)
+    out: dict = {"acl_snapshot": sid, "content_snapshot": snap.content_snapshot}
+    head = Store.open(store_path).snapshot_id
+    warning = None if head == snap.content_snapshot else (
+        f"the ACL snapshot is for content snapshot {snap.content_snapshot[:12]}, the store is "
+        f"at {head[:12]}: tools deny every call (F2) until `adr acl sync`")
+    out["warning"] = warning
+    if a.user is not None:
+        principals = acl.caller_principals(snap, a.user)
+        visible = sum(1 for v in snap.docs.values() if set(v) & set(principals))
+        out.update(user=a.user, principals=list(principals), visible_documents=visible,
+                   documents=len(snap.docs))
+        lines = [f"{a.user}: {' '.join(principals)}",
+                 f"  sees {visible} of {len(snap.docs)} documents"]
+    else:
+        if a.chunk is not None:
+            idx = tools.Tools(store_path, emb_cache=a.emb_cache).active_index()
+            cid = tools._resolve(a.chunk, sorted(idx.chunks), "chunk", "the active index")
+            doc_id = idx.chunks[cid].doc_id
+            out["chunk_id"] = cid
+        else:
+            doc_id = tools._resolve(a.doc, sorted(snap.docs), "document",
+                                    f"ACL snapshot {sid[:12]}")
+        principals = snap.docs.get(doc_id)
+        out.update(doc_id=doc_id, principals=principals)
+        who = "no entry: visible to no one" if not principals else " ".join(principals)
+        lines = ([f"chunk {out['chunk_id']}"] if a.chunk is not None else []) + \
+            [f"document {doc_id}: {who}"]
+    if a.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
+    print(f"acl snapshot {sid[:12]} (sequence {snap.sequence}, synced "
+          f"{snap.synced_at.isoformat().replace('+00:00', 'Z')})")
+    for line in lines:
+        print(line)
+    if warning:
+        print(f"warning: {warning}")
+    return 0
+
+
+TOOL_STORE = REPO_ROOT / ".cache" / "store-p2" / "toolret"
+
+
+def _toolret_records(a: argparse.Namespace) -> tuple[str, list[tool_records.ToolRecord]]:
+    from adr_eval.corpora import toolret
+
+    cfg = toolret.load_config(toolret.CONFIG_PATH)
+    rows = toolret.tools(a.root if a.root is not None else toolret.DATA_DIR,
+                         toolret.CONFIG_PATH)
+    recs = []
+    for r in rows:
+        try:
+            doc = json.loads(r["documentation"])
+        except ValueError as e:
+            raise _UsageError(f"ToolRet tool {r['id']}: documentation is not JSON: "
+                              f"{_one_line(e)}") from e
+        try:
+            recs.append(tool_records.from_toolret(
+                doc, tool_records.toolret_uri(r["repo"], r["revision"], r["config"], r["id"]),
+                r["revision"], r["license"], toolret_id=r["id"]))
+        except tool_records.AdapterError as e:
+            raise _UsageError(f"ToolRet tool {r['id']}: {e}") from e
+    files = [cfg["files"][k] for k in cfg["tool_files"]]
+    return (f"toolret {files[0]['repo']}@{files[0]['revision'][:12]} "
+            f"({', '.join(f['config'] for f in files)})", recs)
+
+
+def _tool_source(a: argparse.Namespace, refs: dict
+                 ) -> tuple[str, list[tool_records.ToolRecord]]:
+    """(description of the source, its tool records) for `adr tools ingest`; an OpenAPI
+    source fills `refs` with its $ref counts."""
+    if a.toolret:
+        return _toolret_records(a)
+    path = a.mcp or a.openapi
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise _UsageError(f"cannot read {path}: {_one_line(e)}") from e
+    try:
+        if a.mcp:
+            for key in ("tools_list", "server"):
+                if key not in doc:
+                    raise _UsageError(f"{path}: not a captured tools/list file (no {key!r})")
+            uri = a.source_uri or doc.get("source_uri")
+            lic = a.license or doc.get("license")
+            if not uri or not lic:
+                raise _UsageError(f"{path}: give --source-uri and --license (the file has "
+                                  f"no source_uri or license)")
+            recs = tool_records.from_mcp(doc["tools_list"], doc["server"], uri,
+                                         a.source_version or str(doc.get("version", "")), lic)
+            return f"MCP server {doc['server']} ({path})", recs
+        if not a.source_uri or not a.license:
+            raise _UsageError("--openapi needs --source-uri and --license (they are part of "
+                              "every record, and the source_uri of its tool_id)")
+        version = a.source_version or str((doc.get("info") or {}).get("version", ""))
+        return f"OpenAPI {path}", tool_records.from_openapi(doc, a.source_uri, version,
+                                                            a.license, stats=refs)
+    except (ValueError, TypeError, AttributeError) as e:
+        raise _UsageError(f"{path}: {_one_line(e)}") from e
+
+
+def _tools_ingest(a: argparse.Namespace) -> int:
+    """Add the tool records of one source to a store's tool catalog and commit a tool
+    snapshot; every record is checked first and none is written if one fails."""
+    if a.store is None and not a.toolret:
+        raise _UsageError("--mcp and --openapi need --store (the default store "
+                          f"{TOOL_STORE} is the ToolRet one)")
+    store = a.store if a.store is not None else TOOL_STORE
+    refs: dict = {}
+    source, recs = _tool_source(a, refs)
+    failed = [(r, p) for r in recs if (p := tool_records.conformance(r))]
+    if failed:
+        for r, problems in failed:
+            print(f"error: tool {r.name!r} ({r.tool_id[:12]}): {'; '.join(problems)}",
+                  file=sys.stderr)
+        print(f"error: {len(failed)} of {len(recs)} tools from {source} fail conformance; "
+              f"nothing written", file=sys.stderr)
+        return EXIT_CONFORMANCE
+    sid, before, after = tool_catalog.ingest(store, recs)
+    res = {"store": str(store), "source": source, "records": len(recs),
+           "added": after - before, "tools": after, "tool_snapshot": sid,
+           "content_snapshot": Store.open(store).snapshot_id, "conformance": 1.0,
+           "definition_tokens": sum(r.definition_tokens for r in recs),
+           "refs": refs or None}
+    if a.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    print(f"tools: {len(recs)} tools from {source}: conformance 100%, {res['added']} new; "
+          f"catalog {sid[:12]} holds {after} tools")
+    print(f"  store {store} (content snapshot {res['content_snapshot'][:12]}); definitions "
+          f"{res['definition_tokens']} tokens")
+    if refs:
+        print(f"  $refs: {refs['missing_refs']} missing $refs and {refs['external_refs']} "
+              f"external ones left as {{}}; cut to {{}}: {refs['cycle_cuts']} cycles, "
+              f"{refs['depth_cuts']} at depth {tool_records.REF_DEPTH}, "
+              f"{refs['budget_cuts']} past the {tool_records.NODE_BUDGET} node budget")
+    return 0
+
+
+def _tools_index(a: argparse.Namespace) -> int:
+    """Build or load the tool index of the store's tool catalog and make it active."""
+    store = a.store if a.store is not None else TOOL_STORE
+    info = tools.Tools(store, emb_cache=a.emb_cache).tools_index(
+        a.w_name, weight=a.weight, lexical_only=a.lexical_only, threads=a.threads)
+    if a.json:
+        _print_json(info)
+        return 0
+    mode = "lexical only" if info.lexical_only else f"fusion weight {info.w}"
+    print(f"tool index {info.fingerprint[:12]} ({info.source}) for tool snapshot "
+          f"{info.tool_snapshot[:12]}")
+    print(f"  tools {info.n_tools}; w_name {info.w_name}; {mode}")
+    return 0
+
+
+def _search_tools(a: argparse.Namespace) -> int:
+    filters = None if not a.source_kind else {"source_kind": a.source_kind}
+    res = _tools(a).search_tools(a.query, top=a.top, filters=filters)
+    if a.json:
+        _print_json(res)
+        return 0
+    lex = ", lexical only" if res.lexical_only else ""
+    kinds = res.filters["source_kind"]
+    only = "" if kinds is None else f"; source_kind {','.join(kinds)} ({res.excluded_by_filter}" \
+                                    f" excluded)"
+    print(f"tool snapshot {res.tools_snapshot[:12]}  tool index {res.fingerprint[:12]}{lex}  "
+          f"{len(res.hits)} hit(s){only}")
+    print(f"{'rank':>4}  {'score':>10}  {'tool':<12}  {'kind':<8}  {'name':<32}  summary")
+    for h in res.hits:
+        print(f"{h.rank:>4}  {h.score:>10.4f}  {h.tool_id[:12]}  {h.source_kind:<8}  "
+              f"{_cut(h.name, 32):<32}  {_cut(h.summary)}")
+    return 0
+
+
+def _load_tool(a: argparse.Namespace) -> int:
+    res = _tools(a).load_tool(a.tool_id)
+    if a.json:
+        _print_json(res)
+        return 0
+    print(f"# tool {res.tool_id[:12]} ({res.source_kind}, {res.source_uri}) tool snapshot "
+          f"{res.tools_snapshot[:12]}; {res.definition_tokens} tokens")
+    print(json.dumps(res.definition, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _mcp(a: argparse.Namespace) -> int:
+    """`adr mcp`: the server of `adr_store.mcp_server` (which imports the `mcp` package only
+    when it builds the server, so the rest of `adr` runs without the `[mcp]` extra)."""
+    return mcp_server.serve(a.store, a.as_user, a.emb_cache)
 
 
 def _non_negative(s: str) -> int:
@@ -506,8 +915,15 @@ def _positive(s: str) -> int:
     return v
 
 
+AS_HELP = ("call as this user principal (e.g. user:acme-0) with the ACL enforced: the "
+           "caller's view only, and no access at all if the ACL snapshot is missing, stale, "
+           "for another content snapshot or does not know the caller (F1-F5). For tests and "
+           "simulation only: ")
+
+
 def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
-    p = sub.add_parser(name, help=help)
+    p = sub.add_parser(name, help=help,
+                       description=None if name == "index" else f"{help}. {NOT_A_BOUNDARY}")
     where = p.add_mutually_exclusive_group(required=name != "index")
     where.add_argument("--store", type=Path, default=None, help="store directory")
     if name != "index":
@@ -516,12 +932,32 @@ def _tool_parser(sub, name: str, help: str, fn) -> argparse.ArgumentParser:
     p.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
                    help="embedding cache directory (dense indexes only)")
     p.add_argument("--json", action="store_true", help="print the result as JSON")
+    if name != "index":
+        p.add_argument("--as", dest="as_user", default=None, metavar="USER",
+                       help=AS_HELP + NOT_A_BOUNDARY)
     p.set_defaults(fn=fn)
     return p
 
 
+def _filter_flags(p: argparse.ArgumentParser) -> None:
+    f = p.add_argument_group("applicability filters (Phase 2; need an applicability overlay, "
+                             "except --include-superseded)")
+    f.add_argument("--include-superseded", action="store_true",
+                   help="keep superseded documents (the Phase 1 view)")
+    f.add_argument("--as-of", default=None, metavar="YYYY-MM-DD",
+                   help="only documents in force on this date (replaces the superseded "
+                        "default; excludes proposed rules unless --status names them)")
+    f.add_argument("--status", action="append", default=None, metavar="S",
+                   help="keep this status (repeatable)")
+    f.add_argument("--jurisdiction", action="append", default=None, metavar="J",
+                   help="keep this jurisdiction (repeatable)")
+    f.add_argument("--max-tier", type=int, default=None, metavar="N",
+                   help="keep authority tier N or lower (1 to 4)")
+
+
 def _parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools.")
+    ap = argparse.ArgumentParser(prog="adr", description="Evidence store tools. " +
+                                 NOT_A_BOUNDARY)
     sub = ap.add_subparsers(dest="command", required=True)
     ing = sub.add_parser("ingest", help="read a pinned corpus, or the loose files of a "
                                         "folder, into a store and commit a snapshot")
@@ -557,6 +993,10 @@ def _parser() -> argparse.ArgumentParser:
     se.add_argument("query")
     se.add_argument("--top", type=_positive, default=tools.SEARCH_TOP,
                     help=f"number of chunks (default {tools.SEARCH_TOP})")
+    se.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=None,
+                    help="collapse copies to one hit per cluster (default: on when the "
+                         "active index's chunks have a dedup overlay; `adr dedup build`)")
+    _filter_flags(se)
 
     rd = _tool_parser(sub, "read", "the exact text of a document range", _read)
     rd.add_argument("doc_id", help="document id (or a unique prefix of 8+ characters)")
@@ -564,6 +1004,7 @@ def _parser() -> argparse.ArgumentParser:
     rd.add_argument("--end", type=int, default=None)
     rd.add_argument("--element", default=None, help="an element id of the document")
     rd.add_argument("--chunk", default=None, help="a chunk id of the active index")
+    _filter_flags(rd)
 
     gr = _tool_parser(sub, "grep", "regular-expression matches in (doc_id, offset) order",
                       _grep)
@@ -576,15 +1017,159 @@ def _parser() -> argparse.ArgumentParser:
     gr.add_argument("--timeout", type=float, default=tools.GREP_TIMEOUT,
                     help=f"seconds the pattern may spend matching (default "
                          f"{tools.GREP_TIMEOUT:g}, at most {tools.GREP_TIMEOUT_MAX:g})")
+    _filter_flags(gr)
+
+    st = _tool_parser(sub, "search-tools", "ranked tools of the store's tool catalog for a query "
+                                           "(Phase 2)", _search_tools)
+    st.add_argument("query")
+    st.add_argument("--top", type=_positive, default=tools.SEARCH_TOP,
+                    help=f"number of tools (default {tools.SEARCH_TOP})")
+    st.add_argument("--source-kind", action="append", default=None, metavar="K",
+                    choices=tools.SOURCE_KINDS, help="keep tools of this source kind "
+                                                     "(repeatable)")
+    lt = _tool_parser(sub, "load-tool", "the MCP Tool definition of one tool (Phase 2)",
+                      _load_tool)
+    lt.add_argument("tool_id", help="tool id (or a unique prefix of 8+ characters)")
+
+    app = sub.add_parser("applicability", help="the applicability overlay (Phase 2)")
+    app_sub = app.add_subparsers(dest="action", required=True)
+    der = app_sub.add_parser("derive", help="derive the applicability overlay of the store's "
+                                            "HEAD snapshot and write it once")
+    where = der.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    der.add_argument("--gov-config", type=Path, default=GOV_CONFIG,
+                     help="the gov corpus config, for eCFR issuers (default "
+                          "corpora/gov/config.json)")
+    der.add_argument("--json", action="store_true", help="print the result as JSON")
+    der.set_defaults(fn=_applicability_derive)
+
+    dd = sub.add_parser("dedup", help="the dedup overlay (Phase 2)")
+    dd_sub = dd.add_subparsers(dest="action", required=True)
+    bld = dd_sub.add_parser("build", help="find exact and near-duplicate chunks of the active "
+                                          "index and write the dedup overlay once")
+    where = bld.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    bld.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                     help="embedding cache directory (to load a dense active index)")
+    bld.add_argument("--json", action="store_true", help="print the result as JSON")
+    bld.set_defaults(fn=_dedup_build)
+
+    acl_p = sub.add_parser("acl", help="the ACL snapshot (Phase 2): sync and show",
+                           description="ACL snapshots: `adr acl sync` runs one sync cycle "
+                                       "(read and validate the directory and policy, compute "
+                                       "every document's access list, write the snapshot, "
+                                       "replace acl/HEAD atomically); `adr acl show` prints "
+                                       "principals. " + NOT_A_BOUNDARY)
+    acl_sub = acl_p.add_subparsers(dest="action", required=True)
+    sy = acl_sub.add_parser("sync", help="one sync cycle: write a new ACL snapshot and move "
+                                         "acl/HEAD to it", description=NOT_A_BOUNDARY)
+    where = sy.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    sy.add_argument("--directory", type=Path, default=acl.DIRECTORY_PATH,
+                    help="the directory (default config/acl/directory.json)")
+    sy.add_argument("--policy", type=Path, default=acl.POLICY_PATH,
+                    help="the policy (default config/acl/policy.json)")
+    sy.add_argument("--json", action="store_true", help="print the result as JSON")
+    sy.set_defaults(fn=_acl_sync)
+    sh = acl_sub.add_parser("show", help="the principals of a chunk, a document or a user in "
+                                         "the current ACL snapshot",
+                            description=NOT_A_BOUNDARY)
+    where = sh.add_mutually_exclusive_group(required=True)
+    where.add_argument("--store", type=Path, default=None, help="store directory")
+    where.add_argument("--corpus", choices=NAMES, help=f"use the store {STORE_ROOT}/<corpus>")
+    what = sh.add_mutually_exclusive_group(required=True)
+    what.add_argument("--chunk", default=None, help="a chunk id of the active index (or a "
+                                                   "unique prefix of 8+ characters)")
+    what.add_argument("--doc", default=None, help="a document id (or a unique prefix of 8+ "
+                                                 "characters)")
+    what.add_argument("--user", default=None, help="a user principal, e.g. user:acme-0")
+    sh.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                    help="embedding cache directory (to load a dense active index)")
+    sh.add_argument("--json", action="store_true", help="print the result as JSON")
+    sh.set_defaults(fn=_acl_show)
+
+    mc = sub.add_parser("mcp", help="serve the tools over MCP (stdio) as one caller (Phase 2; "
+                                     "needs the [mcp] extra)",
+                        description="Serve search, read, grep, search_tools and load_tool over "
+                                    "MCP on stdio, as one caller with the ACL enforced on every "
+                                    "call (code in adr_store.mcp_server). Without a caller "
+                                    "(--as or ADR_CALLER) it refuses to start. " +
+                                    mcp_server.HELP_HANDLES)
+    mcp_server.add_arguments(mc)
+    mc.set_defaults(fn=_mcp)
+    tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
+    tl_sub = tl.add_subparsers(dest="action", required=True)
+    ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "
+                                          "catalog and commit a tool snapshot")
+    src = ti.add_mutually_exclusive_group(required=True)
+    src.add_argument("--mcp", type=Path, default=None, metavar="F",
+                     help="a captured tools/list file (server, version, source_uri, license, "
+                          "tools_list)")
+    src.add_argument("--openapi", type=Path, default=None, metavar="F",
+                     help="an OpenAPI 3.x JSON document (needs --source-uri and --license)")
+    src.add_argument("--toolret", action="store_true",
+                     help="the local ToolRet toolbench tools (`adr-eval tools-fetch` first)")
+    ti.add_argument("--store", type=Path, default=None,
+                    help=f"store directory (made a tools-only store if new; default "
+                         f"{TOOL_STORE} with --toolret)")
+    ti.add_argument("--root", type=Path, default=None,
+                    help="--toolret: the data directory (default data/tools)")
+    ti.add_argument("--source-uri", default=None, help="the records' source_uri")
+    ti.add_argument("--source-version", default=None,
+                    help="the records' source_version (default: the file's version)")
+    ti.add_argument("--license", default=None, help="the records' licence")
+    ti.add_argument("--json", action="store_true", help="print the result as JSON")
+    ti.set_defaults(fn=_tools_ingest)
+    tx = tl_sub.add_parser("index", help="build or load the tool index of the store's tool "
+                                         "catalog (tools/HEAD) and make it the active one")
+    tx.add_argument("--store", type=Path, default=None,
+                    help=f"store directory (default {TOOL_STORE})")
+    tx.add_argument("--w-name", type=_non_negative, required=True,
+                    help="times the split tool name is repeated in the BM25 text (tuned by "
+                         "`adr-eval tools-retrieval`)")
+    mode = tx.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--weight", type=float, default=None,
+                      help="linear fusion weight in [0, 1] on BM25 (tuned)")
+    mode.add_argument("--lexical-only", action="store_true",
+                      help="BM25 channel only: no embedding, no fusion")
+    tx.add_argument("--emb-cache", type=Path, default=tools.DEFAULT_EMB_CACHE,
+                    help="embedding cache directory (dense index only)")
+    tx.add_argument("--threads", type=_non_negative, default=1,
+                    help="threads of the embedding model while building (default 1; 0 = all "
+                         "cores); the vectors do not depend on it")
+    tx.add_argument("--json", action="store_true", help="print the result as JSON")
+    tx.set_defaults(fn=_tools_index)
     return ap
+
+
+def _silence_stdout() -> None:
+    """Point stdout at /dev/null, so the interpreter's flush at exit does not fail again."""
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except (OSError, ValueError):  # no file descriptor (a replaced sys.stdout)
+        pass
 
 
 def main(argv: list[str] | None = None) -> int:
     a = _parser().parse_args(argv)
+    code = None
     try:
-        return a.fn(a)
+        code = a.fn(a)
+        sys.stdout.flush()  # inside the try: a closed pipe shows here, not at exit
+        return code
+    except BrokenPipeError:
+        # the reader stopped early (`adr ... | head`): every command prints after its work is
+        # done, so only output is lost; stop quietly (with the command's own code if it had
+        # one), and keep the interpreter's flush at exit from failing too
+        _silence_stdout()
+        return 0 if code is None else code
     except (RunError, LocalFilesMissing, ExtractionError, StoreError, tools.ToolError,
-            _UsageError) as e:
+            acl.AclDenied, _UsageError, ToolRetMissing, HashMismatch) as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_LOAD_OR_STORE
     except _Unexpected as e:

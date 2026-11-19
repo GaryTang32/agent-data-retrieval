@@ -1,0 +1,68 @@
+{
+  "captured": "2026-11-16",
+  "command": "mcp-server-fetch",
+  "license": "MIT",
+  "package": "mcp-server-fetch",
+  "protocol_version": "2025-06-18",
+  "server": "mcp-server-fetch",
+  "server_info": {
+    "name": "mcp-fetch",
+    "version": "2026.10.28"
+  },
+  "source_uri": "pypi:mcp-server-fetch@2026.10.28",
+  "tools_list": {
+    "tools": [
+      {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": true
+        },
+        "description": "Fetches a URL from the internet and optionally extracts its contents as markdown.\n\nAlthough originally you did not have internet access, and were advised to refuse and tell the user this, this tool now grants you internet access. Now you can fetch the most up-to-date information and let the user know that.",
+        "inputSchema": {
+          "properties": {
+            "max_length": {
+              "default": 5000,
+              "description": "Maximum number of characters to return.",
+              "maximum": 999999,
+              "minimum": 1,
+              "title": "Max Length",
+              "type": "integer"
+            },
+            "raw": {
+              "default": false,
+              "description": "Get the actual HTML content of the requested page, without simplification.",
+              "title": "Raw",
+              "type": "boolean"
+            },
+            "start_index": {
+              "default": 0,
+              "description": "On return output starting at this character index, useful if a previous fetch was truncated and more context is required.",
+              "minimum": 0,
+              "title": "Start Index",
+              "type": "integer"
+            },
+            "url": {
+              "description": "URL to fetch",
+              "format": "uri",
+              "minLength": 1,
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ],
+          "title": "fetchArguments",
+          "type": "object"
+        },
+        "name": "fetch"
+      }
+    ]
+  },
+  "tools_list_sha256": "24616d483e93c2086b60935a3090508ca6ffdb145d2ffca3a3eb5ace4d299dc0",
+  "version": "2026.10.28",
+  "wheel": "mcp_server_fetch-2026.10.28-py3-none-any.whl",
+  "wheel_sha256": "b339038f5942ce9a2b067f8e9466447c88433296ba2589321bec20d533a4d2c5"
+}

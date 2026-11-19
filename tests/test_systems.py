@@ -506,3 +506,455 @@ def test_retrieval_compare_refuses_other_metrics_versions_and_splits(tmp_path, f
     assert main(["retrieval-compare", a["dir"].name, c["dir"].name, "--out", out]) == 2
     assert "different metrics versions" in capsys.readouterr().err
     assert main(["retrieval-compare", a["dir"].name, "nope", "--out", out]) == 2
+
+
+# -- Phase 2 configurations (spec §10.1) ----------------------------------------------------
+
+P2 = ("p2-identity", "p2-appl", "p2-dedup", "p2-default")
+
+
+@pytest.fixture
+def p2fakes(fakes, monkeypatch):
+    """`fakes`, and the same fake embedding model for the `adr_store` tools the Phase 2
+    systems search through."""
+    from adr_store import tools
+
+    monkeypatch.setattr(tools, "make_embedding_cache",
+                        lambda path=None, *, threads=1: fake_cache(Path(path)))
+    return fakes
+
+
+@pytest.fixture
+def p2config(config, tmp_path, monkeypatch):
+    monkeypatch.setattr(systems, "PHASE1_SUMMARIES", tmp_path / "summaries")
+    return {**config, "p2_store_dir": str(tmp_path / "store-p2")}
+
+
+def test_the_phase2_systems_are_registered_apart_from_phase1():
+    assert systems.P2_NAMES == P2
+    assert systems.ALL_NAMES == (*systems.NAMES, *P2)
+    assert set(systems.P2_SPECS) == set(P2)
+    f = {n: systems.P2_SPECS[n].filters for n in P2}
+    assert f["p2-identity"].include_superseded and f["p2-dedup"].include_superseded
+    assert not f["p2-appl"].include_superseded and not f["p2-default"].include_superseded
+    assert [systems.P2_SPECS[n].as_of for n in P2] == [False, True, False, True]
+    assert [systems.P2_SPECS[n].dedup for n in P2] == [False, False, True, True]
+
+
+def test_a_phase2_system_copies_the_store_derives_overlays_and_reuses_the_phase1_index(
+        mini, p2config, p2fakes):
+    from adr_store import applicability, dedup
+    from adr_store.retrieval.index import chunk_content_sha256
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    p2 = build("p2-default", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    assert (path / "HEAD").read_text() == (p1.store_path / "HEAD").read_text()
+    assert p2.fingerprint == p1.fingerprint and p2.w == p1.w and p2.accepts_as_of
+    idx = p2.tools.active_index()
+    app = applicability.load_overlay(path, idx.snapshot)
+    dd = dedup.load_overlay(path, idx.snapshot, idx.chunker,
+                            chunk_content_sha256(idx.chunks.values()))
+    assert app is not None and dd is not None
+    cfg = p2.run_config()
+    assert cfg["store"].endswith("store-p2/mini") and cfg["store_snapshot"] == idx.snapshot
+    assert cfg["phase1_system"] == "p1-struct-bc" and cfg["caller"] is None
+    assert cfg["acl"] is None and cfg["as_of_from_item"] is True
+    assert cfg["filters"] == applicability.Filters().to_dict()
+    assert (cfg["applicability"], cfg["dedup"]) == (app.overlay_id, dd.overlay_id)
+    assert (cfg["w_bc"], cfg["linear_w"]) == (p1.index.settings.w_bc, p1.w)
+    assert set(p2.chunks) == set(p1.chunks)
+    # a second build loads the copy and its overlays as they are
+    again = build("p2-identity", mini, p2config)
+    assert again.run_config()["dedup"] is None and again.run_config()["applicability"] == \
+        app.overlay_id
+    assert again.run_config()["filters"]["include_superseded"] is True
+
+
+def test_a_phase2_system_refuses_a_recorded_phase1_run_it_does_not_reproduce(
+        mini, p2config, p2fakes):
+    p1 = build("p1-struct-bc", mini, p2config)
+    summaries = systems.PHASE1_SUMMARIES
+    recorded = {"config": {"system": "p1-struct-bc", "lexical_only": False, "w": p1.w,
+                           "fingerprint": p1.fingerprint,
+                           "settings": {"w_bc": p1.index.settings.w_bc,
+                                        "store_snapshot": p1.index.snapshot}}}
+    d = summaries / "mini-p1-struct-bc-dev-retrieval-20261113T000000"
+    d.mkdir(parents=True)
+    (d / "retrieval.json").write_text(json.dumps(recorded))
+    other = summaries / "mini-p1-struct-bc-rr-dev-retrieval-20261113T000000"  # not the system
+    other.mkdir()
+    (other / "retrieval.json").write_text(json.dumps({"config": {"w": 0.123}}))
+    assert build("p2-identity", mini, p2config).run_config()["phase1_recorded"] == [d.name]
+    recorded["config"]["w"] = 0.5 if p1.w != 0.5 else 0.25
+    (d / "retrieval.json").write_text(json.dumps(recorded))
+    with pytest.raises(runner.RunError, match=f"(?s){d.name}.*w"):
+        build("p2-identity", mini, p2config)
+
+
+def test_the_measured_caller_is_the_auditor_and_tests_default_to_none():
+    """config/eval.json names the measured caller (Task 8); the tests' config has none, so
+    the 2A tests keep searching without the ACL layer unless they opt in."""
+    shipped = json.loads((runner.CONFIG_PATH).read_text(encoding="utf-8"))
+    assert shipped["p2_caller"] == "user:auditor"
+    assert runner.load_config()["p2_caller"] is None
+
+
+def test_a_phase2_system_searches_as_the_configured_caller(mini, p2config, p2fakes):
+    """With `p2_caller` the configuration searches through the ACL layer as that caller
+    (indexing stays an operator call without it); the run config records the caller and the
+    ACL snapshot; a store without an ACL snapshot, or an unknown caller, is refused before
+    any item is searched."""
+    from adr_store import acl
+
+    plain = build("p2-default", mini, p2config)  # copies the store, no caller
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    cfg = {**p2config, "p2_caller": "user:auditor"}
+    with pytest.raises(runner.RunError, match=r"(?s)F1.*adr acl sync --store"):
+        build("p2-default", mini, cfg)
+    res = acl.sync(path)
+    p2 = build("p2-default", mini, cfg)
+    assert p2.caller == "user:auditor" and p2.searcher is not p2.tools
+    rc = p2.run_config()
+    assert rc["caller"] == "user:auditor"
+    assert rc["acl"]["acl_snapshot"] == res.acl_snapshot and rc["acl"]["sequence"] == 1
+    assert rc["acl"]["visible_docs"] == rc["acl"]["store_docs"] == len(mini[0].docs)
+    assert p2.fingerprint == plain.fingerprint and set(p2.chunks) == set(plain.chunks)
+    log = path / "log" / "retrieval.jsonl"
+    before = len(log.read_text(encoding="utf-8").splitlines())
+    for item in mini[1]:
+        assert [c for c, _ in p2.retrieve(item.question, item.as_of)] == \
+            [c for c, _ in plain.retrieve(item.question, item.as_of)]
+    lines = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()[before:]]
+    mine = [x for x in lines if x["caller"] is not None]
+    assert len(mine) == len(mini[1]) == len(lines) - len(mine)  # and the plain searches'
+    assert {(x["caller"], x["acl_decision"], x["acl_snapshot"]) for x in mine} == {
+        ("user:auditor", "allowed", res.acl_snapshot)}
+    assert {x["acl_decision"] for x in lines if x["caller"] is None} == {"off"}
+    with pytest.raises(runner.RunError, match="F4"):
+        build("p2-default", mini, {**p2config, "p2_caller": "user:ghost"})
+
+
+def test_p2_identity_never_uses_the_caller(mini, p2config, p2fakes, tmp_path, capsys):
+    """p2-identity is every Phase 2 layer off, the ACL layer included (ruling, Task 8 fix
+    round): with `p2_caller` set it still searches without the ACL layer (the Phase 1
+    matrix-product path), needs no ACL snapshot, and records no caller."""
+    cfg = {**p2config, "p2_caller": "user:auditor"}
+    p2 = build("p2-identity", mini, cfg)  # the copied store has no ACL snapshot: no refusal
+    assert p2.caller is None and p2.acl is None and p2.searcher is p2.tools
+    rc = p2.run_config()
+    assert (rc["caller"], rc["acl"]) == (None, None)
+    p1 = build("p1-struct-bc", mini, p2config)
+    for item in mini[1]:
+        assert p2.retrieve(item.question) == p1.retrieve(item.question)  # scores bit for bit
+    with pytest.raises(runner.RunError, match="F1"):
+        build("p2-appl", mini, cfg)  # the other configurations still search as the caller
+
+
+def test_a_phase2_store_of_other_documents_is_refused(mini, p2config, p2fakes):
+    from adr_store.store import Store
+
+    build("p2-identity", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    full = Store.open(path)
+    Store(path, None, {d: full._records[d] for d in full.doc_ids()[:2]}).commit()
+    with pytest.raises(runner.RunError, match="(?s)other documents.*remove"):
+        build("p2-identity", mini, p2config)
+
+
+@pytest.mark.parametrize("split", ["dev", "test"])
+def test_p2_identity_equals_p1_struct_bc_on_mini(split, tmp_path, p2fakes, capsys):
+    """Criterion A5 in CI: ranked ids and exact scores of every item, dev and test."""
+    a = _retrieval(tmp_path, "p1-struct-bc", split)
+    b = _retrieval(tmp_path, "p2-identity", split)
+    ra, rb = ({r["item_id"]: r for r in x["rows"]} for x in (a, b))
+    assert set(ra) == set(rb) and ra
+    for item_id, row in ra.items():
+        assert rb[item_id]["ranked"] == row["ranked"]
+        assert rb[item_id]["scores"] == row["scores"]
+    assert b["config"]["fingerprint"] == a["config"]["fingerprint"]
+    capsys.readouterr()
+    assert main(["retrieval-identical", str(a["dir"]), str(b["dir"])]) == 0
+    assert "identical" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("split", ["dev", "test"])
+def test_p2_appl_equals_p1_struct_bc_on_mini_but_the_dated_item_finds_nothing(
+        split, tmp_path, p2fakes, capsys):
+    """Mini has no chains, so the default filter excludes nothing; its documents' dates are
+    unknown, so `as_of` admits none of them (unknown never matches)."""
+    a = _retrieval(tmp_path, "p1-struct-bc", split)
+    b = _retrieval(tmp_path, "p2-appl", split)
+    ra, rb = ({r["item_id"]: r for r in x["rows"]} for x in (a, b))
+    dated = {i for i, r in ra.items() if r["qtype"] == "policy_asof"}
+    assert len(dated) == 1
+    for item_id, row in rb.items():
+        if item_id in dated:
+            assert row["ranked"] == [] and row["as_of"] is not None
+            assert ra[item_id]["ranked"]
+        else:
+            assert (row["ranked"], row["scores"]) == (ra[item_id]["ranked"],
+                                                      ra[item_id]["scores"])
+            assert row["as_of"] is None
+    assert "as_of" not in next(iter(ra.values()))
+    capsys.readouterr()
+    assert main(["retrieval-identical", str(a["dir"]), str(b["dir"])]) == 1
+    out = capsys.readouterr().out
+    assert "1 of" in out and next(iter(dated)) in out
+
+
+def _forge_one_cluster(path: Path, idx) -> str:
+    """Replace the p2 store's dedup overlay by one joining every chunk into one near cluster
+    (mini has no copies), so collapse would change every ranking."""
+    import hashlib
+
+    from adr_store import dedup
+    from adr_store.retrieval.index import chunk_content_sha256
+
+    members = sorted(idx.chunks)
+    edges = [(i, i + 1, 0.95) for i in range(len(members) - 1)]
+    cluster = dedup.Cluster(cluster_id=hashlib.sha256("\n".join(members).encode()).hexdigest(),
+                            members=members, kind="near", min_jaccard=0.95, edges=edges)
+    overlay = dedup.DedupOverlay(format_version="0.1", snapshot=idx.snapshot,
+                                 chunker=idx.chunker,
+                                 chunk_content_sha256=chunk_content_sha256(idx.chunks.values()),
+                                 params=dedup.PARAMS, clusters=[cluster], stats={})
+    dedup.overlay_path(path, idx.snapshot, idx.chunker,
+                       chunk_content_sha256(idx.chunks.values())).unlink()
+    return dedup.write_overlay(path, overlay)[0]
+
+
+def test_p2_identity_equals_p1_struct_bc_even_with_a_dedup_overlay_that_collapses(
+        mini, p2config, p2fakes):
+    """`p2-identity` and `p2-appl` pass dedup=False (never None), so an overlay in the store
+    does not change them; `p2-dedup` and `p2-default` pass dedup=True."""
+    p1 = build("p1-struct-bc", mini, p2config)
+    first = build("p2-identity", mini, p2config)
+    forged = _forge_one_cluster(Path(p2config["p2_store_dir"]) / "mini",
+                                first.tools.active_index())
+    calls = []
+    for name in P2:
+        s = build(name, mini, p2config)
+        assert s.run_config()["dedup_overlay"] == forged
+        real = s.tools.search
+        s.tools.search = lambda *a, real=real, name=name, **kw: calls.append(
+            (name, kw["dedup"])) or \
+            real(*a, **kw)
+        for item in mini[1]:
+            got = s.retrieve(item.question)
+            if name in ("p2-identity", "p2-appl"):
+                assert got == p1.retrieve(item.question)
+            else:
+                assert len(got) == 1  # one cluster: one slot
+    assert {(n, d) for n, d in calls} == {("p2-identity", False), ("p2-appl", False),
+                                          ("p2-dedup", True), ("p2-default", True)}
+
+
+def test_p2_compare_writes_slots_subsets_and_verdicts(tmp_path, p2fakes, capsys):
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-default")
+    store = systems.p2_store_dir(runner.load_config(), "mini")
+    out = tmp_path / "runs"
+    capsys.readouterr()
+    assert main(["p2-compare", a["dir"].name, b["dir"].name, "--store", str(store),
+                 "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert printed.startswith("# Phase 2 comparison: p2-default minus p1-struct-bc")
+    d = out / f"p2-compare-{a['dir'].name}--{b['dir'].name}"
+    c = json.loads((d / "compare.json").read_text())
+    assert (d / "compare.md").read_text().startswith("# Phase 2 comparison")
+    assert c["margin"] == 0.02 and c["n_resamples"] == 10_000 and c["seed"] == 20261108
+    # mini: one dated test item (which p2-default answers with nothing), no chains
+    assert c["subset_sizes"] == {"asof": 1, "in_force": 5, "superseded_only": 0, "scored": 6}
+    assert c["criteria"]["A4"] == {"subset": "in_force", "pass": True, "n": 5}
+    assert c["subsets"]["in_force"]["keys"]["ndcg@10"]["mean_diff"] == 0.0
+    assert c["criteria"]["A3"]["subset"] == "asof"
+    assert set(c["slots"]) == {"a", "b"}
+    assert c["slots"]["b"]["asof"]["n_slots"] == 0
+    assert c["slots"]["a"]["all"]["superseded_slots"] == 0
+    assert c["applicability"] and c["dedup"]
+    # a run of another store snapshot is refused
+    path = b["dir"] / "retrieval.json"
+    data = json.loads(path.read_text())
+    data["config"]["settings"]["store_snapshot"] = "0" * 64
+    path.write_text(json.dumps(data))
+    assert main(["p2-compare", a["dir"].name, b["dir"].name, "--store", str(store),
+                 "--out", str(out)]) == 2
+    assert "not the store's HEAD" in capsys.readouterr().err
+
+
+def test_p2_identity_slot_stats_equal_p1_struct_bc_s_on_dated_items(tmp_path, p2fakes):
+    """p2-identity takes a dated item's date but does not apply it, so its rows record none
+    and its slots are counted in its own view (the Phase 1 one), as p1-struct-bc's are: with
+    one cluster joining every chunk, a dated row counted under its date would admit nothing
+    and show no duplicates."""
+    import shutil
+
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-identity")
+    dated = [r for r in b["rows"] if r["qtype"] == "policy_asof"]
+    assert dated and all(r["as_of"] is None for r in b["rows"])
+    store = tmp_path / "store-copy"
+    shutil.copytree(systems.p2_store_dir(runner.load_config(), "mini"), store)
+    from adr_store.tools import Tools
+
+    _forge_one_cluster(store, Tools(store).active_index())
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["subset_sizes"]["asof"] == 1
+    assert c["slots"]["a"]["asof"]["duplicate_slots"] > 0
+    assert c["slots"]["a"] == c["slots"]["b"]
+    # a run whose rows record a date its system did not apply (an older p2-identity run)
+    # is refused rather than counted in another view
+    path = b["dir"] / "retrieval.json"
+    data = json.loads(path.read_text())
+    for r in data["rows"]:
+        if r["qtype"] == "policy_asof":
+            r["as_of"] = "2024-01-01"
+    path.write_text(json.dumps(data))
+    with pytest.raises(runner.RunError, match="as_of"):
+        phase2.compare(a["dir"], b["dir"], store)
+
+
+def _set(path: Path, edit) -> None:
+    data = json.loads(path.read_text())
+    edit(data)
+    path.write_text(json.dumps(data))
+
+
+def _chunker(**kw):
+    def edit(d):
+        d["config"]["settings"]["chunker"] = {**d["config"]["settings"]["chunker"], **kw}
+    return edit
+
+
+def _scored_row(d) -> dict:
+    return next(r for r in d["rows"] if r["metrics"] and r["qtype"] != "insufficient")
+
+
+@pytest.mark.parametrize("edit_a,edit_b,match", [
+    (None, lambda d: d["config"].update(corpus="gov"), "different corpus"),
+    (None, lambda d: d["config"].update(split="dev"), "different split"),
+    (None, lambda d: d["config"].update(golden_sha256="0" * 64), "different golden_sha256"),
+    (lambda d: d["config"].update(golden_sha256="0" * 64),
+     lambda d: d["config"].update(golden_sha256="0" * 64), "changed since the runs"),
+    (None, lambda d: d["config"].update(metrics_version=1), "different metrics_version"),
+    (None, _chunker(max_tokens=300), "different chunkers"),
+    (_chunker(version="0"), _chunker(version="0"), "not this code's"),
+    (None, lambda d: d["rows"][0]["ranked"].append("0" * 64), "not chunks of the store"),
+    (None, lambda d: _scored_row(d).update(metrics=None), "lack metrics"),
+], ids=["corpus", "split", "golden", "golden-changed", "metrics-version", "chunker",
+        "chunker-not-this-code", "unknown-chunk", "missing-metrics"])
+def test_p2_compare_refuses_runs_it_cannot_compare(tmp_path, p2fakes, capsys, edit_a,
+                                                   edit_b, match):
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-default")
+    store = systems.p2_store_dir(runner.load_config(), "mini")
+    assert phase2.compare(a["dir"], b["dir"], store)["corpus"] == "mini"  # as made: compared
+    for edit, run in ((edit_a, a), (edit_b, b)):
+        if edit is not None:
+            _set(run["dir"] / "retrieval.json", edit)
+    with pytest.raises(runner.RunError, match=match):
+        phase2.compare(a["dir"], b["dir"], store)
+    capsys.readouterr()
+    assert main(["p2-compare", str(a["dir"]), str(b["dir"]), "--store", str(store),
+                 "--out", str(tmp_path / "cmp")]) == 2
+    assert match in capsys.readouterr().err
+    assert not (tmp_path / "cmp").exists()
+
+
+def test_a_phase2_store_copy_that_loses_a_race_uses_the_winner_s(mini, p2config, p2fakes,
+                                                                 monkeypatch):
+    """Two builders copy the Phase 1 store at once: each copies into its own part
+    directory and renames it into place; the one that loses uses the winner's copy."""
+    import shutil
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    real = shutil.copytree
+    calls = []
+
+    def racing(src, dst, *a, **kw):
+        if Path(src) != p1.store_path:  # another copy (an index save)
+            return real(src, dst, *a, **kw)
+        calls.append(Path(dst))
+        if len(calls) == 1:  # another builder finishes its copy first
+            real(src, path, **kw)
+            (path / "winner").write_text("")
+        return real(src, dst, **kw)
+
+    monkeypatch.setattr(shutil, "copytree", racing)
+    p2 = build("p2-identity", mini, p2config)
+    assert calls and calls[0] != path and calls[0].parent == path.parent
+    assert (path / "winner").is_file() and p2.tools.store_path == path
+    assert (path / "HEAD").read_text() == (p1.store_path / "HEAD").read_text()
+    assert sorted(p.name for p in path.parent.iterdir()) == ["mini"]  # no part left
+
+
+def test_an_interrupted_phase2_store_copy_leaves_no_store(mini, p2config, p2fakes,
+                                                          monkeypatch):
+    import shutil
+
+    p1 = build("p1-struct-bc", mini, p2config)
+    path = Path(p2config["p2_store_dir"]) / "mini"
+    real = shutil.copytree
+
+    def failing(src, dst, *a, **kw):
+        if Path(src) != p1.store_path:
+            return real(src, dst, *a, **kw)
+        real(src, dst, *a, **kw)  # the whole copy, HEAD included, then the failure
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(shutil, "copytree", failing)
+    with pytest.raises(runner.RunError, match="no space left"):
+        build("p2-identity", mini, p2config)
+    assert not path.exists() and list(path.parent.iterdir()) == []
+    monkeypatch.setattr(shutil, "copytree", real)
+    assert build("p2-identity", mini, p2config).tools.store_path == path
+
+
+def test_the_recorded_corpora_need_a_committed_phase1_summary(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    p1 = SimpleNamespace(w=0.5, fingerprint="f" * 64, index=SimpleNamespace(
+        settings=SimpleNamespace(w_bc=1), snapshot="5" * 64))
+    monkeypatch.setattr(systems, "PHASE1_SUMMARIES", tmp_path / "none")
+    for corpus in ("gov", "research", "bench"):
+        with pytest.raises(runner.RunError, match=f"(?s)no committed.*{corpus}"):
+            systems._check_recorded(corpus, p1, lexical_only=False)
+        assert systems._check_recorded(corpus, p1, lexical_only=True) == []
+    assert systems._check_recorded("mini", p1, lexical_only=False) == []
+    monkeypatch.undo()
+    for corpus in systems.RECORDED_CORPORA:  # the committed summaries are there
+        assert list(systems.PHASE1_SUMMARIES.glob(
+            f"{corpus}-p1-struct-bc-*-retrieval-*/retrieval.json"))
+
+
+def test_p2_compare_says_when_the_store_has_no_overlay(tmp_path, p2fakes):
+    """Without a dedup or applicability overlay the counts that need it are None, and the
+    comparison says why (not silently)."""
+    import shutil
+
+    from adr_eval import phase2
+
+    a = _retrieval(tmp_path, "p1-struct-bc")
+    b = _retrieval(tmp_path, "p2-identity")
+    store = tmp_path / "store-copy"
+    shutil.copytree(systems.p2_store_dir(runner.load_config(), "mini"), store)
+    shutil.rmtree(store / "dedup")
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["dedup"] is None and c["slots"]["a"]["all"]["duplicate_slots"] is None
+    assert any("no dedup overlay" in n and "adr dedup build" in n for n in c["notes"])
+    md = phase2.render_compare_markdown(c)
+    assert "no dedup overlay" in md and "duplicate" in md
+    shutil.rmtree(store / "applicability")
+    c = phase2.compare(a["dir"], b["dir"], store)
+    assert c["applicability"] is None and c["slots"]["a"]["all"]["superseded_slots"] is None
+    assert any("no applicability overlay" in n for n in c["notes"])
+    # with both overlays there is nothing to say
+    full = phase2.compare(a["dir"], b["dir"], systems.p2_store_dir(runner.load_config(),
+                                                                   "mini"))
+    assert full["notes"] == []

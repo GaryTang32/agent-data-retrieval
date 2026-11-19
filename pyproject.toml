@@ -29,6 +29,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest==9.2.0", "ruff==0.17.4"]
+# the MCP server (`adr mcp`, Phase 2 spec §9.1): pinned exactly; the core install does not need it
+mcp = ["mcp==2.3.0"]
 
 [project.scripts]
 adr-eval = "adr_eval.cli:main"

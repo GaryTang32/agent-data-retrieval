@@ -37,6 +37,15 @@ class BM25Index:
         hits.sort(key=lambda h: (-h[1], h[0]))
         return hits[:k]
 
+    def scores(self, query: str):
+        """The raw BM25 score of every chunk for `query`, in build order (a numpy array), or
+        None when nothing can match (no indexable chunks or no query tokens). `search` ranks
+        these, rounded to 6 decimals, keeping the positive ones."""
+        q = tokenize(query)
+        if self._bm25 is None or not q:
+            return None
+        return self._bm25.get_scores(q)
+
     def config(self) -> dict:
         return {
             "library": "bm25s",

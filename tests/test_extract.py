@@ -82,3 +82,35 @@ def test_xml_inline_markup_does_not_split_words():
         "Note2 3",
         "next line",
     ]
+
+
+def test_html_extraction_survives_warnings_as_errors_without_pysocks():
+    """CI runs `pytest -W error` on a fresh install without PySocks. trafilatura imports
+    urllib3.contrib.socks, which then warns DependencyWarning; under -W error that warning
+    is an exception and broke test collection. We never use a SOCKS proxy, so extraction
+    must not depend on that optional import."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "class Block:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        "        if name == 'socks':\n"
+        "            raise ImportError('blocked for the test')\n"
+        "sys.meta_path.insert(0, Block())\n"
+        # pytest wraps each collected module in warnings.catch_warnings(): courlan's
+        # urllib3.disable_warnings() made during one module's import is undone before
+        # the next module imports trafilatura.downloads, which is what CI hit
+        "import warnings\n"
+        "with warnings.catch_warnings():\n"
+        "    import courlan\n"
+        "from adr_eval.corpora.extract import extract_text\n"
+        "body = b'Vessel inspection rules apply. ' * 20\n"
+        "html = b'<html><body><article><p>' + body + b'</p></article></body></html>'\n"
+        "assert 'Vessel inspection' in extract_text(html, 'html')\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-W", "error", "-c", code], capture_output=True, text=True
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]

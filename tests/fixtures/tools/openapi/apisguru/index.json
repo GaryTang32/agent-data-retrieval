@@ -1,0 +1,241 @@
+{
+  "candidates": 1521,
+  "commit": "aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809",
+  "license": "CC0-1.0",
+  "selection": "OpenAPI 3.x APIs of v2/list.json at the commit (preferred version, a v2/specs/.../openapi.json URL), ordered by SHA-256(\"adr-tools-openapi\\n\" + api key); fetched in that order, kept when under 200,000 bytes, JSON with openapi 3.x and at least one operation, until 20 were kept",
+  "skipped": [
+    {
+      "api": "clickmeter.com",
+      "path": "v2/specs/clickmeter.com/v2/openapi.json",
+      "reason": "297582 bytes"
+    },
+    {
+      "api": "amazonaws.com:ivs",
+      "path": "v2/specs/amazonaws.com/ivs/2020-07-14/openapi.json",
+      "reason": "203380 bytes"
+    },
+    {
+      "api": "googleapis.com:dataproc",
+      "path": "v2/specs/googleapis.com/dataproc/v1/openapi.json",
+      "reason": "285754 bytes"
+    },
+    {
+      "api": "github.com:ghec",
+      "path": "v2/specs/github.com/ghec/1.1.4/openapi.json",
+      "reason": "11994096 bytes"
+    },
+    {
+      "api": "amazonaws.com:eks",
+      "path": "v2/specs/amazonaws.com/eks/2017-11-01/openapi.json",
+      "reason": "376357 bytes"
+    },
+    {
+      "api": "mist.com",
+      "path": "v2/specs/mist.com/0.36.1/openapi.json",
+      "reason": "3387250 bytes"
+    },
+    {
+      "api": "amazonaws.com:mediapackage",
+      "path": "v2/specs/amazonaws.com/mediapackage/2017-10-12/openapi.json",
+      "reason": "246480 bytes"
+    },
+    {
+      "api": "amazonaws.com:snowball",
+      "path": "v2/specs/amazonaws.com/snowball/2016-06-30/openapi.json",
+      "reason": "208268 bytes"
+    },
+    {
+      "api": "meraki.com",
+      "path": "v2/specs/meraki.com/0.0.0-streaming/openapi.json",
+      "reason": "867509 bytes"
+    },
+    {
+      "api": "amazonaws.com:medialive",
+      "path": "v2/specs/amazonaws.com/medialive/2017-10-14/openapi.json",
+      "reason": "1020742 bytes"
+    }
+  ],
+  "source": "https://github.com/APIs-guru/openapi-directory (branch gh-pages)",
+  "specs": [
+    {
+      "api": "amazonaws.com:importexport",
+      "bytes": 95211,
+      "file": "amazonaws.com__importexport__2010-06-01.json",
+      "openapi": "3.0.0",
+      "sha256": "fd86f30dc8cfb4169ec7f314d15bd49f5d658930c4e9d265d0d12b4080012d81",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/amazonaws.com/importexport/2010-06-01/openapi.json",
+      "version": "2010-06-01"
+    },
+    {
+      "api": "amazonaws.com:runtime.lex.v2",
+      "bytes": 85854,
+      "file": "amazonaws.com__runtime.lex.v2__2020-08-07.json",
+      "openapi": "3.0.0",
+      "sha256": "b3c8dd83162d64d5fa53fa5a64611d63aebc8af0fe754001f9ee775e0d7b7108",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/amazonaws.com/runtime.lex.v2/2020-08-07/openapi.json",
+      "version": "2020-08-07"
+    },
+    {
+      "api": "amentum.space:gravity",
+      "bytes": 8792,
+      "file": "amentum.space__gravity__1.1.1.json",
+      "openapi": "3.0.0",
+      "sha256": "c265a82568ec2ad9f9a63a2ca5b6101f4a81a7a33ceb3550c2694badff635e13",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/amentum.space/gravity/1.1.1/openapi.json",
+      "version": "1.1.1"
+    },
+    {
+      "api": "apisetu.gov.in:hppanchayat",
+      "bytes": 37572,
+      "file": "apisetu.gov.in__hppanchayat__3.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "2535707951efd3ed7a153a81a81da6f3a4df885f19e8897e8e56a54e2445e6fe",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/apisetu.gov.in/hppanchayat/3.0.0/openapi.json",
+      "version": "3.0.0"
+    },
+    {
+      "api": "apisetu.gov.in:maxlifeinsurance",
+      "bytes": 38199,
+      "file": "apisetu.gov.in__maxlifeinsurance__3.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "d62ee21b76295791e3539b5c90ae1467dd6b2aece53feb2b48a94a285f948834",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/apisetu.gov.in/maxlifeinsurance/3.0.0/openapi.json",
+      "version": "3.0.0"
+    },
+    {
+      "api": "apisetu.gov.in:phedharyana",
+      "bytes": 43420,
+      "file": "apisetu.gov.in__phedharyana__3.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "60f3671671d73a7ce916eeef216b0265e10b5169ec65ce03e0f96e98777e11c0",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/apisetu.gov.in/phedharyana/3.0.0/openapi.json",
+      "version": "3.0.0"
+    },
+    {
+      "api": "apisetu.gov.in:tbse",
+      "bytes": 37945,
+      "file": "apisetu.gov.in__tbse__3.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "79ac51cc6f2ec660f64904f4dfa22ebf5fa48ede7dbcc73ad7600ef170008999",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/apisetu.gov.in/tbse/3.0.0/openapi.json",
+      "version": "3.0.0"
+    },
+    {
+      "api": "apisetu.gov.in:transport",
+      "bytes": 89782,
+      "file": "apisetu.gov.in__transport__3.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "8e15e26c98a7c16a763028b23ced512a5e01b4fa50d40a3bc87e6ae417b2d3e3",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/apisetu.gov.in/transport/3.0.0/openapi.json",
+      "version": "3.0.0"
+    },
+    {
+      "api": "clickup.com",
+      "bytes": 4443,
+      "file": "clickup.com__1.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "62e8866b8bf9147759442557b8457409582dad98967ee1377a8c400334d7156a",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/clickup.com/1.0.0/openapi.json",
+      "version": "1.0.0"
+    },
+    {
+      "api": "googleapis.com:lifesciences",
+      "bytes": 65122,
+      "file": "googleapis.com__lifesciences__v2beta.json",
+      "openapi": "3.0.0",
+      "sha256": "f85aaf3a50a14ab06a3b61c3b750d44243297d2303a0f7081d724ce83385261a",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/googleapis.com/lifesciences/v2beta/openapi.json",
+      "version": "v2beta"
+    },
+    {
+      "api": "googleapis.com:mybusinesslodging",
+      "bytes": 195691,
+      "file": "googleapis.com__mybusinesslodging__v1.json",
+      "openapi": "3.0.0",
+      "sha256": "3b27f30dee9f253c90d783a667043cb26d79166fe04b5834799284b8236b11e8",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/googleapis.com/mybusinesslodging/v1/openapi.json",
+      "version": "v1"
+    },
+    {
+      "api": "googleapis.com:playdeveloperreporting",
+      "bytes": 131087,
+      "file": "googleapis.com__playdeveloperreporting__v1beta1.json",
+      "openapi": "3.0.0",
+      "sha256": "a86832b0b70e09054e3d079f517c277ed0e8d7873f6a34d1edecf969e2d65777",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/googleapis.com/playdeveloperreporting/v1beta1/openapi.json",
+      "version": "v1beta1"
+    },
+    {
+      "api": "googleapis.com:secretmanager",
+      "bytes": 65615,
+      "file": "googleapis.com__secretmanager__v1beta1.json",
+      "openapi": "3.0.0",
+      "sha256": "a0fc6f0ac93e6482f611c25dc63ba8c0c055be9b17102fb8d083a4389b1180ae",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/googleapis.com/secretmanager/v1beta1/openapi.json",
+      "version": "v1beta1"
+    },
+    {
+      "api": "hubapi.com:auth",
+      "bytes": 11861,
+      "file": "hubapi.com__auth__v1.json",
+      "openapi": "3.0.1",
+      "sha256": "5f5c0d8785a5c61bfbe86609a6079ad7785e586a34c32a6154cc5d5a8febadc0",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/hubapi.com/auth/v1/openapi.json",
+      "version": "v1"
+    },
+    {
+      "api": "interzoid.com:getcitymatch",
+      "bytes": 3400,
+      "file": "interzoid.com__getcitymatch__1.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "8fbf532330e71d98f17ee402cb336e07173a8a08370812ff815c3a21de334c55",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/interzoid.com/getcitymatch/1.0.0/openapi.json",
+      "version": "1.0.0"
+    },
+    {
+      "api": "interzoid.com:getfullnameparsedmatch",
+      "bytes": 4082,
+      "file": "interzoid.com__getfullnameparsedmatch__1.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "eb5c1ad3f677933729212374ab7578e866673c42ec6175a1eff8dd2623c7e523",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/interzoid.com/getfullnameparsedmatch/1.0.0/openapi.json",
+      "version": "1.0.0"
+    },
+    {
+      "api": "interzoid.com:lookupareacode",
+      "bytes": 3506,
+      "file": "interzoid.com__lookupareacode__1.0.0.json",
+      "openapi": "3.0.0",
+      "sha256": "619a06be449447a306ebd5001d23fd670faa9589654855d45f898963053cae29",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/interzoid.com/lookupareacode/1.0.0/openapi.json",
+      "version": "1.0.0"
+    },
+    {
+      "api": "lgtm.com",
+      "bytes": 119083,
+      "file": "lgtm.com__v1.0.json",
+      "openapi": "3.0.1",
+      "sha256": "69a1c8a4de6c09fa1fa8ec54b55b0b43904c29b0d51d2f44a4246a2474af9ad0",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/lgtm.com/v1.0/openapi.json",
+      "version": "v1.0"
+    },
+    {
+      "api": "sportsdata.io:soccer-v3-scores",
+      "bytes": 72596,
+      "file": "sportsdata.io__soccer-v3-scores__1.0.json",
+      "openapi": "3.0.0",
+      "sha256": "f152ce23a6ad9b3826bf28b92903d05a10861f269c2265329ace1d933ad92fd6",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/sportsdata.io/soccer-v3-scores/1.0/openapi.json",
+      "version": "1.0"
+    },
+    {
+      "api": "telematicssdk.com",
+      "bytes": 199622,
+      "file": "telematicssdk.com__1.0.0.json",
+      "openapi": "3.0.3",
+      "sha256": "7e372257327045963b153de84f647c07ba587b156d1f430a5957c5c7517ddfac",
+      "source_uri": "https://raw.githubusercontent.com/APIs-guru/openapi-directory/aa43d9ae7f9594c1d5413f2596f3ef83ea9f3809/v2/specs/telematicssdk.com/1.0.0/openapi.json",
+      "version": "1.0.0"
+    }
+  ]
+}

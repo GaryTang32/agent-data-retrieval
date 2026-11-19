@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "AttributeRule": {
+      "additionalProperties": false,
+      "description": "An ordered attribute rule: documents it matches get exactly `access` (`[]`: no one).",
+      "properties": {
+        "access": {
+          "items": {
+            "pattern": "^(public|tenant:[a-z][a-z0-9-]*|group:[a-z][a-z0-9-]*/[0-9a-z-]+|user:[a-z][a-z0-9-]*)$",
+            "type": "string"
+          },
+          "title": "Access",
+          "type": "array"
+        },
+        "match": {
+          "$ref": "#/$defs/RuleMatch"
+        }
+      },
+      "required": [
+        "match",
+        "access"
+      ],
+      "title": "AttributeRule",
+      "type": "object"
+    },
+    "Bucket": {
+      "additionalProperties": false,
+      "description": "A row of the bucket table: buckets below `below` (and at or above the previous row's)\nget an access list of this kind.",
+      "properties": {
+        "access": {
+          "enum": [
+            "public",
+            "two_tenants",
+            "tenant",
+            "group"
+          ],
+          "title": "Access",
+          "type": "string"
+        },
+        "below": {
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Below",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "below",
+        "access"
+      ],
+      "title": "Bucket",
+      "type": "object"
+    },
+    "RuleMatch": {
+      "additionalProperties": false,
+      "description": "What an attribute rule matches: every condition given must hold.",
+      "properties": {
+        "format": {
+          "anyOf": [
+            {
+              "enum": [
+                "md",
+                "txt",
+                "html",
+                "xml",
+                "pdf",
+                "json",
+                "csv"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "uri_prefix": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uri Prefix"
+        }
+      },
+      "title": "RuleMatch",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The assignment policy (§5.2): the salt of every hash, the sync limits (F3), the\nattribute rules (applied first, in order) and the bucket table.",
+  "properties": {
+    "buckets": {
+      "items": {
+        "$ref": "#/$defs/Bucket"
+      },
+      "minItems": 1,
+      "title": "Buckets",
+      "type": "array"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "future_skew_s": {
+      "minimum": 0,
+      "title": "Future Skew S",
+      "type": "integer"
+    },
+    "max_sync_age_s": {
+      "exclusiveMinimum": 0,
+      "title": "Max Sync Age S",
+      "type": "integer"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/AttributeRule"
+      },
+      "title": "Rules",
+      "type": "array"
+    },
+    "salt": {
+      "minLength": 1,
+      "title": "Salt",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format_version",
+    "salt",
+    "max_sync_age_s",
+    "future_skew_s",
+    "rules",
+    "buckets"
+  ],
+  "title": "AclPolicy",
+  "type": "object"
+}

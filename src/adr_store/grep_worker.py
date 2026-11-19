@@ -25,15 +25,20 @@ from multiprocessing.connection import Connection
 DONE, MORE, EMPTY = "done", "more", "empty"
 
 
-def scan(rx: re.Pattern, docs: list[tuple[str, str]], limit: int):
-    """The matches of `rx` in `docs` ((doc_id, text), scanned in the given order), in offset
-    order within a document, at most `limit`: ([(doc_id, start, end, line)], status). `line`
-    is 1 plus the number of `\\n` before the match. The scan stops at the first match after
-    `limit` (MORE) or at a zero-width match (EMPTY)."""
+def scan(rx: re.Pattern, docs: list[tuple], limit: int):
+    """The matches of `rx` in `docs` ((doc_id, text) or (doc_id, text, skip), scanned in the
+    given order), in offset order within a document, at most `limit`: ([(doc_id, start, end,
+    line)], status). `line` is 1 plus the number of `\\n` before the match. Matches that start
+    before `skip` are passed over (a later page of the same scan: the document is scanned
+    from its start, so the matches after `skip` are exactly the scan's). The scan stops at
+    the first match after `limit` (MORE) or at a zero-width match (EMPTY)."""
     out: list[tuple[str, int, int, int]] = []
-    for doc_id, text in docs:
+    for doc_id, text, *rest in docs:
+        skip = rest[0] if rest else 0
         line, counted = 1, 0  # line number at offset `counted`
         for m in rx.finditer(text):
+            if m.start() < skip and m.start() != m.end():
+                continue
             if len(out) == limit:
                 return out, MORE
             if m.start() == m.end():

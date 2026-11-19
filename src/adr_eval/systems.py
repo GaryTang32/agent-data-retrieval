@@ -1,6 +1,9 @@
 """System registry: a name maps to a builder of one retrieval system over one corpus.
 
-A built system has `retrieve(question) -> [(chunk_id, score)]` (the top 10, best first),
+A built system has `retrieve(question) -> [(chunk_id, score)]` (the top 10, best first; a
+system with `accepts_as_of` takes `retrieve(question, as_of)` and says with
+`applied_as_of(as_of)` which date its search applied, None for none: what a run's row
+records as `as_of`),
 `chunks` (chunk id -> `Chunk`), `fingerprint`, `w` (the tuned linear weight, or None),
 `source` ("loaded" or "built": where its index came from) and `run_config()` (the
 "retrieval" block of a run's config).
@@ -20,7 +23,29 @@ With `lexical_only=True` a system keeps only its BM25 channel (no embedding, no 
 Phase 1 system still tunes `w_bc` on BM25 alone): a cheap diagnostic, recorded as such in the
 run config; its fingerprint differs from the full system's.
 
-This module is the harness's only entry to `adr_store` (plan, shared rules).
+- `p2-identity`, `p2-appl`, `p2-dedup`, `p2-default`: the Phase 2 configurations (Phase 2
+  spec §10.1). Each builds `p1-struct-bc` through this registry (its dev tuning gives `w_bc`
+  and `w`), requires every committed `p1-struct-bc` retrieval summary of the corpus
+  (`PHASE1_SUMMARIES`) to show the same `w`, `w_bc`, store snapshot and fingerprint, copies
+  the Phase 1 store to `<p2_store_dir>/<corpus>` (default `.cache/store-p2`) when missing,
+  derives the applicability and dedup overlays there when missing, activates `p1-struct-bc`
+  with those weights through `adr_store.tools.Tools` (its fingerprint must be the Phase 1
+  system's) and searches through `Tools.search` with the configuration's filters and dedup.
+  They take `retrieve(question, as_of)`: the configurations with `as_of` search a dated item
+  with `Filters(as_of=...)`. They are registered apart (`P2_NAMES`); `NAMES` stays the Phase
+  0/1 systems and `ALL_NAMES` is both. With `config["p2_caller"]` (config/eval.json: the
+  measured caller `user:auditor`, Phase 2 Task 8) they search through the ACL layer
+  (`Tools(acl=True, caller=...)`) as that caller; indexing and the index's chunks stay
+  operator calls without it. The caller's access is resolved once at build (a store without
+  a fresh ACL snapshot is refused: run `adr acl sync --store <p2 store>`) and recorded in
+  the run config (`acl`); every search resolves it again. Without `p2_caller` (None, the
+  2A runs and the tests' default) they search without the ACL layer. `p2-identity` never
+  uses `p2_caller`: it is every Phase 2 layer off, the ACL layer included, so it keeps the
+  Phase 1 matrix-product dense path (the ACL layer's row-exact kernel may differ in the last
+  float32 bits) and criterion A5 holds bit for bit.
+
+This module is the harness's only entry to `adr_store` for the Phase 0/1 harness modules
+(plan, shared rules).
 """
 
 from __future__ import annotations
@@ -39,6 +64,7 @@ from adr_eval.retrieval.fusion import _GRID, linear
 from adr_eval.retrieval.index import _CHANNEL_K, RRF_K, TOP_N, HybridIndex
 from adr_eval.retrieval.lexical import BM25Index
 from adr_eval.scoring.retrieval_metrics import ndcg_at_k
+from adr_store.applicability import Filters
 
 W_BC_GRID = (0, 1, 2, 3)
 Groups = dict[str, list[list[Evidence]]]
@@ -144,6 +170,33 @@ def store_dir(config: dict, corpus: str) -> Path:
     return runner.REPO_ROOT / config.get("store_dir", ".cache/store") / corpus
 
 
+def _checked_store(path: Path, loaded: LoadedCorpus, again: str):
+    """The store at `path` (None without HEAD), refused when another parser or extractor made
+    it or a document's stored text differs from the corpus's (`again`: how the fix makes it
+    anew, "ingested" or "copied")."""
+    from adr_store.records import sha256_text
+    from adr_store.store import EXTRACTOR, Store
+    from adr_store.structure import PARSER
+
+    if not (path / "HEAD").is_file():
+        return None
+    store = Store.open(path)
+    snap = json.loads((path / "snapshots" / f"{store.snapshot_id}.json").read_bytes())
+    if (snap["parser"], snap["extractor"]) != (PARSER, EXTRACTOR):
+        raise runner.RunError(
+            f"{path}: store made by {snap['parser']} / {snap['extractor']}, the code is "
+            f"{PARSER} / {EXTRACTOR}\nfix: remove {path} so that it is {again} again")
+    held = set(store.doc_ids())
+    differ = [d for d in sorted(d.doc_id for d in loaded.manifest.documents) if d in held
+              and store.source(d).text_sha256 != sha256_text(loaded.docs[d].text)]
+    if differ:
+        raise runner.RunError(
+            f"{path}: the stored text of {len(differ)} document(s) differs from the "
+            f"corpus's (e.g. {differ[0]}); the corpus's text extraction changed\nfix: "
+            f"remove {path} so that it is {again} again")
+    return store
+
+
 def ensure_store(corpus: str, loaded: LoadedCorpus, config: dict):
     """The corpus's evidence store, ingested (through the `adr_store` API) when it is missing
     or its snapshot does not hold exactly the corpus's documents; returns (store, how).
@@ -152,29 +205,13 @@ def ensure_store(corpus: str, loaded: LoadedCorpus, config: dict):
     from the text the corpus gives it (text SHA-256; the store's files are addressed by doc
     id, so it cannot take the new text in place), is refused with the fix: remove it."""
     from adr_store.cli import UNKNOWN_LICENSES, compile_figures
-    from adr_store.records import sha256_text
-    from adr_store.store import EXTRACTOR, ConformanceError, Store, write_atomic
-    from adr_store.structure import PARSER
+    from adr_store.store import ConformanceError, Store, write_atomic
 
     path = store_dir(config, corpus)
     want = sorted(d.doc_id for d in loaded.manifest.documents)
-    if (path / "HEAD").is_file():
-        store = Store.open(path)
-        snap = json.loads((path / "snapshots" / f"{store.snapshot_id}.json").read_bytes())
-        if (snap["parser"], snap["extractor"]) != (PARSER, EXTRACTOR):
-            raise runner.RunError(
-                f"{path}: store made by {snap['parser']} / {snap['extractor']}, the code is "
-                f"{PARSER} / {EXTRACTOR}\nfix: remove {path} so that it is ingested again")
-        held = set(store.doc_ids())
-        differ = [d for d in want if d in held
-                  and store.source(d).text_sha256 != sha256_text(loaded.docs[d].text)]
-        if differ:
-            raise runner.RunError(
-                f"{path}: the stored text of {len(differ)} document(s) differs from the "
-                f"corpus's (e.g. {differ[0]}); the corpus's text extraction changed\nfix: "
-                f"remove {path} so that it is ingested again")
-        if store.doc_ids() == want:
-            return store, "loaded"
+    store = _checked_store(path, loaded, "ingested")
+    if store is not None and store.doc_ids() == want:
+        return store, "loaded"
     store = Store.create(path)
     added, failures = [], []
     for d in sorted(loaded.manifest.documents, key=lambda d: d.doc_id):
@@ -326,19 +363,295 @@ def _store_system(name: str):
     return build
 
 
+# -- Phase 2 configurations (Phase 2 spec §10.1) ------------------------------------------
+
+P2_REFERENCE = "p1-struct-bc"  # the Phase 1 system whose index and weights they reuse
+PHASE1_SUMMARIES = runner.REPO_ROOT / "results" / "phase1" / "run-summaries"
+RECORDED_CORPORA = ("gov", "research", "bench")  # Phase 1 recorded these; mini is a fixture
+
+
+@dataclass(frozen=True)
+class P2Spec:
+    """A Phase 2 configuration: the applicability filters of every search, whether a
+    `policy_asof` item's own date replaces them (`Filters(as_of=item.as_of)`), and dedup."""
+
+    filters: Filters
+    as_of: bool
+    dedup: bool
+
+
+P2_SPECS = {
+    "p2-identity": P2Spec(Filters(include_superseded=True), as_of=False, dedup=False),
+    "p2-appl": P2Spec(Filters(), as_of=True, dedup=False),
+    "p2-dedup": P2Spec(Filters(include_superseded=True), as_of=False, dedup=True),
+    "p2-default": P2Spec(Filters(), as_of=True, dedup=True),
+}
+
+
+def p2_store_dir(config: dict, corpus: str) -> Path:
+    """The scratch copy of the corpus's store the Phase 2 systems use (never the Phase 1
+    store itself)."""
+    return runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2") / corpus
+
+
+@dataclass
+class P2System:
+    """A Phase 2 configuration over the p2 store: `p1-struct-bc`'s index and weights, searched
+    through `adr_store.tools.Tools` with the configuration's filters and dedup."""
+
+    name: str
+    spec: P2Spec
+    tools: object  # adr_store.tools.Tools over the p2 store, its active index p1-struct-bc's
+    phase1: StoreSystem
+    source: str
+    applicability: str | None
+    dedup: str | None
+    recorded: list[str]
+    caller: str | None = None
+    searcher: object = None  # the Tools that searches: `tools`, or with a caller the ACL layer's
+    acl: dict | None = None  # the caller's access at build (ACL snapshot, sequence, view)
+    accepts_as_of = True
+
+    def __post_init__(self):
+        if self.searcher is None:
+            self.searcher = self.tools
+
+    @property
+    def w(self) -> float | None:
+        return self.phase1.w
+
+    @property
+    def chunks(self) -> dict[str, Chunk]:
+        return self.tools.active_index().chunks
+
+    @property
+    def fingerprint(self) -> str:
+        return self.tools.active_index().fingerprint
+
+    def filters_for(self, as_of=None) -> Filters:
+        if self.spec.as_of and as_of is not None:
+            return Filters(as_of=as_of)
+        return self.spec.filters
+
+    def applied_as_of(self, as_of=None):
+        """The date the search of `retrieve(question, as_of)` applies (None: the
+        configuration's own filters, which name none)."""
+        return self.filters_for(as_of).as_of
+
+    def retrieve(self, question: str, as_of=None) -> list[tuple[str, float]]:
+        res = self.searcher.search(question, top=TOP_N, filters=self.filters_for(as_of),
+                                   dedup=self.spec.dedup)
+        return [(h.chunk_id, h.score) for h in res.hits]
+
+    def run_config(self) -> dict:
+        return {**self.phase1.run_config(),
+                "store": runner._display_path(self.tools.store_path),
+                "store_snapshot": self.tools.snapshot,
+                "phase1_system": P2_REFERENCE,
+                "phase1_store": runner._display_path(self.phase1.store_path),
+                "phase1_recorded": self.recorded,
+                "caller": self.caller, "acl": self.acl,
+                "filters": self.spec.filters.to_dict(), "as_of_from_item": self.spec.as_of,
+                "applicability": self.applicability,
+                "dedup": self.dedup if self.spec.dedup else None,
+                "dedup_overlay": self.dedup}
+
+
+def phase1_summaries(corpus: str) -> list[Path]:
+    """The committed `p1-struct-bc` retrieval summaries of `corpus` (dev, then test)."""
+    return [path for split in ("dev", "test") for path in sorted(PHASE1_SUMMARIES.glob(
+        f"{corpus}-{P2_REFERENCE}-{split}-retrieval-*/retrieval.json"))]
+
+
+def phase1_fingerprints(corpus: str) -> set[str]:
+    """The index fingerprints of the committed `p1-struct-bc` retrieval summaries of
+    `corpus` (the Phase 1 index the Phase 2 configurations and probes must search)."""
+    return {json.loads(p.read_text(encoding="utf-8"))["config"]["fingerprint"]
+            for p in phase1_summaries(corpus)}
+
+
+def _check_recorded(corpus: str, p1: StoreSystem, lexical_only: bool) -> list[str]:
+    """The committed `p1-struct-bc` retrieval summaries of `corpus` that the rebuilt system
+    reproduces (`w`, `w_bc`, store snapshot, fingerprint); any other is a `RunError`, and so
+    is a corpus of `RECORDED_CORPORA` with none (mini and other fixtures have none). A
+    lexical-only build is compared with none (the recorded runs are full ones)."""
+    if lexical_only:
+        return []
+    got = {"w": p1.w, "w_bc": p1.index.settings.w_bc, "store_snapshot": p1.index.snapshot,
+           "fingerprint": p1.fingerprint}
+    checked = []
+    paths = phase1_summaries(corpus)
+    if not paths and corpus in RECORDED_CORPORA:
+        raise runner.RunError(
+            f"no committed {P2_REFERENCE} retrieval summary of {corpus} under "
+            f"{PHASE1_SUMMARIES} ({corpus}-{P2_REFERENCE}-<split>-retrieval-*/retrieval.json):"
+            f" the Phase 2 configurations must reproduce a recorded Phase 1 run\nfix: restore "
+            f"results/phase1/run-summaries from git")
+    for path in paths:
+        cfg = json.loads(path.read_text(encoding="utf-8"))["config"]
+        want = {"w": cfg["w"], "w_bc": cfg["settings"]["w_bc"],
+                "store_snapshot": cfg["settings"]["store_snapshot"],
+                "fingerprint": cfg["fingerprint"]}
+        differ = [f"{k} {want[k]!r} recorded, {got[k]!r} rebuilt" for k in want
+                  if want[k] != got[k]]
+        if differ:
+            raise runner.RunError(
+                f"{path.parent.name}: the rebuilt {P2_REFERENCE} does not reproduce the "
+                f"recorded run: {'; '.join(differ)}\nfix: restore the Phase 1 store and "
+                f"index the run was made with")
+        checked.append(path.parent.name)
+    return checked
+
+
+def _copy_store(src: Path, path: Path) -> None:
+    """Copy the store at `src` to `path` atomically: into `.<name>.part-<pid>` beside it,
+    then one rename, so `path` is either missing or a whole copy. A builder whose rename
+    finds `path` already there (another one copied it meanwhile) uses that copy; the part
+    directory is removed in every case."""
+    import os
+    import shutil
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.parent / f".{path.name}.part-{os.getpid()}"
+    shutil.rmtree(part, ignore_errors=True)  # left by a killed process of this pid
+    try:
+        try:
+            shutil.copytree(src, part, symlinks=True)
+        except OSError as e:
+            raise runner.RunError(f"{path}: copying the Phase 1 store {src} failed: {e}") \
+                from e
+        try:
+            os.rename(part, path)
+        except OSError as e:
+            if not (path / "HEAD").is_file():
+                raise runner.RunError(f"{path}: could not move the copy {part} into place: "
+                                      f"{e}\nfix: remove {path} so that it is copied again") \
+                    from e
+            # another builder's whole copy won the race: use it (checked by the caller)
+    finally:
+        shutil.rmtree(part, ignore_errors=True)
+
+
+def _p2_store(corpus: str, loaded: LoadedCorpus, config: dict, p1: StoreSystem):
+    """The p2 store, copied from the Phase 1 store when missing (`_copy_store`) and checked
+    as `ensure_store` checks a store; it must hold the corpus's documents at the snapshot of
+    the Phase 1 index."""
+    path = p2_store_dir(config, corpus)
+    if not (path / "HEAD").is_file():
+        if path.exists():
+            raise runner.RunError(f"{path}: exists but holds no store (no HEAD)\nfix: remove "
+                                  f"{path} so that it is copied again")
+        _copy_store(p1.store_path, path)
+    store = _checked_store(path, loaded, "copied")
+    want = sorted(d.doc_id for d in loaded.manifest.documents)
+    if store.doc_ids() != want or store.snapshot_id != p1.index.snapshot:
+        raise runner.RunError(
+            f"{path}: holds other documents or another snapshot ({store.snapshot_id[:12]}) "
+            f"than the Phase 1 store ({p1.index.snapshot[:12]})\nfix: remove {path} so "
+            f"that it is copied again")
+    return store
+
+
+def _ensure_overlays(store, idx) -> tuple[str, str]:
+    """(applicability overlay id, dedup overlay id) of the p2 store, derived and written
+    when missing (write-once, as `adr applicability derive` and `adr dedup build`)."""
+    from adr_store import applicability, dedup
+    from adr_store.cli import GOV_CONFIG
+    from adr_store.retrieval.index import chunk_content_sha256
+
+    app = applicability.load_overlay(store.path, store.snapshot_id)
+    if app is None:
+        overlay, report = applicability.derive(
+            store, json.loads(GOV_CONFIG.read_text(encoding="utf-8")))
+        applicability.write_overlay(store.path, overlay)
+        applicability.write_report(store.path, report)
+        app = applicability.load_overlay(store.path, store.snapshot_id)
+    content = chunk_content_sha256(idx.chunks.values())
+    dd = dedup.load_overlay(store.path, store.snapshot_id, idx.chunker, content)
+    if dd is None:
+        dedup.write_overlay(store.path, dedup.build(list(idx.chunks.values()), idx.snapshot,
+                                                    idx.chunker))
+        dd = dedup.load_overlay(store.path, store.snapshot_id, idx.chunker, content)
+    return app.overlay_id, dd.overlay_id
+
+
+def _acl_searcher(path: Path, emb: Path, caller: str | None) -> tuple[object, dict | None]:
+    """(the Tools that searches as `caller` through the ACL layer, the caller's access now
+    as recorded in the run config), or (None, None) without a caller. A denial (no or a
+    stale ACL snapshot, an unknown caller) is a RunError before any item is searched."""
+    if caller is None:
+        return None, None
+    from adr_store import acl
+    from adr_store.tools import ToolError, Tools
+
+    searcher = Tools(path, emb_cache=emb, acl=True, caller=caller)
+    try:
+        access = searcher._access()
+    except ToolError as e:
+        raise runner.RunError(f"{path}: searching as {caller}: {e}\nfix: run `adr acl sync "
+                              f"--store {path}` (the ACL snapshot must be for the store's "
+                              f"HEAD and at most max_sync_age_s old)") from e
+    snap = acl.read_head(path)[1]
+    return searcher, {"acl_snapshot": access.acl_snapshot, "sequence": snap.sequence,
+                      "synced_at": snap.synced_at.isoformat(), "view": access.view,
+                      "principals": list(access.principals),
+                      "visible_docs": len(access.docs),
+                      "store_docs": len(searcher.store.doc_ids())}
+
+
+def _p2_system(name: str):
+    spec = P2_SPECS[name]
+
+    def build(corpus: str, loaded: LoadedCorpus, items: list[GoldenItem], groups: Groups,
+              config: dict, *, rebuild: bool = False, lexical_only: bool = False) -> P2System:
+        from adr_store.tools import ToolError, Tools
+
+        p1 = REGISTRY[P2_REFERENCE](corpus, loaded, items, groups, config, rebuild=rebuild,
+                                    lexical_only=lexical_only)
+        recorded = _check_recorded(corpus, p1, lexical_only)
+        store = _p2_store(corpus, loaded, config, p1)
+        emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+        try:
+            tools = Tools(store.path, emb_cache=emb)
+            info = tools.index(P2_REFERENCE, lexical_only=lexical_only,
+                               w_bc=p1.index.settings.w_bc,
+                               weight=None if lexical_only else p1.w)
+        except ToolError as e:
+            raise runner.RunError(f"{store.path}: {e}") from e
+        if info.fingerprint != p1.fingerprint:
+            raise runner.RunError(
+                f"{store.path}: the index of {P2_REFERENCE} there has fingerprint "
+                f"{info.fingerprint[:12]}, the Phase 1 system's is {p1.fingerprint[:12]}\n"
+                f"fix: remove {store.path} so that it is copied again")
+        app_id, dedup_id = _ensure_overlays(store, tools.active_index())
+        # p2-identity is every Phase 2 layer off, the ACL layer included (ruling, Task 8 fix
+        # round): it keeps the Phase 1 matrix-product path, so A5 holds bit for bit
+        caller = None if name == "p2-identity" else config.get("p2_caller")
+        searcher, access = _acl_searcher(store.path, emb, caller)
+        return P2System(name, spec, tools, p1, info.source, app_id, dedup_id, recorded,
+                        caller=caller, searcher=searcher, acl=access)
+
+    return build
+
+
 Builder = Callable[..., object]
 REGISTRY: dict[str, Builder] = {
     "baseline-rrf": _baseline("baseline-rrf"),
     "baseline-linear": _baseline("baseline-linear"),
     **{name: _store_system(name) for name in SPECS},
 }
-NAMES = tuple(REGISTRY)
+NAMES = tuple(REGISTRY)  # the Phase 0 and Phase 1 systems
+P2_REGISTRY: dict[str, Builder] = {name: _p2_system(name) for name in P2_SPECS}
+P2_NAMES = tuple(P2_REGISTRY)
+ALL_NAMES = (*NAMES, *P2_NAMES)
 
 
 def build(name: str, corpus: str, loaded: LoadedCorpus, items: list[GoldenItem],
           groups: Groups, config: dict, *, rebuild: bool = False, lexical_only: bool = False):
     """Build the system `name` for `corpus`; `items` are all golden items (dev ones tune)."""
-    if name not in REGISTRY:
-        raise runner.RunError(f"unknown system {name!r}; expected one of {', '.join(NAMES)}")
-    return REGISTRY[name](corpus, loaded, items, groups, config, rebuild=rebuild,
-                          lexical_only=lexical_only)
+    builder = REGISTRY.get(name) or P2_REGISTRY.get(name)
+    if builder is None:
+        raise runner.RunError(f"unknown system {name!r}; expected one of "
+                              f"{', '.join(ALL_NAMES)}")
+    return builder(corpus, loaded, items, groups, config, rebuild=rebuild,
+                   lexical_only=lexical_only)

@@ -56,8 +56,16 @@ def _isolate_writable_state(writable_state, monkeypatch):
     """Keep tests from writing the repo's .cache/: the shipped config's index, LLM cache, store
     and embedding cache dirs and DenseIndex's default embedding cache point at the session
     directory instead.
+    The Phase 2 harness's store copies (`p2_store_dir`) and the default output root of
+    `adr-eval p2-compare` and `adr-eval probes` go there too, and the Phase 2 configurations
+    search without a caller (`p2_caller` None; the shipped config measures `user:auditor`)
+    unless a test opts in. The ACL probes' view stores and clones go there too.
     The `adr` tools' default embedding cache and `StoreIndex`'s default one point there too,
     and so does the store directory `adr --corpus <name>` and `adr index <name>` use.
+    The default tools-only store of `adr tools ingest --toolret`, and the ToolRet data
+    directory (`data/tools`) and manifest (`corpora/tools/manifest.json`) that
+    `adr-eval tools-fetch` writes, go there too, and so does the default output root of
+    `adr-eval tools-retrieval`.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -71,6 +79,7 @@ def _isolate_writable_state(writable_state, monkeypatch):
         return {**real_load_config(path), "index_dir": str(writable_state / "index"),
                 "cache_dir": str(writable_state / "llm"),
                 "store_dir": str(writable_state / "store"),
+                "p2_store_dir": str(writable_state / "store-p2"), "p2_caller": None,
                 "embedding_cache_dir": str(writable_state / "emb-store")}
 
     monkeypatch.setattr(runner, "load_config", load_config)
@@ -79,11 +88,24 @@ def _isolate_writable_state(writable_state, monkeypatch):
                         (model_name, writable_state / "emb", model_cache_dir))
     tools_emb = writable_state / "emb-tools"
     monkeypatch.setattr(tools, "DEFAULT_EMB_CACHE", tools_emb)
-    monkeypatch.setattr(tools.Tools.__init__, "__kwdefaults__", {"emb_cache": tools_emb})
+    monkeypatch.setattr(tools.Tools.__init__, "__kwdefaults__",
+                        {**tools.Tools.__init__.__kwdefaults__, "emb_cache": tools_emb})
     monkeypatch.setattr(tools.make_embedding_cache, "__defaults__", (tools_emb,))
     monkeypatch.setattr(store_index, "_default_cache",
                         lambda: EmbeddingCache(writable_state / "emb-store-index"))
     monkeypatch.setattr(cli, "STORE_ROOT", writable_state / "cli-store")
+    monkeypatch.setattr(cli, "TOOL_STORE", writable_state / "store-p2-toolret")
+    from adr_eval.corpora import toolret
+
+    monkeypatch.setattr(toolret, "DATA_DIR", writable_state / "data-tools")
+    monkeypatch.setattr(toolret, "MANIFEST_PATH", writable_state / "tools-manifest.json")
+    from adr_eval import phase2, probes
+
+    monkeypatch.setattr(phase2, "OUT_ROOT", writable_state / "runs")
+    monkeypatch.setattr(probes, "OUT_ROOT", writable_state / "runs")
+    from adr_eval import tools_eval
+
+    monkeypatch.setattr(tools_eval, "OUT_ROOT", writable_state / "runs")
 
 
 @pytest.fixture
