@@ -3,8 +3,8 @@
 > **Status: work in progress.** This repository is under active development and is not
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
 > harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, and Phase 2:
-> applicability filters, permissions, tools as data and an MCP server. Phases 3–6 are not built
-> yet. Interfaces, file formats and results may change without notice.
+> applicability filters, permissions, tools as data and an MCP server. Phase 3 is being designed;
+> Phases 3–6 are not built yet. Interfaces, file formats and results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -46,8 +46,8 @@ Two terms are used precisely:
 flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
     P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
-    P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ built and measured"]
-    P3["Phase 3<br/>Typed database"]
+    P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ merged"]
+    P3["Phase 3<br/>Typed database<br/>🔄 in design"]
     P4["Phase 4<br/>Knowledge units"]
     P5["Phase 5<br/>Graph and<br/>navigation"]
     P6["Phase 6<br/>Closed loop and<br/>governance"]
@@ -59,15 +59,16 @@ flowchart LR
     classDef active fill:#fff1cc,stroke:#a86b00,color:#4a3000
     classDef todo fill:#eef0f4,stroke:#8a93a6,color:#3a4152
     class P0,P1,P2 done
-    class P3,P4,P5,P6 todo
+    class P3 active
+    class P4,P5,P6 todo
 ```
 
 | Phase | What it delivers | Status | Steps done | Progress |
 |---|---|---|---|---|
 | 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
 | 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | ✅ Built and measured ([results](results/phase1/README.md)) | 6 of 6 | `██████████` |
-| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Built and measured ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
-| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | Not started | – | `░░░░░░░░░░` |
+| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Merged (#7) ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
+| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | 🔄 In design | – | `░░░░░░░░░░` |
 | 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
 | 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
 | 6. Closed loop and governance | Audits, gap mining, exporters, a public harness | Not started | – | `░░░░░░░░░░` |
@@ -121,8 +122,8 @@ design targets taken from the research, not results.
 |---|---|---|
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
 | **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **Built and measured.** Three exit criteria met, one partly (no bounding boxes), one deferred (parse routing needs layout models), one not applicable. Retrieval is level with the baseline, which stays the reference ([results](results/phase1/README.md)) |
-| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Built and measured.** All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
-| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | Not started |
+| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Merged** (#7). All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
+| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | In design |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
 | **5. Graph and navigation layers** | Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy. Each layer is kept only if it beats the earlier phases on accuracy or tokens. | Not started |
 | **6. Closed loop, interoperability and governance** | Gap mining and audits, spec v1.0, exporters to external catalogs and graph stores, a public neutral harness. | Not started |
