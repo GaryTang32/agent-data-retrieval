@@ -43,7 +43,16 @@ def _xml_text(data: bytes) -> str:
 
 
 def _html_text(data: bytes) -> str:
-    import trafilatura
+    import warnings
+
+    from urllib3.exceptions import DependencyWarning
+
+    # trafilatura.downloads imports urllib3.contrib.socks, which warns when PySocks is
+    # absent. Nothing here uses a SOCKS proxy, so that one warning is ignored, and only
+    # during the import: under `-W error` it would otherwise break the import.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=DependencyWarning)
+        import trafilatura
 
     return (
         trafilatura.extract(
