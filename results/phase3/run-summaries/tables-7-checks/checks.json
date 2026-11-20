@@ -1,13 +1,13 @@
 {
- "note": "Task 7: every table probe set run twice in fresh processes (the second with the committed code); per-item results.json and probes.json compared byte for byte (not committed: runs/).",
+ "note": "Task 7: every table probe set run twice in fresh processes (the second with the committed code); per-item results.json and probes.json compared byte for byte (not committed: runs/). Fix round 1 (b6044ef) re-ran applicability-gov, failclosed-gov/research, leak-gov/research and mcp-gov twice; the other sets are unchanged by it.",
  "pairs": {
   "applicability-gov": {
-   "first": "probes-tables-applicability-gov-20261120T185701",
+   "first": "probes-tables-applicability-gov-20261120T194713",
    "probes_identical": true,
    "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
    "results_identical": true,
    "results_sha256": "dc6258e814cc29f899dcc1d36c6f354c9763cbe8ddba13acf36e2bc9e467a40b",
-   "second": "probes-tables-applicability-gov-20261120T191553"
+   "second": "probes-tables-applicability-gov-20261120T195142"
   },
   "equivalence-bench": {
    "first": "probes-tables-equivalence-bench-20261120T190302",
@@ -42,44 +42,44 @@
    "second": "probes-tables-equivalence-tools-20261120T193152"
   },
   "failclosed-gov": {
-   "first": "probes-tables-failclosed-gov-20261120T185721",
+   "first": "probes-tables-failclosed-gov-20261120T194723",
    "probes_identical": true,
-   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "probes_sha256": "528d6e6cf2162cea2d8a8a74a10e0229535c6af797acd8ed5ef02b979c37bb36",
    "results_identical": true,
-   "results_sha256": "95a1f789e4f5c287ee6ac0dc8ca6158fe4e0c4f92a64d83202d28221345338f7",
-   "second": "probes-tables-failclosed-gov-20261120T191603"
+   "results_sha256": "0b48f6ef69d20dfb2d65ae2f71038c13e9fd4929e2d64c895a1527e726e49c27",
+   "second": "probes-tables-failclosed-gov-20261120T195154"
   },
   "failclosed-research": {
-   "first": "probes-tables-failclosed-research-20261120T185735",
+   "first": "probes-tables-failclosed-research-20261120T194732",
    "probes_identical": true,
-   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "probes_sha256": "bfb8a9f4bd7220e8b595f8125bf08ae65283dc2d0fb542269677eb43b1316dcd",
    "results_identical": true,
-   "results_sha256": "95a1f789e4f5c287ee6ac0dc8ca6158fe4e0c4f92a64d83202d28221345338f7",
-   "second": "probes-tables-failclosed-research-20261120T191612"
+   "results_sha256": "32c183fd5adb4c2a1226946b988c2ac48438b1d281bf35123504d8e8b8d18b2a",
+   "second": "probes-tables-failclosed-research-20261120T195204"
   },
   "leak-gov": {
-   "first": "probes-tables-leak-gov-20261120T185832",
+   "first": "probes-tables-leak-gov-20261120T194807",
    "probes_identical": true,
-   "probes_sha256": "34fe8e27b25d9a0b559c4191e9b43fbb5f8fc0e6da034c965486be9dfcbffe8a",
+   "probes_sha256": "04644aebc0de9eac86636e65050bd38524fa6fb057bd0e7d748c8b2b6e26e706",
    "results_identical": true,
-   "results_sha256": "69e5319d38ad29af3e2f4c3c7ee470b321d0bdc489976449c5feb385a0942a65",
-   "second": "probes-tables-leak-gov-20261120T191648"
+   "results_sha256": "cd69ad5fc9970b45d4274c85f4195bdca8123d98e2892b776269cb6a2f49adc0",
+   "second": "probes-tables-leak-gov-20261120T195243"
   },
   "leak-research": {
-   "first": "probes-tables-leak-research-20261120T190020",
+   "first": "probes-tables-leak-research-20261120T195018",
    "probes_identical": true,
    "probes_sha256": "8c7c88e39e7d3b9066626810eafae9d481337b08c32e0f1b68f99451767693a3",
    "results_identical": true,
    "results_sha256": "a61fcc1a8cadd255145e945a01f38d2a090f6497a7e4b03a1733a9a8d96f4da2",
-   "second": "probes-tables-leak-research-20261120T191857"
+   "second": "probes-tables-leak-research-20261120T195301"
   },
   "mcp-gov": {
-   "first": "probes-tables-mcp-gov-20261120T191146",
+   "first": "probes-tables-mcp-gov-20261120T195027",
    "probes_identical": true,
-   "probes_sha256": "2ee7bbd69f276c762467b4efbf78dd80580c1d48abd823f9c4073b41848afa33",
+   "probes_sha256": "99929de29646958870fd9edade69a2a12aa5b161846a4721b9057bbf67e934ae",
    "results_identical": true,
-   "results_sha256": "72e63819ce9223fab8157fd81c6df8d1ea4b8cac68839318343930a3e9a62788",
-   "second": "probes-tables-mcp-gov-20261120T192954"
+   "results_sha256": "3f05bec700e26f22674c4ce01d9e3e1326494e2f4dcd0f9c27ccced06fa8490d",
+   "second": "probes-tables-mcp-gov-20261120T195310"
   },
   "sql-gov": {
    "first": "probes-tables-sql-gov-20261120T185626",

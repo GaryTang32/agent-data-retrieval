@@ -1,6 +1,6 @@
 # Table probes: applicability (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, tables `2678b8da9633`, ACL snapshot `c4573fde7762` sequence 18). Seed 20261120. No model calls.
+Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, tables `2678b8da9633`, ACL snapshot `7099c7abca47` sequence 19). Seed 20261120. No model calls.
 
 51 probes on fr_documents (1 default, 50 as_of over 50 dates), 51 passed, 0 rows of documents not in force.
 

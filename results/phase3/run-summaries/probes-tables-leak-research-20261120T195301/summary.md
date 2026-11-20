@@ -1,8 +1,8 @@
 # Table probes: leak (research)
 
-Store `.cache/store-p2/research` (snapshot `97c415b1aa71`, tables `62604e913378`, ACL snapshot `e79478bafb8b` sequence 20). Seed 20261120. No model calls.
+Store `.cache/store-p2/research` (snapshot `97c415b1aa71`, tables `62604e913378`, ACL snapshot `b210968a02bb` sequence 21). Seed 20261120. No model calls.
 
-100 leak probes, 0 leaks, 0 invalid (100 as user:ghost, denied F4).
+100 leak probes, 0 leaks, 0 invalid; 0 compared with a reference store, 100 as user:ghost (denied F4: no directory user has a hidden row).
 
 | family | probes | leaks | invalid | callers | outcomes |
 |---|---|---|---|---|---|

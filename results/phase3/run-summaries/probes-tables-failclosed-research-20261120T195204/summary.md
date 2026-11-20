@@ -1,8 +1,8 @@
-# Table probes: failclosed (gov)
+# Table probes: failclosed (research)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, tables `2678b8da9633`, ACL snapshot `c4573fde7762` sequence 18). Seed 20261120. No model calls.
+Store `.cache/store-p2/research` (snapshot `97c415b1aa71`, tables `62604e913378`, ACL snapshot `b210968a02bb` sequence 21). Seed 20261120. No model calls.
 
-90 probes, 90 passed, 0 with content.
+90 probes, 90 passed, 0 with content; target document `3fbd836906a9` (papers).
 
 | condition | probes | passed | with content | outcomes |
 |---|---|---|---|---|

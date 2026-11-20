@@ -1,8 +1,8 @@
 {
   "config": {
     "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
-    "acl_sequence": 18,
-    "acl_snapshot": "c4573fde776296c911a3fc3517e06461bd14d320abf98a1b5dfbfa2b70711188",
+    "acl_sequence": 19,
+    "acl_snapshot": "7099c7abca47cf65aedee5c2ad2913cddcdb07904f433232a7a628f73e31123f",
     "corpus": "gov",
     "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
     "kind": "tables-applicability",
@@ -39,6 +39,7 @@
         }
       }
     },
+    "statements_checked": 1,
     "total": {
       "allowed": 153,
       "allowed_unresolved": 0,

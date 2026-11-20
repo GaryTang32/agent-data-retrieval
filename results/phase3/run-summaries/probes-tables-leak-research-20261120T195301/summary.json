@@ -1,8 +1,8 @@
 {
   "config": {
     "acl_entries_sha256": "7f8fb0e62d37989484cb47d7d89a60dbb205a2995fe2175ef0eae24d2d80f09f",
-    "acl_sequence": 20,
-    "acl_snapshot": "e79478bafb8bad480dca599632d0a363e590086b930a125b5592bf6f1376eab3",
+    "acl_sequence": 21,
+    "acl_snapshot": "b210968a02bbfce90fa67bb352a0856f7e9696bd0bbc157a7192a84b42cabbd8",
     "corpus": "research",
     "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
     "kind": "tables-leak",
@@ -48,6 +48,7 @@
         }
       }
     },
+    "statements_checked": 60,
     "total": {
       "allowed": 0,
       "allowed_unresolved": 0,
@@ -204,6 +205,7 @@
         "id_outside_view": 100,
         "rows_differ": 0
       },
+      "compared": 0,
       "ghost": 100,
       "invalid": 0,
       "leak_kinds": {

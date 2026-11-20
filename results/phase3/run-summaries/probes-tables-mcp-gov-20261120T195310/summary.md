@@ -2,7 +2,7 @@
 
 The 60 of 400 table leak probes with the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed 20261120), each through an `adr mcp` server of its caller. No model calls.
 
-60 probes, 0 leaks, 0 invalid (22 as user:ghost, denied F4). Handle replays: 38 of 38 identical, 38 handles naming the tables.
+60 probes, 0 leaks, 0 invalid (16 as user:ghost, denied F4). Handle replays: 44 of 44 identical, 44 handles naming the tables.
 
 | store | probes | leaks | invalid |
 |---|---|---|---|
@@ -11,4 +11,4 @@ The 60 of 400 table leak probes with the lowest SHA-256 of `<seed>:<store>/<prob
 
 ## Log fields
 
-190 calls through MCP; 190 log lines in the probed stores (equal per store: True). Complete (MCP and reference logs): True.
+196 calls through MCP; 196 log lines in the probed stores (equal per store: True). Complete (MCP and reference logs): True.
