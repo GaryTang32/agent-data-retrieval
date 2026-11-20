@@ -20,14 +20,17 @@ compares by its stored canonical JSON text.
 
 from __future__ import annotations
 
+import bisect
 import csv
+import functools
 import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from adr_eval.corpora.research import _row_id
+from adr_eval.corpora.research import _csv_rows_with_spans, _row_id
+from adr_store.tables.parse import author_key, author_tokens, header_line, scan_dockets
 
 if TYPE_CHECKING:
     from adr_store.tables.contracts import Contract
@@ -176,14 +179,49 @@ def _year(text: str, start: int, end: int) -> int:
     return int(_loads(text, start, end)[:4])
 
 
+def _string_before(text: str, end: int) -> str:
+    """The decoded JSON string that holds position `end`, from its opening quote up to `end`."""
+    i = end
+    while i > 0:
+        i -= 1
+        if text[i] == '"':
+            backslashes = 0
+            while i - 1 - backslashes >= 0 and text[i - 1 - backslashes] == "\\":
+                backslashes += 1
+            if backslashes % 2 == 0:
+                return json.loads('"' + text[i + 1:end] + '"')
+    raise ValueError("no JSON string before the span")
+
+
+def _string_part(text: str, start: int, end: int) -> str:
+    """The text a span names inside a JSON string: the whole encoded string (with its quotes),
+    or a fragment of one (the encoded characters between the quotes), decoded."""
+    if text[start] == '"':
+        return _loads(text, start, end)
+    return json.loads('"' + text[start:end] + '"')
+
+
+def _docket(text: str, start: int, end: int) -> str:
+    """A docket: the span is its number inside one `docket_ids` string, and the docket is the
+    last one found in the string read up to the end of the span (so letters given by an
+    earlier part carry over)."""
+    dockets, _ = scan_dockets(_string_before(text, end))
+    docket, number, _ = dockets[-1]
+    if number.text != json.loads('"' + text[start:end] + '"'):
+        raise ValueError("the span is not the last docket number of its string")
+    return docket
+
+
 # Federal Register columns: the span is the JSON-encoded value (the identity), except where the
 # stored value is derived from it.
 RESLICERS: dict[str, Callable[[str, int, int], Any]] = {
     f"fr.{name}": _loads for name in (
         "id", "type", "agency", "publication_date", "title", "action", "effective_on",
-        "other_ids", "agency_name", "fr_agency_id", "agency_parent_id", "docket_raw")
+        "agency_name", "fr_agency_id", "agency_parent_id", "docket_raw")
 }
 RESLICERS.update({
+    "fr.other_ids": _string_part,   # a whole `docket_ids` string, or a part of one
+    "fr.docket": _docket,
     "fr.year": _year,
     "fr.cfr_parts": _cfr_label,    # an element of `cfr_references`: "<title> CFR <part>"
     "fr.cfr_part": _cfr_label,
@@ -198,11 +236,52 @@ MANIFEST_COLUMNS = ("research", "topic", "also_in", "type", "title", "authors", 
 
 def manifest_row(text: str, start: int, end: int) -> dict[str, str]:
     """The manifest row whose CSV lines are `text[start:end]`, read with the header line."""
-    header = text.partition("\n")[0].rstrip("\r")
+    header = header_line(text)
     rows = list(csv.reader((header + "\n" + text[start:end]).splitlines(keepends=True)))
     if len(rows) != 2:
         raise ValueError("the span is not one CSV row")
     return dict(zip(rows[0], rows[1], strict=False))
+
+
+@functools.lru_cache(maxsize=2)
+def _record_spans(text: str) -> tuple[tuple[int, int], ...]:
+    return tuple(span for _, span in _csv_rows_with_spans(text))
+
+
+def _record_at(text: str, start: int, end: int) -> int:
+    """The index of the manifest record that holds `text[start:end]`."""
+    spans = _record_spans(text)
+    i = bisect.bisect_right(spans, (start, len(text) + 1)) - 1
+    if i < 0 or not spans[i][0] <= start <= end <= spans[i][1]:
+        raise ValueError("the span is not inside one manifest record")
+    return i
+
+
+def _row_number(text: str, start: int, end: int) -> int:
+    """The number of the manifest record `text[start:end]` (the header is not a record)."""
+    i = _record_at(text, start, end)
+    if _record_spans(text)[i] != (start, end):
+        raise ValueError("the span is not one manifest record")
+    return i + 1
+
+
+def _author_at(text: str, start: int, end: int) -> tuple[int, str]:
+    """(position, name as written) of the author whose characters are `text[start:end]`."""
+    i = _record_at(text, start, end)
+    found = author_tokens(text, *_record_spans(text)[i])
+    if found is not None:
+        for position, (name, s, e) in enumerate(found[0]):
+            if (s, e) == (start, end):
+                return position, name
+    raise ValueError("the span is not an author of its record")
+
+
+def _authors_et_al(text: str, start: int, end: int) -> bool:
+    i = _record_at(text, start, end)
+    found = author_tokens(text, *_record_spans(text)[i])
+    if found is None or _record_spans(text)[i] != (start, end):
+        raise ValueError("the span is not one manifest record")
+    return found[1]
 
 
 def _manifest_value(column: str) -> Callable[[str, int, int], Any]:
@@ -227,7 +306,11 @@ def _paper_id(text: str, start: int, end: int) -> str:
 
 RESLICERS.update({f"papers.{c}": _manifest_value(c) for c in MANIFEST_COLUMNS})
 RESLICERS.update({"papers.year": _manifest_year, "papers.also_in_list": _also_in_list,
-                  "papers.id": _paper_id})
+                  "papers.id": _paper_id, "papers.row": _row_number,
+                  "papers.author_position": lambda t, s, e: _author_at(t, s, e)[0],
+                  "papers.author_raw": lambda t, s, e: _author_at(t, s, e)[1],
+                  "papers.author_key": lambda t, s, e: author_key(_author_at(t, s, e)[1]),
+                  "papers.author_et_al": _authors_et_al})
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -240,7 +323,8 @@ def _same(a: Any, b: Any) -> bool:
 
 def reslice(text: str, prov: ValueProv, value: Any) -> bool:
     """T3 for one span: does `text[start:end]`, through the column's derivation, give exactly
-    `value` (and, when the provenance holds a quote, is the quote that very slice)? False for
+    `value` (an element of a list column when the derivation gives a list and `value` is no
+    list), and, when the provenance holds a quote, is the quote that very slice? False for
     a span outside the text, a spec with no derivation, or provenance without a span."""
     if prov.span is None:
         return False
@@ -253,7 +337,10 @@ def reslice(text: str, prov: ValueProv, value: Any) -> bool:
     if derive is None:
         return False
     try:
-        return _same(derive(text, start, end), value)
+        got = derive(text, start, end)
+        if isinstance(got, list) and not isinstance(value, list):
+            return any(_same(one, value) for one in got)   # one element of a list column
+        return _same(got, value)
     except (ValueError, KeyError, TypeError, IndexError):
         return False
 
