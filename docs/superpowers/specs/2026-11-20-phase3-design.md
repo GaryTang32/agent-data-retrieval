@@ -233,6 +233,7 @@ force (§8.3), so counts are never multiplied by versions.
 | Column | Type | Source |
 |---|---|---|
 | `section`, `version` | text | structure (join key) |
+| `state`, `waterway` | text | repeated from the section row, so one `query_table` call can filter draws by place |
 | `bridge` | text | model: the bridge's name as written |
 | `mile` | real | model: the waterway mile, if stated |
 | `notice_hours` | int | model: advance notice required to open, in hours, if any |
@@ -319,7 +320,7 @@ the status rule does not depend on the gold.
 Bumping one column's spec version (for example a clearer description of `notice_hours`) changes
 only that column's cache keys: the extractor groups columns by spec, and each group is its own
 cached call per section. A test changes one spec on a fixture and checks that only that group's
-calls run (criterion T5). For the real run, the 8 model columns of the two tables are extracted
+calls run (criterion T5). For the real run, the 9 model columns of the two tables are extracted
 in one group, so a spec change costs one call per section; the grouping is what makes partial
 re-extraction possible.
 
@@ -336,7 +337,7 @@ Three new tools in `adr_store.tools.Tools`, served over MCP like the five Phase 
 
 | Tool | Tier | What it does |
 |---|---|---|
-| `describe_tables` | T1 | The semantic layer: tables, columns with descriptions and types, entity links, metrics (`count`, `count_distinct`) and dimensions, generated from the contracts; at most 8 KB |
+| `describe_tables` | T1 | The semantic layer: tables, columns with descriptions and types, entity links, metrics (`count`, and `count_distinct` as an `sql` template) and dimensions, generated from the contracts; at most 8 KB |
 | `query_table` | T1 | Parameterized: `table`, `filters` (the v0.1 operators plus `__ne`, `__isnull`, `__contains_any`), `op` (`count`, `list`, `lookup`, `count_by`), `fields`, `order`, `limit`, the Phase 2 applicability arguments (`as_of`, `include_superseded`, status), `handle`. Compiled to one parameterised SQL statement by code; the model never writes SQL here. Returns rows with their provenance |
 | `sql` | T2 | Guarded read-only SQL: one `SELECT` statement over the caller's view of the tables under the same applicability arguments, with limits. Each table exposes `_doc_id` and one `_prov_<column>` JSON column per column, so a statement can select provenance |
 
@@ -356,15 +357,15 @@ and `json_extract` so statements can unnest them.
 - A progress handler stops a statement after a fixed budget of virtual-machine steps (no wall
   clock, so the cut-off is deterministic); results are capped at 1,000 rows and flagged as
   truncated.
-- Errors return a fixed message per class (syntax, denied, budget, too many rows), never the
+- Errors return a fixed message per class (syntax, denied, budget, result too large: over 2 MB), never the
   database's internal text, so an error cannot reveal hidden rows or table internals.
 
 ### 8.2 Output and determinism
 
 `query_table` results are sorted by the contract order (or the requested order, then the key).
-For `sql`, the statement is wrapped as `SELECT * FROM (<statement>) ORDER BY <every output
-column>`, after the statement's own ordering when it has one is kept as the leading sort keys,
-so the order is total even for aggregates and statements that do not select the key. Same arguments, same tables id, same view: byte-identical
+For `sql`, a statement with its own `ORDER BY` keeps it as written; a statement without one is
+wrapped as `SELECT * FROM (<statement>) ORDER BY <every output column>`, so the order is total
+even for aggregates and statements that do not select the key. Same arguments, same tables id, same view: byte-identical
 rows. Every result carries a handle.
 
 ### 8.3 Applicability
@@ -464,6 +465,7 @@ every call: Sonnet is `claude-sonnet-5-5`, Opus is `claude-opus-5-5`. Every call
 the service reports as having answered.
 
 `--max-calls` counts per command, so each command gets a fixed share; the shares sum to the cap.
+Every transport attempt, retries included, counts against the share, so real use cannot exceed it.
 
 | Command | Purpose | Model | Share (calls) |
 |---|---|---|---|
