@@ -4,9 +4,9 @@
 A candidate build and the current build (HEAD) are evaluated on a gold set through the query
 engine, on a database of every row under the default applicability filters (the Phase 2 view of
 documents in force). A **flip** is a case HEAD answers right and the candidate answers wrong; the
-candidate becomes HEAD only when it has at most `max_flips` of them. With no HEAD, or a HEAD the
-current contracts can no longer read, every case counts as wrong on HEAD, so a first build
-promotes with no flips.
+candidate becomes HEAD only when it has at most `max_flips` of them. With no HEAD every case
+counts as wrong on HEAD, so a first build promotes with no flips; a HEAD the current contracts
+can no longer read blocks the gate unless the caller overrides it.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any
 
 from adr_eval.models import load_items
 from adr_store import applicability as ap
+from adr_store.tables.contracts import CONTRACT_DIR
 from adr_store.tables.engine import QueryError, ViewDB, from_gold_query, run_query
 from adr_store.tables.overlay import (
     TablesError,
@@ -52,7 +53,8 @@ def _right(db: ViewDB, kwargs: dict, expected: Any) -> bool:
     return out.value == expected
 
 
-def _default_view(store_path: Path, tables_id: str) -> ViewDB:
+def _default_view(store_path: Path, tables_id: str, contracts_dir: Path = CONTRACT_DIR
+                  ) -> ViewDB:
     """Every row of the build whose document the default applicability filters admit."""
     m = load_manifest(store_path, tables_id)
     admitted = None
@@ -60,11 +62,12 @@ def _default_view(store_path: Path, tables_id: str) -> ViewDB:
         overlay = ap.load_overlay(store_path, m.snapshot, m.applicability)
         docs = {r.doc_id for t in m.tables for r in load_rows(store_path, m, t.table)}
         admitted, _ = overlay.allowed_docs(docs, ap.Filters())
-    return ViewDB.build(store_path, m, tables_id, admitted)
+    return ViewDB.build(store_path, m, tables_id, admitted, contracts_dir=contracts_dir)
 
 
-def _right_cases(store_path: Path, tables_id: str, cases: list[GoldCase]) -> set[str]:
-    db = _default_view(store_path, tables_id)
+def _right_cases(store_path: Path, tables_id: str, cases: list[GoldCase],
+                 contracts_dir: Path = CONTRACT_DIR) -> set[str]:
+    db = _default_view(store_path, tables_id, contracts_dir)
     return {cid for cid, kwargs, expected in cases if _right(db, kwargs, expected)}
 
 
@@ -78,27 +81,41 @@ class GateResult:
     right_current: int
     right_candidate: int
     n: int
+    head_unreadable: str | None = None   # why HEAD could not be evaluated (override used)
 
 
-def gate(store_path: Path, candidate: str, cases: list[GoldCase], max_flips: int) -> GateResult:
+def gate(store_path: Path, candidate: str, cases: list[GoldCase], max_flips: int, *,
+         contracts_dir: Path = CONTRACT_DIR, allow_unreadable_head: bool = False
+         ) -> GateResult:
     """Evaluate `candidate` against HEAD on `cases` and move HEAD to it when it has at most
-    `max_flips` flips. A candidate that does not load is a `TablesError`; nothing moves."""
+    `max_flips` flips. A candidate that does not load is a `TablesError`; nothing moves.
+
+    A HEAD that exists but cannot be evaluated under the current contracts (a contract edited
+    since it was built) leaves the gate with nothing to compare against: it refuses
+    (`TablesError`, HEAD unchanged) unless `allow_unreadable_head`, in which case HEAD answers
+    no case and `GateResult.head_unreadable` gives the reason."""
     if max_flips < 0:
         raise ValueError(f"max_flips must not be negative, got {max_flips}")
     ids = [cid for cid, _, _ in cases]
     if len(set(ids)) != len(ids):
         raise ValueError("gold cases must have distinct ids")
     current = read_head(store_path)
-    right_new = _right_cases(store_path, candidate, cases)
+    right_new = _right_cases(store_path, candidate, cases, contracts_dir)
     right_old: set[str] = set()
+    unreadable = None
     if current is not None:
         try:
-            right_old = _right_cases(store_path, current, cases)
-        except TablesError:   # a HEAD the current contracts cannot read answers nothing
-            right_old = set()
+            right_old = _right_cases(store_path, current, cases, contracts_dir)
+        except TablesError as e:
+            if not allow_unreadable_head:
+                raise TablesError(
+                    f"HEAD {current[:12]} cannot be evaluated under the current contracts "
+                    f"({e}); HEAD is unchanged. Pass allow_unreadable_head=True to promote "
+                    f"the candidate without a comparison") from e
+            unreadable = str(e)
     flips = sorted(right_old - right_new)
     promoted = len(flips) <= max_flips
     if promoted:
         _set_head(store_path, candidate)
     return GateResult(promoted, candidate, current, flips, sorted(right_new - right_old),
-                      len(right_old), len(right_new), len(cases))
+                      len(right_old), len(right_new), len(cases), unreadable)

@@ -506,3 +506,24 @@ def test_v01_style_count_and_list_queries_run(gov_db, research_db):
     assert run_query(gov_db, **from_gold_query(gq, "gov")).count == 3
     gq = GoldQuery(store="typed_db", op="list", filters={"venue": "arXiv"})
     assert run_query(research_db, **from_gold_query(gq, "research")).ids == ["2501.00001"]
+
+
+@pytest.mark.parametrize("kwargs,message", [
+    ({"filters": ["type", "Rule"]}, "^filters must be an object$"),
+    ({"filters": "type"}, "^filters must be an object$"),
+    ({"filters": {1: "x"}}, "^filter names must be strings$"),
+    ({"op": "lookup", "fields": "year"}, "^fields must be a list of strings$"),
+    ({"op": "lookup", "fields": ("year",)}, "^fields must be a list of strings$"),
+    ({"op": "lookup", "fields": [1]}, "^fields must be a list of strings$"),
+    ({"op": "count_by", "fields": {"year": 1}}, "^fields must be a list of strings$"),
+    ({"op": "lookup", "order": "year"}, "^order must be a list of strings$"),
+    ({"op": "lookup", "order": [1, "id"]}, "^order must be a list of strings$"),
+    ({"op": "lookup", "order": None, "limit": None}, "^limit must be an integer"),
+    ({"op": "lookup", "limit": 2.5}, "^limit must be an integer"),
+    ({"op": ["count"]}, "^unknown op"),
+    ({"table": ["fr_documents"]}, "^unknown table"),
+])
+def test_malformed_arguments_are_query_errors(gov_db, kwargs, message):
+    args = {"table": "fr_documents", "filters": {}, "op": "count", **kwargs}
+    with pytest.raises(QueryError, match=message):
+        run_query(gov_db, args.pop("table"), args.pop("filters"), args.pop("op"), **args)

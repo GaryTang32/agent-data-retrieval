@@ -73,7 +73,7 @@ def test_gate_promotes_a_first_build(built):
     path, cand = built
     assert read_head(path) is None
     r = gate(path, cand, CASES, max_flips=0)
-    assert r == GateResult(True, cand, None, [], ["a", "b", "c", "d"], 0, 4, 4)
+    assert r == GateResult(True, cand, None, [], ["a", "b", "c", "d"], 0, 4, 4, None)
     assert read_head(path) == cand
 
 
@@ -151,20 +151,44 @@ def test_head_moves_only_through_the_gate():
     assert users == {"tables/overlay.py", "tables/gate.py"}
 
 
-def test_a_head_the_current_contracts_cannot_read_answers_nothing(built, monkeypatch):
+def edited_contracts(tmp_path):
+    """A copy of the gov contracts with a description-only edit to fr_documents."""
+    out = tmp_path / "contracts"
+    out.mkdir()
+    for name, c in load_contracts(corpus="gov").items():
+        if name == FR:
+            c = c.model_copy(update={"description": c.description + " (edited)"})
+        (out / f"{name}.json").write_text(c.model_dump_json(), encoding="utf-8")
+    return out
+
+
+def test_a_head_the_current_contracts_cannot_read_blocks_the_gate(built, tmp_path):
     path, head = built
     gate(path, head, CASES, max_flips=0)
-    cand = derived(path, head, retype(1))
-    import adr_store.tables.gate as g
-    real = g._default_view
+    contracts = edited_contracts(tmp_path)
+    cand = build_tables(path, "gov", contracts_dir=contracts).tables_id
+    assert cand != head
+    with pytest.raises(TablesError, match=r"HEAD .* cannot be evaluated.*allow_unreadable_head"):
+        gate(path, cand, CASES, max_flips=0, contracts_dir=contracts)
+    assert read_head(path) == head
 
-    def view(store_path, tables_id):
-        if tables_id == head:
-            raise TablesError("contract drift")
-        return real(store_path, tables_id)
-    monkeypatch.setattr(g, "_default_view", view)
-    r = gate(path, cand, CASES, max_flips=0)
-    assert r.promoted and r.right_current == 0 and r.flips == []
+
+def test_the_override_promotes_and_names_the_reason(built, tmp_path):
+    path, head = built
+    gate(path, head, CASES, max_flips=0)
+    contracts = edited_contracts(tmp_path)
+    cand = build_tables(path, "gov", contracts_dir=contracts).tables_id
+    r = gate(path, cand, CASES, max_flips=0, contracts_dir=contracts,
+             allow_unreadable_head=True)
+    assert r.promoted and read_head(path) == cand and r.flips == []
+    assert r.right_current == 0 and r.current == head
+    assert "contract is not the one the build" in r.head_unreadable
+
+
+def test_a_readable_head_has_no_unreadable_reason(built):
+    path, head = built
+    assert gate(path, head, CASES, max_flips=0).head_unreadable is None
+    assert gate(path, head, CASES, max_flips=0).head_unreadable is None
 
 
 # -- gold cases -------------------------------------------------------------------------------

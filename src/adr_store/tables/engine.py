@@ -325,15 +325,23 @@ def compile_query(c: Contract, filters: dict, op: str, *, fields: list[str] | No
                   order: list[str] | None = None, limit: int = QUERY_LIMIT) -> Compiled:
     """The one SQL statement of a query over table `c`. `lookup` selects at most `limit` + 1
     rows (the extra row tells `run_query` the result is truncated)."""
-    if op not in OPS:
+    if not isinstance(op, str) or op not in OPS:
         raise QueryError(f"unknown op {op!r}; known: {', '.join(OPS)}")
+    if not isinstance(filters, dict):
+        raise QueryError("filters must be an object")
+    if not all(isinstance(k, str) for k in filters):
+        raise QueryError("filter names must be strings")
+    for what, names in (("fields", fields), ("order", order)):
+        if names is not None and not (isinstance(names, list)
+                                      and all(isinstance(n, str) for n in names)):
+            raise QueryError(f"{what} must be a list of strings")
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= QUERY_LIMIT_MAX:
         raise QueryError(f"limit must be an integer from 1 to {QUERY_LIMIT_MAX}, got {limit!r}")
     table = _q(c.table)
     parts: list[str] = []
     params: list[Any] = []
     never: list[str] = []
-    for key, value in (filters or {}).items():
+    for key, value in filters.items():
         col, fop = _split(c, key)
         sql, p, why = _clause(col, f"{table}.{_q(col.name)}", fop, value, key)
         parts.append(sql)
@@ -389,10 +397,11 @@ class QueryOutcome:
 def run_query(db: ViewDB, table: str, filters: dict | None, op: str, *,
               fields: list[str] | None = None, order: list[str] | None = None,
               limit: int = QUERY_LIMIT) -> QueryOutcome:
-    c = db.contracts.get(table)
+    c = db.contracts.get(table) if isinstance(table, str) else None
     if c is None:
         raise QueryError(f"unknown table {table!r}")
-    compiled = compile_query(c, filters or {}, op, fields=fields, order=order, limit=limit)
+    compiled = compile_query(c, {} if filters is None else filters, op, fields=fields,
+                             order=order, limit=limit)
     got = db.execute(compiled.sql, compiled.params)
     never = list(compiled.never)
     if op == "count":
