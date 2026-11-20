@@ -27,7 +27,7 @@ from adr_store.tables.overlay import (
     write_manifest,
     write_table,
 )
-from adr_store.tables.provenance import RowRecord, value_prov
+from adr_store.tables.provenance import RowRecord
 
 # entity type -> the (source table, column) pairs its raw forms are read from
 ENTITY_SOURCES: dict[str, list[tuple[str, str]]] = {
@@ -43,15 +43,18 @@ HEADINGS = "ecfr_headings"     # the waterway entity source that is no table: 33
 
 
 def _heading_sources(store: Store) -> list[tuple[str, str, RowRecord]]:
-    """One source row per section heading of the 33 CFR 117 chain, its raw form the waterway
-    the heading names."""
+    """One source row per section heading of the 33 CFR 117 chain that sits in a state group,
+    its raw form the waterway the heading names. General sections (no state: "Purpose.") and
+    reserved or empty headings name no waterway and give no row (the link index skips the same
+    sections). The rows carry no provenance: entity rows are computed, without spans."""
     out = []
     for doc_id in chain_docs(store):
         for unit in ecfr_sections(store, doc_id):
             text = heading_waterway_text(unit.heading)
-            out.append((HEADINGS, "heading", RowRecord(
-                doc_id=doc_id, row={"heading": text},
-                prov={"heading": value_prov(doc_id, "ecfr.heading@1", unit.heading_span)})))
+            if unit.state is None or not text or text.strip("[]. ").casefold() == "reserved":
+                continue
+            out.append((HEADINGS, "heading", RowRecord(doc_id=doc_id, row={"heading": text},
+                                                       prov={})))
     return out
 
 

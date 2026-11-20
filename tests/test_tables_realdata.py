@@ -130,3 +130,12 @@ def test_real_drawbridge_titles_link_to_the_newest_sections_of_part_117():
     assert {u["id"] for u in links["unlinked"]} == {
         "2023-06925", "2024-02084", "2024-03455", "2024-03462", "2026-00932", "2026-01398",
         "2026-01400"}
+
+
+def test_real_waterway_entities_leave_out_stateless_sections_and_reserved_headings():
+    store = store_of("gov")
+    m = ov.load_manifest(store.path, build_tables(store.path, "gov").tables_id)
+    rows = ov.load_rows(store.path, m, "waterways")
+    assert len(rows) == 1320 and len({r.row["key"] for r in rows}) == 467
+    assert {"purpose", "definitions", "reserved"}.isdisjoint(
+        {r.row["key"] for r in rows})

@@ -308,7 +308,8 @@ def test_ecfr_sections_in_document_order_with_states(ecfr_store, newest):
     units = ecfr_sections(ecfr_store, newest)
     assert [(u.section, u.state) for u in units] == [
         ("117.1", None), ("117.821", "North Carolina"), ("117.823", "North Carolina"),
-        ("117.827", "North Carolina"), ("117.261", "Florida"), ("117.263", "Florida")]
+        ("117.827", "North Carolina"), ("117.829", "North Carolina"), ("117.261", "Florida"),
+        ("117.263", "Florida")]
     general = units[0]
     assert general.state_span is None
     text = ecfr_store.text(newest)
@@ -511,6 +512,9 @@ def test_waterways_come_from_titles_and_ecfr_headings(tmp_path):
     aiw = [r for r in heading_rows if r.row["key"] == "atlantic intracoastal waterway"]
     assert {r.row["raw"] for r in aiw} == {"Atlantic Intracoastal Waterway"}
     assert sorted(r.row["rows"] for r in aiw) == [3, 3]    # three headings in each of two versions
+    # a stateless section ("Purpose.") and a reserved heading name no waterway
+    assert {"purpose", "reserved"}.isdisjoint({r.row["key"] for r in rows})
+    assert all(r.row["key"] and not r.row["key"].startswith("[") for r in heading_rows)
     title_rows = [r for r in rows if r.row["source_table"] == "fr_documents"]
     assert "neuse river" in {r.row["key"] for r in title_rows}
     assert result.reports["waterways"]["rejected"] == []
