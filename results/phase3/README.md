@@ -8,7 +8,7 @@
 **Verdict for 3A.**
 - **Q1 holds.** `p3-typed` answers 27 of 27 gov and 26 of 27 research test count questions from the typed tables. `baseline-linear` answered 2 of 27 and 16 of 27. Gov's paired McNemar p is 6.0 × 10⁻⁸ and research's is 0.0020. Both accuracies are at least 0.90, and gov's p is below 0.05.
 - **Q1 was close to certain by construction** (spec §10.2). The generated queries are the baseline's own, read back from the model cache. They already returned the gold records on 27 of 27 gov and 26 of 27 research items, and only the baseline's answering step, which read retrieved chunks, failed. So Q1 tests that the typed tables and the query compiler reproduce the record semantics of `golden/records.py`. It does not show a new ability to understand questions.
-- **The one miss is the `also_in` wording problem** (§4.2). The model read "also cited by" as membership, while the frozen gold compares the whole `;`-joined string. The tables keep the raw string, so they reproduce the gold. The miss belongs to the generated query, not to the tables.
+- **The one miss is the `also_in` wording problem** (§4.2). The model read the question as topic membership, while the frozen gold compares the whole `;`-joined string. The tables keep the raw string, so they reproduce the gold. The miss belongs to the generated query, not to the tables.
 - **The table probes pass** (S1–S3, D1 MCP leg): 0 leaks in 400 leak probes, of which 300 were compared with a reference store. Fail-closed passed 90 of 90 per corpus, the SQL guard 120 of 120 per corpus, table equivalence 1,000 of 1,000 and applicability 51 of 51. The MCP leg found 0 leaks in 60 probes, and 44 of 44 handle replays were identical.
 
 Design: [`docs/superpowers/specs/2026-11-20-phase3-design.md`](../../docs/superpowers/specs/2026-11-20-phase3-design.md).
@@ -84,8 +84,11 @@ Known weak spots, all from the exact-key rule:
 ```
 adr acl sync --store .cache/store-p2/gov        # and research
 adr-eval run gov --system p3-typed --split test --qtype count_filter --repeats 1 --max-calls 0
-adr-eval p3-q1 runs/gov-p3-typed-test-20261120T200702 runs/gov-baseline-linear-test-20261113T094503
+adr-eval p3-q1 runs/gov-p3-typed-test-20261120T200702 runs/gov-baseline-linear-test-20261113T094503 \
+    --summary results/phase3/run-summaries/gov-p3-typed-test-20261120T200702/q1-gov-baseline-linear-test-20261113T094503.json
 ```
+
+`p3-q1` writes its full output, which names items, only into the typed run's directory under `runs/` (gitignored). The committed `q1-<baseline>.json` is the `--summary` form (`phase3.q1_summary`). It holds no item id and no filter value. It gives each typed miss by its cause and the shape of its query (op, store, filter keys), and baseline misses and the `also_in` readings as counts.
 
 | Corpus | Items | `p3-typed` | `baseline-linear` (Phase 0) | b (typed only) | c (baseline only) | McNemar p (exact) |
 |---|---|---|---|---|---|---|
@@ -95,22 +98,22 @@ adr-eval p3-q1 runs/gov-p3-typed-test-20261120T200702 runs/gov-baseline-linear-t
 Each run ended `complete` with 27 rows and `calls` 0. Gov was run a second time in a fresh process (`…T201428`). Its rows and `compile.json` were byte-identical.
 
 **Every miss and its cause.**
-- **`p3-typed`, 1 miss: `research-count_filter-033` (op `list`).** The generated query used `also_in__contains: "04_reading_synthesis_citation"` with `status: "downloaded"`, which is the membership reading. It returned 23 ids. The gold compares the `also_in` string exactly and holds 14 ids. The same generated query gives the same 23 over the records (`query_exec_match` false), so the tables answered the query correctly. The cause is the question's wording against the frozen gold. This is the baseline's one generated-query miss, as §4.2 predicted.
+- **`p3-typed`, 1 miss: one research test `list` item.** The generated query used `also_in__contains`, the membership reading, plus a status filter. It returned 23 ids, against the gold's 14. The gold compares the `also_in` string exactly. The same generated query gives the same 23 over the records (`query_exec_match` false), so the tables answered the query correctly. The cause is the question's wording against the frozen gold. This is the baseline's one generated-query miss, as §4.2 predicted.
 - **`baseline-linear`, 25 gov misses.** 21 were wrong and 4 abstained. In all 25 the generated query was right (`query_exec_match` true), so every miss came from the answer the model gave from retrieved chunks.
-- **`baseline-linear`, 11 research misses.** All 11 were wrong answers from retrieved chunks. In 10 of them the generated query was right. The 11th is item 033 above.
+- **`baseline-linear`, 11 research misses.** All 11 were wrong answers from retrieved chunks. In 10 of them the generated query was right. The 11th is the item of the typed miss above.
 
-**The `also_in` readings (§4.2)**, over the v0.1 items whose gold compares `also_in` exactly. The table gives the count under each reading; a `list` item counts its ids.
+**The `also_in` readings (§4.2)**, over the v0.1 items whose gold compares `also_in` exactly. The table gives the count under each reading; a `list` item counts its ids. The wording class is "value" for a question that asks for an `also_in` value, else "membership".
 
-| Item | Split | Op | Wording | String (frozen gold) | Membership |
+| Split | Op | Wording | Topics in the value | String (frozen gold) | Membership |
 |---|---|---|---|---|---|
-| research-count_filter-005 | test | count | "an also_in value of exactly …" (three topics) | 1 | 3 |
-| research-count_filter-010 | test | list | "an also_in value of …" (two topics) | 2 | 2 |
-| research-count_filter-012 | dev | count | "also cited by …" | 14 | 22 |
-| research-count_filter-020 | test | count | "also cited by …" | 2 | 2 |
-| research-count_filter-033 | test | list | "also cited by …" | 14 | 23 |
-| research-count_filter-035 | dev | count | "also cited by …" | 2 | 8 |
+| test | count | value | 3 | 1 | 3 |
+| test | list | value | 2 | 2 | 2 |
+| dev | count | membership | 1 | 14 | 22 |
+| test | count | membership | 1 | 2 | 2 |
+| test | list | membership | 1 | 14 | 23 |
+| dev | count | membership | 1 | 2 | 8 |
 
-For a value with several topics, membership here means every topic of the value is among the record's topics. Items 005 and 010 ask for the value "exactly", so the string reading is the question's own. Item 005 differs only under the membership reading, which its wording rules out. Among the items worded as membership, three differ: dev 14 against 22, dev 2 against 8, and test 14 against 23 (item 033). These are the three items of §4.2. The tables expose both readings. `also_in` keeps the raw string, so the frozen gold reproduces, and `also_in_list` holds the topics for the membership reading.
+For a value with several topics, membership here means every topic of the value is among the record's topics. The two value-worded items ask for the value itself, so the string reading is the question's own. One of them differs only under the membership reading, which its wording rules out. Among the membership-worded items, three differ: dev 14 against 22, dev 2 against 8, and test 14 against 23 (the typed miss). These are the three items of §4.2. The tables expose both readings. `also_in` keeps the raw string, so the frozen gold reproduces, and `also_in_list` holds the topics for the membership reading.
 
 ## S1–S3 and D1: the table probes (Task 7)
 
@@ -129,6 +132,6 @@ The bench and tools stores hold no tables, and their empty checks pass.
 
 ## Files
 
-- [`run-summaries/`](run-summaries/) holds the two `p3-typed` runs (`config.json`, `compile.json`, `report.json`, `report.md`, and the `q1-<baseline>.json` from `adr-eval p3-q1`) and the table probe summaries (`probes-tables-*`, `tables-7-checks`). Per-item rows, golden items and probe sets stay local in `runs/`. The Q1 files report a list answer by its length only.
+- [`run-summaries/`](run-summaries/) holds the two `p3-typed` runs and the table probe summaries (`probes-tables-*`, `tables-7-checks`). Each run has `config.json`, `compile.json`, `report.json`, `report.md` and `q1-<baseline>.json`, the aggregated `adr-eval p3-q1 --summary` form. No committed file names an item: per-item rows (`results.jsonl`), the full Q1 output, golden items and probe sets stay local in `runs/`.
 - [`entity-samples.json`](entity-samples.json) holds the entity cluster counts, the largest clusters and the seeded samples of both builds.
 - [`waterway-links.json`](waterway-links.json) holds the linked and unlinked drawbridge titles.

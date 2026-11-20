@@ -674,14 +674,18 @@ class TypedSystem:
         table with its filters, whatever its `store` says (as `pipeline.exec_match` runs it)
         and ignoring its `as_of`; `count` gives the count, `list` the sorted unique ids,
         `lookup` the one field of the one matching row. A refused query (or none) gives
-        value None; so does an answer from another tables build than `tables`."""
+        value None; so does an answer from another tables build than `tables`. A fail-closed
+        denial (`AccessDenied`: a stale ACL, an unknown caller) is no answer to score: it
+        propagates and fails the run, as an ACL failure fails a chunk-path run."""
         from adr_store.tables.engine import from_gold_query
-        from adr_store.tools import ToolError
+        from adr_store.tools import AccessDenied, ToolError
 
         if gq is None:
             return None, None
         try:
             res = self.tools.query_table(**from_gold_query(gq, self.corpus))
+        except AccessDenied:
+            raise
         except ToolError as e:
             return None, str(e)
         if res.tables != self.tables:

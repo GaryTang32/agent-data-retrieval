@@ -1,58 +1,52 @@
 {
   "also_in": [
     {
-      "also_in": "06_kg_construction;09_quality_versioning_provenance;13_open_source_implementation",
       "differs": true,
-      "item_id": "research-count_filter-005",
       "membership": 3,
       "op": "count",
       "split": "test",
-      "string": 1
+      "string": 1,
+      "wording": "value"
     },
     {
-      "also_in": "02_deep_research_agents;04_reading_synthesis_citation",
       "differs": false,
-      "item_id": "research-count_filter-010",
       "membership": 2,
       "op": "list",
       "split": "test",
-      "string": 2
+      "string": 2,
+      "wording": "value"
     },
     {
-      "also_in": "08_open_source_kb_stacks",
       "differs": true,
-      "item_id": "research-count_filter-012",
       "membership": 22,
       "op": "count",
       "split": "dev",
-      "string": 14
+      "string": 14,
+      "wording": "membership"
     },
     {
-      "also_in": "11_enterprise_cloud_platforms",
       "differs": false,
-      "item_id": "research-count_filter-020",
       "membership": 2,
       "op": "count",
       "split": "test",
-      "string": 2
+      "string": 2,
+      "wording": "membership"
     },
     {
-      "also_in": "04_reading_synthesis_citation",
       "differs": true,
-      "item_id": "research-count_filter-033",
       "membership": 23,
       "op": "list",
       "split": "test",
-      "string": 14
+      "string": 14,
+      "wording": "membership"
     },
     {
-      "also_in": "05_schema_induction_matching",
       "differs": true,
-      "item_id": "research-count_filter-035",
       "membership": 8,
       "op": "count",
       "split": "dev",
-      "string": 2
+      "string": 2,
+      "wording": "membership"
     }
   ],
   "b": 10,
@@ -65,67 +59,13 @@
   "baseline_misses": [
     {
       "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-002",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-008",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-009",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-010",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-013",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-014",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-019",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-020",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-033",
+      "n": 1,
       "outcome": "wrong",
       "query_exec_match": false
     },
     {
       "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-037",
-      "outcome": "wrong",
-      "query_exec_match": true
-    },
-    {
-      "cause": "the answer from retrieved chunks",
-      "item_id": "research-count_filter-049",
+      "n": 10,
       "outcome": "wrong",
       "query_exec_match": true
     }
@@ -137,20 +77,15 @@
   "misses": [
     {
       "cause": "the generated query's result differs from the gold query's under the records semantics (the model's reading of the question)",
-      "generated_query": {
-        "as_of": null,
-        "entities": [
-          "04_reading_synthesis_citation"
+      "outcome": "wrong",
+      "query": {
+        "filter_keys": [
+          "also_in__contains",
+          "status"
         ],
-        "filters": {
-          "also_in__contains": "04_reading_synthesis_citation",
-          "status": "downloaded"
-        },
         "op": "list",
         "store": "typed_db"
       },
-      "item_id": "research-count_filter-033",
-      "outcome": "wrong",
       "query_exec_match": false,
       "typed_error": null,
       "value": {
@@ -159,8 +94,8 @@
     }
   ],
   "n": 27,
-  "only_baseline": [],
-  "only_typed": [],
+  "only_baseline": 0,
+  "only_typed": 0,
   "split": "test",
   "typed": {
     "accuracy": 0.9629629629629629,

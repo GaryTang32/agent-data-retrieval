@@ -561,7 +561,9 @@ def _p2_compare(a: argparse.Namespace) -> int:
 def _p3_q1(a: argparse.Namespace) -> int:
     """`adr-eval p3-q1 TYPED_RUN BASELINE_RUN`: Q1 (`phase3.q1_compare`) with the `also_in`
     readings of the corpus's golden items; printed and written to
-    `<typed run>/q1-<baseline run>.json`."""
+    `<typed run>/q1-<baseline run>.json` (it names items: keep it in runs/). With
+    `--summary OUT` the committed form (`phase3.q1_summary`, no item id or filter value) is
+    written to OUT too."""
     from adr_eval import phase3
 
     typed, base = Path(a.typed_run), Path(a.baseline_run)
@@ -571,6 +573,10 @@ def _p3_q1(a: argparse.Namespace) -> int:
                                            get_adapter(c["corpus"]).records(loaded))
     text = json.dumps(c, indent=2, sort_keys=True) + "\n"
     (typed / f"q1-{base.name}.json").write_text(text, encoding="utf-8")
+    if a.summary is not None:
+        a.summary.parent.mkdir(parents=True, exist_ok=True)
+        a.summary.write_text(json.dumps(phase3.q1_summary(c), indent=2, sort_keys=True) + "\n",
+                             encoding="utf-8")
     print(text, end="")
     return 0
 
@@ -1348,6 +1354,8 @@ def _parser() -> argparse.ArgumentParser:
                             "readings); writes <typed run>/q1-<baseline run>.json")
     p.add_argument("typed_run", help="the p3-typed run directory")
     p.add_argument("baseline_run", help="the baseline run directory")
+    p.add_argument("--summary", type=Path, default=None, metavar="OUT",
+                   help="also write the committed form (no item id or filter value) to OUT")
     p.set_defaults(fn=_p3_q1)
 
     p = sub.add_parser("probes", help="probe sets (no model calls): Phase 2 temporal (gov), "

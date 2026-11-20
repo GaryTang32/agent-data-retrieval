@@ -399,6 +399,9 @@
   "metrics_version": 2,
   "n_items": 27,
   "n_rows": 27,
+  "qtypes": [
+    "count_filter"
+  ],
   "repeats": 1,
   "run_id": "gov-p3-typed-test-20261120T200702",
   "snapshot": "2ad8a136abbc0ae6f25f0570d74bc2a185fc3b99795054dfe59dddab5a26b532",
@@ -406,8 +409,7 @@
   "status": "complete",
   "stub": false,
   "system": "p3-typed",
+  "tables": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8",
   "w": null,
-  "warnings": [
-    "judge and generator share a model family"
-  ]
+  "warnings": []
 }

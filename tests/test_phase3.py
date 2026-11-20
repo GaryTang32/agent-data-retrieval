@@ -25,8 +25,9 @@ from adr_eval.phase3 import (
     also_in_readings,
     cache_inputs_unchanged,
     q1_compare,
+    q1_summary,
 )
-from adr_eval.report import build_report
+from adr_eval.report import build_report, render_markdown
 from adr_eval.runner import RunError
 from adr_eval.scoring.stats import mcnemar_exact
 from adr_store import acl
@@ -34,6 +35,8 @@ from tests.store.tables_fixtures import loaded_of
 from tests.store.test_tables_tools import make
 
 QUERY_PROMPT = load_prompt("query_gen")
+CHUNK_ROWS = json.loads((Path(__file__).parent / "fixtures" / "chunk_path_rows_mini.json")
+                        .read_text(encoding="utf-8"))
 BAD = "How many documents have a red colour?"  # its generated query names no column
 
 
@@ -225,6 +228,13 @@ def test_p3_typed_answers_from_the_tables_with_no_answer_or_judge_call(tables_st
     assert comp["manifest"] == json.loads(manifest.read_text())
     rep = build_report(run_dir)   # a typed run is reportable
     assert rep["end_to_end"]["accuracy"] == 0.75
+    assert rep["qtypes"] == ["count_filter"] and rep["tables"] == tables_id
+    assert rep["warnings"] == []   # no judge ran: no judge-family warning
+    md = render_markdown(rep)
+    assert f"tables `{tables_id}`" in md and "index fingerprint" not in md
+    assert "G3 retrieval" not in md and "share a model family" not in md
+    assert "Question types: count_filter only." in md
+    assert "no answer or judge call" in md
 
 
 def test_a_rerun_makes_no_call_under_max_calls_0(tables_store_config):
@@ -239,6 +249,29 @@ def test_a_rerun_makes_no_call_under_max_calls_0(tables_store_config):
         [{k: v for k, v in r.items() if k not in strip} for r in load_rows(first)]
     cold = typed_run(env, generator(), max_calls=0)   # nothing cached: it stops, no call
     assert config_json(cold)["status"] == "stopped_calls" and config_json(cold)["calls"] == 0
+
+
+def test_an_access_denial_stops_the_run_and_is_never_scored(tables_store_config, monkeypatch):
+    """A fail-closed denial on the typed path (here a stale ACL after the build) is not a
+    query refusal: it fails the run, as an ACL failure fails the chunk path, and no row
+    scores it `wrong`."""
+    from adr_store import tools
+    from adr_store.tools import AccessDenied
+
+    env = tables_store_config
+    real = tools.Tools.query_table
+
+    def denied(self, *a, **k):
+        raise AccessDenied("F1", "access denied (F1): the ACL snapshot is stale")
+
+    monkeypatch.setattr(tools.Tools, "query_table", denied)
+    with pytest.raises(AccessDenied):
+        typed_run(env, generator())
+    monkeypatch.setattr(tools.Tools, "query_table", real)
+    (run_dir,) = env["out"].iterdir()
+    cfg = config_json(run_dir)
+    assert cfg["status"] == "failed" and "access denied (F1)" in cfg["error"]
+    assert all(r["outcome"] != "wrong" for r in load_rows(run_dir))
 
 
 def test_a_dry_run_counts_the_query_calls_only(tables_store_config, capsys):
@@ -266,9 +299,12 @@ def test_p3_typed_needs_a_caller(tables_store_config):
 
 @pytest.mark.slow
 def test_the_chunk_path_rows_are_unchanged(tmp_path):
-    """baseline-linear on mini with the stub: the rows keep exactly the Phase 0 keys (no
-    `typed_error`), carry retrieval metrics and judge checks, and a --qtype run gives the same
-    rows for its items as the unfiltered run."""
+    """baseline-linear on mini with the stub gives the rows recorded with the code before
+    Task 8 (tests/fixtures/chunk_path_rows_mini.json, recorded at abbaec3 with `latency_s`
+    dropped): equal except retrieval scores, which are compared to 2e-3 as in
+    `test_baselines_through_the_registry_give_the_recorded_ranked_lists` (ONNX on other CPUs
+    differs in the fourth decimal). A --qtype run gives the same rows for its items, and its
+    report states the filter."""
     cfg = {**runner.load_config(), "index_dir": str(tmp_path / "index"),
            "cache_dir": str(tmp_path / "llm"), "stub": True, "concurrency": 2}
     full = tmp_path / "runs" / runner.run("mini", "baseline-linear", "test", 1, cfg,
@@ -283,6 +319,15 @@ def test_the_chunk_path_rows_are_unchanged(tmp_path):
             "served_models", "latency_s", "error", "json_recovered"}
     rows = load_rows(full)
     assert rows and all(set(r) == keys for r in rows)
+
+    def pinned(r):
+        r = {k: v for k, v in r.items() if k != "latency_s"}
+        return {**r, "retrieved": [c for c, _ in r["retrieved"]]}
+
+    assert [pinned(r) for r in rows] == [pinned(r) for r in CHUNK_ROWS]
+    for got, want in zip(rows, CHUNK_ROWS, strict=True):
+        assert [x for _, x in got["retrieved"]] == pytest.approx(
+            [x for _, x in want["retrieved"]], abs=2e-3)
     assert {r["outcome"] for r in rows} == {"correct"}
     assert all(r["retrieved"] and r["metrics"] is not None for r in rows
                if r["qtype"] != "insufficient")
@@ -293,16 +338,19 @@ def test_the_chunk_path_rows_are_unchanged(tmp_path):
     assert want and [{k: v for k, v in r.items() if k not in strip}
                      for r in load_rows(part)] == want
     assert config_json(full)["qtypes"] is None
+    assert "Question types" not in render_markdown(build_report(full))
+    assert "Question types: count_filter only." in render_markdown(build_report(part))
 
 
 # -- Q1 ------------------------------------------------------------------------------------------
 
 
-def run_dir_of(root: Path, name: str, system: str, rows: list[dict]) -> Path:
+def run_dir_of(root: Path, name: str, system: str, rows: list[dict], **cfg) -> Path:
     d = root / name
     d.mkdir(parents=True)
     (d / "config.json").write_text(json.dumps({"run_id": name, "corpus": "gov",
-                                               "system": system, "split": "test"}))
+                                               "system": system, "split": "test",
+                                               "status": "complete", **cfg}))
     (d / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     return d
 
@@ -367,6 +415,78 @@ def test_q1_compare_refuses_repeats_or_a_typed_run_that_is_not_one(tmp_path):
         q1_compare(typed_dir, base_dir)
 
 
+def test_q1_compare_refuses_runs_that_are_not_comparable(tmp_path):
+    typed_dir = run_dir_of(tmp_path, "typed", "p3-typed", [q1_row("a", "correct")])
+    for name, cfg, what in (("c", {"corpus": "research"}, "corpus"),
+                            ("s", {"split": "dev"}, "split"),
+                            ("f", {"status": "stopped_calls"}, "status")):
+        base_dir = run_dir_of(tmp_path, name, "baseline-linear", [q1_row("a", "correct")],
+                              **cfg)
+        with pytest.raises(RunError, match=what):
+            q1_compare(typed_dir, base_dir)
+    unfinished = run_dir_of(tmp_path, "t2", "p3-typed", [q1_row("a", "correct")],
+                            status="failed")
+    base_dir = run_dir_of(tmp_path, "b2", "baseline-linear", [q1_row("a", "correct")])
+    with pytest.raises(RunError, match="status"):
+        q1_compare(unfinished, base_dir)
+
+
+def _keys_and_strings(x, keys, strings):
+    if isinstance(x, dict):
+        for k, v in x.items():
+            keys.add(k)
+            _keys_and_strings(v, keys, strings)
+    elif isinstance(x, list):
+        for v in x:
+            _keys_and_strings(v, keys, strings)
+    elif isinstance(x, str):
+        strings.add(x)
+    return keys, strings
+
+
+def test_q1_summary_holds_no_item_id_and_no_filter_value(tmp_path):
+    """The committed form of Q1: counts, accuracies, McNemar, each typed miss by its cause and
+    the shape of its query, baseline misses as counts, also_in readings without ids or
+    values. No item id and no filter value anywhere."""
+    member = {"store": "typed_db", "op": "list", "entities": ["topic_x"], "as_of": None,
+              "filters": {"also_in__contains": "topic_x", "status": "downloaded"}}
+    typed_dir = run_dir_of(tmp_path, "typed", "p3-typed", [
+        {**q1_row("item-a", "wrong", value=["p1", "p2", "p3"], exec_match=False),
+         "generated_query": member},
+        q1_row("item-b", "correct"), q1_row("item-c", "correct"),
+        q1_row("item-only-typed", "correct")])
+    base_dir = run_dir_of(tmp_path, "base", "baseline-linear", [
+        q1_row("item-a", "wrong", exec_match=False), q1_row("item-b", "wrong"),
+        q1_row("item-c", "abstained"), q1_row("item-only-base", "correct")])
+    c = q1_compare(typed_dir, base_dir)
+    c["also_in"] = [{"item_id": "item-a", "split": "test", "op": "list", "also_in": "topic_x",
+                     "wording": "membership", "string": 2, "membership": 3, "differs": True}]
+    s = q1_summary(c)
+    keys, strings = _keys_and_strings(s, set(), set())
+    assert "item_id" not in keys and "also_in" in keys
+    assert not any(x.startswith("item-") for x in strings)
+    assert not strings & {"topic_x", "downloaded", "Rule", "p1"}
+    assert {k: s[k] for k in ("n", "b", "c", "mcnemar_p", "only_typed", "only_baseline")} == \
+        {"n": 3, "b": 2, "c": 0, "mcnemar_p": mcnemar_exact(2, 0), "only_typed": 1,
+         "only_baseline": 1}
+    assert s["typed"] == c["typed"] and s["baseline"] == c["baseline"]
+    assert s["misses"] == [{
+        "outcome": "wrong", "cause": c["misses"][0]["cause"], "query_exec_match": False,
+        "typed_error": None, "value": {"n": 3},
+        "query": {"store": "typed_db", "op": "list",
+                  "filter_keys": ["also_in__contains", "status"]}}]
+    assert s["baseline_misses"] == [
+        {"outcome": "abstained", "cause": "abstained", "query_exec_match": True, "n": 1},
+        {"outcome": "wrong", "cause": "the answer from retrieved chunks",
+         "query_exec_match": False, "n": 1},
+        {"outcome": "wrong", "cause": "the answer from retrieved chunks",
+         "query_exec_match": True, "n": 1}]
+    assert s["also_in"] == [{"split": "test", "op": "list", "wording": "membership",
+                             "string": 2, "membership": 3, "differs": True}]
+    assert q1_summary({**c, "misses": [{**c["misses"][0], "generated_query": None}]})[
+        "misses"][0]["query"] is None
+
+
 def test_p3_q1_cli_prints_and_writes_the_comparison(tmp_path, capsys):
     typed_dir = run_dir_of(tmp_path, "typed", "p3-typed",
                            [q1_row(i, "correct") for i in ("a", "b")])
@@ -380,6 +500,11 @@ def test_p3_q1_cli_prints_and_writes_the_comparison(tmp_path, capsys):
     written = json.loads((typed_dir / "q1-base.json").read_text())
     assert printed == written and (written["b"], written["c"]) == (1, 0)
     assert written["also_in"] == []
+    out = tmp_path / "committed" / "q1.json"
+    assert main(["p3-q1", str(typed_dir), str(base_dir), "--summary", str(out)]) == 0
+    capsys.readouterr()
+    summary = json.loads(out.read_text())
+    assert summary == q1_summary(written) and "item_id" not in out.read_text()
 
 
 # -- also_in readings ----------------------------------------------------------------------------
@@ -395,10 +520,12 @@ def test_also_in_readings_report_both_counts():
     ]
     gq = lambda op, f: GoldQuery(store="typed_db", op=op, filters=f)  # noqa: E731
     items = [
-        item("r1", "?", gq("count", {"also_in": "t1"}), Answer(kind="number", value=1.0)),
+        item("r1", "How many are also cited by t1?", gq("count", {"also_in": "t1"}),
+             Answer(kind="number", value=1.0)),
         item("r2", "?", gq("list", {"also_in": "t1", "venue": "arXiv"}),
              Answer(kind="set", value=["p1"]), split="dev"),
-        item("r3", "?", gq("count", {"also_in": "t1;t2"}), Answer(kind="number", value=2.0)),
+        item("r3", 'How many have an also_in value of exactly "t1;t2"?',
+             gq("count", {"also_in": "t1;t2"}), Answer(kind="number", value=2.0)),
         item("r4", "?", gq("count", {"venue": "arXiv"}), Answer(kind="number", value=3.0)),
         item("r5", "?", gq("count", {"also_in": "t1"}), Answer(kind="number", value=1.0),
              qtype="factoid"),
@@ -406,9 +533,9 @@ def test_also_in_readings_report_both_counts():
     out = also_in_readings(items, records)
     assert out == [
         {"item_id": "r1", "split": "test", "op": "count", "also_in": "t1",
-         "string": 1, "membership": 4, "differs": True},
+         "wording": "membership", "string": 1, "membership": 4, "differs": True},
         {"item_id": "r2", "split": "dev", "op": "list", "also_in": "t1",
-         "string": 1, "membership": 2, "differs": True},
+         "wording": "membership", "string": 1, "membership": 2, "differs": True},
         {"item_id": "r3", "split": "test", "op": "count", "also_in": "t1;t2",
-         "string": 2, "membership": 3, "differs": True},
+         "wording": "value", "string": 2, "membership": 3, "differs": True},
     ]

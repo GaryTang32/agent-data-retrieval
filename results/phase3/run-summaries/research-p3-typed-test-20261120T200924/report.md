@@ -2,9 +2,11 @@
 
 Corpus `research`, system `p3-typed`, split `test`, 1 repeats, 27 rows, status `complete`. Generator `claude-sonnet-5-5`, judge `claude-opus-5-5`. Metrics version 2.
 
-> **Warning:** judge and generator share a model family
+Question types: count_filter only.
 
-Values in brackets are 95% CIs (percentile bootstrap, 10,000 resamples). End to end: cluster bootstrap over items of the statistic shown, using every repeat (items are resampled with all their rows); none where fewer than 2 items contribute. G3 retrieval: bootstrap of the mean over items at repeat 0 (retrieval is deterministic); none where n < 2.
+Answers from the typed tables `62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a` with the generated query: no retrieval, no answer or judge call, exact scoring.
+
+Values in brackets are 95% CIs (percentile bootstrap, 10,000 resamples). End to end: cluster bootstrap over items of the statistic shown, using every repeat (items are resampled with all their rows); none where fewer than 2 items contribute.
 
 ## End to end
 
@@ -20,12 +22,6 @@ Values in brackets are 95% CIs (percentile bootstrap, 10,000 resamples). End to 
 
 Citation precision –, evidence cited –. Tokens 59671 in / 2027 out. Spent $0.0000 in total (authoritative: every call, including any row dropped at a budget stop); rows written sum to $0.0000. Latency p50 – s, p95 – s (uncached calls: 0). Errors: 0.
 
-## G3 retrieval (excluding `insufficient`)
-
-| stratum | n | Recall@10 | nDCG@10 | MRR | coverage@10 | tokens@10 | full coverage |
-|---|---|---|---|---|---|---|---|
-| pooled | 0 | – | – | – | – | – | – |
-
 ## Determinism
 
 Retrieval identity: not measured (1 repeat); answer agreement: not measured; pass^1 0.963.
@@ -40,8 +36,8 @@ Route accuracy over rows whose gold op is not `abstain`; record match over rows 
 
 ## G1 compile
 
-Span containment –; text fidelity –; empty documents 0; index fingerprint `None`.
+Tables `62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a` (5 tables; the manifest is in compile.json).
 
 ## Judge
 
-Proxy κ – (n = 0; proxy, not human κ: judge vs the exact scorer on number/set/id items); raw agreement –, binary κ – (judge "partial" counted as incorrect; n = 0). Self-consistency – (n = 0). Human κ: not yet measured.
+No judge call: every answer is scored exactly.

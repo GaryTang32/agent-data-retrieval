@@ -369,6 +369,9 @@
   "metrics_version": 2,
   "n_items": 27,
   "n_rows": 27,
+  "qtypes": [
+    "count_filter"
+  ],
   "repeats": 1,
   "run_id": "research-p3-typed-test-20261120T200924",
   "snapshot": "23ad670175b7fa58f4ba5464842f512adabc53821b44d86a3cb9426dc74099d1",
@@ -376,8 +379,7 @@
   "status": "complete",
   "stub": false,
   "system": "p3-typed",
+  "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a",
   "w": null,
-  "warnings": [
-    "judge and generator share a model family"
-  ]
+  "warnings": []
 }

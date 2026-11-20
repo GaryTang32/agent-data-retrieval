@@ -6,7 +6,10 @@
   `SCHEMA_SHA256`), or the measurement would ask for new calls.
 - `q1_compare`: a `p3-typed` run against a baseline run over the common `count_filter`
   items: accuracy of each, the discordant pairs, the exact McNemar test and every miss with
-  its cause. Values are reported as numbers or list lengths, never as lists of ids.
+  its cause and generated query. It names items, so it stays in `runs/` (gitignored).
+- `q1_summary`: the committed form of `q1_compare`: no item id and no filter value (no
+  per-item rows are committed, spec §1); typed misses by cause and query shape, baseline
+  misses and the `also_in` readings as counts.
 - `also_in_readings`: the research `also_in` wording problem (§4.2): gold compares the
   `;`-joined string exactly, the questions read as membership; both counts per item.
 """
@@ -80,14 +83,16 @@ def cache_inputs_unchanged(corpus: str) -> list[str]:
 # -- Q1 ----------------------------------------------------------------------------------------
 
 def _run(run_dir: Path) -> tuple[dict, dict[str, dict]]:
-    """(config, repeat-0 count_filter rows by item id) of a run; a run with other repeats is
-    refused (Q1 compares one reply per item)."""
+    """(config, repeat-0 count_filter rows by item id) of a run; a run that did not complete,
+    or has other repeats, is refused (Q1 compares one reply per item of a whole run)."""
     run_dir = Path(run_dir)
     try:
         cfg = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
         lines = (run_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()
     except OSError as e:
         raise RunError(f"{run_dir}: not a run directory (config.json, results.jsonl)") from e
+    if cfg.get("status") != "complete":
+        raise RunError(f"{run_dir}: status {cfg.get('status')!r}; Q1 compares complete runs")
     rows = [json.loads(x) for x in lines if x.strip()]
     if any(r["repeat"] != 0 for r in rows):
         raise RunError(f"{run_dir}: holds repeats other than repeat 0; Q1 compares repeat 0 "
@@ -137,6 +142,11 @@ def q1_compare(typed_run: Path, baseline_run: Path) -> dict:
     if tcfg.get("system") != TYPED_SYSTEM:
         raise RunError(f"{typed_run}: not a {TYPED_SYSTEM} run (system "
                        f"{tcfg.get('system')!r})")
+    for key in ("corpus", "split"):
+        if tcfg.get(key) != bcfg.get(key):
+            raise RunError(f"the runs are not comparable: {key} {tcfg.get(key)!r} "
+                           f"({Path(typed_run).name}) against {bcfg.get(key)!r} "
+                           f"({Path(baseline_run).name})")
     ids = sorted(set(typed) & set(base))
     ok_t = {i: typed[i]["outcome"] == "correct" for i in ids}
     ok_b = {i: base[i]["outcome"] == "correct" for i in ids}
@@ -168,6 +178,46 @@ def q1_compare(typed_run: Path, baseline_run: Path) -> dict:
     }
 
 
+def _query_shape(gq: dict | None) -> dict | None:
+    """A generated query without its values: store, op and the sorted filter keys."""
+    if gq is None:
+        return None
+    return {"store": gq.get("store"), "op": gq.get("op"),
+            "filter_keys": sorted(gq.get("filters") or {})}
+
+
+def _count_rows(rows: list[dict], keys: tuple[str, ...]) -> list[dict]:
+    """`rows` counted by the values of `keys`, sorted by them."""
+    counts: dict[str, dict] = {}
+    for r in rows:
+        group = {k: r[k] for k in keys}
+        counts.setdefault(json.dumps(group, sort_keys=True), {**group, "n": 0})["n"] += 1
+    return [counts[k] for k in sorted(counts)]
+
+
+def q1_summary(c: dict) -> dict:
+    """The committed form of a `q1_compare` result (with or without its `also_in`): the same
+    counts, accuracies and McNemar test; each typed miss by outcome, cause, record match, tool
+    error, value (a list by its length) and query shape; baseline misses and the items found
+    in one run only as counts; the `also_in` readings by split, op and wording. No item id,
+    filter value or entity."""
+    misses = [{"outcome": m["outcome"], "cause": m["cause"],
+               "query_exec_match": m["query_exec_match"], "typed_error": m["typed_error"],
+               "value": _shown(m["value"]), "query": _query_shape(m["generated_query"])}
+              for m in c["misses"]]
+    out = {k: c[k] for k in ("typed_run", "baseline_run", "corpus", "split", "n", "typed",
+                             "baseline", "b", "c", "mcnemar_p")}
+    out.update(
+        only_typed=len(c["only_typed"]), only_baseline=len(c["only_baseline"]),
+        misses=sorted(misses, key=lambda m: json.dumps(m, sort_keys=True)),
+        baseline_misses=_count_rows(c["baseline_misses"],
+                                    ("outcome", "cause", "query_exec_match")))
+    if "also_in" in c:
+        out["also_in"] = [{k: a[k] for k in ("split", "op", "wording", "string", "membership",
+                                             "differs")} for a in c["also_in"]]
+    return out
+
+
 # -- the also_in readings ----------------------------------------------------------------------
 
 def _topics(value: Any) -> list[str]:
@@ -178,8 +228,10 @@ def _topics(value: Any) -> list[str]:
 def also_in_readings(items: list[GoldenItem], records: list[dict]) -> list[dict]:
     """For each count_filter item whose gold query compares `also_in` exactly (v0.1): the
     count under that string reading (`string`, the frozen gold) and under the membership
-    reading the questions use (`membership`: every topic of the value is one of the
-    record's topics); a `list` item counts its ids. In item id order."""
+    reading (`membership`: every topic of the value is one of the record's topics); a
+    `list` item counts its ids. `wording` is "value" for a question that asks for an
+    "also_in value" (the string reading is its own), else "membership" ("also cited by").
+    In item id order."""
     out = []
     for item in sorted(items, key=lambda i: i.id):
         gq = item.gold_query
@@ -193,6 +245,9 @@ def also_in_readings(items: list[GoldenItem], records: list[dict]) -> list[dict]
             "also_in")))]
         n_member = len({str(r["id"]) for r in member}) if gq.op == "list" else len(member)
         n_exact = len(exact) if isinstance(exact, list) else exact
+        wording = "value" if "also_in value" in item.question.casefold() else "membership"
         out.append({"item_id": item.id, "split": item.split, "op": gq.op, "also_in": value,
-                    "string": n_exact, "membership": n_member, "differs": n_exact != n_member})
+                    "wording": wording, "string": n_exact, "membership": n_member,
+                    "differs": n_exact != n_member})
     return out
+
