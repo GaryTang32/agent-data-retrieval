@@ -2117,7 +2117,6 @@ class Tools:
             try:
                 out = run_query(db, table, filters, op, fields=fields, order=order, limit=limit)
             except QueryError as e:
-                e.__traceback__ = None  # its frames hold the database: never kept by the error
                 raise ToolError(str(e)) from None
             ids, groups, truncated = out.ids, out.groups, out.truncated
             if ids is not None and len(ids) > QUERY_ROW_CAP:
@@ -2156,7 +2155,6 @@ class Tools:
             try:
                 out = run_sql(db, statement)
             except SqlRefused as e:
-                e.__traceback__ = None  # its frames hold the database: never kept by the error
                 raise ToolError(str(e)) from None
             log["sql_rows"] = len(out.rows)
             res = SqlResult(digest, out.columns, out.rows, out.truncated, self.snapshot,

@@ -233,16 +233,26 @@ def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
         return real(path, corpus, **kw)
 
     monkeypatch.setattr(tables_build, "build_tables", spy)
-    assert adr(["tables", "build", "--store", tables_store], capsys)[0] == 0
     generator = runner.load_config()["generator"]
-    assert seen[-1] == ("gov", {"with_extraction": False, "generator_profile": generator,
+    real_config = runner.load_config
+
+    def no_config():
+        raise AssertionError("the generator profile is resolved only for --with-extraction")
+
+    # a metadata build resolves no generator profile (it calls no model)
+    monkeypatch.setattr(runner, "load_config", no_config)
+    assert adr(["tables", "build", "--store", tables_store], capsys)[0] == 0
+    assert seen[-1] == ("gov", {"with_extraction": False, "generator_profile": None,
                                 "max_calls": 0})
     assert adr(["tables", "build", "--store", tables_store, "--generator", "claude_code_opus",
                 "--max-calls", 3, "--tables-for", "gov"], capsys)[0] == 0
     assert seen[-1] == ("gov", {"with_extraction": False,
                                 "generator_profile": "claude_code_opus", "max_calls": 3})
+    monkeypatch.setattr(runner, "load_config", real_config)
     code, _, err = adr(["tables", "build", "--store", tables_store, "--with-extraction"], capsys)
     assert code == 2 and "extraction tables are not built yet" in err
+    assert seen[-1] == ("gov", {"with_extraction": True, "generator_profile": generator,
+                                "max_calls": 0})
     # the corpus comes from the store's documents, or --tables-for when both are there
     research = make_tables_store(tmp_path / "r", [MANIFEST])
     assert adr(["tables", "build", "--store", research.path], capsys)[0] == 0

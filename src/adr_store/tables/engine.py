@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import weakref
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -113,6 +114,10 @@ class ViewDB:
         self.contracts = contracts
         self.tables_id = tables_id
         self._lock = threading.Lock()
+        # closes the connection when the database is closed or collected: a weakref callback
+        # runs before the collector finalises anything, so a database that only a reference
+        # cycle holds (a kept error's traceback) never leaves an unclosed connection behind
+        self._closer = weakref.finalize(self, conn.close)
 
     @classmethod
     def build(cls, store_path: Path, manifest: Manifest, tables_id: str,
@@ -147,13 +152,7 @@ class ViewDB:
         return cls(conn, contracts, tables_id)
 
     def close(self) -> None:
-        self.conn.close()
-
-    def __del__(self):  # an abandoned database closes its connection without a warning
-        try:
-            self.conn.close()
-        except Exception:  # noqa: BLE001 - during interpreter shutdown anything may be gone
-            pass
+        self._closer()
 
     def execute(self, sql: str, params: Sequence = ()) -> list[tuple]:
         """All rows of a statement; one statement at a time per database."""

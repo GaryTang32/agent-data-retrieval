@@ -338,8 +338,44 @@ def test_view_databases_are_cached_by_tables_view_and_filters(built, monkeypatch
     t.query_table(FR, applicability={"as_of": "2024-06-01"})
     assert len(t._table_dbs) == 2 and other not in t._table_dbs   # least recently used out
     assert key in t._table_dbs
-    # another caller's instance never sees this one's databases
-    assert as_(built, "user:globex-0")._table_dbs == {}
+    # another caller's instance builds its own database: another view, another object
+    mine = dict(t._table_dbs)
+    g = as_(built, "user:globex-0")
+    assert g.query_table(FR, op="list").ids != t.query_table(FR, op="list").ids
+    (gkey, gdb), = g._table_dbs.items()
+    assert gkey[1] == g._access().view != access.view and gkey[0] == key[0]
+    assert all(gdb is not d for d in t._table_dbs.values())
+    assert dict(t._table_dbs) == mine
+
+
+def test_an_acl_resync_builds_a_new_view_database_without_the_revoked_rows(built):
+    """One `Tools` instance across a re-sync that revokes a document: the next call resolves the
+    new view, builds a new database without the revoked rows, and an old handle (which names no
+    ACL) replays against the current ACL with the same reduced result."""
+    wide = {"include_superseded": True}
+    t = as_(built, "user:acme-0")
+    before = t.query_table(FR, op="list", applicability=wide)
+    counted = t.sql("SELECT count(*) FROM fr_documents", applicability=wide)
+    assert "2024-00001" in before.ids
+    (old_key, old_db), = t._table_dbs.items()
+    config = built.path.parent / f"{built.path.name}-acl"
+    policy = json.loads((config / "policy.json").read_text(encoding="utf-8"))
+    assert policy["rules"][0] == fr(1, ["tenant:acme", "tenant:globex"])
+    policy["rules"][0] = fr(1, ["tenant:globex"])
+    (config / "policy.json").write_text(json.dumps(policy), encoding="utf-8")
+    acl.sync(built.path, config / "directory.json", config / "policy.json", clock=lambda: T0)
+    after = t.query_table(FR, op="list", applicability=wide)
+    assert after.ids == [i for i in before.ids if i != "2024-00001"]
+    assert t.sql("SELECT count(*) FROM fr_documents", applicability=wide).rows == \
+        [[counted.rows[0][0] - 1]]
+    assert len(t._table_dbs) == 2
+    new_key = next(k for k in t._table_dbs if k != old_key)
+    assert new_key[0] == old_key[0] and new_key[1] != old_key[1]
+    assert new_key[1] == t._access().view and t._table_dbs[new_key] is not old_db
+    replay = t.query_table(FR, op="list", applicability=wide, handle=before.handle)
+    assert replay == after and replay.handle == before.handle
+    assert t.query_table(FR, {"id": "2024-00001"}, "lookup", applicability=wide,
+                         handle=before.handle).rows == []
 
 
 def test_views_with_the_same_rows_still_get_their_own_database(built):
@@ -576,21 +612,23 @@ def test_a_research_store_has_its_own_tables(tmp_path):
 
 
 def test_a_refusal_keeps_no_database_alive(built):
-    """A refused statement's traceback holds the database (the guard's frames): the tools drop
-    it, so a database is freed (and closed) by reference counting, never left to the cycle
-    collector, which may finalise its connection first (an unclosed-database warning)."""
+    """A refused statement's traceback holds the database (the guard's and the engine's frames)
+    but no cycle (`run_sql` drops its refusal), so once the caller drops the error and the tools,
+    a database is freed (and closed) by reference counting, not left to the cycle collector."""
     t = as_(built)
     t.sql("SELECT 1 FROM fr_documents")
     ref = weakref.ref(next(iter(t._table_dbs.values())))
     gc.collect()
     gc.disable()
     try:
-        for stmt in ("SELECT * FROM sqlite_master", "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL "
-                     "SELECT n + 1 FROM c) SELECT count(*) FROM c"):
+        for stmt in ("SELECT * FROM sqlite_master", "SELECT nosuch FROM fr_documents",
+                     "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c) "
+                     "SELECT count(*) FROM c"):
             with pytest.raises(ToolError):
                 t.sql(stmt)
-        with pytest.raises(ToolError):
-            t.query_table(FR, {"bogus": 1})
+        for filters, op in (({"bogus": 1}, "count"), ({}, "median")):
+            with pytest.raises(ToolError):
+                t.query_table(FR, filters, op)
         del t
         assert ref() is None
     finally:

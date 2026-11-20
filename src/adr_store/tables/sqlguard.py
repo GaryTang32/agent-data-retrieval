@@ -663,5 +663,8 @@ def run_sql(db: ViewDB, statement: str) -> SqlOutcome:
             slot.guard = None
             guard.close()
     if refusal is not None:
-        raise refusal from None
+        try:
+            raise refusal from None
+        finally:   # the traceback holds this frame: no frame-refusal cycle keeps `db` alive
+            del refusal
     return SqlOutcome(columns, rows, truncated)

@@ -83,7 +83,7 @@ def gov_db(tmp_path_factory):
     result = build_tables(path, "gov")
     db = ViewDB.build(path, ov.load_manifest(path, result.tables_id), result.tables_id, None)
     yield db
-    db.close()   # refusals kept in tracebacks hold the database in cycles: close it here
+    db.close()
 
 
 @pytest.fixture(scope="module")
@@ -993,3 +993,33 @@ def test_natural_and_using_are_refused_without_the_name_check(gov_db, monkeypatc
 ])
 def test_on_joins_json_each_ctes_and_string_values_still_run(gov_db, stmt, rows):
     assert run_sql(gov_db, stmt).rows == rows
+
+
+def test_a_refusal_holds_no_reference_cycle(tmp_path, monkeypatch):
+    """A refused statement leaves no cycle between `run_sql`'s frame and the refusal it raises,
+    so a database nobody holds is freed (and closed) by reference counting, never left to the
+    cycle collector (which may finalise its connection first: an unclosed-database warning)."""
+    import gc
+    import weakref
+
+    path = tmp_path / "store"
+    make_tables_store(path)
+    result = build_tables(path, "gov")
+    db = ViewDB.build(path, ov.load_manifest(path, result.tables_id), result.tables_id, None)
+    ref = weakref.ref(db)
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 20_000)
+    gc.collect()
+    gc.disable()
+    try:
+        for stmt in ("SELECT * FROM sqlite_master",                       # denied
+                     "SELECT nosuch FROM fr_documents",                    # syntax
+                     "WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r) "
+                     "SELECT count(*) FROM r"):                           # budget
+            with pytest.raises(SqlRefused):
+                run_sql(db, stmt)
+        del db
+        assert ref() is None
+    finally:
+        if ref() is not None:   # RED: close the leaked database before the collector does
+            ref().close()
+        gc.enable()

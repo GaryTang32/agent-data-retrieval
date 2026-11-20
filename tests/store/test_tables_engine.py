@@ -527,3 +527,22 @@ def test_malformed_arguments_are_query_errors(gov_db, kwargs, message):
     args = {"table": "fr_documents", "filters": {}, "op": "count", **kwargs}
     with pytest.raises(QueryError, match=message):
         run_query(gov_db, args.pop("table"), args.pop("filters"), args.pop("op"), **args)
+
+
+def test_a_database_collected_in_a_cycle_closes_its_connection_first():
+    """A `ViewDB` that only a reference cycle holds (an error kept with its traceback, a frame
+    that holds itself) is closed before the collector finalises its connection: no
+    unclosed-database warning, whatever order the collector visits them in."""
+    import gc
+    import warnings
+
+    c = load_contracts()["fr_documents"]
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always", ResourceWarning)
+        for _ in range(50):
+            db = ViewDB.from_rows({"fr_documents": c}, {"fr_documents": []})
+            holder = {"db": db}
+            holder["self"] = holder          # the database is only reachable from a cycle
+            del db, holder
+            gc.collect()
+    assert [str(w.message) for w in seen if issubclass(w.category, ResourceWarning)] == []

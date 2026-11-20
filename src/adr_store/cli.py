@@ -937,7 +937,9 @@ def _tables_corpus(a: argparse.Namespace) -> str:
 
 def _tables_build(a: argparse.Namespace) -> int:
     corpus = _tables_corpus(a)
-    generator = a.generator or eval_runner.load_config()["generator"]
+    # only an extraction build calls a model: a metadata build resolves no profile
+    generator = (a.generator or eval_runner.load_config()["generator"]) if a.with_extraction \
+        else a.generator
     try:
         res = tables_build.build_tables(a.store, corpus, with_extraction=a.with_extraction,
                                         generator_profile=generator, max_calls=a.max_calls)
