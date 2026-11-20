@@ -10,7 +10,7 @@ import pytest
 from adr_store.tables import overlay as ov
 from adr_store.tables import sqlguard
 from adr_store.tables.build import build_tables
-from adr_store.tables.contracts import load_contracts
+from adr_store.tables.contracts import MAX_VALUE_BYTES, load_contracts
 from adr_store.tables.engine import ViewDB, run_query
 from adr_store.tables.provenance import RowRecord
 from adr_store.tables.sqlguard import (
@@ -19,6 +19,7 @@ from adr_store.tables.sqlguard import (
     ERR_ROWS,
     ERR_SYNTAX,
     FUNCTIONS,
+    SQL_CHARGE_BYTES,
     SQL_MAX_BYTES,
     SQL_MAX_VALUE,
     SQL_ROW_CAP,
@@ -159,8 +160,8 @@ def test_the_function_whitelist():
 
 
 def test_the_limits():
-    assert (SQL_ROW_CAP, SQL_STEP_BUDGET, SQL_STEP_EVERY, SQL_MAX_BYTES, SQL_MAX_VALUE) == \
-        (1000, 5_000_000, 1000, 2_000_000, 65_536)
+    assert (SQL_ROW_CAP, SQL_STEP_BUDGET, SQL_STEP_EVERY, SQL_MAX_BYTES, SQL_CHARGE_BYTES) == \
+        (1000, 5_000_000, 1000, 2_000_000, 64)
 
 
 # -- date and time functions (deterministic replacements) ----------------------------------
@@ -435,17 +436,20 @@ def test_rows_stream_and_the_size_refusal_comes_before_all_are_fetched(gov_db, m
 
 
 def test_a_wide_result_is_refused_without_holding_it(gov_db):
-    # the review's memory probe, at the 64 KB value limit: 343 rows of about 60 KB
-    e = _refused(gov_db, "SELECT replace(printf('%60000d', 1), ' ', 'x') || a.id "
-                         "FROM fr_documents a, fr_documents b, fr_documents c")
+    # the review's memory probe, at the value limit: 343 rows of nearly the limit each
+    e = _refused(gov_db, f"SELECT replace(printf('%{SQL_MAX_VALUE - 200}d', 1), ' ', 'x') "
+                         "|| a.id FROM fr_documents a, fr_documents b, fr_documents c")
     assert e.kind == "rows"
 
 
-def test_values_are_limited_to_64_kb(gov_db):
-    ok = "SELECT length(replace(printf('%60000d', 1), ' ', 'x'))"
-    assert run_sql(gov_db, ok).rows == [[60000]]
-    for stmt in ("SELECT length(replace(printf('%40000d', 1), ' ', 'xx'))",
-                 "SELECT length(group_concat(replace(printf('%30000d', n), ' ', 'x'))) FROM "
+def test_values_are_limited_to_the_shared_bound(gov_db):
+    assert SQL_MAX_VALUE >= MAX_VALUE_BYTES   # every stored value can be read
+    near = SQL_MAX_VALUE - 100
+    ok = f"SELECT length(replace(printf('%{near}d', 1), ' ', 'x'))"
+    assert run_sql(gov_db, ok).rows == [[near]]
+    half = SQL_MAX_VALUE // 2
+    for stmt in (f"SELECT length(replace(printf('%{half + 100}d', 1), ' ', 'xx'))",
+                 f"SELECT length(group_concat(replace(printf('%{half}d', n), ' ', 'x'))) FROM "
                  "(SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3)",
                  "WITH RECURSIVE r(n, s) AS (SELECT 1, 'x' UNION ALL SELECT n + 1, s || s FROM r "
                  "WHERE n < 30) SELECT max(length(s)) FROM r"):
@@ -454,43 +458,53 @@ def test_values_are_limited_to_64_kb(gov_db):
 
 
 def test_amplifying_functions_are_charged_by_result_size(gov_db, monkeypatch):
-    # under 1,000 virtual-machine steps, so only the charges can exceed the budget:
-    # each 60,000-character result charges 60000 // 1024 = 58 steps
-    one = "SELECT length(replace(printf('%60000d', 1), ' ', 'x'))"
-    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 116)
-    assert run_sql(gov_db, one).rows == [[60000]]           # printf 58 + replace 58
-    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 115)
-    assert _refused(gov_db, one).kind == "budget"
-    for fn, charged in (("format('%60000d', 1)", 58), ("substr(printf('%60000d', 1), 1)", 116)):
+    # under 1,000 virtual-machine steps, so only the charges can exceed the budget: each
+    # 6,400-character result charges 6400 // 64 = 100 steps
+    assert SQL_CHARGE_BYTES == 64
+    one = "SELECT length(replace(printf('%6400d', 1), ' ', 'x'))"
+    for stmt, charged in ((one, 200),                                         # printf + replace
+                          ("SELECT length(format('%6400d', 1))", 100),
+                          ("SELECT length(substr(printf('%6400d', 1), 1))", 200),
+                          ("SELECT length(group_concat(x, '')) FROM (SELECT printf('%3200d', 1) "
+                           "AS x UNION ALL SELECT printf('%3200d', 2))", 200)):  # 50 + 50 + 100
         monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged)
-        assert run_sql(gov_db, f"SELECT length({fn})").rows == [[60000]]
+        assert run_sql(gov_db, stmt).rows == [[6400]]
         monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged - 1)
-        assert _refused(gov_db, f"SELECT length({fn})").kind == "budget"
-    agg = ("SELECT length(group_concat(x, '')) FROM (SELECT printf('%30000d', 1) AS x "
-           "UNION ALL SELECT printf('%30000d', 2))")   # printf 2 x 29, group_concat 58
-    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 116)
-    assert run_sql(gov_db, agg).rows == [[60000]]
-    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 115)
-    assert _refused(gov_db, agg).kind == "budget"
+        e = _refused(gov_db, stmt)
+        assert e.kind == "budget" and str(e) == ERR_BUDGET
+
+
+LARGE = SQL_MAX_VALUE - 200
+LARGE_VALUE_PROBES = [   # the review's probes, at the largest value the limit allows
+    f"SELECT max(length(replace(printf('%{LARGE}d', a.id), ' ', 'x') || b.id)) "
+    "FROM fr_documents a, fr_documents b, fr_documents c, fr_documents d, fr_documents e, "
+    "fr_documents f",
+    f"WITH RECURSIVE r(n, s) AS (SELECT 1, '' UNION SELECT n + 1, replace(printf('%{LARGE}d', "
+    "n), ' ', 'x') FROM r) SELECT count(*) FROM r",
+]
 
 
 def test_large_value_joins_and_recursion_stop_at_the_budget(gov_db, monkeypatch):
-    big = "replace(printf('%60000d', a.id), ' ', 'x')"
+    big = f"replace(printf('%{LARGE}d', a.id), ' ', 'x')"
     monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 10_000)
     small = ("SELECT max(length(replace(printf('%10d', a.id), ' ', 'x'))) "
              "FROM fr_documents a, fr_documents b, fr_documents c")
     assert run_sql(gov_db, small).rows == [[10]]   # 343 rows: the steps alone are in budget
     e = _refused(gov_db, small.replace("replace(printf('%10d', a.id), ' ', 'x')", big))
     assert e.kind == "budget" and str(e) == ERR_BUDGET
-    # at the production budget these run about 16 s and 25 s (see the Task 5 report); a tenth
-    # of it keeps the test quick while the large-value work still dominates the steps
     monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 500_000)
-    for stmt in (f"SELECT max(length({big} || b.id)) FROM fr_documents a, fr_documents b, "
-                 "fr_documents c, fr_documents d, fr_documents e, fr_documents f",
-                 "WITH RECURSIVE r(n, s) AS (SELECT 1, '' UNION SELECT n + 1, "
-                 "replace(printf('%60000d', n), ' ', 'x') FROM r) SELECT count(*) FROM r"):
+    for stmt in LARGE_VALUE_PROBES:
         e = _refused(gov_db, stmt)
         assert e.kind == "budget" and str(e) == ERR_BUDGET
+
+
+@pytest.mark.parametrize("stmt", LARGE_VALUE_PROBES)
+def test_large_value_probes_stop_quickly_at_the_production_budget(gov_db, stmt):
+    """About 1–1.5 s each (measured; see the Task 5 report): the charges, not the steps,
+    end them."""
+    assert sqlguard.SQL_STEP_BUDGET == 5_000_000
+    e = _refused(gov_db, stmt)
+    assert e.kind == "budget" and str(e) == ERR_BUDGET
 
 
 def test_group_concat_keeps_sqlite_semantics(gov_db):
@@ -572,3 +586,17 @@ def test_error_codes_map_to_fixed_classes(code, kind):
     e.sqlite_errorcode = code   # SQLITE_FULL, SQLITE_NOMEM, SQLITE_TOOBIG, SQLITE_ERROR
     refusal = sqlguard._Guard(frozenset(), frozenset()).refusal(e)
     assert refusal.kind == kind and "engine" not in str(refusal)
+
+
+def test_query_table_works_after_run_sql(gov_db):
+    """The overrides stay registered on the view database but act only inside `run_sql`;
+    `query_table` uses none of them."""
+    run_sql(gov_db, "SELECT date('2024-01-01'), replace(id, '-', ''), group_concat(type), "
+                    "printf('%d', year), substr(id, 1, 4) FROM fr_documents")
+    assert run_query(gov_db, "fr_documents", {"type": "Rule"}, "count").count == 5
+    assert run_query(gov_db, "fr_documents", {"title__contains": "drawbridge"}, "list").ids == \
+        ["2024-00001", "2024-00004", "2024-00005"]   # 2024-00002 has no title
+    groups = run_query(gov_db, "fr_documents", {}, "count_by", fields=["cfr_parts"]).groups
+    assert {"value": "33 CFR 117", "count": 3} in groups
+    rows = run_query(gov_db, "fr_documents", {"id": "2024-00003"}, "lookup").rows
+    assert rows[0]["row"]["cfr_parts"] == ["47 CFR 73"]

@@ -17,6 +17,7 @@ from adr_store.store import StoreError
 from adr_store.tables import overlay as ov
 from adr_store.tables.contracts import (
     CONTRACT_DIR,
+    MAX_VALUE_BYTES,
     Contract,
     contract_sha256,
     load_contracts,
@@ -558,3 +559,32 @@ def test_the_federal_register_agency_id_spec_is_fr_agency_id():
     col = {c.name: c for c in CONTRACTS["fr_agencies"].columns}["fr_agency_id"]
     assert col.spec_id == "fr.fr_agency_id@1"
     assert "fr.fr_agency_id" in RESLICERS and "fr.agency_id" not in RESLICERS
+
+
+# -- the stored-value limit (shared with guarded sql, ruling P20) -------------------------------
+
+def test_a_stored_value_over_8_kb_is_a_problem():
+    assert MAX_VALUE_BYTES == 8192
+    at_limit = with_row(GOOD, {"title": "x" * 8192})
+    assert validate_row(CONTRACT, at_limit) == []
+    over = with_row(GOOD, {"title": "x" * 8193})
+    assert validate_row(CONTRACT, over) == ["title: value over 8192 bytes"]
+    multibyte = with_row(GOOD, {"title": "é" * 4097})   # 4,097 characters, 8,194 bytes
+    assert validate_row(CONTRACT, multibyte) == ["title: value over 8192 bytes"]
+    as_list = with_row(GOOD, {"other_ids": ["x" * 8190]})   # canonical JSON ["x…"] is 8,194
+    assert validate_row(CONTRACT, as_list) == ["other_ids: value over 8192 bytes"]
+
+
+def test_stored_provenance_over_8_kb_is_a_problem():
+    long_quote = value_prov(D, "fr.title@1", (0, 5), quote="q" * 8192)
+    rec = with_row(GOOD, {}, {"title": long_quote})
+    assert validate_row(CONTRACT, rec) == ["title: provenance over 8192 bytes"]
+
+
+def test_a_build_with_a_9_kb_value_refuses_the_row(tmp_path):
+    big = with_row(fr_row(D, "2024-00009"), {"action": "a" * 9 * 1024})
+    tf = write_table(tmp_path, SNAP, CONTRACT, [*ROWS, big], report := {})
+    assert (tf.rows, tf.rejected) == (3, 1)
+    assert report["rejected"][0]["problems"] == ["action: value over 8192 bytes"]
+    lines = (tmp_path / "tables" / SNAP / tf.file).read_text().splitlines()
+    assert "2024-00009" not in "".join(lines)

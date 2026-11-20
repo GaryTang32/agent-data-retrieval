@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import math
 import re
 from pathlib import Path
@@ -26,6 +27,10 @@ from adr_store.tables.provenance import SPEC_ID, RowRecord, ValueProv
 CONTRACT_DIR = REPO_ROOT / "config" / "tables"
 ColumnType = Literal["text", "int", "real", "bool", "date", "text[]", "real[]"]
 _INT64 = 2**63
+# The most bytes a stored value, or its provenance, takes in its stored form (UTF-8 text, or
+# canonical JSON for a list or provenance). Guarded SQL (`sqlguard`) reads values with the same
+# bound, so no stored value can be over it at read time (ruling P20).
+MAX_VALUE_BYTES = 8192
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -199,11 +204,32 @@ def _prov_problems(col: Column, value: Any, prov: ValueProv | list[ValueProv]) -
     return problems
 
 
+def _canonical(v: Any) -> str:
+    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def stored_bytes(v: Any) -> int:
+    """Bytes of a value in its stored form: UTF-8 text, canonical JSON for a list (numbers and
+    bools are short)."""
+    if isinstance(v, str):
+        return len(v.encode("utf-8"))
+    if isinstance(v, list):
+        return len(_canonical(v).encode("utf-8"))
+    return 0
+
+
+def _prov_bytes(prov: ValueProv | list[ValueProv]) -> int:
+    dumped = ([p.model_dump(mode="json") for p in prov] if isinstance(prov, list)
+              else prov.model_dump(mode="json"))
+    return len(_canonical(dumped).encode("utf-8"))
+
+
 def validate_row(c: Contract, rec: RowRecord) -> list[str]:
     """What is wrong with `rec` under contract `c`; [] when it is valid. Checks that the row
     has exactly the stored columns, each value has its column's type (no coercion: a bool is not
     an int, a string is not a number) and allowed values, a null is allowed and has a null
-    reason, and every value has provenance of the column's spec (one entry per list element)."""
+    reason, every value has provenance of the column's spec (one entry per list element), and
+    no value or provenance is over `MAX_VALUE_BYTES` in its stored form."""
     problems: list[str] = []
     stored = {col.name: col for col in c.stored_columns}
     for name in sorted(set(rec.row) - set(stored)):
@@ -222,8 +248,13 @@ def validate_row(c: Contract, rec: RowRecord) -> list[str]:
         elif found := _value_problems(col, value):
             problems.extend(found)
             continue
+        elif stored_bytes(value) > MAX_VALUE_BYTES:
+            problems.append(f"{name}: value over {MAX_VALUE_BYTES} bytes")
+            continue
         if name not in rec.prov:
             problems.append(f"{name}: no provenance")
-        else:
-            problems.extend(_prov_problems(col, value, rec.prov[name]))
+        elif found := _prov_problems(col, value, rec.prov[name]):
+            problems.extend(found)
+        elif _prov_bytes(rec.prov[name]) > MAX_VALUE_BYTES:
+            problems.append(f"{name}: provenance over {MAX_VALUE_BYTES} bytes")
     return problems

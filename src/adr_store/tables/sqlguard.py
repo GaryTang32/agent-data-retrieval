@@ -23,8 +23,8 @@ P19, P20).
   `SQL_MAX_VALUE` bytes, and the functions whose result can be much longer than their inputs
   (`replace`, `printf`/`format`, `substr`/`substring` and the `group_concat` aggregate) are
   Python wrappers that compute with SQLite's own code on the private connection and charge
-  `len(result) // 1024` extra steps to the budget. A value over the limit, the final result or
-  any intermediate one, is refused as `rows` ("result too large");
+  `len(result) // SQL_CHARGE_BYTES` extra steps to the budget. A value over the limit, the
+  final result or any intermediate one, is refused as `rows` ("result too large");
 - at most `SQL_ROW_CAP` rows (one more only sets `truncated`) and `SQL_MAX_BYTES` of canonical
   JSON, counted row by row as the cursor steps, so the refusal comes before the rest is fetched.
 
@@ -38,8 +38,10 @@ infinity on overflow, as in `9e999`) as null, the way SQLite itself stores NaN.
 Every refusal is a `SqlRefused` whose message is one of four fixed texts, never the engine's,
 so an error cannot reveal hidden rows or table internals. The authorizer, budget and limit are
 installed for the call only. The function overrides cannot be unregistered from a connection,
-so they are installed once per database and dispatch to the call in progress; outside a call
-they refuse (nothing else runs these functions on a view database: `query_table` does not).
+so they stay registered on the view database once the first call installs them, and dispatch
+to the call in progress: they act only inside `run_sql` and raise anywhere else. `query_table`
+uses none of them (date, datetime, strftime, julianday, replace, printf, format, substr,
+substring, group_concat), so it works on the same database before and after `run_sql`.
 """
 
 from __future__ import annotations
@@ -58,7 +60,10 @@ SQL_ROW_CAP = 1000
 SQL_STEP_BUDGET = 5_000_000
 SQL_STEP_EVERY = 1000
 SQL_MAX_BYTES = 2_000_000
-SQL_MAX_VALUE = 65_536   # bytes in one value or row; the longest stored cell is 4,401 (gov)
+# bytes in one value or row SQLite builds; at least the stored-value bound
+# (`contracts.MAX_VALUE_BYTES`), so every stored value can be read
+SQL_MAX_VALUE = 65_536
+SQL_CHARGE_BYTES = 64    # an amplifying function's result charges one step per 64 bytes
 
 ERR_SYNTAX = "sql refused (syntax): one SELECT statement over the listed tables"
 ERR_DENIED = ("sql refused (denied): only reading the listed tables with whitelisted functions "
@@ -288,9 +293,9 @@ class _Guard:
         return 0
 
     def charge(self, result: Any) -> None:
-        """Charge `len(result) // 1024` steps for a text or blob result."""
+        """Charge `len(result) // SQL_CHARGE_BYTES` steps for a text or blob result."""
         if isinstance(result, (str, bytes)):
-            self.steps += len(result) // 1024
+            self.steps += len(result) // SQL_CHARGE_BYTES
             if self.steps > SQL_STEP_BUDGET:
                 self.over_budget = True
                 raise ValueError("past the step budget")
