@@ -31,9 +31,11 @@ _INT64 = 2**63
 # canonical JSON for a list or provenance), and the most a whole stored row takes as its
 # canonical row record (row and provenance, the overlay line without its newline). Guarded SQL
 # (`sqlguard`) reads with SQLite's length limit at `MAX_ROW_BYTES`, which also bounds every row
-# SQLite builds (sorting, DISTINCT), so any stored row can be selected and sorted whole: the row
-# record repeats every column name, which outweighs SQLite's per-column record overhead
-# (ruling P20).
+# SQLite builds (sorting, DISTINCT). A stored row fits whole: the row record repeats every column
+# name, which outweighs SQLite's per-column record overhead. A computed column (an entity's
+# per-view `display_name`, one of the entity's raw forms, at most `MAX_VALUE_BYTES`) is outside
+# the row record; entity rows are small (at most about 2.3 KB in the real builds), so they fit
+# with it (ruling P20).
 MAX_VALUE_BYTES = 8192
 MAX_ROW_BYTES = 16_384
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

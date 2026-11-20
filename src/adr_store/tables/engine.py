@@ -52,6 +52,14 @@ def _casefold(x: Any) -> str | None:
     return None if x is None else str(x).casefold()
 
 
+def _contains_casefold(haystack: Any, needle: Any) -> int | None:
+    """1 when the case-folded `haystack` contains `needle`, else 0 (the engine's own function:
+    guarded SQL overrides `instr`)."""
+    if haystack is None or needle is None:
+        return None
+    return int(str(needle) in str(haystack).casefold())
+
+
 def _json(v: Any) -> str:
     return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -124,6 +132,7 @@ class ViewDB:
             raise QueryError(f"unknown table {unknown[0]!r}")
         conn = sqlite3.connect(":memory:", check_same_thread=False)
         conn.create_function("casefold", 1, _casefold, deterministic=True)
+        conn.create_function("contains_casefold", 2, _contains_casefold, deterministic=True)
         for name, c in contracts.items():
             _create(conn, c, rows.get(name, []))
         conn.commit()
@@ -245,7 +254,7 @@ def _mismatch(key: str, col: Column, v: Any) -> tuple[str, list, str]:
 def _contains(ref: str, col: Column, v: Any) -> tuple[str, list] | None:
     needle = str(v).casefold()
     if col.type in ("text", "date"):
-        return f"({_guard(ref, col)} AND instr(casefold({ref}), ?) > 0)", [needle]
+        return f"({_guard(ref, col)} AND contains_casefold({ref}, ?))", [needle]
     if col.type.endswith("[]"):
         return (f"({_guard(ref, col)} AND EXISTS (SELECT 1 FROM json_each({ref}) AS je "
                 f"WHERE casefold(je.value) = ?))"), [needle]

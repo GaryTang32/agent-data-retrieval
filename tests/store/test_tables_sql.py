@@ -469,7 +469,8 @@ def test_amplifying_functions_are_charged_by_result_size(gov_db, monkeypatch):
     # 6,400-character result charges 6400 // 64 = 100 steps
     assert SQL_CHARGE_BYTES == 64
     one = "SELECT length(replace(printf('%6400d', 1), ' ', 'x'))"
-    for stmt, charged in ((one, 200),                                         # printf + replace
+    # printf 100 + replace 100, and replace's search 6400 * 1 // 4096 = 1
+    for stmt, charged in ((one, 201),
                           ("SELECT length(format('%6400d', 1))", 100),
                           ("SELECT length(substr(printf('%6400d', 1), 1))", 200),
                           ("SELECT length(group_concat(x, '')) FROM (SELECT printf('%3200d', 1) "
@@ -551,7 +552,7 @@ def test_the_overrides_hold_no_finished_call(gov_db):
             with pytest.raises(sqlite3.OperationalError):
                 gov_db.execute(q)
         gc.collect()
-    assert gov_db.execute("SELECT casefold('A'), instr('ab', 'b')") == [("a", 2)]
+    assert gov_db.execute("SELECT casefold('A'), contains_casefold('AB', 'b')") == [("a", 1)]
     assert run_sql(gov_db, "SELECT date('2024-03-01')").rows == [["2024-03-01"]]
 
 
@@ -626,3 +627,167 @@ def test_a_stored_row_at_the_row_limit_is_selected_and_sorted_whole():
         assert [r[1] for r in run_sql(db, sub).rows] == ["2024-00012", "2024-00011", "2024-00010"]
     finally:
         db.close()
+
+
+# -- fix round 2: reserved identifiers, search functions, window group_concat -----------------
+
+@pytest.mark.parametrize("stmt", [
+    # NATURAL JOIN and JOIN ... USING compare right-hand columns without the authorizer
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN sqlite_master",
+    "SELECT count(*) FROM (SELECT 'table' AS type, 'fr_documents' AS name) "
+    "NATURAL JOIN sqlite_master",
+    "SELECT count(*) FROM (SELECT 'table' AS type) JOIN sqlite_master USING (type)",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL LEFT JOIN sqlite_master",
+    "SELECT count(*) FROM sqlite_master NATURAL JOIN (SELECT 'table' AS type)",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN sqlite_temp_master",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN temp.sqlite_master",
+    "SELECT count(*) FROM (SELECT 0 AS id) NATURAL JOIN json_tree('[1,2,[3]]')",
+    "SELECT count(*) FROM (SELECT 'json' AS name) NATURAL JOIN pragma_function_list",
+    "SELECT count(*) FROM (SELECT 'id' AS name) NATURAL JOIN pragma_table_info('fr_documents')",
+    "SELECT count(*) FROM (SELECT 1 AS value) NATURAL JOIN generate_series(1, 10)",
+    "SELECT count(*) FROM (SELECT 'main' AS schema) NATURAL JOIN dbstat",
+    "SELECT count(*) FROM (SELECT 1 AS pgno) NATURAL JOIN sqlite_dbpage",
+    "SELECT count(*) FROM (SELECT 'fr_documents' AS name) NATURAL JOIN sqlite_stat1",
+    # every spelling of a reserved name
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN \"sqlite_master\"",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN [SQLITE_MASTER]",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN `Sqlite_Schema`",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN 'sqlite_master'",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN main.\"sqlite_master\"",
+    "SELECT count(*) FROM (SELECT 0 AS id) NATURAL JOIN \"JSON_TREE\"('[1]')",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN [pragma_database_list]",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN fts5vocab",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN rtree",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN carray",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN sqlite_stmt",
+])
+def test_reserved_names_are_denied_in_any_spelling(gov_db, stmt):
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt, rows", [
+    # NATURAL compares every shared column: only rows with no NULL cell match themselves
+    ("SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b", [[2]]),
+    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b USING (id)", [[N]]),
+    ("SELECT count(*) FROM fr_documents, json_each(fr_documents.cfr_parts)", [[7]]),
+    ("SELECT 'sqlite_master is a name', 'x pragma_y'", [["sqlite_master is a name",
+                                                          "x pragma_y"]]),
+    ("SELECT count(*) FROM fr_documents WHERE title LIKE '%sqlite%'", [[0]]),
+    ("SELECT \"ſqlite_master\" FROM (SELECT 1 AS \"ſqlite_master\")", [[1]]),  # not ASCII
+])
+def test_ordinary_names_and_strings_still_run(gov_db, stmt, rows):
+    assert run_sql(gov_db, stmt).rows == rows
+
+
+def _lit(v):
+    if v is None:
+        return "NULL"
+    if isinstance(v, bytes):
+        return "X'" + v.hex() + "'"
+    if isinstance(v, (int, float)):
+        return repr(v)
+    return "'" + v.replace("'", "''") + "'"
+
+
+def _cases(seed: int, n: int):
+    import random
+    rng = random.Random(seed)
+    alphabet = "aAbB%_*?[]^-\\éÉßẞ!z0 "
+    def text():
+        return "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 8)))
+    def value():
+        k = rng.random()
+        if k < 0.05:
+            return None
+        if k < 0.10:
+            return rng.choice([0, 12, -3, 1.5])
+        if k < 0.15:
+            return text().encode("utf-8")
+        return text()
+    return [(value(), value(), rng.choice(["\\", "%", "a", "é", "_"])) for _ in range(n)]
+
+
+def test_search_overrides_match_sqlite_exactly(gov_db):
+    """`instr`, `like` (2 and 3 arguments, so `LIKE`, `NOT LIKE` and `ESCAPE` route to it) and
+    `glob` give SQLite's own answers: an oracle over 400 seeded cases."""
+    cases = _cases(20261120, 400)
+    values = ", ".join(f"({i}, {_lit(x)}, {_lit(y)}, {_lit(e)})"
+                       for i, (x, y, e) in enumerate(cases))
+    exprs = ("instr(x, y), x LIKE y, x NOT LIKE y, x LIKE y ESCAPE e, like(y, x), "
+             "like(y, x, e), x GLOB y, x NOT GLOB y, glob(y, x), upper(x) LIKE lower(y)")
+    q = (f"SELECT i, {exprs} FROM (SELECT column1 AS i, column2 AS x, column3 AS y, "
+         f"column4 AS e FROM (VALUES {values})) ORDER BY i")
+    plain = sqlite3.connect(":memory:")
+    try:
+        expected = [list(r) for r in plain.execute(q)]
+    finally:
+        plain.close()
+    assert run_sql(gov_db, q).rows == expected
+    assert any(r[2] == 1 for r in expected) and any(r[7] == 1 for r in expected)
+
+
+def test_a_like_escape_must_be_one_character_as_in_sqlite(gov_db):
+    assert _refused(gov_db, "SELECT 'a' LIKE 'a' ESCAPE 'xy'").kind == "syntax"
+
+
+def test_search_functions_are_charged_by_their_search(gov_db, monkeypatch):
+    # printf('%4096d') charges 64 and printf('%1024d') 16; the search charges
+    # 4096 * 1024 // 4096 = 1024; replace also charges its 4,096-character result (64)
+    h, n = "printf('%4096d', 1)", "printf('%1024d', 2)"
+    for stmt, charged in ((f"SELECT instr({h}, {n})", 1104),
+                          (f"SELECT {h} LIKE {n}", 1104),
+                          (f"SELECT {h} NOT LIKE {n} ESCAPE '!'", 1104),
+                          (f"SELECT {h} GLOB {n}", 1104),
+                          (f"SELECT length(replace({h}, {n}, 'x'))", 1168)):
+        monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged)
+        run_sql(gov_db, stmt)
+        monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged - 1)
+        e = _refused(gov_db, stmt)
+        assert e.kind == "budget" and str(e) == ERR_BUDGET
+
+
+_V = ("WITH h AS MATERIALIZED (SELECT replace(printf('%16000d', 1), ' ', 'a') AS h), "
+      "n AS MATERIALIZED (SELECT replace(printf('%7999d', 1), ' ', 'a') || 'b' AS n), "
+      "p AS MATERIALIZED (SELECT replace(printf('%4000d', 1), ' ', '%a') || 'b' AS p) ")
+_J = ", fr_documents a, fr_documents b, fr_documents c, fr_documents d"
+_X = "CASE WHEN d.id IS NULL THEN '' ELSE {} END"
+SEARCH_PROBES = [   # the review's probes: about 12 minutes, 2 minutes and 21 s before
+    _V + "SELECT count(*) FROM h, n" + _J + " WHERE instr(h, " + _X.format("n") + ") > 0",
+    _V + "SELECT count(*) FROM h, p" + _J + " WHERE h LIKE " + _X.format("p"),
+    _V + "SELECT count(*) FROM h, p" + _J + " WHERE h GLOB "
+    + _X.format("replace(p, '%', '*')"),
+    _V + "SELECT count(*) FROM h, n" + _J + " WHERE length(replace(h, " + _X.format("n")
+    + ", 'x')) > 0",
+]
+
+
+@pytest.mark.parametrize("stmt", SEARCH_PROBES)
+def test_search_probes_stop_quickly_at_the_production_budget(gov_db, stmt):
+    assert sqlguard.SQL_STEP_BUDGET == 5_000_000
+    e = _refused(gov_db, stmt)
+    assert e.kind == "budget" and str(e) == ERR_BUDGET
+
+
+def test_group_concat_works_as_a_window_function(gov_db):
+    data = ("(SELECT column1 AS g, column2 AS v, column3 AS s FROM (VALUES ('a', 'x', ';'), "
+            "('a', NULL, ';'), ('a', 'y', '|'), ('b', 'z', ';'), ('a', 'w', NULL), "
+            "('b', 'q', ',')))")
+    q = (f"SELECT g, v, group_concat(v) OVER (PARTITION BY g ORDER BY v), "
+         f"group_concat(v, s) OVER (ORDER BY g, v ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING), "
+         f"group_concat(v) OVER (ORDER BY g, v ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "
+         f"FROM {data} ORDER BY g, v")
+    plain = sqlite3.connect(":memory:")
+    try:
+        expected = [list(r) for r in plain.execute(q)]
+    finally:
+        plain.close()
+    assert run_sql(gov_db, q).rows == expected
+    assert run_sql(gov_db, "SELECT type, group_concat(id) OVER (PARTITION BY type) "
+                           "FROM fr_documents WHERE type = 'Proposed Rule'").rows == \
+        [["Proposed Rule", "2024-00002,2024-00005"]] * 2
+
+
+def test_a_natural_self_join_counts_as_sqlite_does(gov_db):
+    q = "SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b"
+    assert run_sql(gov_db, q).rows == [list(r) for r in gov_db.execute(q)]

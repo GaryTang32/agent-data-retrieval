@@ -3,6 +3,12 @@ P19, P20).
 
 `run_sql` runs one statement on a `ViewDB` (which holds only the caller's visible rows) under:
 
+- a refusal (`denied`) of any statement naming SQLite's own objects: an identifier, bare or
+  quoted, or an identifier-shaped single-quoted string, that is `sqlite_*`, `pragma_*` or a
+  virtual table module other than `json_each` (`json_tree`, `generate_series`, `dbstat`, `fts*`,
+  `rtree*`, …), compared with SQLite's ASCII case folding. The authorizer is never asked about the
+  columns NATURAL JOIN and JOIN … USING compare, and SQLite cannot name a table dynamically, so
+  refusing the names closes that path;
 - an authorizer that allows `SELECT`, recursive CTEs, calling the functions in `FUNCTIONS`, and
   reading only the view's tables, `json_each` and the statement's own common table expressions,
   all names compared case-folded. SQLite reports a table read as (table, column, `main`), but a
@@ -19,6 +25,10 @@ P19, P20).
 - one statement: a `;` after `strip_terminator` is a syntax refusal;
 - a budget of virtual-machine steps (no wall clock, so the cut-off is deterministic): recursive
   CTEs and cross joins stop at `SQL_STEP_BUDGET`, which is how "beyond a depth" is enforced;
+- bounded search work: `instr`, `like` (also the `LIKE`/`NOT LIKE … ESCAPE` operators) and
+  `glob` are overrides that charge `len(a) * len(b) // SQL_SEARCH_PAIRS` steps before SQLite's own
+  code runs the search on the private connection (the same answers as the built-ins, checked by
+  an oracle test), and `replace` pays the same for its search;
 - bounded work per step (P20): every value, and every row SQLite builds, is at most
   `SQL_MAX_VALUE` bytes (16 KB, the build-time row bound; stored values are at most 8 KB), and
   the functions whose result can be much longer than their inputs
@@ -54,13 +64,17 @@ installed for the call only. The function overrides cannot be unregistered from 
 so they stay registered on the view database once the first call installs them, and dispatch
 to the call in progress: they act only inside `run_sql` and raise anywhere else. `query_table`
 uses none of them (date, datetime, strftime, julianday, replace, printf, format, substr,
-substring, group_concat), so it works on the same database before and after `run_sql`.
+substring, instr, like, glob, group_concat; its `__contains` uses the engine's own
+`contains_casefold`), so it works on the same database before and after `run_sql`.
+`group_concat` is a window function as well as an aggregate.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import sqlite3
+from collections import deque
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
@@ -75,8 +89,9 @@ SQL_STEP_BUDGET = 5_000_000
 SQL_STEP_EVERY = 1000
 SQL_MAX_BYTES = 2_000_000
 # SQLite's length limit for the call: the most bytes in one value or in any row SQLite builds
-# (a sorter, DISTINCT or ephemeral row). It is the build-time row bound, so every stored row,
-# and every stored value, can be read and sorted whole.
+# (a sorter, DISTINCT or ephemeral row). It is the build-time row bound, so every stored value
+# and stored row can be read and sorted whole (a computed `display_name` is outside the row
+# bound; entity rows are about 2.3 KB at most, so they fit with it; see `contracts`).
 SQL_MAX_VALUE = MAX_ROW_BYTES
 SQL_CHARGE_BYTES = 64    # an amplifying function's result charges one step per 64 bytes
 
@@ -88,6 +103,8 @@ ERR_ROWS = "sql refused (too many rows): the result is over 2 MB; select fewer r
 
 DATE_FUNCTIONS = frozenset({"date", "datetime", "strftime", "julianday"})
 AMPLIFYING = frozenset({"replace", "printf", "format", "substr", "substring"})  # + group_concat
+SEARCHING = frozenset({"instr", "like", "glob"})   # charged by the size of their search
+SQL_SEARCH_PAIRS = 4096   # a search over a and b charges len(a) * len(b) // 4096 steps
 FUNCTIONS: frozenset[str] = frozenset("""
     avg count group_concat max min sum total abs coalesce ifnull iif instr length lower ltrim
     nullif printf format replace round rtrim substr substring trim typeof upper like glob
@@ -102,18 +119,51 @@ _SQLITE_NOMEM, _SQLITE_FULL, _SQLITE_TOOBIG = 7, 13, 18
 _SPACE = " \t\n\v\f\r"   # SQLite's whitespace; any other character from U+0080 is a word one
 
 
+def _fold(name: str) -> str:
+    """ASCII case folding, as SQLite compares identifiers."""
+    return name.translate(_ASCII_LOWER)
+
+
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
 def _modules() -> frozenset[str]:
-    """Virtual table modules: a CTE with one of these names (or `sqlite_*`, `pragma_*`) is not
-    trusted to be the object a no-database read names."""
+    """Virtual table modules other than `json_each`: table-valued functions and system tables a
+    statement may not name."""
     known = {"json_each", "json_tree", "jsonb_each", "jsonb_tree", "dbstat", "sqlite_dbpage",
              "sqlite_stmt", "generate_series", "carray", "geopoly", "rtree", "rtree_i32", "fts3",
              "fts4", "fts5", "fts4aux", "fts5vocab", "fts3tokenize", "completion", "zipfile"}
     try:
         with closing(sqlite3.connect(":memory:")) as conn:
-            known |= {r[0].casefold() for r in conn.execute("PRAGMA module_list")}
+            known |= {_fold(r[0]) for r in conn.execute("PRAGMA module_list")}
     except sqlite3.Error:
         pass
-    return frozenset(known)
+    return frozenset(known - {"json_each"})
+
+
+def _reserved(name: str) -> bool:
+    """A name of SQLite's own objects: `sqlite_*`, `pragma_*` or a virtual table module."""
+    folded = _fold(name)
+    return folded.startswith(("sqlite_", "pragma_")) or folded in _MODULES
+
+
+def _names_reserved(statement: str) -> bool:
+    """Whether the statement names a reserved object anywhere, as a bare or quoted identifier
+    or as a single-quoted string SQLite would read as one (`FROM 'sqlite_master'`). The
+    authorizer is not consulted for columns that NATURAL JOIN and JOIN ... USING compare, and
+    SQLite cannot name a table dynamically, so refusing the names closes that path."""
+    for kind, start, end in _significant(statement):
+        text = statement[start:end]
+        if kind == "word" or (kind == "quoted" and text[0] != "'"):
+            if _reserved(_unquote(text)):
+                return True
+        elif kind == "quoted" and _IDENTIFIER.fullmatch(_unquote(text)) \
+                and _reserved(_unquote(text)):
+            return True   # a string where SQLite reads an identifier; data strings pass
+    return False
+
+
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]*")
 
 
 _MODULES = _modules()
@@ -230,9 +280,8 @@ def _cte_names(statement: str, toks: list[tuple[str, int, int]]) -> frozenset[st
                 if j < len(toks) and words[j] == optional:
                     j += 1
             if j < len(toks) and words[j] == "(":
-                names.add(_unquote(statement[toks[i][1]:toks[i][2]]).casefold())
-    return frozenset(n for n in names if not n.startswith(("sqlite_", "pragma_"))
-                     and n not in _MODULES)
+                names.add(_fold(_unquote(statement[toks[i][1]:toks[i][2]])))
+    return frozenset(n for n in names if not _reserved(n))
 
 
 def _shape(statement: str) -> _Shape:
@@ -276,7 +325,7 @@ class _Guard:
     a value over `SQL_MAX_VALUE`."""
 
     def __init__(self, tables: frozenset[str], ctes: frozenset[str]):
-        self.tables = frozenset(t.casefold() for t in tables) | {"json_each"}
+        self.tables = frozenset(_fold(t) for t in tables) | {"json_each"}
         self.ctes = ctes
         self.steps = 0
         self.over_budget = False
@@ -289,7 +338,7 @@ class _Guard:
         if action in (sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE):
             return sqlite3.SQLITE_OK
         if action == sqlite3.SQLITE_READ and arg1 is not None:
-            name = arg1.casefold()
+            name = _fold(arg1)
             if db == "main" and name in self.tables:
                 return sqlite3.SQLITE_OK
             if db is None and arg2 == "" and (name in self.tables or name in self.ctes):
@@ -310,10 +359,17 @@ class _Guard:
     def charge(self, result: Any) -> None:
         """Charge `len(result) // SQL_CHARGE_BYTES` steps for a text or blob result."""
         if isinstance(result, (str, bytes)):
-            self.steps += len(result) // SQL_CHARGE_BYTES
-            if self.steps > SQL_STEP_BUDGET:
-                self.over_budget = True
-                raise ValueError("past the step budget")
+            self.charge_steps(len(result) // SQL_CHARGE_BYTES)
+
+    def charge_steps(self, steps: int) -> None:
+        self.steps += steps
+        if self.steps > SQL_STEP_BUDGET:
+            self.over_budget = True
+            raise ValueError("past the step budget")
+
+    def charge_search(self, a: Any, b: Any) -> None:
+        """Charge a search of `b` in `a` (or `a` against pattern `b`) before it runs."""
+        self.charge_steps(_length(a) * _length(b) // SQL_SEARCH_PAIRS)
 
     def _private(self) -> sqlite3.Connection:
         if self._helper is None:
@@ -344,10 +400,19 @@ class _Guard:
         return self.sqlite(name, args)
 
     def amplify(self, name: str, args: tuple) -> Any:
-        """`name(*args)`, charged by the length of its result."""
+        """`name(*args)`, charged by the length of its result (and `replace` by its search)."""
+        if name == "replace" and len(args) == 3:
+            self.charge_search(args[0], args[1])
         result = self.sqlite(name, args)
         self.charge(result)
         return result
+
+    def search(self, name: str, args: tuple) -> Any:
+        """`instr(a, b)`, `like(pattern, a[, escape])` or `glob(pattern, a)`, charged by the
+        size of the search before it runs, then computed by SQLite."""
+        if len(args) >= 2:
+            self.charge_search(args[0], args[1])
+        return self.sqlite(name, args)
 
     def text(self, v: Any) -> str:
         """A value as SQLite's text conversion gives it."""
@@ -358,42 +423,45 @@ class _Guard:
         return self._private().execute("SELECT CAST(? AS TEXT)", (v,)).fetchone()[0]
 
     def group_concat(self) -> Any:
-        """A new `group_concat(X[, sep])` accumulator with SQLite's semantics: NULL values
-        skipped, `,` by default, a NULL separator adds nothing, NULL when no value; charged by
-        the length of its result."""
+        """A new `group_concat(X[, sep])` accumulator with SQLite's semantics, also as a window
+        function: NULL values skipped, `,` by default, a NULL separator adds nothing, NULL when
+        no value; removing the oldest value drops the separator that followed it. Each result
+        is charged by its length."""
         guard = self
 
         class GroupConcat:
             def __init__(self):
-                self.parts: list[str] = []
+                self.items: deque[tuple[str, str]] = deque()   # (separator before, text)
                 self.size = 0
-                self.any = False
-
-            def _add(self, text: str) -> None:
-                self.size += len(text.encode("utf-8"))
-                if self.size > SQL_MAX_VALUE:
-                    guard.too_big = True
-                    raise ValueError("value too long")
-                self.parts.append(text)
 
             def step(self, *args: Any) -> None:
                 if len(args) not in (1, 2):
                     raise ValueError("group_concat takes one or two arguments")
                 if args[0] is None:
                     return
-                if self.any:
-                    sep = "," if len(args) == 1 else args[1]
-                    if sep is not None:
-                        self._add(guard.text(sep))
-                self.any = True
-                self._add(guard.text(args[0]))
+                sep = "," if len(args) == 1 else args[1]
+                item = ("" if sep is None else guard.text(sep), guard.text(args[0]))
+                self.size += len(item[0].encode("utf-8")) + len(item[1].encode("utf-8"))
+                if self.size > SQL_MAX_VALUE:
+                    guard.too_big = True
+                    raise ValueError("value too long")
+                self.items.append(item)
 
-            def finalize(self) -> str | None:
-                if not self.any:
+            def inverse(self, *args: Any) -> None:
+                if args and args[0] is not None and self.items:
+                    sep, text = self.items.popleft()
+                    self.size -= len(sep.encode("utf-8")) + len(text.encode("utf-8"))
+
+            def value(self) -> str | None:
+                if not self.items:
                     return None
-                result = "".join(self.parts)
+                first = self.items[0][1]
+                result = first + "".join(sep + text for sep, text in list(self.items)[1:])
                 guard.charge(result)
                 return result
+
+            def finalize(self) -> str | None:
+                return self.value()
 
         return GroupConcat()
 
@@ -427,6 +495,8 @@ class _Slot:
             conn.create_function(name, -1, self._call("date", name), deterministic=True)
         for name in sorted(AMPLIFYING):   # not deterministic: evaluated, and charged, per row
             conn.create_function(name, -1, self._call("amplify", name))
+        for name in sorted(SEARCHING):    # -1 also takes the LIKE operator's ESCAPE form
+            conn.create_function(name, -1, self._call("search", name))
         slot = self
 
         class GroupConcat:
@@ -436,10 +506,16 @@ class _Slot:
             def step(self, *args: Any) -> None:
                 self.inner.step(*args)
 
+            def inverse(self, *args: Any) -> None:
+                self.inner.inverse(*args)
+
+            def value(self) -> str | None:
+                return self.inner.value()
+
             def finalize(self) -> str | None:
                 return self.inner.finalize()
 
-        conn.create_aggregate("group_concat", -1, GroupConcat)
+        conn.create_window_function("group_concat", -1, GroupConcat)   # aggregate and window
 
     def _active(self) -> _Guard:
         if self.guard is None:
@@ -457,6 +533,13 @@ def _slot(db: ViewDB, conn: sqlite3.Connection) -> _Slot:
     if slot is None:
         slot = db.__dict__["_sqlguard_slot"] = _Slot(conn)
     return slot
+
+
+def _length(v: Any) -> int:
+    """Characters of text, bytes of a blob, digits of a number; 0 for NULL."""
+    if v is None:
+        return 0
+    return len(v) if isinstance(v, (str, bytes)) else len(str(v))
 
 
 def _cell(v: Any) -> Any:
@@ -517,6 +600,8 @@ def run_sql(db: ViewDB, statement: str) -> SqlOutcome:
     shape = _shape(body)
     if not shape.one:
         raise SqlRefused("syntax")
+    if _names_reserved(body):
+        raise SqlRefused("denied")
     guard = _Guard(frozenset(db.contracts), shape.ctes)
     refusal: SqlRefused | None = None
     with db.exclusive() as conn:
