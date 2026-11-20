@@ -337,7 +337,7 @@ Three new tools in `adr_store.tools.Tools`, served over MCP like the five Phase 
 
 | Tool | Tier | What it does |
 |---|---|---|
-| `describe_tables` | T1 | The semantic layer: tables, columns with descriptions and types, entity links, metrics (`count`, and `count_distinct` as an `sql` template) and dimensions, generated from the contracts; at most 8 KB |
+| `describe_tables` | T1 | The semantic layer, generated from the contracts: with no argument, an index of every table (columns as `name: type`, entity links, metrics `count` and `count_distinct` as an `sql` template, dimensions); with `table=…`, that table's full column descriptions and allowed values. Each response at most 8 KB |
 | `query_table` | T1 | Parameterized: `table`, `filters` (the v0.1 operators plus `__ne`, `__isnull`, `__contains_any`), `op` (`count`, `list`, `lookup`, `count_by`), `fields`, `order`, `limit`, the Phase 2 applicability arguments (`as_of`, `include_superseded`, status), `handle`. Compiled to one parameterised SQL statement by code; the model never writes SQL here. Returns rows with their provenance |
 | `sql` | T2 | Guarded read-only SQL: one `SELECT` statement over the caller's view of the tables under the same applicability arguments, with limits. Each table exposes `_doc_id` and one `_prov_<column>` JSON column per column, so a statement can select provenance |
 
@@ -542,6 +542,9 @@ extracting from 33 CFR 165 or 47 CFR 73 (three times the cost, less uniform text
 | P15 | The second extraction is one numbered-question call per section, not one call per column | Keeps the second pass inside the budget while its prompt stays structurally different | Less independence than separate per-column calls |
 | P16 | `p3-typed` runs on count items only and never answers from chunks | Phases 1–2 never produced answers; a fallback would spend answer and judge calls | `p3-typed` is not a whole-system accuracy number |
 | P17 | Entity display names are computed per caller view | A global most-frequent spelling can reveal hidden rows | Display names can differ between callers |
+| P18 | `describe_tables` is an index plus per-table detail, each at most 8 KB | Fifteen-plus contracts with descriptions do not fit one 8 KB response; shortening descriptions would weaken the semantic layer | An agent needs a second call to read a table's column descriptions |
+| P19 | A `sql` statement's own top-level `ORDER BY` gets positional tie-breakers on every output column | Constraint 3 requires a total order; keeping the statement's order alone leaves ties in scan order | Slightly different order than a database client would show for ties |
+| P20 | `sql` bounds work per step: values limited to 64 KB and string-amplifying functions charged by result size against the step budget | A step budget alone does not bound CPU, memory or temporary disk when values are large | A legitimate query building very long strings is refused |
 
 ## 15. Build order
 
