@@ -105,8 +105,9 @@ on 27 of 27 gov and 26 of 27 research test items; only the answering step, which
 chunks, failed.
 
 One wording problem: research `also_in` is a string, and gold uses exact equality where the
-questions say "also cited by topic X" (membership). On four items the two readings give
-different counts (for example 14 against 22). Typed tables keep the raw string column, so the
+questions say "also cited by topic X" (membership). On three items the two readings give
+different counts (dev 14 against 22 and 2 against 8; test 14 against 23); one test item is
+affected, and it is the baseline's one generated-query miss (the model wrote membership). Typed tables keep the raw string column, so the
 frozen gold reproduces; the membership reading is exposed as a separate list column and the
 mismatch is reported (§10.2).
 
@@ -118,7 +119,8 @@ mismatch is reported (§10.2).
 | Sections | 1,386 in all versions, **533 distinct section texts**; 424 in the newest version |
 | Size | about 578k characters (about 144k tokens); newest version mean 1,009, median 566 characters per section |
 | Regular phrases (newest version) | "mile N" 872, "open on signal" 758, "N hours notice" 360, "need not open" 234, "the draw of the X bridge" 381, FR citations 783 |
-| Links to the FR table | 44 of 53 FR "Drawbridge Operation Regulation; <waterway>" titles match a §117 section heading exactly |
+| Links to the FR table | 54 FR "Drawbridge Operation Regulation(s)" titles (42 distinct). Titles carry waterway, city and state; section headings carry the waterway only and the state sits in the enclosing structure (`DIV7` subject group, 38 states). Matching any comma-separated part of a title to a heading finds 45 of 54; links are made on (waterway key, state), one-to-many (§6) |
+| Multiple draws per section | 92 of the newest version's 424 sections govern two or more draws (up to 10), often with different rules per draw |
 | Golden overlap | 30 gov v0.1 items cite part 117 (12 factoid, 7 id_lookup, 6 procedure, others) |
 
 Why this family: it is small enough to extract within a modest budget, regular enough that a
@@ -135,8 +137,9 @@ have no reliable section boundaries in the store; research PDFs and bench are he
 Each table has a committed contract, `config/tables/<table>.json`:
 
 - `table`, `version`, `description` (one line, used by the semantic layer).
-- `columns`: name, type (`text`, `int`, `real`, `bool`, `date`, `text[]`), nullable, description,
-  `spec_id` (§5.3), and for categorical columns the allowed values.
+- `columns`: name, type (`text`, `int`, `real`, `bool`, `date`, `text[]`, `real[]`), nullable,
+  description, `spec_id` (§5.3), and for categorical columns the allowed values (listed in the
+  semantic layer only up to 25 values, so it stays under 8 KB).
 - `key`: the columns that identify a row; `order`: the total sort order.
 - `source`: the corpus, the document selector, and the loader (`metadata` or `extraction`).
 - `entities`: which columns are linked to which entity table (§6).
@@ -146,12 +149,16 @@ is rejected, counted and reported, never stored silently.
 
 ### 5.2 The table overlay
 
-Tables follow the Phase 2 overlay pattern: `<store>/tables/<content snapshot>/<table>.jsonl`,
+Tables follow the Phase 2 overlay pattern, with the table id in the file name (as dedup names
+its files) so that a candidate build, the current build and a re-extraction after a spec change
+can coexist: `<store>/tables/<content snapshot>/<table>-v<contract version>-<id[:16]>.jsonl`,
 canonical JSON, one row per line, rows in the contract's order. The table id is the SHA-256 of the
-file. An existing file with different bytes is refused (write-once). A separate unhashed
-`<table>.report.json` holds counts, rejections and null reasons by column. A manifest
-`tables-<id>.json` lists every table id of a build; its SHA-256 is the **tables id** carried in
-handles (§9.3).
+file; an existing file with different bytes is refused (write-once). A separate unhashed
+`.report.json` per table holds counts, rejections and null reasons by column. A build manifest
+`tables-<id[:16]>.json` lists every table file of a build, including the entity tables (§6); its
+SHA-256 is the **tables id** carried in handles (§9.3). `<store>/tables/HEAD` names the current
+manifest and moves only through the merge gate (§7.6). List columns are stored as JSON arrays.
+All Phase 3 builds and measurements use the Phase 2 scratch stores (`.cache/store-p2/`).
 
 For queries, the JSONL files are loaded into an in-memory SQLite database (standard library) per
 (tables id, caller view), described in §8. The SQLite file is a derived view, never the record:
@@ -168,54 +175,75 @@ Every stored value carries its provenance in a parallel structure, so the row st
 ```
 
 - `spec_id` names the extraction spec and its version (`fr.publication_date@1`,
-  `bridge.notice_hours@1`). Changing a spec changes its version and re-extracts only that field
-  (§7.5).
+  `bridge.notice_hours@1`). Changing a spec changes its version and re-extracts only the column
+  group that contains it (§7.5).
+- A list value carries one provenance entry per element.
 - `status` is one of `verified` (span re-slices and every check passed), `auto-accepted`
   (span re-slices, a soft check failed and is recorded), `rejected` (not stored as a value; the
   column is null with a null reason) and `review-pending` (reserved; nothing sets it in Phase 3).
 - A null value has a **null reason**: `absent` (the source has no such field or the text states
   nothing), `not_applicable`, `unparseable` (a value was present but failed its type),
-  `ungrounded` (the model gave a value whose quote did not re-slice).
+  `ungrounded` (the model gave a value whose quote did not re-slice), `model_error` (the call
+  failed after its retries; the failure is cached like a reply, so a zero-call rebuild
+  reproduces it instead of stopping).
 
 ### 5.4 The 3A tables
 
 | Table | Rows | Key | Notes |
 |---|---|---|---|
-| `fr_documents` | 167 | `document_number` | type, title, action, publication date, effective date, year, most specific agency, status from the Phase 2 envelope |
-| `fr_cfr_refs` | one per (document, title, part) | document, title, part | `cfr_part` text as in v0.1 ("33 CFR 117") and integer title and part |
+| `fr_documents` | 167 | `id` (= `document_number`) | the v0.1 record fields `id`, `type`, `agency` (most specific), `publication_date`, `year`, `title`, `cfr_parts` (`text[]`, "33 CFR 117"); plus action, effective date and the Phase 2 envelope status |
+| `fr_cfr_refs` | one per (document, title, part) | document, title, part | `cfr_part` text as in v0.1 and integer title and part (39 distinct pairs once the one integer part is normalised) |
 | `fr_agencies` | one per (document, agency) | document, agency id | raw name and canonical agency id |
-| `fr_dockets` | one per (document, docket) | document, docket | raw string and parsed docket ids (one raw string can give several) |
-| `papers` | 2,570 | row number | every manifest column raw, plus `year` as int, `also_in_list` as `text[]`, canonical venue and licence ids |
+| `fr_dockets` | one per (document, docket) | document, docket | parsed from "Docket No(s)." / "Docket Number" strings only (one string can give several); other identifiers in `docket_ids` ("FCC 19-123", "FRS 16313", "DA 19-1303") go to an `other_ids` column of `fr_documents` |
+| `papers` | 2,570 | `id` (the v0.1 record id: arXiv id, else DOI, else `url:` hash) and row number | every manifest column raw, plus `year` as int, `also_in_list` as `text[]`, canonical venue and licence ids |
 | `paper_authors` | one per (paper, author position) | paper, position | raw author string and a normalised name; "et al." kept as a flag, not an author |
 
 Raw columns are always kept next to normalised ones. The frozen v0.1 gold queries use raw
 semantics (exact venue strings, `also_in` as one string), so the typed database must reproduce
 them exactly; normalised columns serve new questions.
 
+`query_table` reproduces the operator semantics of `golden/records.py` exactly, not SQLite's
+defaults: case-folding through a registered Python function (SQLite's `lower()` is ASCII-only),
+no type coercion (`year = '2020'` does not match an integer year), comparisons of mixed or null
+types never match, `__contains` is case-folded substring on text and case-folded element
+equality on lists, and `list` returns sorted unique ids. An unknown column is an error naming the
+column (columns are public, §9.2).
+
 ### 5.5 The 3B table
 
-`drawbridge_rules`, one row per (§117 section, content version), from the 533 distinct section
-texts and repeated for every version that contains the same text (so a version's rows are
-complete). Columns (each with its own spec):
+Two tables, because a section often governs several draws with different rules (§4.3). Rows are
+extracted once per distinct section text (533) and repeated for every version that contains the
+same text, so each version's rows are complete; the default filter keeps only the version in
+force (§8.3), so counts are never multiplied by versions.
 
-| Column | Type | Meaning |
+`drawbridge_sections`, one row per (section, version):
+
+| Column | Type | Source |
 |---|---|---|
-| `section` | text | "117.1081" (from the XML structure, not the model) |
-| `heading` | text | section heading (structure) |
-| `waterway` | text | the waterway named in the heading or text |
-| `bridges` | text[] | bridge names the section governs |
-| `mile` | real[] | river or waterway miles named for those bridges |
-| `state` | text | the state in the heading |
-| `notice_hours` | int | advance notice required to open, in hours, if any |
-| `opens_on_signal` | bool | the draw opens on signal (in any period) |
-| `closed_periods` | text[] | periods when the draw need not open, as quoted |
-| `seasonal` | bool | rules differ by season or date range |
-| `owner_or_agency` | text | the entity that must be notified or that operates the bridge |
-| `vhf_channel` | int | VHF channel to call, if stated |
+| `section` | text | structure: "117.1081" |
+| `heading` | text | structure: the section heading |
+| `state` | text | structure: the enclosing `DIV7` subject group ("North Carolina") |
+| `waterway` | text | model |
+| `seasonal` | bool | model: rules differ by season or date range |
+| `owner_or_agency` | text | model: the entity to notify or that operates the draws |
+| `vhf_channel` | int | model |
 
-The model returns, for each column, a value and a verbatim quote from the section; code locates
-the quote in the stored text and records the offsets (as Phase 0 did for golden quotes). Columns
-taken from the XML structure carry structure provenance, not a model spec.
+`drawbridge_bridges`, one row per (section, version, draw):
+
+| Column | Type | Source |
+|---|---|---|
+| `section`, `version` | text | structure (join key) |
+| `bridge` | text | model: the bridge's name as written |
+| `mile` | real | model: the waterway mile, if stated |
+| `notice_hours` | int | model: advance notice required to open, in hours, if any |
+| `opens_on_signal` | bool | model: the draw opens on signal in at least one period |
+| `closed_periods` | text[] | model: periods when the draw need not open, as quoted |
+
+The model returns, for each section, the section-level values and a list of draws, each value
+with a verbatim quote from the section; code locates every quote in the stored text and records
+the offsets (as Phase 0 did for golden quotes). Structure columns carry structure provenance, not
+a model spec. Rules stated once for all draws of a section are copied to each draw with the same
+quote.
 
 ## 6. Entity resolution
 
@@ -228,12 +256,16 @@ and an alias map: `agencies`, `cfr_parts`, `dockets`, `venues`, `licences`, `wat
   "preprint" are removed; for licences, spaces and hyphens are unified; for dockets, the prefix
   "Docket No." / "Docket Number" is dropped and a list string is split).
 - **Fixed-pivot clustering:** names with the same key form a cluster; the canonical id is the
-  SHA-256 of the key, and the display name is the most frequent raw form (ties by byte order).
-  Clustering never chains through transitive fuzzy matches: only equal keys merge.
+  SHA-256 of the key. Clustering never chains through transitive fuzzy matches: only equal keys
+  merge. The display name is computed per caller view, as the byte-smallest raw form among
+  visible rows, so it never reveals a hidden row's spelling and per-view equivalence (§9.2)
+  holds. Entity tables are listed in the build manifest (§5.2) and filtered per view like
+  other tables.
 - **Overrides:** an optional committed file `config/entities/<type>.json` can merge or split
   clusters by key. It starts empty; every override is listed in the report.
-- **Waterway links** between `fr_documents` and `drawbridge_rules` use the waterway key; the
-  survey's nine unmatched titles become test cases, reported as linked or not.
+- **Waterway links** between `fr_documents` and `drawbridge_sections` use (waterway key,
+  state), one-to-many, matched against each comma-separated part of a drawbridge FR title. The
+  list of linked and unlinked titles is committed with the 3A results.
 - **Measured:** clusters per type, the largest clusters, and singletons, in the report; for
   venues and authors a seeded sample of 50 clusters is listed for the user to inspect.
 
@@ -241,9 +273,9 @@ and an alias map: `agencies`, `cfr_parts`, `dockets`, `venues`, `licences`, `wat
 
 ### 7.1 Units and prompts
 
-One call per distinct section text (533). The prompt gives the contract's column descriptions,
-the section text, and asks for JSON: for each column, `value`, `quote`, and `null_reason` when no
-value is stated. A section's cache key is the SHA-256 of (adapter, model, prompt version, section
+One call per distinct section text (533). The prompt gives the contracts' column descriptions,
+the section text, and asks for JSON: the section-level columns and a list of draws, each value
+with `value`, `quote`, and `null_reason` when no value is stated. A section's cache key is the SHA-256 of (adapter, model, prompt version, section
 text, spec versions), through the existing `.cache/llm` cache, so a section that is unchanged
 across versions costs one call in all.
 
@@ -262,15 +294,19 @@ across versions costs one call in all.
    "(\d+) hours? (advance )?notice", "mile (\d+(\.\d+)?)"), agreement is recorded per value;
    disagreement does not reject, it is counted.
 6. **Independent second extraction:** a different model (Opus, against Sonnet for the first
-   pass) with a structurally different prompt (question per column, not one JSON form) extracts
-   the same columns from every section. Agreement per column is reported. The second extraction
-   also feeds the 3B golden set (§10.3), so it is never used to fix the first.
+   pass) with a structurally different prompt extracts the same facts from every section, in one
+   call per section: numbered questions ("1. Which draws does this section govern? 2. For each,
+   how many hours of notice…") answered in order with quotes, instead of one JSON form. Draws
+   are matched between the passes by bridge-name key, then mile. Agreement per column is
+   reported. The second extraction also feeds the 3B golden set (§10.3), so it is never used to
+   fix the first.
 
 ### 7.3 What "grounded" means
 
-A non-null model value is grounded when check 3 passes. Phase 3 reports the grounded share of
-non-null values per column (target ≥ 95%, criterion E2) and requires that 100% of stored values
-re-slice (criterion E1), which holds by construction because ungrounded values are not stored.
+A non-null model value is grounded when check 3 passes. Phase 3 reports, from the extraction
+report (before ungrounded values are dropped), the grounded share of non-null model values per
+column (criterion E1, target ≥ 95%), and requires that 100% of stored values re-slice (criterion
+T3), which holds by construction because ungrounded values are not stored.
 
 ### 7.4 Statuses
 
@@ -283,8 +319,9 @@ the status rule does not depend on the gold.
 Bumping one column's spec version (for example a clearer description of `notice_hours`) changes
 only that column's cache keys: the extractor groups columns by spec, and each group is its own
 cached call per section. A test changes one spec on a fixture and checks that only that group's
-calls run (criterion T5). For the real run, the 12 model columns are extracted in one group, so a
-spec change costs one call per section; the grouping is what makes partial re-extraction possible.
+calls run (criterion T5). For the real run, the 8 model columns of the two tables are extracted
+in one group, so a spec change costs one call per section; the grouping is what makes partial
+re-extraction possible.
 
 ### 7.6 The merge gate
 
@@ -300,8 +337,12 @@ Three new tools in `adr_store.tools.Tools`, served over MCP like the five Phase 
 | Tool | Tier | What it does |
 |---|---|---|
 | `describe_tables` | T1 | The semantic layer: tables, columns with descriptions and types, entity links, metrics (`count`, `count_distinct`) and dimensions, generated from the contracts; at most 8 KB |
-| `query_table` | T1 | Parameterized: `table`, `filters` (the v0.1 operators plus `__ne`, `__isnull`, `__contains_any`), `op` (`count`, `list`, `lookup`, `count_by`), `fields`, `order`, `limit`, `as_of`, `handle`. Compiled to one parameterised SQL statement by code; the model never writes SQL here. Returns rows with their provenance |
-| `sql` | T2 | Guarded read-only SQL: one `SELECT` statement over the caller's view of the tables, with limits; returns rows and the provenance columns that the statement selects |
+| `query_table` | T1 | Parameterized: `table`, `filters` (the v0.1 operators plus `__ne`, `__isnull`, `__contains_any`), `op` (`count`, `list`, `lookup`, `count_by`), `fields`, `order`, `limit`, the Phase 2 applicability arguments (`as_of`, `include_superseded`, status), `handle`. Compiled to one parameterised SQL statement by code; the model never writes SQL here. Returns rows with their provenance |
+| `sql` | T2 | Guarded read-only SQL: one `SELECT` statement over the caller's view of the tables under the same applicability arguments, with limits. Each table exposes `_doc_id` and one `_prov_<column>` JSON column per column, so a statement can select provenance |
+
+The in-memory database is built per (tables id, caller view, applicability filters) and cached
+like the Phase 2 per-view BM25. List columns are JSON arrays; the authorizer allows `json_each`
+and `json_extract` so statements can unnest them.
 
 ### 8.1 The SQL guard
 
@@ -320,9 +361,10 @@ Three new tools in `adr_store.tools.Tools`, served over MCP like the five Phase 
 
 ### 8.2 Output and determinism
 
-`query_table` results are sorted by the contract order (or the requested order, then the key);
-`sql` results keep the statement's `ORDER BY` and add the key as a final tie-break when the
-statement has none (by wrapping it). Same arguments, same tables id, same view: byte-identical
+`query_table` results are sorted by the contract order (or the requested order, then the key).
+For `sql`, the statement is wrapped as `SELECT * FROM (<statement>) ORDER BY <every output
+column>`, after the statement's own ordering when it has one is kept as the leading sort keys,
+so the order is total even for aggregates and statements that do not select the key. Same arguments, same tables id, same view: byte-identical
 rows. Every result carries a handle.
 
 ### 8.3 Applicability
@@ -352,9 +394,12 @@ they are visible all together or not at all; FR rows vary by caller; §117 rows 
 
 ### 9.3 Handles
 
-The Phase 2 handle gains one part, `tables` (the tables id). A handle naming a tables id that no
-longer exists fails explicitly ("handle no longer available: tables"); the ACL is never part of a
-handle, so an old handle is judged against the current ACL (ruling R15 of Phase 2 still holds).
+The Phase 2 handle gains one optional part, `tables` (the tables id, default null), so handles
+saved before Phase 3 still validate. A handle naming a tables id that no longer exists fails
+explicitly ("handle no longer available: tables"); the ACL is never part of a handle, so an old
+handle is judged against the current ACL (ruling R15 of Phase 2 still holds). The five Phase 2
+tools' results gain the new handle key; "unchanged" for them (constraint 2) means identical hits,
+counts and messages.
 
 ## 10. What is measured
 
@@ -363,15 +408,25 @@ handle, so an old handle is judged against the current ACL (ruling R15 of Phase 
 | System | Answers count and list questions by |
 |---|---|
 | `baseline-linear` (recorded, Phase 0) | reading retrieved chunks |
-| `p3-typed` | the generated query of the baseline run (cached; no new call) compiled to `query_table` over the typed tables; other question types fall back to the Phase 1/2 path unchanged |
+| `p3-typed` | the generated query (G2) compiled to `query_table` over the typed tables. It runs on `count_filter` items only (the runner gains a question-type filter); it never falls back to answering from chunks |
+
+All Phase 3 harness runs search as `user:auditor` after a fresh ACL sync (the Phase 2 freshness
+limit is one hour).
 
 ### 10.2 The frozen count questions (3A)
 
 The 27 gov and 27 research test `count_filter` items, scored exactly as Phase 0 scores them
-(number closeness, set equality). The generated queries are the baseline's cached ones, so 3A's
-measurement makes no model call. Reported: accuracy for both systems, the paired McNemar test,
-and every miss with its cause. The `also_in` wording problem (§4.2) is reported with both
-readings.
+(number closeness, set equality). The generated queries are the baseline's: all 54 replies are in
+the model cache under the same key (adapter, model, query-generation prompt, schema, question),
+so 3A's measurement makes no model call, provided the query-generation prompt and the record
+schema text stay byte-identical (checked before the run). Reported: accuracy for both systems,
+the paired McNemar test, and every miss with its cause. The `also_in` wording problem (§4.2) is
+reported with both readings.
+
+Because those generated queries already return the gold records on 27 of 27 gov and 26 of 27
+research items, Q1 is close to certain by construction: it tests that the typed tables and the
+compiler reproduce the record semantics, not a new ability to understand questions. The
+write-up says so.
 
 ### 10.3 A new golden set for the 3B table: `gov-tables v0.1`
 
@@ -381,10 +436,13 @@ advance notice?"), multi-constraint filters, and lookups.
 
 - **Facts:** from the independent second extraction (§7.2 step 6), not from the table under test,
   with its own verbatim quotes re-sliced by code.
-- **Questions:** drawn by code from those facts with the same generator logic as v0.1's
-  count_filter items (one or two clauses from a sampled row); the model only phrases them (one
-  call per question). Answers are computed by code. 120 items, split 30 dev / 90 test by SHA-256
-  of the item id.
+- **Questions:** drawn by code from those facts (one or two clauses from a sampled row, as v0.1's
+  count_filter drawer does, extended to bool fields, numeric ranges and `__isnull`); the model
+  only phrases them (one call per question; no evidence-only check call). The gold query is a
+  `query_table` argument object (table, filters, op), a new gold format with its own prompt
+  version, since v0.1's `gold_query` has no table or `count_by`. Answers are computed by code
+  over the version in force. 120 items, split by the existing `assign_split` (20% dev): about
+  24 dev and 96 test.
 - **Limits, stated up front:** the gold comes from a model, not a person. A shared error of the
   two models (same wrong reading of a section) is invisible to this measurement. Agreement with
   the regex cross-check, where it applies, is reported as an independent check on the gold.
@@ -395,26 +453,35 @@ advance notice?"), multi-constraint filters, and lookups.
 |---|---|---|
 | Table leak | for each user, `query_table` and `sql` over rows of hidden documents (by key, by filter, by aggregate, by `count_by` group, by error message) return what a store without those documents returns | ≥ 300 |
 | SQL guard | writes, DDL, `ATTACH`, `PRAGMA`, `load_extension`, multiple statements, recursive CTE bombs, huge cross joins, functions outside the whitelist, comment and encoding tricks | ≥ 100 |
-| Table equivalence | 3 corpora (tables exist for gov and research; bench and tools have none, checked empty) × 20 views × 25 queries against stores built from each view's documents | 1,000 |
-| Fail closed | F1–F5 and "no entry" × the three new tools | 30 |
-| Applicability | default and `as_of` queries on `drawbridge_rules` and `fr_documents` return only rows of documents in force | ≥ 50 |
+| Table equivalence | gov and research × 20 views × 25 queries against stores built from each view's documents (research rows are all-or-nothing per view, so its share tests little; gov carries the weight). Bench and tools have no tables and are checked empty | 1,000 |
+| Fail closed | (F1–F5 and "no entry") × the three new tools × 5 callers | 90 |
+| Applicability | default and `as_of` queries on the drawbridge tables and `fr_documents` return only rows of documents in force | ≥ 50 |
 
 ## 11. Model-call budget (needs the user's approval)
 
-| Purpose | Model | Calls (estimate) |
-|---|---|---|
-| First extraction of 533 distinct §117 sections | Sonnet | 533, plus up to 5% retries: ≤ 560 |
-| Independent second extraction (QA and gold facts) | Opus | 533, plus retries: ≤ 560 |
-| Phrasing the 120 gov-tables questions | Sonnet | 120 |
-| Query generation (G2) for the 120 new questions, for `p3-typed` | Sonnet | 120 |
-| Answers of `baseline-linear` on the new questions (reading chunks), for comparison | Sonnet | 120 |
-| **Total cap** | | **1,500 calls** (enforced with `--max-calls`) |
+Models, both through the Claude Code adapter on the user's subscription with the model named on
+every call: Sonnet is `claude-sonnet-5-5`, Opus is `claude-opus-5-5`. Every call records the model
+the service reports as having answered.
+
+`--max-calls` counts per command, so each command gets a fixed share; the shares sum to the cap.
+
+| Command | Purpose | Model | Share (calls) |
+|---|---|---|---|
+| `adr tables extract` (first pass) | 533 distinct §117 sections, plus retries | Sonnet | 560 |
+| `adr tables extract --second-pass` | the same sections, one numbered-question call each, plus retries | Opus | 560 |
+| `adr-eval golden tables` | phrasing about 120 questions, plus redraws of malformed replies | Sonnet | 140 |
+| `adr-eval run` (`p3-typed` and `baseline-linear`, one shared query-generation prompt, so one query call per item serves both) | query generation for the 120 questions | Sonnet | 125 |
+| `adr-eval run` (`baseline-linear` answers) | answers from retrieved chunks, test split only (about 96 items) | Sonnet | 100 |
+| | | **Total cap** | **1,485 of 1,500** |
+
+Kept out of the budget by design: the proxy judge and self-consistency calls (gov-tables items
+are counts, lists, numbers and yes/no lookups, all scored exactly), and v0.1's evidence-only
+check call. Calls that fail are cached as failures (§5.3), so they are not repeated.
 
 At the cache's recorded medians (6.8 s per Sonnet call, 6.6 s per Opus call), about 2.8 hours of
 calls serially, about 45 minutes at the configured concurrency of 4. Billed to the Claude
-subscription; the notional cost at the recorded rates is about $40 (about $0.029 per Sonnet call
-and $0.014 per Opus call on Phase 0's prompts, more here because sections are longer). Nothing is
-called before the user approves; part 3A and all probes need no approval.
+subscription; the notional cost at the recorded rates is about $40. Nothing is called before the
+user approves; part 3A and all probes need no approval.
 
 ## 12. Exit criteria
 
@@ -430,9 +497,9 @@ comparison is paired).
 | T5 | A spec change re-extracts only affected fields | Fixture: change one column group's spec | Only that group's calls run; other cache keys and values unchanged |
 | T6 | The merge gate blocks regressions | Fixture: a candidate with flips above the threshold | Refused, and `tables/HEAD` unchanged |
 | Q1 | Typed tables answer the frozen count questions | `p3-typed` on 27 gov and 27 research test items | ≥ 0.90 accuracy on each corpus, and above `baseline-linear` with McNemar p < 0.05 on gov |
-| Q2 | Typed tables answer the new drawbridge questions | `p3-typed` against `baseline-linear` on the 90 test items of gov-tables v0.1 | ≥ 0.80 accuracy, and above the baseline by more than 0.02 on the paired difference's lower bound |
-| E1 | Extraction is grounded | Non-null model values in `drawbridge_rules` | ≥ 95% grounded (re-slicing quotes) before rejection; every stored value grounded |
-| E2 | Extraction agrees with an independent pass | Per column, against the Opus extraction | Agreement reported for every column; ≥ 0.85 on `waterway`, `notice_hours`, `opens_on_signal` |
+| Q2 | Typed tables answer the new drawbridge questions | `p3-typed` against `baseline-linear` on the test items of gov-tables v0.1 (about 96) | ≥ 0.80 accuracy, and the lower bound of the paired difference's 95% interval above +0.02 |
+| E1 | Extraction is grounded | Non-null model values in the drawbridge tables, from the extraction report before ungrounded values are dropped | ≥ 95% grounded (re-slicing quotes) |
+| E2 | Extraction agrees with an independent pass | Per column, against the Opus extraction (draws matched by bridge-name key, then mile) | Agreement reported for every column; ≥ 0.85 on `waterway`, `bridge` (draw set per section), `notice_hours`, `opens_on_signal` |
 | S1 | No leak through tables | Table leak probes and table equivalence | 0 leaks; 1,000 of 1,000 equivalent |
 | S2 | SQL is read-only and bounded | SQL guard probes | 100% refused or bounded, with the fixed messages |
 | S3 | Fail closed and logged | Fail-closed probes; every log line of the table tools | No content in any case; 100% of lines carry the Phase 2 fields plus the tables id |
@@ -469,6 +536,10 @@ extracting from 33 CFR 165 or 47 CFR 73 (three times the cost, less uniform text
 | P11 | Entity resolution by exact normalised keys only, with empty override files | Deterministic and auditable; no fuzzy chaining | Some true aliases stay separate (reported with samples) |
 | P12 | The merge gate is built and tested, and used once | The roadmap's fourth invariant; there is one build to promote | Its threshold is untested on a real regression |
 | P13 | Margins and thresholds of §12 fixed now | As in Phase 2 (R10) | A true small loss under the margin passes |
+| P14 | Two drawbridge tables, sections and draws | 92 of 424 newest sections govern several draws with different rules; one row per section would lose them | One more table to query; questions about draws need a join or the draws table |
+| P15 | The second extraction is one numbered-question call per section, not one call per column | Keeps the second pass inside the budget while its prompt stays structurally different | Less independence than separate per-column calls |
+| P16 | `p3-typed` runs on count items only and never answers from chunks | Phases 1–2 never produced answers; a fallback would spend answer and judge calls | `p3-typed` is not a whole-system accuracy number |
+| P17 | Entity display names are computed per caller view | A global most-frequent spelling can reveal hidden rows | Display names can differ between callers |
 
 ## 15. Build order
 
@@ -477,5 +548,6 @@ extracting from 33 CFR 165 or 47 CFR 73 (three times the cost, less uniform text
 3. `describe_tables`, `query_table`, `sql` with the guard, under the ACL, applicability and
    handles; MCP; probes S1–S3, D1.
 4. `p3-typed` in the harness; measure Q1 (no model calls); write up 3A.
-5. **After the user approves §11:** the extractor, checks and gate; the 3B run; gov-tables v0.1;
-   measure E1, E2, Q2, T1–T6; X1; write up `results/phase3/README.md`.
+5. The extractor, checks and gate, tested on fixtures with the stub model (no calls).
+6. **After the user approves §11:** the 3B run; gov-tables v0.1; measure E1, E2, Q2, T1–T6; X1;
+   write up `results/phase3/README.md`.
