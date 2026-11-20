@@ -1,0 +1,110 @@
+{
+ "note": "Task 7: every table probe set run twice in fresh processes (the second with the committed code); per-item results.json and probes.json compared byte for byte (not committed: runs/).",
+ "pairs": {
+  "applicability-gov": {
+   "first": "probes-tables-applicability-gov-20261120T185701",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "dc6258e814cc29f899dcc1d36c6f354c9763cbe8ddba13acf36e2bc9e467a40b",
+   "second": "probes-tables-applicability-gov-20261120T191553"
+  },
+  "equivalence-bench": {
+   "first": "probes-tables-equivalence-bench-20261120T190302",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "ab669b4e57110c677e0a8da3a1ba45420f5c2df9df800eb647648b575202d6ad",
+   "second": "probes-tables-equivalence-bench-20261120T193111"
+  },
+  "equivalence-gov": {
+   "first": "probes-tables-equivalence-gov-20261120T190254",
+   "probes_identical": true,
+   "probes_sha256": "ddc96a36005d1d36078fed5666e85b05b548064bf5a6791a8f69dac47ed246c1",
+   "results_identical": true,
+   "results_sha256": "93beeaae890bc2001045f27e14fa544b26946bd9be63bfb1efeb7a02bf323303",
+   "second": "probes-tables-equivalence-gov-20261120T191905"
+  },
+  "equivalence-research": {
+   "first": "probes-tables-equivalence-research-20261120T190038",
+   "probes_identical": true,
+   "probes_sha256": "e7574da6b4c278f5bd70468757f2c1d7f82465f334820022d9f6552b2d7386ef",
+   "results_identical": true,
+   "results_sha256": "d2badda8a80d267497d0c0c173cd63f12bceb5aee94a3f39e182fc8160617f43",
+   "second": "probes-tables-equivalence-research-20261120T191946"
+  },
+  "equivalence-tools": {
+   "first": "probes-tables-equivalence-tools-20261120T190344",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "fe2a9262b2cc3440630e1c44c368c53573ab9d4a3cda719c2a081258f534d009",
+   "second": "probes-tables-equivalence-tools-20261120T193152"
+  },
+  "failclosed-gov": {
+   "first": "probes-tables-failclosed-gov-20261120T185721",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "95a1f789e4f5c287ee6ac0dc8ca6158fe4e0c4f92a64d83202d28221345338f7",
+   "second": "probes-tables-failclosed-gov-20261120T191603"
+  },
+  "failclosed-research": {
+   "first": "probes-tables-failclosed-research-20261120T185735",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "95a1f789e4f5c287ee6ac0dc8ca6158fe4e0c4f92a64d83202d28221345338f7",
+   "second": "probes-tables-failclosed-research-20261120T191612"
+  },
+  "leak-gov": {
+   "first": "probes-tables-leak-gov-20261120T185832",
+   "probes_identical": true,
+   "probes_sha256": "34fe8e27b25d9a0b559c4191e9b43fbb5f8fc0e6da034c965486be9dfcbffe8a",
+   "results_identical": true,
+   "results_sha256": "69e5319d38ad29af3e2f4c3c7ee470b321d0bdc489976449c5feb385a0942a65",
+   "second": "probes-tables-leak-gov-20261120T191648"
+  },
+  "leak-research": {
+   "first": "probes-tables-leak-research-20261120T190020",
+   "probes_identical": true,
+   "probes_sha256": "8c7c88e39e7d3b9066626810eafae9d481337b08c32e0f1b68f99451767693a3",
+   "results_identical": true,
+   "results_sha256": "a61fcc1a8cadd255145e945a01f38d2a090f6497a7e4b03a1733a9a8d96f4da2",
+   "second": "probes-tables-leak-research-20261120T191857"
+  },
+  "mcp-gov": {
+   "first": "probes-tables-mcp-gov-20261120T191146",
+   "probes_identical": true,
+   "probes_sha256": "2ee7bbd69f276c762467b4efbf78dd80580c1d48abd823f9c4073b41848afa33",
+   "results_identical": true,
+   "results_sha256": "72e63819ce9223fab8157fd81c6df8d1ea4b8cac68839318343930a3e9a62788",
+   "second": "probes-tables-mcp-gov-20261120T192954"
+  },
+  "sql-gov": {
+   "first": "probes-tables-sql-gov-20261120T185626",
+   "probes_identical": true,
+   "probes_sha256": "5bc141e279ec2d5b6f4c95c4da78578ab794af848c281d121cca47b00b249876",
+   "results_identical": true,
+   "results_sha256": "0904bf30f856ad1875f7d77d4924810821b9c7ce48e6c97d32056661576974bf",
+   "second": "probes-tables-sql-gov-20261120T191522"
+  },
+  "sql-research": {
+   "first": "probes-tables-sql-research-20261120T185642",
+   "probes_identical": true,
+   "probes_sha256": "5bc141e279ec2d5b6f4c95c4da78578ab794af848c281d121cca47b00b249876",
+   "results_identical": true,
+   "results_sha256": "effe9dd1a41a313e4443b8eb26b9daf84ab350bdb7e4e17abb663436bc016bda",
+   "second": "probes-tables-sql-research-20261120T191534"
+  }
+ },
+ "real_stores": {
+  "checked": ".cache/store and .cache/index: 7320 files, size and mtime identical before and after every run of this task",
+  "unchanged": true
+ },
+ "scratch": {
+  "acl_syncs": "gov, research, bench, toolret synced with `adr acl sync` before each sequence (entries 053acb4a6d76, 7f8fb0e62d37, e1ca0a6ae0f1, 3906197e26ef: as in Phase 2)",
+  "clones": "removed",
+  "reference_stores": ".cache/store-p2/views-tables/<corpus>/<view[:12]>, built, reused and removed"
+ }
+}

@@ -1,0 +1,270 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "acl_sequence": 18,
+    "acl_snapshot": "c4573fde776296c911a3fc3517e06461bd14d320abf98a1b5dfbfa2b70711188",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "failclosed_callers": [
+      "user:auditor",
+      "user:globex-1",
+      "user:initech-1",
+      "user:initech-5",
+      "user:outsider"
+    ],
+    "kind": "tables-failclosed",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tables": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8"
+  },
+  "logs": {
+    "by_store": {
+      "clone-F1": {
+        "allowed": 0,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 15,
+        "decisions": {
+          "denied:F1": 15
+        },
+        "lines": 15,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 5,
+        "sql_text_lines": 0,
+        "table_lines": 15,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        }
+      },
+      "clone-F2": {
+        "allowed": 0,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 15,
+        "decisions": {
+          "denied:F2": 15
+        },
+        "lines": 15,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 5,
+        "sql_text_lines": 0,
+        "table_lines": 15,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        }
+      },
+      "clone-F3": {
+        "allowed": 0,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 15,
+        "decisions": {
+          "denied:F3": 15
+        },
+        "lines": 15,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 5,
+        "sql_text_lines": 0,
+        "table_lines": 15,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        }
+      },
+      "clone-no_entry": {
+        "allowed": 30,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 30,
+        "decisions": {
+          "allowed": 30
+        },
+        "lines": 30,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 10,
+        "sql_text_lines": 0,
+        "table_lines": 30,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 10,
+          "query_table": 10,
+          "sql": 10
+        }
+      },
+      "store": {
+        "allowed": 10,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 40,
+        "decisions": {
+          "allowed": 10,
+          "denied:F4": 15,
+          "denied:F5": 15
+        },
+        "lines": 40,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 15,
+        "sql_text_lines": 0,
+        "table_lines": 40,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 10,
+          "query_table": 15,
+          "sql": 15
+        }
+      }
+    },
+    "total": {
+      "allowed": 40,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 115,
+      "decisions": {
+        "allowed": 40,
+        "denied:F1": 15,
+        "denied:F2": 15,
+        "denied:F3": 15,
+        "denied:F4": 15,
+        "denied:F5": 15
+      },
+      "lines": 115,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 40,
+      "sql_text_lines": 0,
+      "table_lines": 115,
+      "tables_missing": 0,
+      "tools": {
+        "describe_tables": 35,
+        "query_table": 40,
+        "sql": 40
+      }
+    }
+  },
+  "summary": {
+    "conditions": {
+      "F1": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "denied:F1": 15
+        },
+        "passed": 15
+      },
+      "F2": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "denied:F2": 15
+        },
+        "passed": 15
+      },
+      "F3": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "denied:F3": 15
+        },
+        "passed": 15
+      },
+      "F4": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "denied:F4": 15
+        },
+        "passed": 15
+      },
+      "F5": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "denied:F5": 15
+        },
+        "passed": 15
+      },
+      "no_entry": {
+        "by_tool": {
+          "describe_tables": 5,
+          "query_table": 5,
+          "sql": 5
+        },
+        "content": 0,
+        "n": 15,
+        "outcomes": {
+          "ok": 15
+        },
+        "passed": 15
+      }
+    },
+    "total": {
+      "content": 0,
+      "n": 90,
+      "passed": 90
+    }
+  }
+}
