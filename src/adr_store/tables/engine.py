@@ -19,7 +19,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -142,6 +143,13 @@ class ViewDB:
         """All rows of a statement; one statement at a time per database."""
         with self._lock:
             return self.conn.execute(sql, tuple(params)).fetchall()
+
+    @contextmanager
+    def exclusive(self) -> Iterator[sqlite3.Connection]:
+        """The connection, held by one caller at a time: guarded SQL (`sqlguard.run_sql`)
+        installs its authorizer, step budget and limits on it for the length of one call."""
+        with self._lock:
+            yield self.conn
 
 
 def _create(conn: sqlite3.Connection, c: Contract, recs: list[RowRecord]) -> None:
