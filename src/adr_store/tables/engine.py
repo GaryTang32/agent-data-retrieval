@@ -88,6 +88,22 @@ def _python(col: Column, v: Any) -> Any:
     return v
 
 
+def contracts_of(manifest: Manifest, tables_id: str, contracts_dir: Path = CONTRACT_DIR
+                 ) -> dict[str, Contract]:
+    """The contract of every table of a build, by table name in the manifest's order;
+    TablesError when one is not the contract the build was made under (edited since)."""
+    available = load_contracts(contracts_dir, manifest.corpus)
+    contracts: dict[str, Contract] = {}
+    for t in manifest.tables:
+        c = available.get(t.table)
+        if c is None or c.version != t.contract_version \
+                or contract_sha256(c) != t.contract_sha256:
+            raise TablesError(f"table {t.table}: the contract is not the one the build "
+                              f"{tables_id[:12]} was made under")
+        contracts[t.table] = c
+    return contracts
+
+
 class ViewDB:
     """The in-memory database of one (tables id, caller view, applicability filters)."""
 
@@ -104,18 +120,9 @@ class ViewDB:
               ) -> ViewDB:
         """The database of the manifest's tables holding the rows of the `admitted` documents
         (None: every row). Each table's contract must be the one the build was made under."""
-        available = load_contracts(contracts_dir, manifest.corpus)
-        contracts: dict[str, Contract] = {}
-        rows: dict[str, list[RowRecord]] = {}
-        for t in manifest.tables:
-            c = available.get(t.table)
-            if c is None or c.version != t.contract_version \
-                    or contract_sha256(c) != t.contract_sha256:
-                raise TablesError(f"table {t.table}: the contract is not the one the build "
-                                  f"{tables_id[:12]} was made under")
-            contracts[t.table] = c
-            rows[t.table] = [r for r in load_rows(store_path, manifest, t.table)
-                             if admitted is None or r.doc_id in admitted]
+        contracts = contracts_of(manifest, tables_id, contracts_dir)
+        rows = {t: [r for r in load_rows(store_path, manifest, t)
+                    if admitted is None or r.doc_id in admitted] for t in contracts}
         return cls._load(contracts, rows, tables_id)
 
     @classmethod

@@ -10,7 +10,15 @@ directory and policy, and the principals of a chunk, a document or a user; code 
 captured MCP `tools/list` result, an OpenAPI 3.x JSON document or the local ToolRet corpus into
 a store's tool catalog; code in `adr_store.tool_records` and `adr_store.tool_catalog`), and
 `adr mcp --store <dir> --as USER` (Phase 2 spec §9.3: the five tools over MCP on stdio as one
-caller; code in `adr_store.mcp_server`, needs the `[mcp]` extra). `adr`
+caller; code in `adr_store.mcp_server`, needs the `[mcp]` extra), and the typed tables (Phase 3
+spec §5.2, §8): `adr tables build` (build the 3A tables of the store's HEAD snapshot as a
+candidate and print its tables id; the corpus is the store's, `--tables-for` when it holds
+both; `--generator` and `--max-calls` (default 0) name the model profile and call cap of an
+extraction build, and a metadata build calls no model), `adr tables gate` (the merge gate:
+evaluate a candidate against `tables/HEAD` on gold sets and promote it when it has at most
+`--max-flips` flips; exit 1 when refused), `adr tables show` (a build's manifest and its
+semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the `query_table`
+and `sql` tools, with the filter flags and `--as USER` of `adr search`). `adr`
 is not a security boundary (Phase 2 spec §7.1): whoever can run it
 can read the store directory.
 
@@ -61,6 +69,7 @@ reported on one line with the document being processed.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import stat
@@ -70,6 +79,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 
+from adr_eval import runner as eval_runner
 from adr_eval.corpora import REPO_ROOT
 from adr_eval.corpora.base import Document, ExtractionError, HashMismatch, sha256_bytes
 from adr_eval.corpora.extract import extract_text
@@ -85,6 +95,12 @@ from adr_store.store import (
     stored_source,
     write_atomic,
 )
+from adr_store.tables import build as tables_build
+from adr_store.tables import gate as tables_gate
+from adr_store.tables import overlay as tables_overlay
+from adr_store.tables.engine import OPS, QUERY_LIMIT, contracts_of
+from adr_store.tables.loaders import FR_PREFIX, PAPERS_URI
+from adr_store.tables.semantic import describe
 
 UNKNOWN_LICENSES = frozenset({"", "unknown"})
 PROBLEMS_SHOWN = 5
@@ -487,12 +503,12 @@ def _filters(a: argparse.Namespace) -> dict | None:
     return f or None
 
 
-def _print_filters(res, excluded: int | None) -> None:
-    """One line naming the filters of a result and what they excluded; none without an
-    overlay (the table is then Phase 1's)."""
+def _print_filters(res, excluded: int | None, filters: dict | None = None) -> None:
+    """One line naming the filters of a result (`filters`, else `res.filters`) and what they
+    excluded; none without an overlay (the table is then Phase 1's)."""
     if res.applicability is None:
         return
-    f = res.filters
+    f = res.filters if filters is None else filters
     parts = [f"as_of {f['as_of']}" if f["as_of"] is not None else
              "include_superseded" if f["include_superseded"] else "default"]
     parts += [f"{k} {','.join(map(str, f[k]))}" for k in ("status", "jurisdiction") if f[k]]
@@ -895,6 +911,168 @@ def _load_tool(a: argparse.Namespace) -> int:
     return 0
 
 
+ECFR_PREFIX = "https://www.ecfr.gov/"
+
+
+def _tables_corpus(a: argparse.Namespace) -> str:
+    """The corpus whose tables to build: `--tables-for`, else the one the store's documents
+    are of (Federal Register or eCFR documents: gov; the papers manifest: research)."""
+    if a.tables_for is not None:
+        return a.tables_for
+    store = Store.open(a.store)
+    found = set()
+    for doc_id in store.doc_ids():
+        uri = store.source(doc_id).uri
+        if uri == PAPERS_URI:
+            found.add("research")
+        elif uri.startswith((FR_PREFIX, ECFR_PREFIX)):
+            found.add("gov")
+    if len(found) != 1:
+        what = "both gov and research documents" if found else \
+            "no Federal Register, eCFR or papers manifest document"
+        raise _UsageError(f"{a.store}: the store holds {what}; give --tables-for gov or "
+                          f"--tables-for research")
+    return found.pop()
+
+
+def _tables_build(a: argparse.Namespace) -> int:
+    corpus = _tables_corpus(a)
+    generator = a.generator or eval_runner.load_config()["generator"]
+    try:
+        res = tables_build.build_tables(a.store, corpus, with_extraction=a.with_extraction,
+                                        generator_profile=generator, max_calls=a.max_calls)
+    except NotImplementedError as e:
+        raise tools.ToolError(str(e)) from e
+    m = tables_overlay.load_manifest(a.store, res.tables_id)
+    head = tables_overlay.read_head(a.store)
+    if a.json:
+        print(json.dumps({"tables_id": res.tables_id, "manifest_path": str(res.manifest_path),
+                          "head": head, "manifest": m.model_dump(mode="json")}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    print(res.tables_id)
+    print(f"candidate tables of {m.corpus} for snapshot {m.snapshot[:12]}: {len(m.tables)} "
+          f"table(s), {sum(t.rows for t in m.tables)} row(s), "
+          f"{sum(t.rejected for t in m.tables)} rejected; HEAD "
+          f"{'is this build' if head == res.tables_id else head[:12] if head else 'none'}")
+    _print_tables(m)
+    if head != res.tables_id:
+        print(f"  not current until promoted: adr tables gate --store {a.store} --candidate "
+              f"{res.tables_id} --gold DIR --max-flips N")
+    return 0
+
+
+def _print_tables(m: tables_overlay.Manifest) -> None:
+    for t in m.tables:
+        print(f"  {t.table:<16} v{t.contract_version}  {t.kind:<10} {t.rows:>7} row(s)  "
+              f"{t.rejected:>5} rejected  {t.sha256[:12]}")
+
+
+def _tables_show(a: argparse.Namespace) -> int:
+    head = tables_overlay.read_head(a.store)
+    tables_id = a.tables or head
+    if tables_id is None:
+        raise tools.ToolError(f"{a.store}: no current tables (tables/HEAD); run `adr tables "
+                              f"build` and `adr tables gate`, or give --tables ID")
+    m = tables_overlay.load_manifest(a.store, tables_id)
+    semantic = describe(list(contracts_of(m, tables_id).values()))
+    if a.json:
+        print(json.dumps({"tables_id": tables_id, "head": head,
+                          "manifest": m.model_dump(mode="json"), "semantic": semantic},
+                         indent=2, ensure_ascii=False))
+        return 0
+    state = "HEAD" if tables_id == head else "not HEAD"
+    print(f"tables {tables_id[:12]} ({state}) of {m.corpus} for snapshot {m.snapshot[:12]}; "
+          f"applicability overlay {m.applicability[:12] if m.applicability else 'none'}")
+    _print_tables(m)
+    print(json.dumps(semantic, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _gold_path(p: Path) -> Path:
+    return p / "items.jsonl" if p.is_dir() else p
+
+
+def _tables_gate(a: argparse.Namespace) -> int:
+    m = tables_overlay.load_manifest(a.store, a.candidate)
+    cases = []
+    for g in a.gold:
+        try:
+            cases += tables_gate.gold_cases(_gold_path(g), m.corpus)
+        except (OSError, ValueError) as e:
+            raise tools.ToolError(f"cannot read the gold set {_gold_path(g)}: "
+                                  f"{_one_line(e)}") from e
+    try:
+        r = tables_gate.gate(a.store, a.candidate, cases, a.max_flips,
+                             allow_unreadable_head=a.allow_unreadable_head)
+    except ValueError as e:
+        raise tools.ToolError(str(e)) from e
+    if a.json:
+        print(json.dumps(dataclasses.asdict(r), indent=2, ensure_ascii=False))
+    else:
+        was = r.current[:12] if r.current else "none"
+        verdict = (f"promoted: {r.candidate[:12]} is HEAD (was {was})" if r.promoted else
+                   f"refused: HEAD stays {was}")
+        print(f"{verdict}; candidate right on {r.right_candidate} of {r.n}, HEAD on "
+              f"{r.right_current} of {r.n}; {len(r.flips)} flip(s) (at most {a.max_flips}), "
+              f"{len(r.gains)} gain(s)")
+        if r.flips:
+            print(f"  flips: {', '.join(r.flips)}")
+        if r.head_unreadable:
+            print(f"  HEAD could not be evaluated: {r.head_unreadable}")
+    return 0 if r.promoted else EXIT_CONFORMANCE
+
+
+def _query_filters(a: argparse.Namespace) -> dict | None:
+    if a.query_filters is None:
+        return None
+    try:
+        return json.loads(a.query_filters)
+    except ValueError as e:
+        raise _UsageError(f"--filters is not JSON: {_one_line(e)}") from e
+
+
+def _query(a: argparse.Namespace) -> int:
+    res = _tools(a).query_table(a.table, _query_filters(a), a.op, fields=a.fields,
+                                order=a.order, limit=a.limit, applicability=_filters(a))
+    if a.json:
+        _print_json(res)
+        return 0
+    more = " (truncated)" if res.truncated else ""
+    print(f"snapshot {res.snapshot[:12]}  tables {res.tables[:12]}  {res.op} on "
+          f"{res.table}{more}")
+    _print_filters(res, res.excluded_by_filter, res.applicability_filters)
+    for why in res.never_matches:
+        print(f"  never matches: {why}")
+    if res.op == "count":
+        print(res.count)
+    elif res.op == "list":
+        for i in res.ids:
+            print(i)
+    elif res.op == "count_by":
+        for g in res.groups:
+            print(f"{g['count']:>8}  {json.dumps(g['value'], ensure_ascii=False)}")
+    else:
+        for r in res.rows:
+            print(f"{r['doc_id'][:12]}  {json.dumps(r['row'], ensure_ascii=False)}")
+    return 0
+
+
+def _sql(a: argparse.Namespace) -> int:
+    res = _tools(a).sql(a.statement, applicability=_filters(a))
+    if a.json:
+        _print_json(res)
+        return 0
+    more = " (truncated)" if res.truncated else ""
+    print(f"snapshot {res.snapshot[:12]}  tables {res.tables[:12]}  {len(res.rows)} "
+          f"row(s){more}")
+    _print_filters(res, res.excluded_by_filter, res.applicability_filters)
+    print("\t".join(res.columns))
+    for row in res.rows:
+        print("\t".join(json.dumps(v, ensure_ascii=False) for v in row))
+    return 0
+
+
 def _mcp(a: argparse.Namespace) -> int:
     """`adr mcp`: the server of `adr_store.mcp_server` (which imports the `mcp` package only
     when it builds the server, so the rest of `adr` runs without the `[mcp]` extra)."""
@@ -1100,6 +1278,67 @@ def _parser() -> argparse.ArgumentParser:
                                     mcp_server.HELP_HANDLES)
     mcp_server.add_arguments(mc)
     mc.set_defaults(fn=_mcp)
+
+    qt = _tool_parser(sub, "query", "query a typed table: count, list, lookup or count_by "
+                                    "(Phase 3; the query_table tool)", _query)
+    qt.add_argument("--table", required=True, help="a table (adr tables show lists them)")
+    qt.add_argument("--filters", dest="query_filters", default=None, metavar="JSON",
+                    help='column filters as a JSON object, e.g. \'{"type": "Rule", '
+                         '"year__gte": 2020}\'')
+    qt.add_argument("--op", choices=OPS, default="count", help="default count")
+    qt.add_argument("--fields", nargs="+", default=None, metavar="F",
+                    help="lookup: the columns to show; count_by: the one column to group by")
+    qt.add_argument("--order", nargs="+", default=None, metavar="F",
+                    help="lookup: sort columns (descending: --order=-F)")
+    qt.add_argument("--limit", type=_positive, default=QUERY_LIMIT,
+                    help=f"lookup: at most this many rows (default {QUERY_LIMIT})")
+    _filter_flags(qt)
+    sq = _tool_parser(sub, "sql", "one guarded read-only SELECT over the typed tables (Phase 3; "
+                                  "the sql tool)", _sql)
+    sq.add_argument("statement", help="one SELECT statement")
+    _filter_flags(sq)
+
+    tb = sub.add_parser("tables", help="the typed tables (Phase 3): build, gate and show",
+                        description="Typed tables of the store's HEAD snapshot: `build` writes "
+                                    "a candidate build, `gate` promotes it to tables/HEAD "
+                                    "through the merge gate, `show` prints a build. "
+                                    + NOT_A_BOUNDARY)
+    tb_sub = tb.add_subparsers(dest="action", required=True)
+    tbb = tb_sub.add_parser("build", help="build the tables of the store's HEAD snapshot (a "
+                                          "candidate: tables/HEAD does not move)")
+    tbb.add_argument("--store", type=Path, required=True, help="store directory")
+    tbb.add_argument("--tables-for", choices=("gov", "research"), default=None,
+                     help="the corpus whose tables to build (default: the one the store's "
+                          "documents are of)")
+    tbb.add_argument("--with-extraction", action="store_true",
+                     help="also build the extraction (3B) tables")
+    tbb.add_argument("--generator", metavar="PROFILE", default=None,
+                     help="model profile in config/models.json of an extraction build "
+                          "(default: config generator); a metadata build calls no model")
+    tbb.add_argument("--max-calls", type=_non_negative, default=0,
+                     help="model calls an extraction build may make (default 0: cached "
+                          "replies only)")
+    tbb.add_argument("--json", action="store_true", help="print the result as JSON")
+    tbb.set_defaults(fn=_tables_build)
+    tbg = tb_sub.add_parser("gate", help="evaluate a candidate against tables/HEAD on gold sets "
+                                         "and promote it when it has at most --max-flips flips")
+    tbg.add_argument("--store", type=Path, required=True, help="store directory")
+    tbg.add_argument("--candidate", required=True, help="the candidate's tables id")
+    tbg.add_argument("--gold", type=Path, action="append", required=True, metavar="DIR",
+                     help="a golden set (directory with items.jsonl, or the file); repeatable")
+    tbg.add_argument("--max-flips", type=_non_negative, required=True,
+                     help="cases HEAD answers right that the candidate may answer wrong")
+    tbg.add_argument("--allow-unreadable-head", action="store_true",
+                     help="promote even when HEAD cannot be evaluated under the current "
+                          "contracts (no comparison)")
+    tbg.add_argument("--json", action="store_true", help="print the result as JSON")
+    tbg.set_defaults(fn=_tables_gate)
+    tbs = tb_sub.add_parser("show", help="a build's manifest and semantic layer (default: "
+                                         "tables/HEAD)")
+    tbs.add_argument("--store", type=Path, required=True, help="store directory")
+    tbs.add_argument("--tables", default=None, metavar="ID", help="a tables id (default HEAD)")
+    tbs.add_argument("--json", action="store_true", help="print the result as JSON")
+    tbs.set_defaults(fn=_tables_show)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "

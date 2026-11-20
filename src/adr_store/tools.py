@@ -153,40 +153,64 @@ caller's visible tools only. With the ACL layer:
 Log lines of the tool tools carry `tools_snapshot`, `tool_index`, `tool_view`, `filters` and
 `tool_error` beside the fields above.
 
-Snapshot handles and cursors (Phase 2 spec §9.2, §9.3; Task 12). Every result of the five tool
-calls carries `handle` (`adr_store.handles`: the content snapshot, the active index with its
-system and weight, the applicability and dedup overlays, the tool snapshot and the active
-tool index the call ran on; a part the store lacks is null), and each of them takes
+Snapshot handles and cursors (Phase 2 spec §9.2, §9.3; Task 12). Every result of the tool calls
+carries `handle` (`adr_store.handles`: the content snapshot, the active index with its system
+and weight, the applicability and dedup overlays, the tool snapshot, the active tool index and
+the tables (Phase 3) the call ran on; a part the store lacks is null), and each of them takes
 `handle=`: the call then runs on exactly those parts (`handles.resolve`: a part that is gone is
-"handle no longer available: <part>", parts that do not belong together a "bad handle"; never
-a fallback to HEAD), so a replay with a result's handle gives that result again. A handle is
-resolved after the caller's access (the ACL first: a caller without access learns nothing
-about a handle) and never stands in for it (ruling R15): F1–F5 are decided against HEAD and
-the current ACL snapshot whatever the handle names, an older content snapshot's documents are
-visible only as the current ACL lists them (a document it holds that the ACL no longer lists
-is "not found", byte for byte as one that never existed; a chain the current ACL thereby
-splits is F1, whose message says to use a current handle and names snapshots only), and an
-older tool snapshot's tools likewise; the `view` logged is that of the snapshot read. A
-replay gives the result again, the dedup note of a handle without a dedup overlay included
-(an overlay built since is not used, and the note is `dedup.missing`'s, as before).
-Without a handle, a result's handle is the store as the call found it: what the call used,
-and the rest as it is now (`handles.current`, which never fails: a damaged record is a null
-part, so such a call behaves as before handles existed). A handle given is logged in
-`args` (as a dict); every line carries `handle` (the result's, or the one given when the call
-failed). `search` and `grep` page with `cursor`, the
-previous result's `next_cursor`: for `search` a rank offset (ranks offset+1 to offset+top of
-the same ranking, at most `CHANNEL_K` deep, `RERANK_TOP` for a reranked index; `next_cursor`
-is set when the page is full and that depth is not reached), for `grep` "<doc_id>:<offset>"
-after the last match (the continuation of the same scan: the documents after that id, and that
-document from that offset when the caller sees it; a cursor naming a document the caller
-cannot see behaves as one naming none; `next_cursor` is set when the page was cut). An id,
-query, pattern or cursor that is not a string is refused ("<argument> must be a string, got
-<type>"), the same message whatever the store holds.
+"handle no longer available: <part>", parts that do not belong together a "bad handle"; never a
+fallback to HEAD), so a replay with a result's handle gives that result again. A handle is
+resolved after the caller's access (the ACL first: a caller without access learns nothing about
+a handle) and never stands in for it (ruling R15): F1–F5 are decided against HEAD and the
+current ACL snapshot whatever the handle names, an older content snapshot's documents are
+visible only as the current ACL lists them (a document it holds that the ACL no longer lists is
+"not found", byte for byte as one that never existed; a chain the current ACL thereby splits is
+F1, whose message says to use a current handle and names snapshots only), and an older tool
+snapshot's tools likewise; the `view` logged is that of the snapshot read. A replay gives the
+result again, the dedup note of a handle without a dedup overlay included (an overlay built
+since is not used, and the note is `dedup.missing`'s, as before). Without a handle, a result's
+handle is the store as the call found it: what the call used, and the rest as it is now
+(`handles.current`, which never fails: a damaged record is a null part, so such a call behaves
+as before handles existed). A handle given is logged in `args` (as a dict); every line carries
+`handle` (the result's, or the one given when the call failed). `search` and `grep` page with
+`cursor`, the previous result's `next_cursor`: for `search` a rank offset (ranks offset+1 to
+offset+top of the same ranking, at most `CHANNEL_K` deep, `RERANK_TOP` for a reranked index;
+`next_cursor` is set when the page is full and that depth is not reached), for `grep`
+"<doc_id>:<offset>" after the last match (the continuation of the same scan: the documents after
+that id, and that document from that offset when the caller sees it; a cursor naming a document
+the caller cannot see behaves as one naming none; `next_cursor` is set when the page was cut).
+An id, query, pattern or cursor that is not a string is refused ("<argument> must be a string,
+got <type>"), the same message whatever the store holds.
+
+Typed tables (Phase 3 spec §8, §9; Task 6). `describe_tables(table=None)` returns the semantic
+layer of the tables (`tables.semantic`: the index, or one table's detail), `query_table(table,
+filters, op, fields=, order=, limit=)` one parameterised query (`tables.engine`: `count`,
+`list`, `lookup`, `count_by`) and `sql(statement)` one guarded read-only SELECT
+(`tables.sqlguard.run_sql`, the only way any tool reaches a database's connection). Each runs
+through `_call` like the tools above (the ACL resolved on entry, then the handle pinned) and
+reads the build that `tables/HEAD` names (moved only by the merge gate, `tables.gate`) when its
+manifest is of the call's content snapshot, or the build its handle names (`handles.Handle.
+tables`; a handle without one is refused with `NO_HANDLE_TABLES`); otherwise `NO_TABLES`.
+`query_table` and `sql` take `applicability` (the `filters` of `search`: `Filters` or its
+dict) and run on a database of the rows of the documents of the caller's view that the filters
+admit, so counts, aggregates, groups and errors cover the view only: a table with no visible
+rows exists and is empty, and a hidden row is a row that does not exist. The databases are
+cached per instance, an LRU of `TABLE_DB_CACHE` by (tables id, the caller's view id, the
+filters, the admitted documents), never shared across views or filters. `list` ids and
+`count_by` groups are capped at `QUERY_ROW_CAP` (`truncated` beyond), `lookup` rows at
+`limit`, `sql` rows at `sqlguard.SQL_ROW_CAP`. `QueryError`, `SqlRefused` and `UnknownTable` are
+`ToolError`s with the same fixed text. Results carry the tables id, the applicability overlay
+id, the filters applied (`applicability_filters`), `excluded_by_filter` (documents of the view)
+and the handle. Log lines of the three carry `tables`; `query_table` and `sql` also
+`applicability` and `applicability_filters`; `sql` logs `args` = {`statement_sha256`,
+`applicability`}, `sql_sha256` and `sql_rows` (the row count), never the statement's text or a
+row. The tables' `.report.json` files are operator reports and are never read here.
 """
 
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import os
 import re
@@ -203,6 +227,7 @@ from itertools import chain
 from multiprocessing.connection import Connection
 from pathlib import Path
 from re import _parser as re_parser
+from typing import Any
 
 import numpy as np
 
@@ -226,6 +251,10 @@ from adr_store.retrieval.lexical import FieldBM25, check_w_bc, doc_mask
 from adr_store.retrieval.rerank import RERANK_TOP, CrossEncoderReranker
 from adr_store.retrieval.tool_index import ToolIndex, tool_view_id
 from adr_store.store import Store, StoreError, write_atomic
+from adr_store.tables.engine import QUERY_LIMIT, QueryError, ViewDB, contracts_of, run_query
+from adr_store.tables.overlay import Manifest
+from adr_store.tables.semantic import UnknownTable, describe
+from adr_store.tables.sqlguard import SQL_ROW_CAP, SqlRefused, run_sql
 from adr_store.tool_catalog import ToolCatalog
 from adr_store.tool_records import definition as tool_definition
 
@@ -250,6 +279,10 @@ OPERATOR_UNDER_ACL = ("{} is an operator call (the whole index, unfiltered) and 
                       "with the ACL layer; use Tools(acl=False)")
 INDEX_UNDER_ACL = ("index is an operator call and does not run with the ACL layer; use "
                    "Tools(acl=False) (`adr index`)")
+NO_TABLES = "no tables for snapshot {}…; run `adr tables build` and `adr tables gate`"
+NO_HANDLE_TABLES = "the handle names no tables; call without a handle or with a current one"
+TABLE_DB_CACHE = 8  # per-view table databases per Tools instance (LRU, see `_view_db`)
+QUERY_ROW_CAP = SQL_ROW_CAP  # ids of a `list`, groups of a `count_by` (one more: truncated)
 
 
 class ToolError(Exception):
@@ -449,6 +482,51 @@ class LoadToolResult(_Result):
     license: str
     definition_tokens: int
     tools_snapshot: str
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class DescribeResult(_Result):
+    snapshot: str
+    tables: str  # the tables id the semantic layer describes
+    semantic: dict  # `tables.semantic.describe`: the index, or one table's detail
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class QueryResult(_Result):
+    table: str
+    op: str
+    filters: dict
+    fields: list[str] | None
+    order: list[str] | None
+    limit: int
+    count: int | None  # op count
+    ids: list[str] | None  # op list: sorted unique ids, at most QUERY_ROW_CAP
+    rows: list[dict] | None  # op lookup: {doc_id, row, prov}, at most `limit`
+    groups: list[dict] | None  # op count_by: {value, count}, at most QUERY_ROW_CAP
+    value: Any  # op lookup: the one field of the one row matched, else None
+    truncated: bool
+    never_matches: list[str]  # the filter clauses that can never match, with the reason
+    snapshot: str
+    tables: str
+    applicability: str | None  # the applicability overlay id
+    applicability_filters: dict  # the applicability filters applied (`Filters.to_dict`)
+    excluded_by_filter: int  # documents of the caller's view the filters excluded
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class SqlResult(_Result):
+    statement_sha256: str
+    columns: list[str]
+    rows: list[list]
+    truncated: bool
+    snapshot: str
+    tables: str
+    applicability: str | None
+    applicability_filters: dict
+    excluded_by_filter: int
     handle: dict | None = None
 
 
@@ -726,11 +804,11 @@ class Tools:
     one ACL snapshot per call, `clock` for F3) and enforces it; `caller` is a `user:`
     principal. Calls on one instance run one at a time.
 
-    Only the tool methods (`search`, `read`, `grep`, `search_tools`, `load_tool`) serve a
-    caller; the MCP layer (Task 12) must call nothing else. `index`, `tools_index`,
-    `active_index`, `active_system` and `active_tool_index` are operator calls, refused with
-    the ACL layer (`index` and `tools_index` after resolving access, so they are logged with
-    the caller's decision)."""
+    Only the tool methods (`search`, `read`, `grep`, `search_tools`, `load_tool`,
+    `describe_tables`, `query_table`, `sql`) serve a caller; the MCP layer must call nothing
+    else. `index`, `tools_index`, `active_index`, `active_system` and `active_tool_index` are
+    operator calls, refused with the ACL layer (`index` and `tools_index` after resolving
+    access, so they are logged with the caller's decision)."""
 
     def __init__(self, store_path: Path, *, emb_cache: Path = DEFAULT_EMB_CACHE,
                  acl: bool = False, caller: str | None = None,
@@ -763,6 +841,8 @@ class Tools:
         self._tool_index: ToolIndex | None = None
         self._tool_catalog: tuple[tuple, ToolCatalog] | None = None  # (file key, catalog)
         self._catalog_now: ToolCatalog | None = None  # the checked catalog of the call
+        # per-view table databases: (tables id, view, filters, admitted docs) -> ViewDB
+        self._table_dbs: OrderedDict[tuple, ViewDB] = OrderedDict()
 
     @property
     def index_root(self) -> Path:
@@ -960,7 +1040,7 @@ class Tools:
                     self.store_path, active["fingerprint"]) is None:
                 active = None
             known["index"] = active
-        for part in ("applicability", "dedup", "tools", "tool_index"):
+        for part in ("applicability", "dedup", "tools", "tool_index", "tables"):
             if part in self._memo:
                 known[part] = self._memo[part]
         if "dedup" not in known and known["index"] is not None and self._index is not None \
@@ -1949,3 +2029,146 @@ class Tools:
 
         return self._call("load_tool", {"tool_id": _filters_arg(tool_id)}, run, fields,
                           tool_call=True, handle=handle)
+
+    # -- typed tables (Phase 3) -------------------------------------------------------
+
+    def _tables(self, fields: dict) -> tuple[str, Manifest]:
+        """The tables id and manifest the call reads (logged in `fields`): the handle's, or
+        `tables/HEAD` when its manifest is of the call's content snapshot (NO_TABLES
+        otherwise: a build not yet promoted, or one of an older snapshot, is never used)."""
+        if self._pin is not None:
+            tables_id = self._pin.tables
+            if tables_id is None:
+                raise ToolError(NO_HANDLE_TABLES)
+        else:
+            tables_id = handles_mod.tables_head(self.store_path, self.snapshot)
+            if tables_id is None:
+                raise ToolError(NO_TABLES.format(self.snapshot[:12]))
+        m = handles_mod.tables_manifest(self.store_path, tables_id)
+        if m is None or m.snapshot != self.snapshot:
+            if self._pin is not None:  # checked on entry: removed or damaged since
+                raise handles_mod.unavailable("tables")
+            raise ToolError(NO_TABLES.format(self.snapshot[:12]))
+        fields["tables"] = self._memo["tables"] = tables_id
+        return tables_id, m
+
+    def _view_db(self, tables_id: str, manifest: Manifest, applicability: object,
+                 fields: dict) -> tuple[ViewDB, _Applied]:
+        """The database of the rows the call may read: those of the documents of the
+        caller's view that the applicability filters admit (logged in `fields`). Built from
+        the table overlay, never shared with another view or filter set: an LRU of
+        `TABLE_DB_CACHE` per instance by (tables id, caller's view id, filters, admitted
+        documents)."""
+        logged: dict = {}
+        applied = self._apply(applicability, logged)
+        fields["applicability_filters"] = logged.get("filters")
+        fields["applicability"] = logged.get("applicability")
+        admitted = applied.allowed
+        key = (tables_id, None if self._access_now is None else self._access_now.view,
+               json.dumps(applied.filters.to_dict(), sort_keys=True),
+               None if admitted is None else acl_mod.view_id(admitted))
+        db = self._table_dbs.get(key)
+        if db is not None:
+            self._table_dbs.move_to_end(key)
+            return db, applied
+        db = ViewDB.build(self.store_path, manifest, tables_id, admitted)
+        self._table_dbs[key] = db
+        while len(self._table_dbs) > TABLE_DB_CACHE:
+            self._table_dbs.popitem(last=False)[1].close()
+        return db, applied
+
+    @staticmethod
+    def _table_fields() -> dict:
+        return {"tables": None, "applicability": None, "applicability_filters": None}
+
+    def describe_tables(self, table: str | None = None, *,
+                        handle: handles_mod.Handle | dict | None = None) -> DescribeResult:
+        """The semantic layer of the tables (`tables.semantic.describe`, generated from the
+        contracts of the build): the index of every table, or with `table` that table's
+        column descriptions and allowed values. Names no row. `handle` pins the call."""
+        fields = {"tables": None}
+
+        def run():
+            tables_id, m = self._tables(fields)
+            try:
+                semantic = describe(list(contracts_of(m, tables_id).values()), table)
+            except UnknownTable as e:
+                raise ToolError(str(e)) from None
+            return DescribeResult(self.snapshot, tables_id, semantic,
+                                  handle=self._result_handle()), [], {}
+
+        return self._call("describe_tables", {"table": _filters_arg(table)}, run, fields,
+                          handle=handle)
+
+    def query_table(self, table: str, filters: dict | None = None, op: str = "count", *,
+                    fields: list[str] | None = None, order: list[str] | None = None,
+                    limit: int = QUERY_LIMIT, applicability: Filters | dict | None = None,
+                    handle: handles_mod.Handle | dict | None = None) -> QueryResult:
+        """One parameterised query (`tables.engine.run_query`) over the rows of the caller's
+        view that the applicability filters admit: `count`, `list` (sorted unique ids, at
+        most `QUERY_ROW_CAP`), `lookup` (rows with provenance, at most `limit`) or
+        `count_by` (groups, at most `QUERY_ROW_CAP`); `truncated` when more were found.
+        `handle` pins the call."""
+        log = self._table_fields()
+
+        def run():
+            tables_id, m = self._tables(log)
+            db, applied = self._view_db(tables_id, m, applicability, log)
+            try:
+                out = run_query(db, table, filters, op, fields=fields, order=order, limit=limit)
+            except QueryError as e:
+                e.__traceback__ = None  # its frames hold the database: never kept by the error
+                raise ToolError(str(e)) from None
+            ids, groups, truncated = out.ids, out.groups, out.truncated
+            if ids is not None and len(ids) > QUERY_ROW_CAP:
+                ids, truncated = ids[:QUERY_ROW_CAP], True
+            if groups is not None and len(groups) > QUERY_ROW_CAP:
+                groups, truncated = groups[:QUERY_ROW_CAP], True
+            res = QueryResult(table, op, {} if filters is None else dict(filters),
+                              None if fields is None else list(fields),
+                              None if order is None else list(order), limit, out.count, ids,
+                              out.rows, groups, out.value, truncated, out.never_matches,
+                              self.snapshot, tables_id, **self._applied_fields(applied),
+                              handle=self._result_handle())
+            shown = ids if ids is not None else [r["doc_id"] for r in out.rows or []]
+            return res, shown, {}
+
+        args = {"table": _filters_arg(table), "filters": _filters_arg(filters),
+                "op": _filters_arg(op), "fields": _filters_arg(fields),
+                "order": _filters_arg(order), "limit": _filters_arg(limit),
+                "applicability": _filters_arg(applicability)}
+        return self._call("query_table", args, run, log, handle=handle)
+
+    def sql(self, statement: str, *, applicability: Filters | dict | None = None,
+            handle: handles_mod.Handle | dict | None = None) -> SqlResult:
+        """One guarded read-only SELECT statement (`tables.sqlguard.run_sql`) over the rows
+        of the caller's view that the applicability filters admit, in a total order, at most
+        `SQL_ROW_CAP` rows (`truncated` beyond). A refusal is one of the guard's fixed
+        messages. The log carries the statement's SHA-256 and row count, never its text or
+        rows. `handle` pins the call."""
+        digest = hashlib.sha256(statement.encode("utf-8", "surrogatepass")).hexdigest() \
+            if isinstance(statement, str) else None
+        log = {**self._table_fields(), "sql_sha256": digest, "sql_rows": None}
+
+        def run():
+            tables_id, m = self._tables(log)
+            db, applied = self._view_db(tables_id, m, applicability, log)
+            try:
+                out = run_sql(db, statement)
+            except SqlRefused as e:
+                e.__traceback__ = None  # its frames hold the database: never kept by the error
+                raise ToolError(str(e)) from None
+            log["sql_rows"] = len(out.rows)
+            res = SqlResult(digest, out.columns, out.rows, out.truncated, self.snapshot,
+                            tables_id, **self._applied_fields(applied),
+                            handle=self._result_handle())
+            return res, [], {}
+
+        args = {"statement_sha256": digest, "applicability": _filters_arg(applicability)}
+        return self._call("sql", args, run, log, handle=handle)
+
+    @staticmethod
+    def _applied_fields(applied: _Applied) -> dict:
+        return {"applicability": None if applied.overlay is None else applied.overlay.overlay_id,
+                "applicability_filters": applied.filters.to_dict(),
+                "excluded_by_filter": applied.excluded}
