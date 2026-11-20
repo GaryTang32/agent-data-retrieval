@@ -665,12 +665,11 @@ def test_a_stored_row_at_the_row_limit_is_selected_and_sorted_whole():
 def test_reserved_names_are_denied_in_any_spelling(gov_db, stmt):
     e = _refused(gov_db, stmt)
     assert e.kind == "denied" and str(e) == ERR_DENIED
+    assert sqlguard._names_reserved(stmt)   # the name check alone catches each spelling too
 
 
 @pytest.mark.parametrize("stmt, rows", [
-    # NATURAL compares every shared column: only rows with no NULL cell match themselves
-    ("SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b", [[2]]),
-    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b USING (id)", [[N]]),
+    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.id = b.id", [[N]]),
     ("SELECT count(*) FROM fr_documents, json_each(fr_documents.cfr_parts)", [[7]]),
     ("SELECT 'sqlite_master is a name', 'x pragma_y'", [["sqlite_master is a name",
                                                           "x pragma_y"]]),
@@ -832,9 +831,12 @@ def test_group_concat_still_works_as_an_aggregate(gov_db):
         ["Rule", "2024-00001;2024-00003;2024-00004;2024-00006;2024-00007"]]
 
 
-def test_a_natural_self_join_counts_as_sqlite_does(gov_db):
-    q = "SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b"
-    assert run_sql(gov_db, q).rows == [list(r) for r in gov_db.execute(q)]
+def test_on_joins_count_as_sqlite_does(gov_db):
+    for q in ("SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.type = b.type",
+              "SELECT count(*) FROM fr_documents a LEFT JOIN fr_documents b "
+              "ON a.id = b.id AND a.year > 2030",
+              "SELECT count(*) FROM fr_documents d JOIN fr_agencies g ON g.id = d.id"):
+        assert run_sql(gov_db, q).rows == [list(r) for r in gov_db.execute(q)]
 
 
 
@@ -866,4 +868,128 @@ def test_reserved_names_in_name_positions_are_denied(gov_db, stmt):
     ("SELECT x FROM (SELECT 'generate_series' AS x)", [["generate_series"]]),
 ])
 def test_reserved_words_as_string_values_run(gov_db, stmt, rows):
+    assert run_sql(gov_db, stmt).rows == rows
+
+
+# -- fix round 6: NATURAL and USING refused, parenthesized FROM items, string aliases ---------
+
+# SQLite never asks the authorizer about the columns NATURAL JOIN and JOIN ... USING compare,
+# so both forms are refused outright: these were table-name oracles or ran other modules
+NATURAL_AND_USING = [
+    "SELECT count(*) FROM (SELECT 'table' AS type, 'fr_documents' AS name) "
+    "NATURAL JOIN ('sqlite_master')",
+    "SELECT count(*) FROM (SELECT 'table' AS type, 'nosuch' AS name) "
+    "NATURAL JOIN ('sqlite_master')",
+    "SELECT count(*) FROM (SELECT 'table' AS type) JOIN ('sqlite_master') USING (type)",
+    "SELECT count(*) FROM (SELECT 'table' AS type) NATURAL JOIN ('sqlite_schema')",
+    "SELECT count(*) FROM (SELECT 'fr_documents' AS name) NATURAL JOIN ( 'sqlite_master' )",
+    "SELECT count(*) FROM (SELECT 'fr_documents' AS name) NATURAL JOIN (('sqlite_master'))",
+    "SELECT count(*) FROM (SELECT 'fr_documents' AS name) NATURAL JOIN (/**/'sqlite_master')",
+    "SELECT count(*) FROM (SELECT 0 AS key) NATURAL JOIN ('json_tree'('[1]'))",
+    "SELECT count(*) FROM (SELECT 'fr_documents' AS name) NATURAL JOIN ('dbstat')",
+    "SELECT count(*) FROM (SELECT 1 AS x) AS window NATURAL JOIN ('pragma_database_list')",
+    # on the listed tables too: the form itself is refused
+    "SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b",
+    "SELECT count(*) FROM fr_documents a JOIN fr_documents b USING (id)",
+    "SELECT count(*) FROM fr_documents a natural left outer join fr_documents b",
+    "SELECT count(*) FROM fr_documents a LEFT natural JOIN fr_documents b",
+    "SELECT count(*) FROM fr_documents a join fr_documents b using(id)",
+    "SELECT count(*) FROM fr_documents a/**/NATURAL/**/JOIN fr_documents b",
+]
+
+
+@pytest.mark.parametrize("stmt", NATURAL_AND_USING)
+def test_natural_and_using_joins_are_denied(gov_db, stmt):
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt", [
+    "SELECT count(*) FROM ('sqlite_master')",
+    "SELECT * FROM ('sqlite_master')",
+    "SELECT count(*) FROM ( 'sqlite_master' )",
+    "SELECT count(*) FROM (('sqlite_schema'))",
+    "SELECT count(*) FROM (/**/'sqlite_master')",
+    "SELECT count(*) FROM (fr_documents, 'sqlite_master')",
+    "SELECT count(*) FROM fr_documents, ('sqlite_master')",
+    "SELECT count(*) FROM fr_documents JOIN ('sqlite_master') ON 1",
+    "SELECT count(*) FROM fr_documents a JOIN (fr_documents b, 'sqlite_master') ON 1",
+    "SELECT count(*) FROM ('json_tree'('[1]'))",
+    "SELECT count(*) FROM fr_documents WHERE id IN (SELECT 1 FROM ('sqlite_master'))",
+    "WITH x AS (SELECT 1) SELECT count(*) FROM x, ('sqlite_master')",
+    # `window` is not a reserved word: an alias named so keeps the FROM list going
+    "SELECT count(*) FROM fr_documents window, 'sqlite_master'",
+    "SELECT count(*) FROM fr_documents AS window, 'sqlite_master'",
+    # `x IN 'name'` reads a table
+    "SELECT 'table' IN 'sqlite_master'",
+    "SELECT 'json_each' IN 'pragma_module_list'",
+    "SELECT count(*) FROM fr_documents WHERE id NOT IN 'sqlite_master'",
+    # string aliases, as bare aliases
+    "SELECT 1 AS 'pragma_x'",
+    "SELECT 1 'sqlite_x'",
+    "SELECT 'a' 'json_tree'",
+    "SELECT CASE WHEN 1 THEN 2 END 'pragma_y'",
+    "SELECT count(*) FROM fr_documents 'sqlite_master'",
+    "SELECT count(*) FROM fr_documents AS 'sqlite_master'",
+    "SELECT count(*) FROM (SELECT 1) 'sqlite_x'",
+    "SELECT count(*) 'pragma_z' FROM fr_documents",
+])
+def test_reserved_strings_in_name_positions_are_denied_by_the_name_check(gov_db, stmt):
+    assert sqlguard._names_reserved(stmt)
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt", [
+    "SELECT count(*) FROM ('json_tree'('[1]'))",
+    "SELECT count(*) FROM fr_documents JOIN ('sqlite_master') ON 1",
+    "SELECT count(*) FROM fr_documents d JOIN ('sqlite_master') ON d.type = sqlite_master.type",
+    "SELECT count(*) FROM ('sqlite_master')",
+    "SELECT count(*) FROM (('sqlite_schema'))",
+    "SELECT count(*) FROM fr_documents, ('pragma_function_list')",
+    "SELECT count(*) FROM fr_documents WHERE id IN (SELECT 1 FROM ('sqlite_master'))",
+    "SELECT 'table' IN 'sqlite_master'",
+    "SELECT 'json_each' IN 'pragma_module_list'",
+    "SELECT count(*) FROM fr_documents JOIN 'json_tree'('[1]') ON 1",
+])
+def test_the_authorizer_denies_named_system_objects_without_the_name_check(
+        gov_db, monkeypatch, stmt):
+    """With NATURAL and USING refused, every read reaches the authorizer: with the name check
+    switched off, a parenthesized or string-named system object is still denied."""
+    monkeypatch.setattr(sqlguard, "_names_reserved", lambda statement: False)
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt", NATURAL_AND_USING)
+def test_natural_and_using_are_refused_without_the_name_check(gov_db, monkeypatch, stmt):
+    monkeypatch.setattr(sqlguard, "_names_reserved", lambda statement: False)
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt, rows", [
+    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.id = b.id", [[N]]),
+    ("SELECT count(*) FROM fr_documents a LEFT JOIN fr_documents b ON a.id = b.id "
+     "AND b.type = 'sqlite_x'", [[N]]),
+    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.type IN ('x', 'sqlite_y')",
+     [[0]]),
+    ("SELECT count(*) FROM fr_documents d JOIN (SELECT id FROM fr_documents) e ON d.id = e.id",
+     [[N]]),
+    ("SELECT count(*) FROM fr_documents, json_each(fr_documents.cfr_parts)", [[7]]),
+    ("SELECT value FROM json_each('[\"sqlite_master\"]')", [["sqlite_master"]]),
+    ("WITH x AS (SELECT 'pragma_x' AS v) SELECT v FROM x", [["pragma_x"]]),
+    ("SELECT x FROM (SELECT 'dbstat' AS x)", [["dbstat"]]),
+    ("SELECT 'sqlite_master' AS x", [["sqlite_master"]]),
+    ("SELECT CASE WHEN 1 THEN 'sqlite_x' ELSE 'pragma_y' END", [["sqlite_x"]]),
+    ("SELECT count(*) FROM fr_documents WHERE type BETWEEN 'rtree' AND 'zipfile'", [[0]]),
+    ("SELECT count(*) FROM fr_documents WHERE type IS NOT 'dbstat'", [[N]]),
+    ("SELECT count(*) FROM fr_documents WHERE NOT type = 'fts5'", [[N]]),
+    ("SELECT json_extract('{\"a\": \"json_tree\"}', '$.a')", [["json_tree"]]),
+    ("SELECT count(*) FROM fr_documents WHERE id = 'x' OR 'sqlite_master' = type", [[0]]),
+    ("SELECT natural_x FROM (SELECT 1 AS natural_x)", [[1]]),
+    ("SELECT \"natural\", \"using\" FROM (SELECT 1 AS \"natural\", 2 AS \"using\")",
+     [[1, 2]]),
+])
+def test_on_joins_json_each_ctes_and_string_values_still_run(gov_db, stmt, rows):
     assert run_sql(gov_db, stmt).rows == rows

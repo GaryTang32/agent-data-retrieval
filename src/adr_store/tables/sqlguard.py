@@ -3,13 +3,15 @@ P19, P20).
 
 `run_sql` runs one statement on a `ViewDB` (which holds only the caller's visible rows) under:
 
+- a refusal (`denied`) of `NATURAL` joins and `JOIN … USING`: SQLite never asks the authorizer
+  about the columns those forms compare, so they could read a table the authorizer would deny
+  (a table-name oracle). Joins use `ON`, whose columns the authorizer sees;
 - a refusal (`denied`) of any statement naming SQLite's own objects: an identifier, bare or
-  quoted, or a single-quoted string where SQLite reads a string as a name (after FROM, JOIN or
-  a FROM-list comma, or next to `.`), that is `sqlite_*`, `pragma_*` or a
-  virtual table module other than `json_each` (`json_tree`, `generate_series`, `dbstat`, `fts*`,
-  `rtree*`, …), compared with SQLite's ASCII case folding. The authorizer is never asked about the
-  columns NATURAL JOIN and JOIN … USING compare, and SQLite cannot name a table dynamically, so
-  refusing the names closes that path;
+  quoted, or a single-quoted string anywhere outside a value position (SQLite reads a string as
+  a name after FROM, JOIN, IN, AS or `.`, after a comma or `(` in a FROM list, before `.` or
+  `(`, and as an alias), that is `sqlite_*`, `pragma_*` or a virtual table module other than
+  `json_each` (`json_tree`, `generate_series`, `dbstat`, `fts*`, `rtree*`, …), compared with
+  SQLite's ASCII case folding. This is defence in depth: the authorizer denies those reads too;
 - an authorizer that allows `SELECT`, recursive CTEs, calling the functions in `FUNCTIONS`, and
   reading only the view's tables, `json_each` and the statement's own common table expressions,
   all names compared case-folded. SQLite reports a table read as (table, column, `main`), but a
@@ -77,7 +79,6 @@ from __future__ import annotations
 
 import math
 import sqlite3
-from collections import deque
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
@@ -155,20 +156,26 @@ def _reserved(name: str) -> bool:
     return folded.startswith(("sqlite_", "pragma_")) or folded in _MODULES
 
 
+def _joins_without_on(statement: str) -> bool:
+    """Whether the statement has a `NATURAL` join or a `USING` constraint. SQLite compares the
+    columns of both forms without asking the authorizer, so they are refused; `ON` joins are
+    authorized column by column. Only bare words are keywords (`"natural"` is a name)."""
+    return any(kind == "word" and _fold(statement[s:e]) in ("natural", "using")
+               for kind, s, e in _significant(statement))
+
+
 def _names_reserved(statement: str) -> bool:
     """Whether the statement names a reserved object: a bare or quoted identifier anywhere, or
-    a single-quoted string where SQLite's grammar reads a string as a table name (directly after
-    FROM, JOIN or a FROM-list comma, or next to `.`, as in `FROM 'sqlite_master'`); a string in
-    any value position is data. The authorizer is not consulted for columns that NATURAL JOIN
-    and JOIN ... USING compare, and SQLite cannot name a table dynamically, so refusing the
-    names closes that path."""
+    a single-quoted string anywhere outside a value position (SQLite's grammar accepts a string
+    as a table, alias or module name, as in `FROM ('sqlite_master')` or `SELECT 1 'x'`)."""
     toks = _significant(statement)
     texts = [statement[s:e] for _, s, e in toks]
-    in_from = [False]   # per parenthesis depth: inside a FROM list
+    in_from = [False]   # per parenthesis level: inside a FROM list
     for k, (kind, _, _) in enumerate(toks):
-        text, low = texts[k], texts[k].lower()
-        if kind == "punct" and text == "(":
-            in_from.append(False)
+        text, low = texts[k], _fold(texts[k])
+        prev = _fold(texts[k - 1]) if k else ""
+        if kind == "punct" and text == "(":   # a FROM item in parentheses keeps the FROM list
+            in_from.append(prev in ("from", "join") or (prev in (",", "(") and in_from[-1]))
         elif kind == "punct" and text == ")":
             in_from.pop() if len(in_from) > 1 else None
         elif kind == "word" and low == "from":
@@ -178,18 +185,36 @@ def _names_reserved(statement: str) -> bool:
         if kind == "word" or (kind == "quoted" and text[0] != "'"):
             if _reserved(_unquote(text)):
                 return True
-        elif kind == "quoted":
-            prev = texts[k - 1].lower() if k else ""
+        elif kind == "quoted" and _reserved(_unquote(text)):
             after = texts[k + 1] if k + 1 < len(texts) else ""
-            name_position = prev in ("from", "join", ".") or after == "." or \
-                (prev == "," and in_from[-1])
-            if name_position and _reserved(_unquote(text)):
+            prev_kind = toks[k - 1][0] if k else ""
+            if not _a_value(prev_kind, prev, after, in_from[-1]):
                 return True
     return False
 
 
-_FROM_ENDS = frozenset({"where", "group", "having", "order", "limit", "window", "union",
-                        "except", "intersect", "select", "values", "returning"})
+def _a_value(prev_kind: str, prev: str, after: str, in_from: bool) -> bool:
+    """Whether a single-quoted string after `prev` (and before `after`) is a value. It is one
+    after an operator, after `(` or `,` outside a FROM list, or after a keyword that a value
+    follows. Elsewhere SQLite reads it as a name: after FROM, JOIN, IN, AS or `.`, after `(`
+    or `,` in a FROM list, before `.` or `(` (a table-valued function), and as an alias after
+    an expression, a table or `)`."""
+    if after in (".", "("):
+        return False
+    if prev in (",", "("):
+        return not in_from
+    if prev_kind == "punct":
+        return prev not in (".", ")")
+    return prev_kind == "word" and prev in _BEFORE_VALUE
+
+
+# a FROM list ends at these words (`window` is not reserved in SQLite: it may be an alias)
+_FROM_ENDS = frozenset({"where", "group", "having", "order", "limit", "union", "except",
+                        "intersect", "select", "values", "returning", "with"})
+# keywords a value may follow directly; after any other word a string is a name or an alias
+_BEFORE_VALUE = frozenset({"select", "distinct", "all", "where", "on", "having", "and", "or",
+                           "not", "is", "like", "glob", "match", "regexp", "escape", "between",
+                           "case", "when", "then", "else", "limit", "offset", "by"})
 
 
 _MODULES = _modules()
@@ -450,15 +475,14 @@ class _Guard:
         return self._private().execute("SELECT CAST(? AS TEXT)", (v,)).fetchone()[0]
 
     def group_concat(self) -> Any:
-        """A new `group_concat(X[, sep])` accumulator with SQLite's semantics, also as a window
-        function: NULL values skipped, `,` by default, a NULL separator adds nothing, NULL when
-        no value; removing the oldest value drops the separator that followed it. Each result
-        is charged by its length."""
+        """A new `group_concat(X[, sep])` aggregate accumulator with SQLite's semantics: NULL
+        values skipped, `,` by default, a NULL separator adds nothing, NULL when no value. The
+        result is charged by its length."""
         guard = self
 
         class GroupConcat:
             def __init__(self):
-                self.items: deque[tuple[str, str]] = deque()   # (separator before, text)
+                self.items: list[tuple[str, str]] = []   # (separator before, text)
                 self.size = 0
 
             def step(self, *args: Any) -> None:
@@ -474,21 +498,13 @@ class _Guard:
                     raise ValueError("value too long")
                 self.items.append(item)
 
-            def inverse(self, *args: Any) -> None:
-                if args and args[0] is not None and self.items:
-                    sep, text = self.items.popleft()
-                    self.size -= len(sep.encode("utf-8")) + len(text.encode("utf-8"))
-
-            def value(self) -> str | None:
+            def finalize(self) -> str | None:
                 if not self.items:
                     return None
                 first = self.items[0][1]
-                result = first + "".join(sep + text for sep, text in list(self.items)[1:])
+                result = first + "".join(sep + text for sep, text in self.items[1:])
                 guard.charge(result)
                 return result
-
-            def finalize(self) -> str | None:
-                return self.value()
 
         return GroupConcat()
 
@@ -532,12 +548,6 @@ class _Slot:
 
             def step(self, *args: Any) -> None:
                 self.inner.step(*args)
-
-            def inverse(self, *args: Any) -> None:
-                self.inner.inverse(*args)
-
-            def value(self) -> str | None:
-                return self.inner.value()
 
             def finalize(self) -> str | None:
                 return self.inner.finalize()
@@ -630,7 +640,7 @@ def run_sql(db: ViewDB, statement: str) -> SqlOutcome:
     shape = _shape(body)
     if not shape.one:
         raise SqlRefused("syntax")
-    if _names_reserved(body):
+    if _joins_without_on(body) or _names_reserved(body):
         raise SqlRefused("denied")
     guard = _Guard(frozenset(db.contracts), shape.ctes)
     refusal: SqlRefused | None = None
