@@ -4,6 +4,7 @@ functions and the total order. Fixture stores under `tmp_path`; nothing reads `d
 `.cache/`."""
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -709,13 +710,14 @@ def _cases(seed: int, n: int):
 
 
 def test_search_overrides_match_sqlite_exactly(gov_db):
-    """`instr`, `like` (2 and 3 arguments, so `LIKE`, `NOT LIKE` and `ESCAPE` route to it) and
-    `glob` give SQLite's own answers: an oracle over 400 seeded cases."""
+    """`instr`, `like` (2 and 3 arguments, so `LIKE`, `NOT LIKE` and `ESCAPE` route to it),
+    `glob` and the trim family give SQLite's own answers: an oracle over 400 seeded cases."""
     cases = _cases(20261120, 400)
     values = ", ".join(f"({i}, {_lit(x)}, {_lit(y)}, {_lit(e)})"
                        for i, (x, y, e) in enumerate(cases))
     exprs = ("instr(x, y), x LIKE y, x NOT LIKE y, x LIKE y ESCAPE e, like(y, x), "
-             "like(y, x, e), x GLOB y, x NOT GLOB y, glob(y, x), upper(x) LIKE lower(y)")
+             "like(y, x, e), x GLOB y, x NOT GLOB y, glob(y, x), upper(x) LIKE lower(y), "
+             "trim(x, y), ltrim(x, y), rtrim(x, y), trim(x), ltrim(x), rtrim(x)")
     q = (f"SELECT i, {exprs} FROM (SELECT column1 AS i, column2 AS x, column3 AS y, "
          f"column4 AS e FROM (VALUES {values})) ORDER BY i")
     plain = sqlite3.connect(":memory:")
@@ -732,13 +734,18 @@ def test_a_like_escape_must_be_one_character_as_in_sqlite(gov_db):
 
 
 def test_search_functions_are_charged_by_their_search(gov_db, monkeypatch):
-    # printf('%4096d') charges 64 and printf('%1024d') 16; the search charges
-    # 4096 * 1024 // 4096 = 1024; replace also charges its 4,096-character result (64)
+    # printf('%4096d') charges 64 and printf('%1024d') 16. instr searches at 4,096 pairs a step
+    # (4096 * 1024 // 4096 = 1024); like, glob and the trim family compare at 128 pairs a step
+    # (4096 * 1024 // 128 = 32768); replace also charges its 4,096-character result (64)
     h, n = "printf('%4096d', 1)", "printf('%1024d', 2)"
     for stmt, charged in ((f"SELECT instr({h}, {n})", 1104),
-                          (f"SELECT {h} LIKE {n}", 1104),
-                          (f"SELECT {h} NOT LIKE {n} ESCAPE '!'", 1104),
-                          (f"SELECT {h} GLOB {n}", 1104),
+                          (f"SELECT {h} LIKE {n}", 32848),
+                          (f"SELECT {h} NOT LIKE {n} ESCAPE '!'", 32848),
+                          (f"SELECT {h} GLOB {n}", 32848),
+                          (f"SELECT length(trim({h}, {n}))", 32848),
+                          (f"SELECT length(ltrim({h}, {n}))", 32848),
+                          (f"SELECT length(rtrim({h}, {n}))", 32848),
+                          (f"SELECT length(trim({h}))", 64),
                           (f"SELECT length(replace({h}, {n}, 'x'))", 1168)):
         monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged)
         run_sql(gov_db, stmt)
@@ -749,14 +756,20 @@ def test_search_functions_are_charged_by_their_search(gov_db, monkeypatch):
 
 _V = ("WITH h AS MATERIALIZED (SELECT replace(printf('%16000d', 1), ' ', 'a') AS h), "
       "n AS MATERIALIZED (SELECT replace(printf('%7999d', 1), ' ', 'a') || 'b' AS n), "
-      "p AS MATERIALIZED (SELECT replace(printf('%4000d', 1), ' ', '%a') || 'b' AS p) ")
+      "p AS MATERIALIZED (SELECT '%' || replace(printf('%7999d', 1), ' ', 'a') || 'b' AS p), "
+      "g AS MATERIALIZED (SELECT '*' || replace(printf('%250d', 1), ' ', '[' || "
+      "replace(printf('%30d', 1), ' ', 'b') || 'a]') || 'c' AS g), "
+      "y AS MATERIALIZED (SELECT replace(printf('%1360d', 1), ' ', 'b') || 'a' AS y) ")
 _J = ", fr_documents a, fr_documents b, fr_documents c, fr_documents d"
 _X = "CASE WHEN d.id IS NULL THEN '' ELSE {} END"
-SEARCH_PROBES = [   # the review's probes: about 12 minutes, 2 minutes and 21 s before
+SEARCH_PROBES = [   # the review's worst cases (none prunable): minutes to the budget before
     _V + "SELECT count(*) FROM h, n" + _J + " WHERE instr(h, " + _X.format("n") + ") > 0",
     _V + "SELECT count(*) FROM h, p" + _J + " WHERE h LIKE " + _X.format("p"),
-    _V + "SELECT count(*) FROM h, p" + _J + " WHERE h GLOB "
-    + _X.format("replace(p, '%', '*')"),
+    _V + "SELECT count(*) FROM h, g" + _J + " WHERE h GLOB " + _X.format("g"),
+    _V + "SELECT count(*) FROM h, y" + _J + " WHERE length(ltrim(h, " + _X.format("y")
+    + ")) = 0",
+    _V + "SELECT count(*) FROM h, y" + _J + " WHERE length(trim(h, " + _X.format("y")
+    + ")) = 0",
     _V + "SELECT count(*) FROM h, n" + _J + " WHERE length(replace(h, " + _X.format("n")
     + ", 'x')) > 0",
 ]
@@ -764,30 +777,93 @@ SEARCH_PROBES = [   # the review's probes: about 12 minutes, 2 minutes and 21 s 
 
 @pytest.mark.parametrize("stmt", SEARCH_PROBES)
 def test_search_probes_stop_quickly_at_the_production_budget(gov_db, stmt):
+    import time
     assert sqlguard.SQL_STEP_BUDGET == 5_000_000
+    start = time.perf_counter()
     e = _refused(gov_db, stmt)
     assert e.kind == "budget" and str(e) == ERR_BUDGET
+    assert time.perf_counter() - start < 5   # about 0.2-1 s measured; minutes before
 
 
-def test_group_concat_works_as_a_window_function(gov_db):
-    data = ("(SELECT column1 AS g, column2 AS v, column3 AS s FROM (VALUES ('a', 'x', ';'), "
-            "('a', NULL, ';'), ('a', 'y', '|'), ('b', 'z', ';'), ('a', 'w', NULL), "
-            "('b', 'q', ',')))")
-    q = (f"SELECT g, v, group_concat(v) OVER (PARTITION BY g ORDER BY v), "
-         f"group_concat(v, s) OVER (ORDER BY g, v ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING), "
-         f"group_concat(v) OVER (ORDER BY g, v ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) "
-         f"FROM {data} ORDER BY g, v")
-    plain = sqlite3.connect(":memory:")
-    try:
-        expected = [list(r) for r in plain.execute(q)]
-    finally:
-        plain.close()
-    assert run_sql(gov_db, q).rows == expected
-    assert run_sql(gov_db, "SELECT type, group_concat(id) OVER (PARTITION BY type) "
-                           "FROM fr_documents WHERE type = 'Proposed Rule'").rows == \
-        [["Proposed Rule", "2024-00002,2024-00005"]] * 2
+WINDOW_SCRIPT = """
+import sys
+from adr_store.tables.contracts import load_contracts
+from adr_store.tables.engine import ViewDB
+from adr_store.tables.provenance import RowRecord
+from adr_store.tables.sqlguard import SqlRefused, run_sql
+c = load_contracts()["fr_documents"]
+rows = [RowRecord(doc_id=f"d{i}", prov={}, row={
+    "id": f"2024-0000{i}", "type": "Rule", "agency": None, "publication_date": "2024-01-01",
+    "year": 2024, "title": None, "cfr_parts": [], "action": None, "effective_on": None,
+    "status": None, "other_ids": [], "title_state": None, "title_waterway_keys": []})
+    for i in range(1, 8)]
+db = ViewDB.from_rows({"fr_documents": c}, {"fr_documents": rows})
+try:
+    print("rows", run_sql(db, sys.argv[1]).rows)
+except SqlRefused as e:
+    print("refused", e.kind)
+db.close()
+"""
+
+
+@pytest.mark.parametrize("stmt", [
+    "SELECT group_concat(id) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING) "
+    "FROM fr_documents",
+    "SELECT group_concat(id) FILTER (WHERE id > '2024-00003') OVER (ORDER BY id) "
+    "FROM fr_documents",
+    "SELECT type, group_concat(id) OVER (PARTITION BY type) FROM fr_documents",
+])
+def test_group_concat_as_a_window_function_is_refused(stmt):
+    """`group_concat` is an aggregate only: CPython's window-function callbacks crash the
+    process when SQLite asks for a value before any step, so the window form is refused. Run
+    in a subprocess so a regression cannot take the test runner down with it."""
+    import subprocess
+    import sys
+    done = subprocess.run([sys.executable, "-c", WINDOW_SCRIPT, stmt], capture_output=True,
+                          text=True, timeout=120, cwd=str(Path(__file__).parents[2]))
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert done.stdout.strip() == "refused syntax"
+
+
+def test_group_concat_still_works_as_an_aggregate(gov_db):
+    assert run_sql(gov_db, "SELECT type, group_concat(id, ';') FROM fr_documents "
+                           "GROUP BY type").rows == [
+        ["Proposed Rule", "2024-00002;2024-00005"],
+        ["Rule", "2024-00001;2024-00003;2024-00004;2024-00006;2024-00007"]]
 
 
 def test_a_natural_self_join_counts_as_sqlite_does(gov_db):
     q = "SELECT count(*) FROM fr_documents a NATURAL JOIN fr_documents b"
     assert run_sql(gov_db, q).rows == [list(r) for r in gov_db.execute(q)]
+
+
+
+@pytest.mark.parametrize("stmt", [
+    "SELECT count(*) FROM 'sqlite_master'",
+    "SELECT count(*) FROM fr_documents, 'sqlite_master'",
+    "SELECT count(*) FROM fr_documents JOIN 'sqlite_schema' ON 1",
+    "SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.id = b.id, 'sqlite_master'",
+    "SELECT count(*) FROM main.'sqlite_master'",
+    "SELECT count(*) FROM 'main'.sqlite_master",
+    "SELECT count(*) FROM 'json_tree'('[1]')",
+    "SELECT count(*) FROM (SELECT 1 AS x) NATURAL JOIN 'pragma_database_list'",
+    "SELECT 1 AS pragma_x", "SELECT 1 AS sqlite_x", "SELECT 1 FROM fr_documents AS sqlite_y",
+])
+def test_reserved_names_in_name_positions_are_denied(gov_db, stmt):
+    e = _refused(gov_db, stmt)
+    assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt, rows", [
+    ("SELECT 'sqlite_master'", [["sqlite_master"]]),
+    ("SELECT 'completion'", [["completion"]]),
+    ("SELECT 'zipfile', 'json_tree'", [["zipfile", "json_tree"]]),
+    ("SELECT count(*) FROM fr_documents WHERE type = 'rtree'", [[0]]),
+    ("SELECT count(*) FROM fr_documents WHERE type IN ('rtree', 'pragma_x', 'Rule')", [[5]]),
+    ("SELECT count(*) FROM fr_documents a JOIN fr_documents b ON a.type = 'sqlite_x'", [[0]]),
+    ("SELECT count(*) FROM fr_documents WHERE title LIKE 'sqlite_%'", [[0]]),
+    ("SELECT coalesce(NULL, 'dbstat'), 'fts5' || 'x'", [["dbstat", "fts5x"]]),
+    ("SELECT x FROM (SELECT 'generate_series' AS x)", [["generate_series"]]),
+])
+def test_reserved_words_as_string_values_run(gov_db, stmt, rows):
+    assert run_sql(gov_db, stmt).rows == rows

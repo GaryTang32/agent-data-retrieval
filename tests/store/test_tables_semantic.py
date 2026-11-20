@@ -133,3 +133,4 @@ def test_the_sql_note_names_the_hidden_columns():
     note = describe([_contract()])["sql"]
     assert "_doc_id" in note and "_prov_" in note and "json_each" in note
     assert "DISTINCT" in note and "subquery" in note   # the wide DISTINCT limit and its fix
+    assert "group_concat is not a window function" in note

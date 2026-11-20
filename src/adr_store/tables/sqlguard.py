@@ -4,7 +4,8 @@ P19, P20).
 `run_sql` runs one statement on a `ViewDB` (which holds only the caller's visible rows) under:
 
 - a refusal (`denied`) of any statement naming SQLite's own objects: an identifier, bare or
-  quoted, or an identifier-shaped single-quoted string, that is `sqlite_*`, `pragma_*` or a
+  quoted, or a single-quoted string where SQLite reads a string as a name (after FROM, JOIN or
+  a FROM-list comma, or next to `.`), that is `sqlite_*`, `pragma_*` or a
   virtual table module other than `json_each` (`json_tree`, `generate_series`, `dbstat`, `fts*`,
   `rtree*`, …), compared with SQLite's ASCII case folding. The authorizer is never asked about the
   columns NATURAL JOIN and JOIN … USING compare, and SQLite cannot name a table dynamically, so
@@ -25,10 +26,11 @@ P19, P20).
 - one statement: a `;` after `strip_terminator` is a syntax refusal;
 - a budget of virtual-machine steps (no wall clock, so the cut-off is deterministic): recursive
   CTEs and cross joins stop at `SQL_STEP_BUDGET`, which is how "beyond a depth" is enforced;
-- bounded search work: `instr`, `like` (also the `LIKE`/`NOT LIKE … ESCAPE` operators) and
-  `glob` are overrides that charge `len(a) * len(b) // SQL_SEARCH_PAIRS` steps before SQLite's own
-  code runs the search on the private connection (the same answers as the built-ins, checked by
-  an oracle test), and `replace` pays the same for its search;
+- bounded search work: `instr`, `like` (also the `LIKE`/`NOT LIKE … ESCAPE` operators), `glob`
+  and `trim`/`ltrim`/`rtrim` are overrides that charge `len(a) * len(b) // SEARCH_PAIRS[name]`
+  steps (4,096 pairs a step for `instr`, 128 for the character-by-character compares) before
+  SQLite's own code runs the search on the private connection (the same answers as the
+  built-ins, checked by an oracle test), and `replace` pays the instr rate for its search;
 - bounded work per step (P20): every value, and every row SQLite builds, is at most
   `SQL_MAX_VALUE` bytes (16 KB, the build-time row bound; stored values are at most 8 KB), and
   the functions whose result can be much longer than their inputs
@@ -64,15 +66,16 @@ installed for the call only. The function overrides cannot be unregistered from 
 so they stay registered on the view database once the first call installs them, and dispatch
 to the call in progress: they act only inside `run_sql` and raise anywhere else. `query_table`
 uses none of them (date, datetime, strftime, julianday, replace, printf, format, substr,
-substring, instr, like, glob, group_concat; its `__contains` uses the engine's own
-`contains_casefold`), so it works on the same database before and after `run_sql`.
-`group_concat` is a window function as well as an aggregate.
+substring, instr, like, glob, trim, ltrim, rtrim, group_concat; its `__contains` uses the
+engine's own `contains_casefold`), so it works on the same database before and after `run_sql`.
+`group_concat` is an aggregate only: as a window function (`OVER`) it is refused as `syntax`,
+because CPython's window-function callbacks crash the process when SQLite asks for a value
+before any step.
 """
 
 from __future__ import annotations
 
 import math
-import re
 import sqlite3
 from collections import deque
 from collections.abc import Iterator
@@ -103,8 +106,13 @@ ERR_ROWS = "sql refused (too many rows): the result is over 2 MB; select fewer r
 
 DATE_FUNCTIONS = frozenset({"date", "datetime", "strftime", "julianday"})
 AMPLIFYING = frozenset({"replace", "printf", "format", "substr", "substring"})  # + group_concat
-SEARCHING = frozenset({"instr", "like", "glob"})   # charged by the size of their search
-SQL_SEARCH_PAIRS = 4096   # a search over a and b charges len(a) * len(b) // 4096 steps
+# functions charged by the size of their search, before it runs: len(a) * len(b) // pairs
+# steps. `instr` (and `replace`) search with memcmp; like, glob and the trim family compare
+# character by character, so they pay 32 times more per pair
+SEARCH_PAIRS = {"instr": 4096, "like": 128, "glob": 128, "trim": 128, "ltrim": 128,
+                "rtrim": 128}
+SEARCHING = frozenset(SEARCH_PAIRS)
+SQL_SEARCH_PAIRS = SEARCH_PAIRS["instr"]   # replace's search
 FUNCTIONS: frozenset[str] = frozenset("""
     avg count group_concat max min sum total abs coalesce ifnull iif instr length lower ltrim
     nullif printf format replace round rtrim substr substring trim typeof upper like glob
@@ -148,22 +156,40 @@ def _reserved(name: str) -> bool:
 
 
 def _names_reserved(statement: str) -> bool:
-    """Whether the statement names a reserved object anywhere, as a bare or quoted identifier
-    or as a single-quoted string SQLite would read as one (`FROM 'sqlite_master'`). The
-    authorizer is not consulted for columns that NATURAL JOIN and JOIN ... USING compare, and
-    SQLite cannot name a table dynamically, so refusing the names closes that path."""
-    for kind, start, end in _significant(statement):
-        text = statement[start:end]
+    """Whether the statement names a reserved object: a bare or quoted identifier anywhere, or
+    a single-quoted string where SQLite's grammar reads a string as a table name (directly after
+    FROM, JOIN or a FROM-list comma, or next to `.`, as in `FROM 'sqlite_master'`); a string in
+    any value position is data. The authorizer is not consulted for columns that NATURAL JOIN
+    and JOIN ... USING compare, and SQLite cannot name a table dynamically, so refusing the
+    names closes that path."""
+    toks = _significant(statement)
+    texts = [statement[s:e] for _, s, e in toks]
+    in_from = [False]   # per parenthesis depth: inside a FROM list
+    for k, (kind, _, _) in enumerate(toks):
+        text, low = texts[k], texts[k].lower()
+        if kind == "punct" and text == "(":
+            in_from.append(False)
+        elif kind == "punct" and text == ")":
+            in_from.pop() if len(in_from) > 1 else None
+        elif kind == "word" and low == "from":
+            in_from[-1] = True
+        elif kind == "word" and low in _FROM_ENDS:
+            in_from[-1] = False
         if kind == "word" or (kind == "quoted" and text[0] != "'"):
             if _reserved(_unquote(text)):
                 return True
-        elif kind == "quoted" and _IDENTIFIER.fullmatch(_unquote(text)) \
-                and _reserved(_unquote(text)):
-            return True   # a string where SQLite reads an identifier; data strings pass
+        elif kind == "quoted":
+            prev = texts[k - 1].lower() if k else ""
+            after = texts[k + 1] if k + 1 < len(texts) else ""
+            name_position = prev in ("from", "join", ".") or after == "." or \
+                (prev == "," and in_from[-1])
+            if name_position and _reserved(_unquote(text)):
+                return True
     return False
 
 
-_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]*")
+_FROM_ENDS = frozenset({"where", "group", "having", "order", "limit", "window", "union",
+                        "except", "intersect", "select", "values", "returning"})
 
 
 _MODULES = _modules()
@@ -367,9 +393,9 @@ class _Guard:
             self.over_budget = True
             raise ValueError("past the step budget")
 
-    def charge_search(self, a: Any, b: Any) -> None:
+    def charge_search(self, a: Any, b: Any, pairs: int = SQL_SEARCH_PAIRS) -> None:
         """Charge a search of `b` in `a` (or `a` against pattern `b`) before it runs."""
-        self.charge_steps(_length(a) * _length(b) // SQL_SEARCH_PAIRS)
+        self.charge_steps(_length(a) * _length(b) // pairs)
 
     def _private(self) -> sqlite3.Connection:
         if self._helper is None:
@@ -408,10 +434,11 @@ class _Guard:
         return result
 
     def search(self, name: str, args: tuple) -> Any:
-        """`instr(a, b)`, `like(pattern, a[, escape])` or `glob(pattern, a)`, charged by the
-        size of the search before it runs, then computed by SQLite."""
+        """`instr(a, b)`, `like(pattern, a[, escape])`, `glob(pattern, a)` or
+        `trim`/`ltrim`/`rtrim(a, characters)`, charged by the size of the search before it
+        runs, then computed by SQLite."""
         if len(args) >= 2:
-            self.charge_search(args[0], args[1])
+            self.charge_search(args[0], args[1], SEARCH_PAIRS[name])
         return self.sqlite(name, args)
 
     def text(self, v: Any) -> str:
@@ -495,7 +522,7 @@ class _Slot:
             conn.create_function(name, -1, self._call("date", name), deterministic=True)
         for name in sorted(AMPLIFYING):   # not deterministic: evaluated, and charged, per row
             conn.create_function(name, -1, self._call("amplify", name))
-        for name in sorted(SEARCHING):    # -1 also takes the LIKE operator's ESCAPE form
+        for name in sorted(SEARCHING):    # -1 also takes LIKE's ESCAPE and trim's 1-arg forms
             conn.create_function(name, -1, self._call("search", name))
         slot = self
 
@@ -515,7 +542,10 @@ class _Slot:
             def finalize(self) -> str | None:
                 return self.inner.finalize()
 
-        conn.create_window_function("group_concat", -1, GroupConcat)   # aggregate and window
+        # an aggregate only: CPython's window-function callbacks crash the process when
+        # SQLite asks for a value before any step (`ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING`,
+        # FILTER), so `group_concat(…) OVER (…)` is refused as syntax
+        conn.create_aggregate("group_concat", -1, GroupConcat)
 
     def _active(self) -> _Guard:
         if self.guard is None:
