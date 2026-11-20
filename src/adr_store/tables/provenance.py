@@ -24,6 +24,7 @@ import bisect
 import csv
 import functools
 import json
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -323,6 +324,35 @@ RESLICERS.update({"papers.year": _manifest_year, "papers.also_in_list": _also_in
                   "papers.author_et_al": _authors_et_al})
 
 
+# 33 CFR 117 structure columns (no model): the span is the section heading (its number, its
+# waterway key) or the state group's head line.
+_SECTION_NUMBER = re.compile(r"^§\s*(\S+)")
+
+
+def _section_number(text: str, start: int, end: int) -> str:
+    m = _SECTION_NUMBER.match(text[start:end])
+    if m is None:
+        raise ValueError("the span is no section heading")
+    return m.group(1)
+
+
+def _heading_waterway_key(text: str, start: int, end: int) -> str:
+    from adr_store.tables.ecfr import heading_waterway_key  # ecfr imports this module
+
+    return heading_waterway_key(text[start:end])
+
+
+RESLICERS.update({
+    "structure.section": _section_number,
+    "structure.heading": lambda t, s, e: t[s:e],
+    "structure.state": lambda t, s, e: t[s:e],
+    "structure.waterway_key": _heading_waterway_key,
+})
+# Model-extracted columns (3B): a value is grounded when its quote is the text at its span
+# (Constraint 6); the value itself (a number written in words, a yes/no) is not derived from it.
+EXTRACTED_SPECS = ("bridge.",)
+
+
 def _same(a: Any, b: Any) -> bool:
     numbers = (int, float)
     if isinstance(a, numbers) and isinstance(b, numbers) \
@@ -334,8 +364,10 @@ def _same(a: Any, b: Any) -> bool:
 def reslice(text: str, prov: ValueProv, value: Any) -> bool:
     """T3 for one span: does `text[start:end]`, through the column's derivation, give exactly
     `value` (an element of a list column when the derivation gives a list and `value` is no
-    list), and, when the provenance holds a quote, is the quote that very slice? False for
-    a span outside the text, a spec with no derivation, or provenance without a span."""
+    list), and, when the provenance holds a quote, is the quote that very slice? A
+    model-extracted value (`bridge.*`) re-slices when it has a quote and the quote is the
+    slice. False for a span outside the text, a spec with no derivation, or provenance
+    without a span."""
     if prov.span is None:
         return False
     start, end = prov.span
@@ -343,6 +375,8 @@ def reslice(text: str, prov: ValueProv, value: Any) -> bool:
         return False
     if prov.quote is not None and text[start:end] != prov.quote:
         return False
+    if prov.spec_id.startswith(EXTRACTED_SPECS):
+        return prov.quote is not None
     derive = RESLICERS.get(prov.spec_id.split("@")[0])
     if derive is None:
         return False

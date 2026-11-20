@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -136,3 +137,120 @@ def loaded_of(store: Store, catalog: str = "papers/manifest.csv") -> LoadedCorpu
     manifest = Manifest(corpus="fixture", version="0", license_summary="fixture",
                         documents=entries)
     return LoadedCorpus(manifest=manifest, docs=docs, empty_docs=[], root=store.path)
+
+
+# -- 33 CFR 117 facts, as a model would extract them (Phase 3 task 9) ----------------------------
+
+# Per fixture section (ecfr_117.xml): section-level and per-draw facts, column -> (value, quote).
+# A column left out is absent. The older version of 117.821 says "two hours notice" (`ecfr_doc`).
+ECFR_SECTIONS = 7          # sections per version; the two versions differ in 117.821 only
+ECFR_FACTS: dict[str, dict] = {
+    "117.1": {"section": {}, "draws": []},
+    "117.821": {"section": {"waterway": ("Cape Fear River", "Cape Fear River")}, "draws": [
+        {"bridge": ("Cape Fear Memorial Bridge", "Cape Fear Memorial Bridge"),
+         "mile": (26.8, "mile 26.8"), "notice_hours": (4, "four hours notice"),
+         "opens_on_signal": (True, "shall open on signal")}]},
+    "117.823": {"section": {"waterway": ("Neuse River", "Neuse River")}, "draws": [
+        {"bridge": ("US 17 Bridge", "US 17 Bridge"), "mile": (2.0, "mile 2.0"),
+         "opens_on_signal": (True, "shall open on signal")},
+        {"bridge": ("Norfolk Southern Railroad Bridge", "Norfolk Southern Railroad Bridge"),
+         "mile": (3.1, "mile 3.1"), "opens_on_signal": (False, "need not open"),
+         "closed_periods": (["7 a.m. to 9 a.m."], "need not open from 7 a.m. to 9 a.m.")},
+        {"bridge": ("NC 55 Bridge", "NC 55 Bridge"), "mile": (4.5, "mile 4.5"),
+         "notice_hours": (12, "12 hours notice"),
+         "opens_on_signal": (True, "shall open on signal if at least 12 hours notice")}]},
+    "117.827": {"section": {"waterway": ("Atlantic Intracoastal Waterway",
+                                         "Atlantic Intracoastal Waterway")}, "draws": [
+        {"bridge": ("Surf City Bridge", "Surf City Bridge"), "mile": (260.7, "mile 260.7"),
+         "opens_on_signal": (True, "shall open on signal")}]},
+    "117.829": {"section": {}, "draws": []},
+    "117.261": {"section": {"waterway": ("Atlantic Intracoastal Waterway",
+                                         "Atlantic Intracoastal Waterway"),
+                            "seasonal": (True, "From November 1 through April 30")}, "draws": [
+        {"bridge": ("Lake Worth Bridge", "Lake Worth Bridge"),
+         "mile": (1014.0, "mile 1014.0"), "opens_on_signal": (False, "need not open"),
+         "closed_periods": (["8 a.m. to 6 p.m. on weekends"],
+                            "need not open from 8 a.m. to 6 p.m. on weekends")}]},
+    "117.263": {"section": {"waterway": ("Atlantic Intracoastal Waterway",
+                                         "Atlantic Intracoastal Waterway"),
+                            "owner_or_agency": ("The bridge tender", "The bridge tender"),
+                            "vhf_channel": (9, "VHF-FM channel 9")}, "draws": [
+        {"bridge": ("Venetian Causeway Bridge", "Venetian Causeway Bridge"),
+         "mile": (1088.5, "mile 1088.5"), "opens_on_signal": (True, "shall open on signal")}]},
+}
+_SECTION_NUMBER = re.compile(r"^§ (\S+)")
+
+
+def ecfr_facts(section_text: str) -> dict:
+    """The facts of one fixture section text (the version is read from the text)."""
+    facts = ECFR_FACTS[_SECTION_NUMBER.match(section_text).group(1)]
+    if "two hours notice" in section_text:
+        draw = {**facts["draws"][0], "notice_hours": (2, "two hours notice")}
+        facts = {**facts, "draws": [draw]}
+    return facts
+
+
+def _cell(facts: dict, column: str) -> dict:
+    if column not in facts:
+        return {"value": None, "quote": None, "null_reason": "absent"}
+    value, quote = facts[column]
+    return {"value": value, "quote": quote, "null_reason": None}
+
+
+def asked_columns(system: str) -> list[str]:
+    """The model columns an extraction prompt asks for: those its "Specs:" line names."""
+    line = next(x for x in system.splitlines() if x.startswith("Specs: "))
+    return [spec.split(".", 1)[1].split("@")[0] for spec in line[len("Specs: "):].split(", ")]
+
+
+def fixture_reply(system: str, user: str, repeat: int) -> str:
+    """A first-pass reply to an extraction prompt: the fixture facts of the columns it asks
+    for, with the bridge name (and mile) of each draw when the prompt asks for draw columns."""
+    from adr_store.tables.extract import DRAW_COLUMNS, SECTION_COLUMNS
+
+    asked = asked_columns(system)
+    facts = ecfr_facts(user)
+    section = {c: _cell(facts["section"], c) for c in SECTION_COLUMNS if c in asked}
+    draw_cols = [c for c in DRAW_COLUMNS if c in asked]
+    if draw_cols and "bridge" not in draw_cols:
+        draw_cols = ["bridge", "mile", *[c for c in draw_cols if c != "mile"]]
+    draws = [{c: _cell(d, c) for c in draw_cols} for d in facts["draws"]] if draw_cols else []
+    return json.dumps({"section": section, "draws": draws})
+
+
+def _answer(facts: dict, column: str, kind: str = "text") -> str:
+    if column not in facts:
+        return "NONE"
+    value, quote = facts[column]
+    if kind == "bool":
+        shown = "YES" if value else "NO"
+    elif kind == "list":
+        shown = "; ".join(value)
+    elif isinstance(value, float) and value.is_integer() and column != "mile":
+        shown = str(int(value))
+    else:
+        shown = str(value)
+    return f'{shown} | "{quote}"'
+
+
+def fixture_numbered(system: str, user: str, repeat: int) -> str:
+    """A second-pass reply (numbered answers) with the fixture facts of a section text."""
+    facts = ecfr_facts(user)
+    s = facts["section"]
+    lines = [f"1. WATERWAY: {_answer(s, 'waterway')}",
+             f"2. SEASONAL: {_answer(s, 'seasonal', 'bool')}",
+             f"3. OWNER: {_answer(s, 'owner_or_agency')}",
+             f"4. VHF CHANNEL: {_answer(s, 'vhf_channel')}",
+             f"5. DRAWS: {len(facts['draws'])}"]
+    for k, d in enumerate(facts["draws"], 1):
+        lines += [f"5.{k}.a BRIDGE: {_answer(d, 'bridge')}",
+                  f"5.{k}.b MILE: {_answer(d, 'mile')}",
+                  f"5.{k}.c NOTICE HOURS: {_answer(d, 'notice_hours')}",
+                  f"5.{k}.d OPENS ON SIGNAL: {_answer(d, 'opens_on_signal', 'bool')}",
+                  f"5.{k}.e CLOSED PERIODS: {_answer(d, 'closed_periods', 'list')}"]
+    return "\n".join(lines) + "\n"
+
+
+def ecfr_store_at(path: Path) -> Store:
+    """A store of both fixture versions of 33 CFR 117 and the Federal Register documents."""
+    return make_tables_store(path, [ecfr_doc(ECFR_NEW), ecfr_doc(ECFR_OLD), *FR_DOCS])

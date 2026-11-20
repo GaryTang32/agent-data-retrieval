@@ -14,7 +14,12 @@ caller; code in `adr_store.mcp_server`, needs the `[mcp]` extra), and the typed 
 spec §5.2, §8): `adr tables build` (build the 3A tables of the store's HEAD snapshot as a
 candidate and print its tables id; the corpus is the store's, `--tables-for` when it holds
 both; `--generator` and `--max-calls` (default 0) name the model profile and call cap of an
-extraction build, and a metadata build calls no model), `adr tables gate` (the merge gate:
+extraction build, and a metadata build calls no model; an extraction build that needs an uncached
+reply beyond the cap stops with exit 1), `adr tables extract` (the 3B extraction of the store's
+33 CFR 117 sections with a model profile, first pass or `--second-pass`, under `--max-calls`,
+which counts every transport attempt, retries included; it prints the units, writes the
+unhashed `extraction-report.json` or `second-pass-report.json` and the second pass's facts
+file, and stops with exit 1 and nothing written at the cap), `adr tables gate` (the merge gate:
 evaluate a candidate against `tables/HEAD` on gold sets and promote it when it has at most
 `--max-flips` flips; exit 1 when refused), `adr tables show` (a build's manifest and its
 semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the `query_table`
@@ -96,6 +101,7 @@ from adr_store.store import (
     write_atomic,
 )
 from adr_store.tables import build as tables_build
+from adr_store.tables import extract as tables_extract
 from adr_store.tables import gate as tables_gate
 from adr_store.tables import overlay as tables_overlay
 from adr_store.tables.engine import OPS, QUERY_LIMIT, contracts_of
@@ -935,7 +941,14 @@ def _tables_corpus(a: argparse.Namespace) -> str:
     return found.pop()
 
 
+def _stopped(max_calls: int, calls: int) -> str:
+    return (f"status: stopped at --max-calls {max_calls} ({calls} model call(s) made); nothing "
+            f"written. Completed calls are cached: rerun to continue.")
+
+
 def _tables_build(a: argparse.Namespace) -> int:
+    from adr_eval.pipeline import BudgetExceeded
+
     corpus = _tables_corpus(a)
     # only an extraction build calls a model: a metadata build resolves no profile
     generator = (a.generator or eval_runner.load_config()["generator"]) if a.with_extraction \
@@ -943,8 +956,11 @@ def _tables_build(a: argparse.Namespace) -> int:
     try:
         res = tables_build.build_tables(a.store, corpus, with_extraction=a.with_extraction,
                                         generator_profile=generator, max_calls=a.max_calls)
-    except NotImplementedError as e:
+    except eval_runner.ProfileError as e:
         raise tools.ToolError(str(e)) from e
+    except BudgetExceeded:
+        print(_stopped(a.max_calls, a.max_calls))
+        return 1
     m = tables_overlay.load_manifest(a.store, res.tables_id)
     head = tables_overlay.read_head(a.store)
     if a.json:
@@ -961,6 +977,55 @@ def _tables_build(a: argparse.Namespace) -> int:
     if head != res.tables_id:
         print(f"  not current until promoted: adr tables gate --store {a.store} --candidate "
               f"{res.tables_id} --gold DIR --max-flips N")
+    return 0
+
+
+def _tables_extract(a: argparse.Namespace) -> int:
+    """`adr tables extract`: the first (or with --second-pass the second) extraction pass over
+    the store's 33 CFR 117 sections, under --max-calls (every transport attempt counts)."""
+    from adr_eval.pipeline import BudgetExceeded
+    from adr_store.tables.contracts import load_contracts
+    from adr_store.tables.ecfr import chain_docs
+
+    store = Store.open(a.store)
+    us = tables_extract.units(store)
+    docs = chain_docs(store)
+    newest = sum(o.doc_id == docs[-1] for u in us for o in u.occurrences) if docs else 0
+    print(f"33 CFR 117: {len(us)} distinct section texts from "
+          f"{sum(len(u.occurrences) for u in us)} sections, {newest} in the newest version")
+    try:
+        meter = tables_extract.metered_client(a.max_calls, profile=a.generator)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    contracts = load_contracts(corpus="gov")
+    workers = a.concurrency or eval_runner.load_config().get("concurrency", 1)
+    try:
+        if a.second_pass:
+            facts, report = tables_extract.second_pass_all(store, meter, contracts,
+                                                           workers=workers)
+        else:
+            _, report = tables_extract.extract_all(store, meter, tables_extract.load_config(),
+                                                   contracts, workers=workers)
+    except BudgetExceeded:
+        print(_stopped(a.max_calls, meter.budget.calls))
+        return 1
+    report = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
+              "max_calls": a.max_calls, "budget_units": meter.budget.calls,
+              "served_models": sorted(meter.served_models)}
+    snapshot_dir = a.store / tables_overlay.TABLES_DIR / store.snapshot_id
+    if a.second_pass:
+        facts_id, facts_path = tables_extract.write_facts(a.store, store.snapshot_id, facts)
+        report["facts_id"] = facts_id
+    name = "second-pass-report.json" if a.second_pass else "extraction-report.json"
+    write_atomic(snapshot_dir / name, (json.dumps(report, indent=2, sort_keys=True,
+                                                  ensure_ascii=False) + "\n").encode("utf-8"))
+    calls = report["calls"]
+    print(f"status: {report['pass']} pass complete; {calls['made']} model call(s) made, "
+          f"{calls['cached']} cached, {calls['failed']} failed; {meter.budget.calls} budget "
+          f"unit(s) of {a.max_calls} used")
+    print(f"report {snapshot_dir / name}")
+    if a.second_pass:
+        print(f"facts {facts_path} {facts_id}")
     return 0
 
 
@@ -1322,6 +1387,21 @@ def _parser() -> argparse.ArgumentParser:
                           "replies only)")
     tbb.add_argument("--json", action="store_true", help="print the result as JSON")
     tbb.set_defaults(fn=_tables_build)
+    tbx = tb_sub.add_parser("extract", help="extract the 3B drawbridge facts of the store's 33 "
+                                            "CFR 117 sections with a model (cached; every "
+                                            "transport attempt counts against --max-calls)")
+    tbx.add_argument("--store", type=Path, required=True, help="store directory")
+    tbx.add_argument("--second-pass", action="store_true",
+                     help="the independent second pass (numbered questions); writes the facts "
+                          "file")
+    tbx.add_argument("--generator", metavar="PROFILE", required=True,
+                     help="model profile in config/models.json")
+    tbx.add_argument("--max-calls", type=_non_negative, required=True,
+                     help="model calls (transport attempts, retries included) this command may "
+                          "make; 0 reads cached replies only")
+    tbx.add_argument("--concurrency", type=_positive, default=None,
+                     help="calls in flight at once (default: config concurrency)")
+    tbx.set_defaults(fn=_tables_extract)
     tbg = tb_sub.add_parser("gate", help="evaluate a candidate against tables/HEAD on gold sets "
                                          "and promote it when it has at most --max-flips flips")
     tbg.add_argument("--store", type=Path, required=True, help="store directory")

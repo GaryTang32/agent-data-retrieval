@@ -25,6 +25,7 @@ from adr_store.records import canonical_json
 from adr_store.tables.provenance import SPEC_ID, RowRecord, ValueProv
 
 CONTRACT_DIR = REPO_ROOT / "config" / "tables"
+EXTRACTION_CONFIG = "extraction.json"   # the 3B column groups and spec versions, no contract
 ColumnType = Literal["text", "int", "real", "bool", "date", "text[]", "real[]"]
 _INT64 = 2**63
 # The most bytes a stored value, or its provenance, takes in its stored form (UTF-8 text, or
@@ -117,10 +118,12 @@ def contract_sha256(c: Contract) -> str:
 
 def load_contracts(directory: Path = CONTRACT_DIR, corpus: str | None = None
                    ) -> dict[str, Contract]:
-    """The contracts in `directory` (one `<table>.json` each), by table name, in name order;
-    only those of `corpus` when given."""
+    """The contracts in `directory` (one `<table>.json` each, `extraction.json` aside), by table
+    name, in name order; only those of `corpus` when given."""
     out: dict[str, Contract] = {}
     for path in sorted(Path(directory).glob("*.json")):
+        if path.name == EXTRACTION_CONFIG:
+            continue
         c = Contract.model_validate_json(path.read_bytes())
         if c.table != path.stem:
             raise ValueError(f"{path}: the contract is for table {c.table!r}")

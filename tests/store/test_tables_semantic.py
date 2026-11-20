@@ -14,7 +14,7 @@ from adr_store.tables.semantic import (
     describe,
 )
 
-INDEX_BUDGET = 6144   # three quarters of the limit: room for the 3B tables and later contracts
+INDEX_BUDGET = 7168   # seven eighths of the limit: the 3A and 3B tables (6.4 KB), room for more
 
 
 def _size(d) -> int:

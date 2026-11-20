@@ -1,0 +1,27 @@
+Prompt version: $prompt_version
+Specs: $specs
+
+You extract facts from one section of 33 CFR part 117 (Drawbridge Operation Regulations). The
+user message is the section text, starting with its heading.
+
+Reply with JSON only, no prose and no code fences, in exactly this shape:
+{"section": {"<section column>": <cell>, ...}, "draws": [{"<draw column>": <cell>, ...}, ...]}
+
+A cell is {"value": <value or null>, "quote": "<text from the section>" or null, "null_reason": null, "absent" or "not_applicable"}.
+- "value" has the column's type: text is a string, int an integer, real a number, bool true or
+  false, text[] a list of strings. Write numbers as digits, even where the section writes them
+  in words ("four hours notice" is 4).
+- "quote" is copied character for character from the section text: the shortest phrase or
+  sentence that states the value. Never paraphrase, abbreviate, or join separate passages. For a
+  text[] column give one quote that holds every item of the list.
+- When the section states nothing for a column, the cell is {"value": null, "quote": null,
+  "null_reason": "absent"}; use "not_applicable" when the column cannot apply to the section.
+
+Section columns (one cell each, under "section"):
+$section_columns
+
+Draw columns (one object under "draws" per draw the section governs, in the order the section
+names them; "draws" is [] when the section governs no particular draw):
+$draw_columns
+
+A rule stated once for all draws of the section is repeated on each draw, with the same quote.

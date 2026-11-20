@@ -1,0 +1,102 @@
+{
+  "table": "drawbridge_bridges",
+  "version": 1,
+  "kind": "data",
+  "description": "33 CFR 117 draws: one row per section, eCFR version and draw.",
+  "columns": [
+    {
+      "name": "section",
+      "type": "text",
+      "nullable": false,
+      "description": "Section number, e.g. 117.821.",
+      "spec_id": "structure.section@1"
+    },
+    {
+      "name": "version",
+      "type": "text",
+      "nullable": false,
+      "description": "eCFR version date of the document holding the section.",
+      "spec_id": "structure.version@1"
+    },
+    {
+      "name": "draw",
+      "type": "int",
+      "nullable": false,
+      "description": "Draw number within the section, from 1 in the order named.",
+      "spec_id": "structure.draw@1"
+    },
+    {
+      "name": "state",
+      "type": "text",
+      "nullable": true,
+      "description": "State of the section (repeated from drawbridge_sections).",
+      "spec_id": "structure.state@1"
+    },
+    {
+      "name": "waterway",
+      "type": "text",
+      "nullable": true,
+      "description": "Waterway of the section (repeated from drawbridge_sections).",
+      "spec_id": "bridge.waterway@1"
+    },
+    {
+      "name": "waterway_key",
+      "type": "text",
+      "nullable": false,
+      "description": "Waterways key of the section heading (repeated).",
+      "spec_id": "structure.waterway_key@1"
+    },
+    {
+      "name": "bridge",
+      "type": "text",
+      "nullable": true,
+      "description": "Name of the bridge as written.",
+      "spec_id": "bridge.bridge@1"
+    },
+    {
+      "name": "mile",
+      "type": "real",
+      "nullable": true,
+      "description": "Waterway mile of the bridge, if stated.",
+      "spec_id": "bridge.mile@1"
+    },
+    {
+      "name": "notice_hours",
+      "type": "int",
+      "nullable": true,
+      "description": "Hours of advance notice required to open, if any.",
+      "spec_id": "bridge.notice_hours@1"
+    },
+    {
+      "name": "opens_on_signal",
+      "type": "bool",
+      "nullable": true,
+      "description": "True when the draw opens on signal in at least one period.",
+      "spec_id": "bridge.opens_on_signal@1"
+    },
+    {
+      "name": "closed_periods",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Periods the draw need not open, as quoted; [] when absent (no per-element provenance).",
+      "spec_id": "bridge.closed_periods@1"
+    }
+  ],
+  "key": [
+    "section",
+    "version",
+    "draw"
+  ],
+  "order": [
+    "section",
+    "version",
+    "draw"
+  ],
+  "list_column": "section",
+  "source": {
+    "corpus": "gov",
+    "selector": "ecfr:33:117",
+    "loader": "extraction"
+  },
+  "entities": {}
+}

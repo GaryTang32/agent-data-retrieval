@@ -28,6 +28,7 @@ from adr_eval.llm import (
     ModelClient,
     ModelError,
     ModelOutputError,
+    _CachedClient,
     cost_usd,
     parse_json,
     price_entry,
@@ -70,8 +71,10 @@ def price_usd(model: str, tokens_in: int, tokens_out: int, prices: dict,
 
 
 def completion_cost(c: Completion, prices: dict) -> float:
-    """`cost_usd`, except that an unpriced stub completion costs nothing."""
-    if c.model == "stub" and "stub" not in prices:
+    """`cost_usd`, except that an unpriced stub completion (a stub model, or any model of the
+    cached stub client) costs nothing."""
+    if (c.model == "stub" or c.provider == "stub") and c.model not in prices \
+            and "stub" not in prices:
         return 0.0
     return cost_usd(c, prices)
 
@@ -81,11 +84,18 @@ class Budget:
 
     `max_dollars` caps table-priced spend; `max_calls` caps model calls that reach a model
     (cache hits are not calls). `stop_reason` is "budget" or "calls" once stopped.
+
+    `count_attempts=False` (Phase 0) counts one unit per call, whatever its transport retries.
+    With `count_attempts=True` (every Phase 3 command that calls a model) a `MeteredClient`
+    over a cached client reserves one unit before every transport attempt, retries included
+    (`attempt`), so real use never exceeds `max_calls`.
     """
 
-    def __init__(self, max_dollars: float | None, max_calls: int | None = None):
+    def __init__(self, max_dollars: float | None, max_calls: int | None = None, *,
+                 count_attempts: bool = False):
         self.max_dollars = max_dollars
         self.max_calls = max_calls
+        self.count_attempts = count_attempts
         self.spent = 0.0
         self.calls = 0
         self.stopped = False
@@ -112,6 +122,17 @@ class Budget:
             self._reserved += estimate
             self._reserved_calls += call
 
+    def attempt(self) -> None:
+        """Take one unit for a transport attempt about to run; BudgetExceeded when it would
+        exceed `max_calls`. The unit is spent whether the attempt succeeds or not."""
+        with self._lock:
+            if self.stopped:
+                raise BudgetExceeded("budget already exhausted")
+            if self.max_calls is not None \
+                    and self.calls + self._reserved_calls + 1 > self.max_calls:
+                self._stop("calls", f"next attempt would exceed --max-calls {self.max_calls}")
+            self.calls += 1
+
     def settle(self, estimate: float, cost: float, call: bool = True,
                made_call: bool = True) -> None:
         with self._lock:
@@ -136,19 +157,30 @@ class MeteredClient:
         self.served_models: set[str] = set()
         self._lock = threading.Lock()
 
-    def complete(self, system: str, user: str, *, max_tokens: int, repeat: int = 0) -> Completion:
+    def complete(self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
+                 cache_failures: bool = False) -> Completion:
+        """`inner.complete` under the budget. `cache_failures` is passed on (a stored failure
+        is a cache hit: it reserves nothing). With `budget.count_attempts` and a cached inner
+        client, each transport attempt takes its own unit (`Budget.attempt`)."""
+        extra = {"cache_failures": True} if cache_failures else {}
         is_cached = getattr(self.inner, "is_cached", None)
-        call = not (is_cached and is_cached(system, user, max_tokens=max_tokens, repeat=repeat))
+        call = not (is_cached and is_cached(system, user, max_tokens=max_tokens, repeat=repeat,
+                                            **extra))
+        per_attempt = call and self.budget.count_attempts and isinstance(self.inner,
+                                                                         _CachedClient)
+        if per_attempt:
+            extra["before_attempt"] = self.budget.attempt
         # a cache hit costs nothing, so it reserves nothing: a fully cached rerun never stops
         est = price_usd(self.model, *estimate_tokens(system, user, max_tokens), self.prices,
                         self.name) if call else 0.0
-        self.budget.reserve(est, call)
-        cost, made_call = 0.0, call
+        unit = call and not per_attempt          # per-attempt units are taken as they run
+        self.budget.reserve(est, unit)
+        cost, made_call = 0.0, unit
         try:
-            c = self.inner.complete(system, user, max_tokens=max_tokens, repeat=repeat)
-            cost, made_call = completion_cost(c, self.prices), not c.cached
+            c = self.inner.complete(system, user, max_tokens=max_tokens, repeat=repeat, **extra)
+            cost, made_call = completion_cost(c, self.prices), unit and not c.cached
         finally:
-            self.budget.settle(est, cost, call, made_call)
+            self.budget.settle(est, cost, unit, made_call)
         if c.served_model is not None:
             with self._lock:
                 self.served_models.add(c.served_model)

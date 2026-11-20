@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Collection
@@ -44,6 +45,11 @@ class ModelOutputError(ModelError):
     pass
 
 
+class CachedFailure(ModelError):
+    """A call that failed after its retries, stored in the cache (`cache_failures=True`) and
+    raised again on every later call with the same key, without a call."""
+
+
 class ModelClient(Protocol):
     name: str
     family: str
@@ -65,10 +71,16 @@ class RateLimitedError(_Retryable):
     backoff = USAGE_LIMIT_BACKOFF_SECONDS
 
 
-def _with_retries(attempt: Callable[[], Completion], max_retries: int) -> Completion:
+def _with_retries(attempt: Callable[[], Completion], max_retries: int,
+                  before_attempt: Callable[[], None] | None = None) -> Completion:
+    """Run `attempt`, retrying a retryable failure up to `max_retries` times with backoff.
+    `before_attempt` runs before every attempt, retries included; whatever it raises (a budget
+    stop) propagates at once."""
     last: Exception | None = None
     waits: Counter = Counter()  # each backoff schedule advances on its own failures
     for i in range(max_retries + 1):
+        if before_attempt is not None:
+            before_attempt()
         try:
             return attempt()
         except _Retryable as e:
@@ -81,6 +93,15 @@ def _with_retries(attempt: Callable[[], Completion], max_retries: int) -> Comple
 
 
 class _CachedClient:
+    """A client whose replies are cached by (adapter, model, system, user, max tokens, repeat).
+
+    `complete(..., cache_failures=True)` also stores a call that failed after its retries (a
+    ModelError) at `Cache.key("failure", key)` and raises it as CachedFailure, then and on every
+    later call with that key, without a call; the default stores nothing on failure (Phase 0).
+    `before_attempt` runs before each transport attempt, retries included (a per-attempt
+    budget); what it raises propagates and is never cached.
+    """
+
     name: str
     family: str
     model: str
@@ -93,21 +114,46 @@ class _CachedClient:
     def _call(self, system: str, user: str, max_tokens: int) -> Completion:
         raise NotImplementedError
 
+    def _attempt(self, system: str, user: str, max_tokens: int, repeat: int) -> Completion:
+        """One transport attempt (the repeat index only enters the cache key)."""
+        return self._call(system, user, max_tokens)
+
     def _key(self, system: str, user: str, max_tokens: int, repeat: int) -> str:
         return Cache.key(self.name, self.model, system, user, max_tokens, repeat)
 
-    def is_cached(self, system: str, user: str, *, max_tokens: int, repeat: int = 0) -> bool:
-        """Whether `complete` with these arguments would be answered from the cache."""
-        return self.cache.get(self._key(system, user, max_tokens, repeat)) is not None
+    @staticmethod
+    def _failure_key(key: str) -> str:
+        return Cache.key("failure", key)
+
+    def is_cached(self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
+                  cache_failures: bool = False) -> bool:
+        """Whether `complete` with these arguments would be answered from the cache (with a
+        reply, or with a stored failure when `cache_failures`)."""
+        key = self._key(system, user, max_tokens, repeat)
+        if self.cache.get(key) is not None:
+            return True
+        return cache_failures and self.cache.get(self._failure_key(key)) is not None
 
     def complete(
-        self, system: str, user: str, *, max_tokens: int, repeat: int = 0
+        self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
+        cache_failures: bool = False, before_attempt: Callable[[], None] | None = None,
     ) -> Completion:
         key = self._key(system, user, max_tokens, repeat)
         hit = self.cache.get(key)
         if hit is not None:
             return Completion(**{"provider": self.name, **hit, "cached": True})
-        c = _with_retries(lambda: self._call(system, user, max_tokens), self.max_retries)
+        if cache_failures:
+            failed = self.cache.get(self._failure_key(key))
+            if failed is not None:
+                raise CachedFailure(failed["error"])
+        try:
+            c = _with_retries(lambda: self._attempt(system, user, max_tokens, repeat),
+                              self.max_retries, before_attempt)
+        except ModelError as e:
+            if not cache_failures:
+                raise
+            self.cache.put(self._failure_key(key), {"error": str(e)})
+            raise CachedFailure(str(e)) from e
         c = replace(c, provider=self.name)
         self.cache.put(key, {**c.__dict__, "cached": False})
         return c
@@ -316,6 +362,32 @@ class StubClient:
             text, (len(system) + len(user)) // 4, len(text) // 4, "stub",
             time.monotonic() - t0, False, provider="stub",
         )
+
+
+class CachedStubClient(_CachedClient):
+    """A deterministic model behind the reply cache, for tests: `fn(system, user, repeat)`
+    gives the reply text, or raises (`_Retryable` for a transport failure that is retried,
+    ModelError for one that is not). `calls` counts the attempts that reached `fn`."""
+
+    name = "stub"
+    family = "stub"
+
+    def __init__(self, model: str, cache: Cache, fn: Callable[[str, str, int], str],
+                 max_retries: int = 0):
+        super().__init__(cache)
+        self.model = model
+        self.fn = fn
+        self.max_retries = max_retries
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def _attempt(self, system: str, user: str, max_tokens: int, repeat: int) -> Completion:
+        with self._lock:
+            self.calls += 1
+        t0 = time.monotonic()
+        text = self.fn(system, user, repeat)
+        return Completion(text, (len(system) + len(user)) // 4, len(text) // 4, self.model,
+                          time.monotonic() - t0, False)
 
 
 _FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL)

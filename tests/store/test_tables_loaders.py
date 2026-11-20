@@ -448,9 +448,13 @@ def test_build_takes_the_generator_profile_and_call_cap_but_makes_no_call(tmp_pa
     assert a.tables_id == build_tables(store.path, "gov").tables_id
 
 
-def test_build_refuses_extraction_until_it_exists(tmp_path):
-    with pytest.raises(NotImplementedError, match="extraction"):
-        build_tables(make_tables_store(tmp_path / "s").path, "gov", with_extraction=True)
+def test_an_extraction_build_without_cached_replies_stops_at_the_call_cap(tmp_path):
+    from adr_eval.pipeline import BudgetExceeded
+    from tests.store.tables_fixtures import ECFR_NEW, ecfr_doc
+
+    store = make_tables_store(tmp_path / "s", [*FR_DOCS, ecfr_doc(ECFR_NEW)])
+    with pytest.raises(BudgetExceeded):     # default --max-calls 0: cached replies only
+        build_tables(store.path, "gov", with_extraction=True)
 
 
 def test_build_counts_a_row_the_contract_rejects(tmp_path):

@@ -249,8 +249,10 @@ def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
     assert seen[-1] == ("gov", {"with_extraction": False,
                                 "generator_profile": "claude_code_opus", "max_calls": 3})
     monkeypatch.setattr(runner, "load_config", real_config)
-    code, _, err = adr(["tables", "build", "--store", tables_store, "--with-extraction"], capsys)
-    assert code == 2 and "extraction tables are not built yet" in err
+    # an extraction build reads cached replies only by default: none are cached here
+    code, out, err = adr(["tables", "build", "--store", tables_store, "--with-extraction"],
+                         capsys)
+    assert code == 1 and "stopped at --max-calls 0" in out and "0 model call(s) made" in out
     assert seen[-1] == ("gov", {"with_extraction": True, "generator_profile": generator,
                                 "max_calls": 0})
     # the corpus comes from the store's documents, or --tables-for when both are there
@@ -265,6 +267,76 @@ def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
     # --corpus keeps its meaning (the real store); it is not a tables option here
     with pytest.raises(SystemExit):
         adr(["tables", "build", "--store", tables_store, "--corpus", "gov"], capsys)
+
+
+def _stub_profiles(monkeypatch, tmp_path, fn):
+    """`runner.make_client` gives a cached stub (named by the profile) for every profile."""
+    from adr_eval import runner
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+
+    made = []
+
+    def make_client(name, profiles, cache, max_retries=5):
+        made.append(name)
+        return CachedStubClient(f"stub-{name}", Cache(tmp_path / "llm"), fn)
+
+    monkeypatch.setattr(runner, "make_client", make_client)
+    return made
+
+
+def test_adr_tables_extract_stops_at_the_cap_then_extracts(tables_store, tmp_path, capsys,
+                                                           monkeypatch):
+    from adr_store.store import Store
+    from adr_store.tables.extract import load_facts
+    from adr_store.tables.overlay import load_manifest
+    from tests.store.tables_fixtures import fixture_numbered, fixture_reply
+
+    made = _stub_profiles(monkeypatch, tmp_path, fixture_reply)
+    snapshot_dir = tables_store / "tables" / Store.open(tables_store).snapshot_id
+    code, out, err = adr(["tables", "extract", "--store", tables_store, "--generator",
+                          "claude_code_sonnet", "--max-calls", 0], capsys)
+    assert code == 1, err
+    assert "8 distinct section texts from 14 sections, 7 in the newest version" in out
+    assert "stopped at --max-calls 0" in out and "0 model call(s) made" in out
+    assert not (snapshot_dir / "extraction-report.json").exists()       # nothing written
+    assert made == ["claude_code_sonnet"]
+    code, out, err = adr(["tables", "extract", "--store", tables_store, "--generator",
+                          "claude_code_sonnet", "--max-calls", 3, "--concurrency", 2], capsys)
+    assert code == 1 and "3 model call(s) made" in out
+    code, out, err = adr(["tables", "extract", "--store", tables_store, "--generator",
+                          "claude_code_sonnet", "--max-calls", 5], capsys)
+    assert code == 0, err
+    assert "complete" in out and "5 model call(s) made, 3 cached, 0 failed" in out
+    report = json.loads((snapshot_dir / "extraction-report.json").read_text())
+    assert report["pass"] == "first" and report["units"] == 8
+    assert report["generator"] == "claude_code_sonnet" and report["model"] == \
+        "stub-claude_code_sonnet"
+    # a zero-call build reads the same replies (same profile)
+    code, out, err = adr(["tables", "build", "--store", tables_store, "--with-extraction",
+                          "--generator", "claude_code_sonnet"], capsys)
+    assert code == 0, err
+    m = load_manifest(tables_store, out.splitlines()[0])
+    assert {t.table: t.rows for t in m.tables}["drawbridge_bridges"] == 14
+    # the second pass writes the facts file and its report
+    _stub_profiles(monkeypatch, tmp_path, fixture_numbered)
+    code, out, err = adr(["tables", "extract", "--store", tables_store, "--second-pass",
+                          "--generator", "claude_code_opus", "--max-calls", 8], capsys)
+    assert code == 0, err
+    facts_id = next(x.split()[-1] for x in out.splitlines() if x.startswith("facts"))
+    assert len(load_facts(tables_store, facts_id)) == 8
+    report = json.loads((snapshot_dir / "second-pass-report.json").read_text())
+    assert report["pass"] == "second" and report["facts_id"] == facts_id
+
+
+def test_adr_tables_extract_needs_a_generator(tables_store, capsys):
+    with pytest.raises(SystemExit):
+        adr(["tables", "extract", "--store", tables_store, "--max-calls", 0], capsys)
+    with pytest.raises(SystemExit):
+        adr(["tables", "extract", "--store", tables_store, "--generator", "x"], capsys)
+    code, _, err = adr(["tables", "extract", "--store", tables_store, "--generator",
+                        "no_such_profile", "--max-calls", 0], capsys)
+    assert code == 2 and "no_such_profile" in err
 
 
 def test_adr_query_and_sql(tables_store, capsys):

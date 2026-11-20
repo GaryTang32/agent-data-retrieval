@@ -1,0 +1,86 @@
+{
+  "table": "drawbridge_sections",
+  "version": 1,
+  "kind": "data",
+  "description": "33 CFR 117 sections: one row per section and eCFR version.",
+  "columns": [
+    {
+      "name": "section",
+      "type": "text",
+      "nullable": false,
+      "description": "Section number, e.g. 117.821.",
+      "spec_id": "structure.section@1"
+    },
+    {
+      "name": "version",
+      "type": "text",
+      "nullable": false,
+      "description": "eCFR version date of the document holding the section.",
+      "spec_id": "structure.version@1"
+    },
+    {
+      "name": "heading",
+      "type": "text",
+      "nullable": false,
+      "description": "Section heading as written.",
+      "spec_id": "structure.heading@1"
+    },
+    {
+      "name": "state",
+      "type": "text",
+      "nullable": true,
+      "description": "State of the enclosing subject group; null for general sections.",
+      "spec_id": "structure.state@1"
+    },
+    {
+      "name": "waterway_key",
+      "type": "text",
+      "nullable": false,
+      "description": "Waterways key of the heading's waterway (join key to waterways.key).",
+      "spec_id": "structure.waterway_key@1"
+    },
+    {
+      "name": "waterway",
+      "type": "text",
+      "nullable": true,
+      "description": "Waterway the section governs, as written.",
+      "spec_id": "bridge.waterway@1"
+    },
+    {
+      "name": "seasonal",
+      "type": "bool",
+      "nullable": true,
+      "description": "True when the rules differ by season or date range.",
+      "spec_id": "bridge.seasonal@1"
+    },
+    {
+      "name": "owner_or_agency",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity to notify, or that owns or operates the draws.",
+      "spec_id": "bridge.owner_or_agency@1"
+    },
+    {
+      "name": "vhf_channel",
+      "type": "int",
+      "nullable": true,
+      "description": "VHF-FM channel to call the bridge on.",
+      "spec_id": "bridge.vhf_channel@1"
+    }
+  ],
+  "key": [
+    "section",
+    "version"
+  ],
+  "order": [
+    "section",
+    "version"
+  ],
+  "list_column": "section",
+  "source": {
+    "corpus": "gov",
+    "selector": "ecfr:33:117",
+    "loader": "extraction"
+  },
+  "entities": {}
+}

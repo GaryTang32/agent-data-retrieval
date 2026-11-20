@@ -126,7 +126,8 @@ def test_committed_contracts_load_and_reference_their_own_columns():
 def test_contracts_load_by_corpus():
     assert set(load_contracts(corpus="gov")) == {
         "fr_documents", "fr_cfr_refs", "fr_agencies", "fr_dockets",
-        "agencies", "cfr_parts", "dockets", "waterways"}
+        "agencies", "cfr_parts", "dockets", "waterways", "drawbridge_sections",
+        "drawbridge_bridges"}
     assert set(load_contracts(corpus="research")) == {"papers", "paper_authors", "venues",
                                                       "licences", "authors"}
 

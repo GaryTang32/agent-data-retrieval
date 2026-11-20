@@ -1,0 +1,27 @@
+{
+  "_comment": "Phase 3 extraction (3B): column groups, one cached model call per group and distinct 33 CFR 117 section text, and each model column's spec version. The source of spec versions: the drawbridge contracts' spec_id must equal these (a test checks). Bumping one spec re-extracts only its group.",
+  "groups": {
+    "main": [
+      "waterway",
+      "seasonal",
+      "owner_or_agency",
+      "vhf_channel",
+      "bridge",
+      "mile",
+      "notice_hours",
+      "opens_on_signal",
+      "closed_periods"
+    ]
+  },
+  "specs": {
+    "waterway": "bridge.waterway@1",
+    "seasonal": "bridge.seasonal@1",
+    "owner_or_agency": "bridge.owner_or_agency@1",
+    "vhf_channel": "bridge.vhf_channel@1",
+    "bridge": "bridge.bridge@1",
+    "mile": "bridge.mile@1",
+    "notice_hours": "bridge.notice_hours@1",
+    "opens_on_signal": "bridge.opens_on_signal@1",
+    "closed_periods": "bridge.closed_periods@1"
+  }
+}
