@@ -10,11 +10,14 @@ import pytest
 
 from adr_eval.corpora.gov import GovAdapter
 from adr_eval.corpora.research import ResearchAdapter
+from adr_eval.golden.records import exec_gold_query
+from adr_eval.models import load_items
 from adr_store import applicability as ap
 from adr_store.store import Store
 from adr_store.tables import overlay as ov
 from adr_store.tables.build import build_tables
 from adr_store.tables.ecfr import chain_docs, ecfr_sections, link_summary, waterway_links
+from adr_store.tables.engine import ViewDB, from_gold_query, run_query
 from adr_store.tables.loaders import fr_tables, papers_tables, records_view
 from adr_store.tables.provenance import MANIFEST_COLUMNS, reslice
 from tests.store.tables_fixtures import loaded_of
@@ -139,3 +142,26 @@ def test_real_waterway_entities_leave_out_stateless_sections_and_reserved_headin
     assert len(rows) == 1320 and len({r.row["key"] for r in rows}) == 467
     assert {"purpose", "definitions", "reserved"}.isdisjoint(
         {r.row["key"] for r in rows})
+
+
+@pytest.mark.parametrize("corpus,n", [("gov", 38), ("research", 35)])
+def test_query_table_reproduces_every_v01_count_filter_item(corpus, n):
+    """The typed engine answers each v0.1 `count_filter` item exactly as `exec_gold_query` does
+    over the v0.1 records (every row of the build, no view filter)."""
+    items_path = Path(__file__).parents[1] / "golden" / corpus / "v0.1" / "items.jsonl"
+    if not items_path.is_file():
+        pytest.skip(f"no golden items at {items_path}")
+    store = store_of(corpus)
+    result = build_tables(store.path, corpus)
+    m = ov.load_manifest(store.path, result.tables_id)
+    db = ViewDB.build(store.path, m, result.tables_id, None)
+    adapter = GovAdapter() if corpus == "gov" else ResearchAdapter()
+    records = adapter.records(loaded_of(store))
+    items = [i for i in load_items(items_path) if i.qtype == "count_filter"]
+    assert len(items) == n
+    for item in items:
+        out = run_query(db, **from_gold_query(item.gold_query, corpus))
+        got = out.count if item.gold_query.op == "count" else out.ids
+        want = exec_gold_query(item.gold_query, records)
+        assert got == want, item.id
+        assert not out.never_matches, item.id
