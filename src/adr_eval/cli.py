@@ -371,6 +371,8 @@ def _exclusions(corpus: str) -> dict[str, str]:
 
 
 def _golden_gen(a: argparse.Namespace) -> int:
+    if a.corpus == TABLES_GOLDEN:
+        return _golden_tables_gen(a)
     items = runner.golden_dir(a.corpus) / "items.jsonl"
     if items.exists() and not a.overwrite:  # checked before any client is made or call sent
         print(f"error: {items} exists and is frozen (golden sets are data, not regenerated "
@@ -429,6 +431,71 @@ def _golden_gen_logged(a: argparse.Namespace) -> int:
     return 0
 
 
+TABLES_GOLDEN = "tables"   # `adr-eval golden tables`: the gov-tables v0.1 set (Phase 3 §10.3)
+
+
+def _stopped(max_calls: int, units: int) -> str:
+    """The status line of a command stopped by its call cap (as `adr tables extract`)."""
+    return (f"status: stopped at --max-calls {max_calls} ({units} budget unit(s) used); "
+            f"nothing written. Completed calls are cached: rerun to continue.")
+
+
+def _failed(error: Exception, units: int) -> str:
+    """The status line of a command stopped by a model failure that is not cached (retries
+    exhausted, the usage limit, a configuration error; ruling P21)."""
+    text = " ".join(str(error).split())
+    return (f"status: stopped: {text} ({units} budget unit(s) used); nothing written. "
+            f"Completed calls are cached: rerun to continue.")
+
+
+def _golden_tables_gen(a: argparse.Namespace) -> int:
+    """`adr-eval golden tables --gen --store S --facts ID --generator P --max-calls N`: the
+    gov-tables v0.1 items from the second-pass facts `ID` of store `S`, phrased by profile `P`
+    under `N` budget units (every transport attempt counts). A stop at the cap or on a model
+    failure that is no input rejection exits 1 and writes nothing; a rerun reads the completed
+    calls from the cache."""
+    from adr_eval.golden import tables
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded
+    from adr_store.tables.extract import metered_client
+    from adr_store.tables.overlay import TablesError
+
+    out = tables.GOLDEN_DIR
+    if (out / "items.jsonl").exists() and not a.overwrite:  # before any client or call
+        print(f"error: {out / 'items.jsonl'} exists and is frozen (a regenerated set is a new "
+              f"version); pass --overwrite to replace it", file=sys.stderr)
+        return 2
+    try:
+        meter = metered_client(a.max_calls, profile=a.generator)
+    except runner.ProfileError as e:
+        raise runner.RunError(str(e)) from e
+    try:
+        res = tables.generate_all(a.store, a.facts, meter, n=tables.N_ITEMS)
+    except TablesError as e:
+        raise runner.RunError(str(e)) from e
+    except BudgetExceeded:
+        print(_stopped(a.max_calls, meter.budget.calls))
+        return 1
+    except ModelError as e:            # a stored input rejection never reaches here
+        print(_failed(e, meter.budget.calls))
+        return 1
+    tables.write_items(out, res.items, res.rejected)
+    dev = sum(i.split == "dev" for i in res.items)
+    ops = Counter(i.qtype for i in res.items)
+    c, calls = res.counts, res.counts["calls"]
+    reasons = Counter(r["reason"] for r in res.rejected)
+    print(f"{out}: {len(res.items)} items ({dev} dev, {len(res.items) - dev} test); per op "
+          f"{dict(sorted(ops.items()))}; facts {a.facts[:12]}")
+    print(f"  {c['draws']} draws: {c['duplicates']} repeats, {c['unusable']} unusable, "
+          f"{len(res.rejected)} rejected {dict(sorted(reasons.items()))}")
+    print(f"status: complete; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {', '.join(sorted(meter.served_models)) or 'none reported'}")
+    if len(res.items) < tables.N_ITEMS:
+        print(f"  short of {tables.N_ITEMS} items: the draws ran out (reported, not padded)")
+    return 0
+
+
 def _golden_verify(a: argparse.Namespace) -> int:
     from adr_eval.golden.verify import verify_items
 
@@ -471,17 +538,36 @@ def _index(a: argparse.Namespace) -> int:
 
 
 def _run(a: argparse.Namespace) -> int:
+    """`adr-eval run`. With `--golden gov-tables` (tables mode, Phase 3 §10.3, §11) the default
+    is one repeat (the budget is one query and, for a chunk system, one answer call per item),
+    and a stop at the call cap or on a model failure that is no input rejection exits 1 with
+    nothing written."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded
+
     config = runner.load_config()
     if a.stub:
         config["stub"] = True
     for role in ("generator", "judge"):
         if getattr(a, role):
             config[role] = getattr(a, role)
-    repeats = a.repeats if a.repeats is not None else config["repeats"]
-    run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
-                        max_dollars=a.max_dollars, dry_run=a.dry_run, rebuild=a.rebuild,
-                        max_calls=a.max_calls,
-                        qtypes=None if a.qtype is None else tuple(a.qtype))
+    tables = a.golden == runner.GOV_TABLES
+    if tables and a.judge:
+        raise runner.RunError("a gov-tables run makes no judge call; remove --judge")
+    repeats = a.repeats if a.repeats is not None else (1 if tables else config["repeats"])
+    try:
+        run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
+                            max_dollars=a.max_dollars, dry_run=a.dry_run, rebuild=a.rebuild,
+                            max_calls=a.max_calls,
+                            qtypes=None if a.qtype is None else tuple(a.qtype),
+                            golden=a.golden)
+    except BudgetExceeded as e:        # tables mode only: v0.1 runs stop per item
+        print(f"status: {e}")
+        return 1
+    except ModelError as e:            # tables mode only; a stored input rejection is a row
+        print(f"status: stopped: {' '.join(str(e).split())}; nothing written. Completed "
+              f"calls are cached: rerun to continue.")
+        return 1
     if a.dry_run:
         return 0
     run_dir = a.out / run_id
@@ -1270,13 +1356,21 @@ def _parser() -> argparse.ArgumentParser:
                    help="data directory (default data/tools)")
     p.set_defaults(fn=_tools_fetch)
 
-    p = sub.add_parser("golden", help="generate or verify the golden set")
-    p.add_argument("corpus", choices=NAMES)
+    p = sub.add_parser("golden", help="generate or verify the golden set; `golden tables --gen` "
+                                      "generates gov-tables v0.1 (3B drawbridge questions)")
+    p.add_argument("corpus", choices=(*NAMES, TABLES_GOLDEN),
+                   help=f"a corpus, or {TABLES_GOLDEN!r} for gov-tables v0.1 (--gen only, with "
+                        f"--store, --facts, --generator and --max-calls)")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--gen", action="store_const", const=_golden_gen, dest="fn")
     mode.add_argument("--verify", action="store_const", const=_golden_verify, dest="fn")
     p.add_argument("--overwrite", action="store_true",
                    help="with --gen: replace an existing (frozen) items.jsonl")
+    p.add_argument("--store", type=Path, default=None,
+                   help="golden tables: the store holding the second-pass facts")
+    p.add_argument("--facts", default=None, metavar="ID",
+                   help="golden tables: the second-pass facts id (`adr tables extract "
+                        "--second-pass` prints it)")
     _profile_args(p, judge=True)
 
     p = sub.add_parser("index", help="build (or check) the saved hybrid index")
@@ -1300,6 +1394,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--qtype", action="append", default=None, choices=get_args(QType),
                    help="run only the items of this question type (repeatable); p3-typed "
                         "needs --qtype count_filter")
+    p.add_argument("--golden", choices=runner.GOLDEN_SETS, default="v0.1",
+                   help="golden set: the corpus's v0.1 set, or gov-tables (corpus gov; no "
+                        "judge; default one repeat; every transport attempt counts against "
+                        "--max-calls; a stop writes nothing)")
     _profile_args(p, judge=True)
     p.set_defaults(fn=_run)
 
@@ -1508,6 +1606,20 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = _parser()
     a = ap.parse_args(argv)
+    if a.command == "golden" and a.corpus == TABLES_GOLDEN:
+        if a.fn is not _golden_gen:
+            ap.error("golden tables takes --gen only")
+        missing = [f for f, v in (("--store", a.store), ("--facts", a.facts),
+                                  ("--generator", a.generator), ("--max-calls", a.max_calls))
+                   if v is None]
+        if missing:
+            ap.error(f"golden tables --gen needs {', '.join(missing)}")
+        if a.judge is not None:
+            ap.error("golden tables makes no judge call; remove --judge")
+        if a.max_calls < 0:
+            ap.error("--max-calls must not be negative")
+    elif a.command == "golden" and (a.store is not None or a.facts is not None):
+        ap.error("--store and --facts are options of `golden tables` only")
     if a.command == "golden" and a.fn is _golden_verify:
         given = [f for f, v in (("--generator", a.generator), ("--judge", a.judge),
                                 ("--max-calls", a.max_calls),

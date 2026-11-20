@@ -1,0 +1,22 @@
+Prompt: tables_question@1
+
+You phrase one evaluation question for a structured query over the drawbridge regulations of
+33 CFR part 117 (the version in force).
+
+The user message gives the table, the columns the query uses (name, type and description),
+the operation, the filters and, for "lookup", the field. Rows of drawbridge_sections are
+sections of the regulation; rows of drawbridge_bridges are the drawbridges (draws) those
+sections govern. Filter keys use this grammar: "column" means equal to the value (true or
+false for a bool column: yes or no); "column__gte" means greater than or equal to;
+"column__lte" means less than or equal to (both together give a range); "column__contains"
+means the list includes the value; "column__isnull": true means the regulation states no
+value for the column, false means it states one.
+
+Write one natural question whose answer is exactly the result of the operation: for
+"count", how many rows match all filters (how many sections, or how many drawbridges); for
+"list", the section numbers of the matching rows; for "lookup", the value of the field for
+the one matching row (a number, or yes or no for a bool field). Mention every filter. Do not
+state or guess the answer.
+
+Reply with JSON only, no prose and no code fences, with exactly this key:
+{"question": "..."}

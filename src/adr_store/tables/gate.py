@@ -7,15 +7,19 @@ documents in force). A **flip** is a case HEAD answers right and the candidate a
 candidate becomes HEAD only when it has at most `max_flips` of them. With no HEAD every case
 counts as wrong on HEAD, so a first build promotes with no flips; a HEAD the current contracts
 can no longer read blocks the gate unless the caller overrides it.
+
+Gold sets are v0.1 `count_filter` items and gov-tables v0.1 items (`golden.tables`, the 3B
+drawbridge questions), each case a `query_table` call and its expected answer (`gold_cases`).
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from adr_eval.models import load_items
+from adr_eval.models import GoldenItem, jsonl_lines
 from adr_store import applicability as ap
 from adr_store.tables.contracts import CONTRACT_DIR
 from adr_store.tables.engine import QueryError, ViewDB, from_gold_query, run_query
@@ -31,13 +35,25 @@ GoldCase = tuple[str, dict, Any]   # (item id, query_table kwargs, expected answ
 
 
 def gold_cases(path: Path, corpus: str) -> list[GoldCase]:
-    """The v0.1 `count_filter` items of the golden set at `path` that the typed database
-    answers, as (id, `query_table` kwargs, expected answer), in file order. Rejected items are
-    left out. (The gov-tables set is added with the 3B tables.)"""
-    return [(item.id, from_gold_query(item.gold_query, corpus), item.answer.value)
-            for item in load_items(path)
-            if item.qtype == "count_filter" and item.gold_query.store == "typed_db"
-            and item.corpus == corpus and item.status != "rejected"]
+    """The cases of the golden set at `path` that the typed database answers, as (id,
+    `query_table` kwargs, expected answer), in file order: its v0.1 `count_filter` items of
+    `corpus` (rejected items left out), and its gov-tables v0.1 items when `corpus` is gov
+    (their query's kwargs; a yes / no lookup expects true / false). A line is a gov-tables item
+    when its `corpus` is "gov-tables"."""
+    from adr_eval.golden.tables import TablesItem, expected_value
+
+    cases: list[GoldCase] = []
+    for line in jsonl_lines(Path(path).read_text(encoding="utf-8")):
+        if json.loads(line).get("corpus") == "gov-tables":
+            t = TablesItem.model_validate_json(line)
+            if corpus == "gov":
+                cases.append((t.id, t.query.to_kwargs(), expected_value(t)))
+            continue
+        item = GoldenItem.model_validate_json(line)
+        if item.qtype == "count_filter" and item.gold_query.store == "typed_db" \
+                and item.corpus == corpus and item.status != "rejected":
+            cases.append((item.id, from_gold_query(item.gold_query, corpus), item.answer.value))
+    return cases
 
 
 def _right(db: ViewDB, kwargs: dict, expected: Any) -> bool:

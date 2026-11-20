@@ -82,7 +82,9 @@ def _g2(rows: list[dict]) -> dict:
         "n": len(scored),
         "route_accuracy": _mean(routed), "route_n": len(routed),
         "entity_f1": _mean(entities), "entity_n": len(entities),
-        "per_field": {f: _mean(r["gold_query_field_hits"][f] for r in scored) for f in G2_FIELDS},
+        # a gov-tables row scores the parts of a table query (table, op, filters, field)
+        "per_field": {f: _mean(r["gold_query_field_hits"][f] for r in scored)
+                      for f in (scored[0]["gold_query_field_hits"] if scored else G2_FIELDS)},
         "exact": _mean(r["query_exact"] for r in scored),
         "exec_match": _mean(executable), "exec_n": len(executable),
     }
@@ -253,6 +255,9 @@ def build_report(run_dir: Path) -> dict:
         "determinism": det, "determinism_violation": violation,
         "end_to_end": _end_to_end(rows, t_values, cfg.get("spent_usd")),
         "judge": _judge(rows, cfg),
+        # a gov-tables run (Phase 3 §10.3) calls no judge: every answer is scored exactly
+        "golden_set": cfg.get("golden_set", "v0.1"),
+        "judge_enabled": cfg.get("judge_enabled", True),
     }
     warnings = []
     if violation:
@@ -341,11 +346,15 @@ def render_markdown(report: dict) -> str:
     out = [f"# Report: {r['run_id']}", "",
            f"Corpus `{r['corpus']}`, system `{r['system']}`, split `{r['split']}`, "
            f"{r['repeats']} repeats, {r['n_rows']} rows, status `{r['status']}`. "
-           f"Generator `{r['generator_model']}`, judge `{j['model']}`"
+           f"Generator `{r['generator_model']}`, "
+           + (f"judge `{j['model']}`" if r.get("judge_enabled", True) else "no judge")
            + (f", linear w = {r['w']}" if r.get("w") is not None else "")
            + f". Metrics version {r.get('metrics_version', 1)}.", ""]
     if r.get("qtypes"):
         out += [f"Question types: {', '.join(r['qtypes'])} only.", ""]
+    if r.get("golden_set", "v0.1") != "v0.1":
+        out += [f"Golden set `{r['golden_set']}`: generated table queries, no judge call, "
+                f"exact scoring.", ""]
     if r.get("tables"):
         out += [f"Answers from the typed tables `{r['tables']}` with the generated query: "
                 f"no retrieval, no answer or judge call, exact scoring.", ""]
@@ -412,6 +421,9 @@ def render_markdown(report: dict) -> str:
             f"Span containment {_fmt(g1.get('span_containment'))}; text fidelity "
             f"{_fmt(tf.get('share'))}; empty documents {len(g1.get('empty_docs', []))}; "
             f"index fingerprint `{g1.get('fingerprint')}`.", ""]
+    if not r.get("judge_enabled", True):
+        out += ["## Judge", "", "No judge call: every answer is scored exactly.", ""]
+        return "\n".join(out)
     out += ["## Judge", "",
             f"Proxy κ {_fmt(j['proxy_kappa'])} "
             f"(n = {j['proxy_kappa_n']}; {j['proxy_kappa_note']}); raw agreement "

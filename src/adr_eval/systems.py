@@ -49,8 +49,9 @@ run config; its fingerprint differs from the full system's.
   item's generated query, compiled by `tables.engine.from_gold_query`, runs through
   `Tools.query_table` as `config["p2_caller"]` (required; the ACL layer resolves it at build,
   as for the Phase 2 configurations, and again on every call). It never answers from
-  chunks; its fingerprint is the tables id. Registered apart (`P3_NAMES`); `ALL_NAMES` is
-  every system.
+  chunks; its fingerprint is the tables id. On the gov-tables set (tables mode) it answers the
+  generated `TableQuery` with `query_table(**query.to_kwargs())` (`answer_table`). Registered
+  apart (`P3_NAMES`); `ALL_NAMES` is every system.
 
 This module is the harness's only entry to `adr_store` for the Phase 0/1 harness modules
 (plan, shared rules).
@@ -67,6 +68,7 @@ from typing import Any
 
 from adr_eval import runner
 from adr_eval.corpora.base import LoadedCorpus
+from adr_eval.golden.tables import TableQuery
 from adr_eval.models import Evidence, GoldenItem, GoldQuery
 from adr_eval.retrieval.chunker import Chunk
 from adr_eval.retrieval.fusion import _GRID, linear
@@ -678,19 +680,31 @@ class TypedSystem:
         denial (`AccessDenied`: a stale ACL, an unknown caller) is no answer to score: it
         propagates and fails the run, as an ACL failure fails a chunk-path run."""
         from adr_store.tables.engine import from_gold_query
-        from adr_store.tools import AccessDenied, ToolError
 
         if gq is None:
             return None, None
+        return self._query(from_gold_query(gq, self.corpus))
+
+    def answer_table(self, q: TableQuery | None) -> tuple[Any, str | None]:
+        """(value, tool error) of a gov-tables query `q` (Phase 3 spec §10.3):
+        `query_table(**q.to_kwargs())`, read as `answer` reads a v0.1 query (a bool lookup
+        gives true or false, which the exact scorer matches to the gold "yes" or "no")."""
+        if q is None:
+            return None, None
+        return self._query(q.to_kwargs())
+
+    def _query(self, kwargs: dict) -> tuple[Any, str | None]:
+        from adr_store.tools import AccessDenied, ToolError
+
         try:
-            res = self.tools.query_table(**from_gold_query(gq, self.corpus))
+            res = self.tools.query_table(**kwargs)
         except AccessDenied:
             raise
         except ToolError as e:
             return None, str(e)
         if res.tables != self.tables:
             return None, f"answered from tables {res.tables[:12]}, not {self.tables[:12]}"
-        value = {"count": res.count, "list": res.ids}.get(gq.op, res.value)
+        value = {"count": res.count, "list": res.ids}.get(kwargs["op"], res.value)
         return value, ("truncated" if res.truncated else None)
 
     def manifest(self) -> dict:

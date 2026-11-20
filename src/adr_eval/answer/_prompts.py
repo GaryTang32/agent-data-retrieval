@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from importlib import resources
 
-_NAMES = ("answer", "query_gen")
+_NAMES = ("answer", "query_gen", "query_gen_tables")
 
 
 def _file(name: str):

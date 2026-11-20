@@ -254,3 +254,33 @@ def fixture_numbered(system: str, user: str, repeat: int) -> str:
 def ecfr_store_at(path: Path) -> Store:
     """A store of both fixture versions of 33 CFR 117 and the Federal Register documents."""
     return make_tables_store(path, [ecfr_doc(ECFR_NEW), ecfr_doc(ECFR_OLD), *FR_DOCS])
+
+
+# -- gov-tables v0.1 (Phase 3 task 10) ------------------------------------------------------------
+
+_PHRASED = ("Table:", "Operation:", "Filters:", "Field:")
+
+
+def phrase_reply(system: str, user: str, repeat: int) -> str:
+    """A phrasing reply to the gov-tables question prompt: a question that names the drawn query
+    (the table, operation, filters and field lines of the message), so each query has its own."""
+    keep = [line for line in user.splitlines() if line.startswith(_PHRASED)]
+    return json.dumps({"question": "Phrase: " + " | ".join(keep)})
+
+
+def facts_store_at(path: Path, docs=None, *, rules=None) -> tuple[Store, str]:
+    """A store of both fixture versions of 33 CFR 117 and the Federal Register documents (or
+    `docs`) with its second-pass facts written (the fixture's numbered answers, behind a cached
+    stub whose cache sits beside the store); (store, facts id)."""
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+    from adr_store.tables import extract as ex
+    from adr_store.tables.contracts import load_contracts
+
+    docs = [ecfr_doc(ECFR_NEW), ecfr_doc(ECFR_OLD), *FR_DOCS] if docs is None else docs
+    store = make_tables_store(path, docs, rules=rules)
+    stub = CachedStubClient("stub-opus", Cache(Path(path).parent / f"{Path(path).name}-llm"),
+                            fixture_numbered)
+    facts, _ = ex.second_pass_all(store, stub, load_contracts(corpus="gov"))
+    facts_id, _ = ex.write_facts(store.path, store.snapshot_id, facts)
+    return store, facts_id

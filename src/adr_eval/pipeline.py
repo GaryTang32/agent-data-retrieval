@@ -8,6 +8,15 @@ that needed it in "json_recovered".
 
 A typed system (`Context.typed`, Phase 3 `p3-typed`) answers with the generated query
 instead: no answer call, no judge, exact scoring only, no retrieval metrics.
+
+Tables mode (`Context.mode == "tables"`, the gov-tables set, Phase 3 spec §10.3, §11): the query
+is a `TableQuery` from `generate_table_query` (one prompt and schema text for every system, so a
+cached call serves them all), scored against the item's gold query (`Context.table_queries`);
+a typed system answers it through `query_table`, a chunk system answers from its chunks as
+above. With `judge_enabled=False` (tables mode) no judge, proxy or self-consistency call is
+made: every answer is scored exactly. In tables mode only an input rejection stored as a
+failure (CachedFailure) or a malformed reply (ModelOutputError) becomes an "error" row; every
+other model failure propagates and stops the run (ruling P21).
 """
 
 from __future__ import annotations
@@ -18,12 +27,14 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
 from adr_eval.answer.answerer import answer_question
-from adr_eval.answer.query_gen import generate_query
+from adr_eval.answer.query_gen import generate_query, generate_table_query
 from adr_eval.golden.records import exec_gold_query
+from adr_eval.golden.tables import TableQuery, describe_text
 from adr_eval.llm import (
+    CachedFailure,
     Completion,
     ModelClient,
     ModelError,
@@ -210,6 +221,15 @@ def field_hits(gold: GoldQuery, gen: GoldQuery | None) -> dict[str, bool]:
     }
 
 
+def table_field_hits(gold: TableQuery | None, gen: TableQuery | None) -> dict[str, bool]:
+    """Per part of a table query (table, op, filters, field): whether the generated one
+    equals the gold one; all False without a generated query."""
+    parts = ("table", "op", "filters", "field")
+    if gen is None or gold is None:
+        return dict.fromkeys(parts, False)
+    return {p: getattr(gen, p) == getattr(gold, p) for p in parts}
+
+
 def route(q: GoldQuery) -> str:
     """The retrieval route a query implies (spec §6)."""
     if q.store == "typed_db":
@@ -287,12 +307,19 @@ class Context:
     records: list[dict]
     schema: dict[str, str]
     generator: ModelClient
-    judge: Judge
+    judge: Judge | None      # None in tables mode (`judge_enabled` False)
     # evidence groups by item id (`scoring.evidence_groups.build_all`); an item missing here
     # is scored with each evidence span as its own group
     groups: dict[str, list[list[Evidence]]] = field(default_factory=dict)
     # a typed system's answer to a generated query: (value, tool error); None for the chunk path
-    typed: Callable[[GoldQuery | None], tuple[Any, str | None]] | None = None
+    # (a TableQuery in tables mode)
+    typed: Callable[[Any], tuple[Any, str | None]] | None = None
+    # "tables": the gov-tables set (table queries); "v0.1": the v0.1 golden sets
+    mode: Literal["v0.1", "tables"] = "v0.1"
+    # False: no judge, proxy or self-consistency call (every answer scored exactly)
+    judge_enabled: bool = True
+    # tables mode: each item's gold query by item id
+    table_queries: dict[str, TableQuery] = field(default_factory=dict)
 
     def groups_for(self, item: GoldenItem) -> list[list[Evidence]]:
         return self.groups.get(item.id) or [[e] for e in item.evidence]
@@ -322,7 +349,8 @@ def _judge_check(item: GoldenItem, candidate: Any, repeat: int, purpose: str,
 
 def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
                    ctx: Context) -> dict:
-    """One result row. ModelError → outcome "error"; BudgetExceeded propagates.
+    """One result row. ModelError → outcome "error" (in tables mode only CachedFailure and
+    ModelOutputError; any other ModelError propagates); BudgetExceeded propagates.
 
     With `ctx.typed` the generated query is answered by `ctx.typed` and scored exactly
     (`typed_error` holds the tool's refusal, `metrics` is None)."""
@@ -343,17 +371,30 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
         row.update(metrics=None, typed_error=None)
     recovered: set[str] = set()  # stages whose reply was parsed by the recovering parser
     stage = "query_gen"
+    tables = ctx.mode == "tables"
+    # tables mode: only a stored input rejection or a malformed reply is an error row (P21)
+    row_errors = (CachedFailure, ModelOutputError) if tables else ModelError
     try:
-        gq, qc = generate_query(item.question, item.as_of, ctx.schema, ctx.generator, repeat,
-                                recover=True)
-        if gq is not None and _recovered(qc):
-            recovered.add("query")
-        hits_ = field_hits(item.gold_query, gq)
-        row.update(generated_query=gq.model_dump(mode="json") if gq else None,
-                   gold_query_field_hits=hits_, query_exact=all(hits_.values()),
-                   query_exec_match=exec_match(item.gold_query, gq, ctx.records),
-                   route_ok=route_ok(item.gold_query, gq),
-                   entity_f1=entity_f1(item.gold_query, gq))
+        if tables:
+            tq, qc = generate_table_query(item.question, describe_text(), ctx.generator,
+                                          repeat, recover=True)
+            gq = tq
+            if tq is not None and _recovered(qc):
+                recovered.add("query")
+            hits_ = table_field_hits(ctx.table_queries.get(item.id), tq)
+            row.update(generated_query=tq.model_dump(mode="json") if tq else None,
+                       gold_query_field_hits=hits_, query_exact=all(hits_.values()))
+        else:
+            gq, qc = generate_query(item.question, item.as_of, ctx.schema, ctx.generator,
+                                    repeat, recover=True)
+            if gq is not None and _recovered(qc):
+                recovered.add("query")
+            hits_ = field_hits(item.gold_query, gq)
+            row.update(generated_query=gq.model_dump(mode="json") if gq else None,
+                       gold_query_field_hits=hits_, query_exact=all(hits_.values()),
+                       query_exec_match=exec_match(item.gold_query, gq, ctx.records),
+                       route_ok=route_ok(item.gold_query, gq),
+                       entity_f1=entity_f1(item.gold_query, gq))
         if ctx.typed is not None:
             stage = "typed"
             value, row["typed_error"] = ctx.typed(gq)
@@ -376,6 +417,9 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
                                    "evidence_cited": rm.evidence_cited(cited, groups)}
             stage = "judge"
             outcome = exact_outcome(item.answer, sa)
+            if outcome is None and not ctx.judge_enabled:
+                raise ModelOutputError(f"a {item.answer.kind} answer needs the judge, which "
+                                       f"this run does not call")
             if outcome is None:
                 label, reason, jc = ctx.judge.judge(item.question, item.answer, sa.value)
                 if _recovered(jc):
@@ -385,10 +429,11 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
                 if repeat == 0:
                     row["judge_check"] = _judge_check(item, sa.value, 1, "self_consistency", ctx,
                                                      recovered)
-            elif repeat == 0 and item.answer.kind in _PROXY_KINDS and outcome in EXACT_TO_JUDGE:
+            elif ctx.judge_enabled and repeat == 0 and item.answer.kind in _PROXY_KINDS \
+                    and outcome in EXACT_TO_JUDGE:
                 row["judge_check"] = _judge_check(item, sa.value, 0, "proxy", ctx, recovered)
             row["outcome"] = outcome
-    except ModelError as e:
+    except row_errors as e:
         row["outcome"], row["error"] = "error", f"{stage}: {e}"
     finally:
         _ledger.entries = None
