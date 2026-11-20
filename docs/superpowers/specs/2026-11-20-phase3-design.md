@@ -183,9 +183,11 @@ Every stored value carries its provenance in a parallel structure, so the row st
   column is null with a null reason) and `review-pending` (reserved; nothing sets it in Phase 3).
 - A null value has a **null reason**: `absent` (the source has no such field or the text states
   nothing), `not_applicable`, `unparseable` (a value was present but failed its type),
-  `ungrounded` (the model gave a value whose quote did not re-slice), `model_error` (the call
-  failed after its retries; the failure is cached like a reply, so a zero-call rebuild
-  reproduces it instead of stopping).
+  `ungrounded` (the model gave a value whose quote did not re-slice), `model_error` (the provider
+  rejected the input itself; that failure is cached like a reply, so a zero-call rebuild
+  reproduces it instead of stopping). Transient failures, usage limits, authentication or
+  environment failures and budget stops are never cached: they stop the run, and a later run
+  retries them (P21).
 
 ### 5.4 The 3A tables
 
@@ -478,7 +480,9 @@ Every transport attempt, retries included, counts against the share, so real use
 
 Kept out of the budget by design: the proxy judge and self-consistency calls (gov-tables items
 are counts, lists, numbers and yes/no lookups, all scored exactly), and v0.1's evidence-only
-check call. Calls that fail are cached as failures (§5.3), so they are not repeated.
+check call. Calls the provider rejects for their input are cached as failures (§5.3), so they are not
+repeated; every other failure stops the run without being cached (P21), and each transport
+attempt, retries included, counts against the cap.
 
 At the cache's recorded medians (6.8 s per Sonnet call, 6.6 s per Opus call), about 2.8 hours of
 calls serially, about 45 minutes at the configured concurrency of 4. Billed to the Claude
@@ -545,6 +549,7 @@ extracting from 33 CFR 165 or 47 CFR 73 (three times the cost, less uniform text
 | P18 | `describe_tables` is an index plus per-table detail, each at most 8 KB | Fifteen-plus contracts with descriptions do not fit one 8 KB response; shortening descriptions would weaken the semantic layer | An agent needs a second call to read a table's column descriptions |
 | P19 | A `sql` statement's own top-level `ORDER BY` gets positional tie-breakers on every output column | Constraint 3 requires a total order; keeping the statement's order alone leaves ties in scan order | Slightly different order than a database client would show for ties |
 | P20 | `sql` bounds work per step: values limited to 64 KB and string-amplifying functions charged by result size against the step budget | A step budget alone does not bound CPU, memory or temporary disk when values are large | A legitimate query building very long strings is refused |
+| P21 | Only failures caused by the input (`InputRejected`: HTTP 400/413/422, or a stub) are cached as `model_error`; retries exhausted, usage limits, other 4xx, a missing binary, malformed responses and budget stops propagate and stop the run | Caching a usage limit or outage would write permanent `model_error` rows for sections the model never saw, and Task 11 runs against a subscription limit | A section that fails for a non-input reason every time stops every run until fixed, rather than becoming a null |
 
 ## 15. Build order
 
