@@ -1,6 +1,6 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
-retrieval-compare, retrieval-identical, p2-compare, p3-q1, probes (temporal, acl, equivalence; the
-table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
+retrieval-compare, retrieval-identical, p2-compare, p3-q1, p3-q2, probes (temporal, acl,
+equivalence; the table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
 tables-applicability, tables-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
 from __future__ import annotations
@@ -554,6 +554,9 @@ def _run(a: argparse.Namespace) -> int:
     tables = a.golden == runner.GOV_TABLES
     if tables and a.judge:
         raise runner.RunError("a gov-tables run makes no judge call; remove --judge")
+    if tables and a.max_calls is None and not (a.stub or a.dry_run):
+        raise runner.RunError("a gov-tables run needs --max-calls (its share of the approved "
+                              "budget; every transport attempt counts)")
     repeats = a.repeats if a.repeats is not None else (1 if tables else config["repeats"])
     try:
         run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
@@ -664,6 +667,30 @@ def _p3_q1(a: argparse.Namespace) -> int:
         a.summary.write_text(json.dumps(phase3.q1_summary(c), indent=2, sort_keys=True) + "\n",
                              encoding="utf-8")
     print(text, end="")
+    return 0
+
+
+def _p3_q2(a: argparse.Namespace) -> int:
+    """`adr-eval p3-q2 TYPED_RUN BASELINE_RUN`: Q2 (`phase3.q2_compare`, spec §12), printed and
+    written to `<typed run>/q2-<baseline run>.json` (it names items: keep it in runs/); with
+    `--summary OUT` the committed form (`phase3.q2_summary`) is written to OUT too."""
+    from adr_eval import phase3
+
+    typed, base = Path(a.typed_run), Path(a.baseline_run)
+    c = phase3.q2_compare(typed, base)
+    text = json.dumps(c, indent=2, sort_keys=True) + "\n"
+    (typed / f"q2-{base.name}.json").write_text(text, encoding="utf-8")
+    if a.summary is not None:
+        a.summary.parent.mkdir(parents=True, exist_ok=True)
+        a.summary.write_text(json.dumps(phase3.q2_summary(c), indent=2, sort_keys=True) + "\n",
+                             encoding="utf-8")
+    d = c["difference"]
+    print(text, end="")
+    print(f"Q2 {'pass' if c['passed'] else 'fail'}: p3-typed {c['typed']['accuracy']:.3f} "
+          f"(>= {phase3.Q2_MIN_ACCURACY}: {c['accuracy_ok']}), baseline-linear "
+          f"{c['baseline']['accuracy']:.3f}; difference {d['mean']:+.3f} [{d['ci95'][0]:+.3f}, "
+          f"{d['ci95'][1]:+.3f}] (lower bound > +{phase3.Q2_MARGIN}: {c['margin_ok']}); "
+          f"McNemar b={c['b']} c={c['c']} p={c['mcnemar_p']:.4g}; n={c['n']}")
     return 0
 
 
@@ -1445,6 +1472,17 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="run output root (default runs); writes p2-compare-<a>--<b>/")
     p.set_defaults(fn=_p2_compare)
+
+    p = sub.add_parser("p3-q2",
+                       help="Phase 3 Q2: a p3-typed gov-tables test run against a "
+                            "baseline-linear one (accuracies, paired bootstrap interval, pass "
+                            "flags, McNemar, misses); writes <typed run>/q2-<baseline run>.json")
+    p.add_argument("typed_run", help="the p3-typed gov-tables run directory")
+    p.add_argument("baseline_run", help="the baseline-linear gov-tables run directory")
+    p.add_argument("--summary", type=Path, default=None, metavar="OUT",
+                   help="also write the committed form (no item id, filter value or answer) "
+                        "to OUT")
+    p.set_defaults(fn=_p3_q2)
 
     p = sub.add_parser("p3-q1",
                        help="Phase 3 Q1: a p3-typed run against a baseline run on their "

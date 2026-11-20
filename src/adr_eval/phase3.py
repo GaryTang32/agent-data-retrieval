@@ -12,6 +12,11 @@
   misses and the `also_in` readings as counts.
 - `also_in_readings`: the research `also_in` wording problem (§4.2): gold compares the
   `;`-joined string exactly, the questions read as membership; both counts per item.
+- `q2_compare` / `q2_summary` (spec §12 Q2, 3B): a `p3-typed` run against a `baseline-linear`
+  run over the test items of gov-tables v0.1: accuracies, the paired bootstrap interval of the
+  accuracy difference (typed minus baseline), the pass flags, McNemar, and every miss with a
+  gov-tables cause; the summary names no item, filter value or answer. Q1 (`q1_compare`)
+  refuses gov-tables runs: its causes and the `also_in` readings are v0.1's.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ from adr_eval.golden.records import exec_gold_query, filter_records
 from adr_eval.llm import Completion
 from adr_eval.models import GoldenItem
 from adr_eval.runner import RunError
-from adr_eval.scoring.stats import mcnemar_exact
+from adr_eval.scoring.stats import mcnemar_exact, paired_bootstrap_ci
 
 SCHEMA_SHA256 = {"gov": "1a88b8fce3876640b72c5b752487e0b6682776bb6a4e5e296e5ace2c24cdeef6",
                  "research": "01c9cd8529b8b411be81bc5b516abd82919876ff07c496eb2019aa464f8104ca"}
@@ -34,6 +39,11 @@ QUERY_GEN_SHA256 = "249b0449466325d45b4c05813b8fbff7bf108070bb816feaf72cffc88d59
 BASELINE_RUNS = {"gov": "runs/gov-baseline-linear-test-20261113T094503",
                  "research": "runs/research-baseline-linear-test-20261113T094721"}
 TYPED_SYSTEM = "p3-typed"
+BASELINE_SYSTEM = "baseline-linear"
+GOV_TABLES = "gov-tables"
+Q2_MIN_ACCURACY = 0.80     # spec §12 Q2: p3-typed accuracy at least this
+Q2_MARGIN = 0.02           # and the interval's lower bound above this
+Q2_SEED, Q2_RESAMPLES = 20261108, 10_000
 _SCHEMA_HEAD, _QUESTION = "Record schema:\n", "\n\nQuestion: "
 
 
@@ -139,6 +149,11 @@ def q1_compare(typed_run: Path, baseline_run: Path) -> dict:
     cause."""
     tcfg, typed = _run(typed_run)
     bcfg, base = _run(baseline_run)
+    for path, cfg in ((typed_run, tcfg), (baseline_run, bcfg)):
+        if cfg.get("golden_set", "v0.1") != "v0.1":
+            raise RunError(f"{path}: a {cfg['golden_set']} run; Q1 compares v0.1 count_filter "
+                           f"runs (its causes and also_in readings are v0.1's): use `adr-eval "
+                           f"p3-q2` for gov-tables")
     if tcfg.get("system") != TYPED_SYSTEM:
         raise RunError(f"{typed_run}: not a {TYPED_SYSTEM} run (system "
                        f"{tcfg.get('system')!r})")
@@ -251,3 +266,124 @@ def also_in_readings(items: list[GoldenItem], records: list[dict]) -> list[dict]
                     "differs": n_exact != n_member})
     return out
 
+
+
+# -- Q2: gov-tables v0.1 (3B) ---------------------------------------------------------------------
+
+_QUERY_PARTS = ("table", "op", "filters", "field")
+
+
+def _typed_tables_cause(row: dict) -> str:
+    """Why a p3-typed gov-tables row is not correct: an error, an unparseable query, a refused
+    query (an unknown column named apart), a query that differs from the gold one, or a query
+    equal to the gold one whose answer differs (the tables differ from the second-pass facts)."""
+    if row["outcome"] == "error":
+        return "error"
+    if row.get("generated_query") is None:
+        return "unparseable query"
+    if row.get("typed_error") and row["typed_error"] != "truncated":
+        return ("unknown column" if row["typed_error"].startswith("unknown column")
+                else "query refused")
+    if not row.get("query_exact"):
+        return "query differs from gold"
+    return "query equals gold, wrong value"
+
+
+def _baseline_tables_cause(row: dict) -> str:
+    if row["outcome"] in ("error", "abstained"):
+        return row["outcome"]
+    if row.get("generated_query") is None:
+        return "wrong value (unparseable query)"
+    return "wrong value"
+
+
+def _differs(row: dict) -> list[str]:
+    """The parts of the generated table query that differ from the gold one."""
+    hits = row.get("gold_query_field_hits") or {}
+    return [p for p in _QUERY_PARTS if hits.get(p) is False]
+
+
+def _tables_shape(q: dict | None) -> dict | None:
+    """A generated table query without its values: table, op, sorted filter keys, field."""
+    if q is None:
+        return None
+    return {"table": q.get("table"), "op": q.get("op"),
+            "filter_keys": sorted(q.get("filters") or {}), "field": q.get("field")}
+
+
+def q2_compare(typed_run: Path, baseline_run: Path) -> dict:
+    """Q2 (spec §12): a `p3-typed` run against a `baseline-linear` run, both complete
+    single-repeat test-split runs of the same gov-tables v0.1 file (`golden_sha256`) over the
+    same items. Each item scores 1 when correct, else 0 (an error is 0). `ci` is
+    `paired_bootstrap_ci(baseline, typed)` (mean of typed minus baseline, 95%, seed 20261108,
+    10,000 resamples); Q2 passes when the typed accuracy is at least 0.80 and the lower bound is
+    above +0.02. `b` counts items only the typed system gets right, `c` the reverse, and
+    `mcnemar_p` is the exact test on them. Each miss carries its cause."""
+    tcfg, typed = _run(typed_run)
+    bcfg, base = _run(baseline_run)
+    for path, cfg, system in ((typed_run, tcfg, TYPED_SYSTEM),
+                              (baseline_run, bcfg, BASELINE_SYSTEM)):
+        if cfg.get("golden_set") != GOV_TABLES:
+            raise RunError(f"{path}: not a {GOV_TABLES} run (golden set "
+                           f"{cfg.get('golden_set', 'v0.1')!r}); Q2 compares gov-tables runs")
+        if cfg.get("system") != system:
+            raise RunError(f"{path}: not a {system} run (system {cfg.get('system')!r})")
+        if cfg.get("split") != "test":
+            raise RunError(f"{path}: split {cfg.get('split')!r}; Q2 is measured on the test "
+                           f"split")
+    if tcfg.get("golden_sha256") != bcfg.get("golden_sha256"):
+        raise RunError(f"the runs are not comparable: golden set "
+                       f"{str(tcfg.get('golden_sha256'))[:12]} ({Path(typed_run).name}) against "
+                       f"{str(bcfg.get('golden_sha256'))[:12]} ({Path(baseline_run).name})")
+    if set(typed) != set(base) or not typed:
+        raise RunError(f"the runs cover different items: {len(set(typed) - set(base))} only in "
+                       f"{Path(typed_run).name}, {len(set(base) - set(typed))} only in "
+                       f"{Path(baseline_run).name}" if typed else
+                       f"{typed_run}: no items to compare")
+    ids = sorted(typed)
+    t = [1.0 if typed[i]["outcome"] == "correct" else 0.0 for i in ids]
+    x = [1.0 if base[i]["outcome"] == "correct" else 0.0 for i in ids]
+    diff, lo, hi = paired_bootstrap_ci(x, t, n=Q2_RESAMPLES, seed=Q2_SEED)
+    b = sum(ti == 1.0 and xi == 0.0 for ti, xi in zip(t, x, strict=True))
+    c = sum(xi == 1.0 and ti == 0.0 for ti, xi in zip(t, x, strict=True))
+    n = len(ids)
+    acc_t, acc_b = sum(t) / n, sum(x) / n
+    return {
+        "typed_run": Path(typed_run).name, "baseline_run": Path(baseline_run).name,
+        "golden_sha256": tcfg.get("golden_sha256"), "facts": tcfg.get("facts"), "n": n,
+        "typed": {"system": TYPED_SYSTEM, "correct": int(sum(t)), "accuracy": acc_t},
+        "baseline": {"system": BASELINE_SYSTEM, "correct": int(sum(x)), "accuracy": acc_b},
+        "difference": {"mean": diff, "ci95": [lo, hi], "seed": Q2_SEED,
+                       "resamples": Q2_RESAMPLES},
+        "thresholds": {"min_accuracy": Q2_MIN_ACCURACY, "margin": Q2_MARGIN},
+        "accuracy_ok": acc_t >= Q2_MIN_ACCURACY, "margin_ok": lo > Q2_MARGIN,
+        "passed": acc_t >= Q2_MIN_ACCURACY and lo > Q2_MARGIN,
+        "b": b, "c": c, "mcnemar_p": mcnemar_exact(b, c),
+        "misses": [{"item_id": i, "outcome": typed[i]["outcome"],
+                    "cause": _typed_tables_cause(typed[i]), "differs": _differs(typed[i]),
+                    "typed_error": typed[i].get("typed_error"), "error": typed[i].get("error"),
+                    "value": _value(typed[i]), "generated_query": typed[i].get("generated_query")}
+                   for i in ids if typed[i]["outcome"] != "correct"],
+        "baseline_misses": [{"item_id": i, "outcome": base[i]["outcome"],
+                             "cause": _baseline_tables_cause(base[i]),
+                             "error": base[i].get("error"), "value": _value(base[i])}
+                            for i in ids if base[i]["outcome"] != "correct"],
+    }
+
+
+def q2_summary(c: dict) -> dict:
+    """The committed form of a `q2_compare` result: the counts, accuracies, interval, pass
+    flags and McNemar test; typed misses counted by outcome, cause, differing query parts and
+    the generated query's shape (table, op, filter keys, field); baseline misses counted by
+    outcome and cause. No item id, filter value, answer or error text."""
+    misses = [{"outcome": m["outcome"], "cause": m["cause"], "differs": m["differs"],
+               "query": _tables_shape(m["generated_query"])} for m in c["misses"]]
+    counted: dict[str, dict] = {}
+    for m in misses:
+        counted.setdefault(json.dumps(m, sort_keys=True), {**m, "n": 0})["n"] += 1
+    out = {k: c[k] for k in ("typed_run", "baseline_run", "golden_sha256", "facts", "n",
+                             "typed", "baseline", "difference", "thresholds", "accuracy_ok",
+                             "margin_ok", "passed", "b", "c", "mcnemar_p")}
+    out.update(misses=[counted[k] for k in sorted(counted)],
+               baseline_misses=_count_rows(c["baseline_misses"], ("outcome", "cause")))
+    return out

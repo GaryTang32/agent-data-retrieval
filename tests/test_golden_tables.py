@@ -36,6 +36,7 @@ from adr_eval.llm import CachedStubClient
 from adr_eval.models import Answer, GoldQuery, write_items
 from adr_eval.pipeline import Budget, BudgetExceeded, MeteredClient
 from adr_store.tables.build import build_tables
+from adr_store.tables.engine import run_query
 from adr_store.tables.extract import load_facts, units
 from adr_store.tables.gate import gate, gold_cases
 from tests.store.tables_fixtures import (
@@ -530,3 +531,42 @@ def test_gold_cases_read_a_file_mixing_v01_and_gov_tables_items(tmp_path, facts_
     cases = gold_cases(path, "gov")
     assert [c[0] for c in cases] == ["gov-count_filter-001", *(i.id for i in items)]
     assert cases[0][1] == {"table": "fr_documents", "filters": {"type": "Rule"}, "op": "count"}
+
+
+# -- fix round 1 ---------------------------------------------------------------------------------
+
+
+def test_a_single_match_lookup_is_generated_end_to_end(tmp_path, facts_env):
+    """Generation yields lookups (numeric and yes / no) whose one matching row is the sampled
+    row: the answer is that row's field, its quote is in the evidence, and the gate case
+    expects the value `query_table` returns."""
+    store, db = facts_env["store"], facts_env["db"]
+    items = generate(store.path, facts_env["facts_id"], stub_of(tmp_path), n=40)
+    lookups = [i for i in items if i.qtype == "lookup"]
+    assert {i.answer.kind for i in lookups} == {"number", "id"}
+    for i in lookups:
+        q = i.query
+        rows = db.execute(f"SELECT count(*) FROM {q.table}")   # the table is not empty
+        assert rows[0][0] > 1
+        assert answer_of(q, db) == i.answer and q.field not in {
+            k.split("__")[0] for k in q.filters}
+        out = run_query(db, q.table, q.filters, "lookup", fields=[q.field])
+        assert len(out.rows) == 1                 # exactly one row matches
+        prov = out.rows[0]["prov"][q.field]
+        assert {(e.char_start, e.char_end) for e in i.evidence} >= {(prov["start"], prov["end"])}
+        assert out.value == tables.expected_value(i)
+    path = tmp_path / "gold.jsonl"
+    path.write_text("".join(i.model_dump_json() + "\n" for i in lookups))
+    assert [c[2] for c in gold_cases(path, "gov")] == [tables.expected_value(i) for i in lookups]
+
+
+def test_facts_without_an_applicability_overlay_are_refused(tmp_path):
+    from adr_store import applicability as ap
+    from adr_store.tables.overlay import TablesError
+
+    store, facts_id = facts_store_at(tmp_path / "store")
+    ap.overlay_path(store.path, store.snapshot_id).unlink()
+    with pytest.raises(TablesError, match="no applicability overlay"):
+        facts_db(store.path, load_facts(store.path, facts_id), units(store))
+    with pytest.raises(TablesError, match="no applicability overlay"):
+        generate(store.path, facts_id, stub_of(tmp_path), n=1)

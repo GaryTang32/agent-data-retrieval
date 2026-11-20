@@ -437,3 +437,191 @@ def test_a_stub_run_replies_with_the_gold_table_queries(env):
         rows = load_rows(env["out"] / run_id)
         assert len(rows) == N_TEST and all(r["outcome"] == "correct" for r in rows), system
         assert config_json(env["out"] / run_id)["count_attempts"] is False
+
+
+# -- fix round 1: the call cap, cached clients and Q2 --------------------------------------------
+
+
+def test_a_generator_without_a_reply_cache_is_refused(env):
+    with pytest.raises(RunError, match="needs a cached client, not StubClient"):
+        tables_run(env, "p3-typed", StubClient(harness_fn(env["items"])))
+
+
+def test_adr_eval_run_gov_tables_needs_max_calls(env, monkeypatch, capsys):
+    code, out, err = run_cli(env, monkeypatch, capsys, "--system", "p3-typed", "--generator",
+                             "claude_code_sonnet", "--out", env["out"])
+    assert code == 2 and "needs --max-calls" in err and not env["out"].exists()
+
+
+def wrong_value(item):
+    return {"number": item.answer.value + 1 if isinstance(item.answer.value, float) else 999,
+            "set": ["999.999"], "id": "maybe"}[item.answer.kind]
+
+
+@pytest.fixture
+def q2_runs(env):
+    """A p3-typed and a baseline-linear test run with chosen misses. Typed: an unknown column,
+    an unparseable reply, a flipped op and an input rejection (an error); baseline: two wrong
+    values and the same input rejection (the query call is shared, so it is an error there
+    too)."""
+    items = env["items"]
+    t = [i for i in items if i.split == "test"]
+    flip = "list" if t[2].query.op != "list" else "count"
+    queries = {t[0].id: TableQuery(table=t[0].query.table, op="count", filters={"colour": "x"}),
+               t[1].id: "no query here",
+               t[2].id: t[2].query.model_copy(update={"op": flip, "field": None})}
+
+    def fail(item, system):
+        if item.id == t[4].id and system == QUERY_PROMPT:
+            raise llm.InputRejected("HTTP 400: too long")
+
+    gen = stub(env, harness_fn(items, queries=queries, fail=fail,
+                               answers={t[3].id: wrong_value(t[3]), t[0].id: wrong_value(t[0])}))
+    typed = tables_run(env, "p3-typed", gen)
+    linear = tables_run(env, "baseline-linear", gen)
+    return {"typed": typed, "linear": linear, "t": t, "items": items}
+
+
+def test_p3_q2_computes_the_paired_interval_and_the_causes(q2_runs):
+    from adr_eval.phase3 import q2_compare
+    from adr_eval.scoring.stats import mcnemar_exact, paired_bootstrap_ci
+
+    r, t = q2_runs, q2_runs["t"]
+    c = q2_compare(r["typed"], r["linear"])
+    typed_rows = {x["item_id"]: x for x in load_rows(r["typed"])}
+    base_rows = {x["item_id"]: x for x in load_rows(r["linear"])}
+    ids = sorted(typed_rows)
+    tv = [float(typed_rows[i]["outcome"] == "correct") for i in ids]
+    bv = [float(base_rows[i]["outcome"] == "correct") for i in ids]
+    assert tv.count(1.0) == 4 and bv.count(1.0) == 5        # 4 typed misses, 3 baseline
+    assert c["n"] == N_TEST
+    assert c["typed"]["accuracy"] == 0.5 and c["baseline"]["accuracy"] == 0.625
+    mean, lo, hi = paired_bootstrap_ci(bv, tv, n=10_000, seed=20261108)
+    assert c["difference"] == {"mean": mean, "ci95": [lo, hi], "seed": 20261108,
+                               "resamples": 10_000}
+    assert mean == -0.125
+    assert (c["b"], c["c"]) == (1, 2) and c["mcnemar_p"] == mcnemar_exact(1, 2)
+    assert c["accuracy_ok"] is False and c["margin_ok"] is False and c["passed"] is False
+    causes = {m["item_id"]: m["cause"] for m in c["misses"]}
+    assert causes == {t[0].id: "unknown column", t[1].id: "unparseable query",
+                      t[2].id: "query differs from gold", t[4].id: "error"}
+    differs = {m["item_id"]: m["differs"] for m in c["misses"]}
+    assert differs[t[2].id] == ["op"] or differs[t[2].id] == ["op", "field"]
+    assert {m["item_id"]: m["cause"] for m in c["baseline_misses"]} == \
+        {t[0].id: "wrong value", t[3].id: "wrong value", t[4].id: "error"}
+
+
+def test_the_q2_pass_flags_follow_the_thresholds(env):
+    from adr_eval.phase3 import q2_compare
+
+    gen = stub(env, harness_fn(env["items"], answers={
+        i.id: wrong_value(i) for i in env["items"] if i.split == "test"}))
+    c = q2_compare(tables_run(env, "p3-typed", gen), tables_run(env, "baseline-linear", gen))
+    assert c["typed"]["accuracy"] == 1.0 and c["baseline"]["accuracy"] == 0.0
+    assert c["difference"]["mean"] == 1.0 and c["difference"]["ci95"] == [1.0, 1.0]
+    assert c["accuracy_ok"] and c["margin_ok"] and c["passed"]
+    assert c["misses"] == [] and (c["b"], c["c"]) == (N_TEST, 0)
+
+
+def _strings(obj) -> list[str]:
+    if isinstance(obj, str):
+        return [obj]
+    if isinstance(obj, dict):
+        return [s for k, v in obj.items() for s in [k, *_strings(v)]]
+    if isinstance(obj, list):
+        return [s for v in obj for s in _strings(v)]
+    return []
+
+
+def test_the_q2_summary_names_no_item_filter_value_answer_or_error(q2_runs):
+    import re
+
+    from adr_eval.phase3 import q2_compare, q2_summary
+
+    c = q2_compare(q2_runs["typed"], q2_runs["linear"])
+    s = q2_summary(c)
+    texts = _strings(s)
+    secret = set()
+    for i in q2_runs["items"]:
+        secret |= {v for v in i.query.filters.values() if isinstance(v, str)}
+        secret |= {x for v in i.query.filters.values() if isinstance(v, list) for x in v}
+        secret |= set(i.answer.value) if isinstance(i.answer.value, list) else set()
+        secret.add(i.question)
+    # the injected values (a filter key such as "colour" is a column name and may appear)
+    secret |= {"no query here", "999.999", "maybe", "HTTP 400: too long"}
+    for text in texts:
+        assert not re.search(r"gov-tables-\d{3}", text), text
+        assert not any(v in text for v in secret if len(v) > 1), text
+    for key in ("n", "typed", "baseline", "difference", "passed", "b", "c", "mcnemar_p"):
+        assert s[key] == c[key]
+    assert sum(m["n"] for m in s["misses"]) == len(c["misses"]) == 4
+    assert sum(m["n"] for m in s["baseline_misses"]) == 3
+    assert {m["cause"] for m in s["misses"]} == {"unknown column", "unparseable query",
+                                                  "query differs from gold", "error"}
+    unknown = next(m for m in s["misses"] if m["cause"] == "unknown column")
+    assert unknown["query"]["filter_keys"] == ["colour"]   # column names, not values
+    # no answer, question, error text or generated query is carried, not even as a number
+    def keys(obj):
+        if isinstance(obj, dict):
+            return set(obj) | {k for v in obj.values() for k in keys(v)}
+        return {k for v in obj for k in keys(v)} if isinstance(obj, list) else set()
+
+    assert not keys(s) & {"value", "question", "error", "typed_error", "generated_query",
+                          "item_id", "answer", "filters"}
+
+
+def test_the_typed_causes_cover_a_query_equal_to_gold_with_another_answer():
+    from adr_eval.phase3 import _typed_tables_cause
+
+    base = {"outcome": "wrong", "generated_query": {"table": "t"}, "typed_error": None,
+            "query_exact": True}
+    assert _typed_tables_cause(base) == "query equals gold, wrong value"
+    assert _typed_tables_cause({**base, "typed_error": "truncated"}) == \
+        "query equals gold, wrong value"
+    assert _typed_tables_cause({**base, "typed_error": "limit must be an integer"}) == \
+        "query refused"
+    assert _typed_tables_cause({**base, "outcome": "error"}) == "error"
+
+
+def test_p3_q2_refuses_runs_it_cannot_compare(q2_runs, env):
+    from adr_eval.phase3 import q2_compare
+
+    typed, linear = q2_runs["typed"], q2_runs["linear"]
+    with pytest.raises(RunError, match="not a p3-typed run"):
+        q2_compare(linear, typed)
+    dev = tables_run(env, "p3-typed", stub(env, harness_fn(env["items"])), split="dev")
+    with pytest.raises(RunError, match="split 'dev'; Q2 is measured on the test split"):
+        q2_compare(dev, linear)
+    cfg = config_json(linear)
+    (linear / "config.json").write_text(json.dumps({**cfg, "golden_sha256": "f" * 64}))
+    with pytest.raises(RunError, match="not comparable: golden set"):
+        q2_compare(typed, linear)
+    (linear / "config.json").write_text(json.dumps({k: v for k, v in cfg.items()
+                                                    if k != "golden_set"}))
+    with pytest.raises(RunError, match="not a gov-tables run"):
+        q2_compare(typed, linear)
+    (linear / "config.json").write_text(json.dumps({**cfg, "status": "failed"}))
+    with pytest.raises(RunError, match="status 'failed'"):
+        q2_compare(typed, linear)
+
+
+def test_p3_q1_refuses_gov_tables_runs(q2_runs):
+    from adr_eval.phase3 import q1_compare
+
+    with pytest.raises(RunError, match="use `adr-eval p3-q2` for gov-tables"):
+        q1_compare(q2_runs["typed"], q2_runs["linear"])
+
+
+def test_the_p3_q2_command_writes_the_comparison_and_the_summary(q2_runs, tmp_path, capsys):
+    typed, linear = q2_runs["typed"], q2_runs["linear"]
+    out = tmp_path / "summary" / "q2.json"
+    assert main(["p3-q2", str(typed), str(linear), "--summary", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert "Q2 fail: p3-typed 0.500" in printed and "baseline-linear 0.625" in printed
+    assert "McNemar b=1 c=2" in printed
+    full = json.loads((typed / f"q2-{linear.name}.json").read_text())
+    assert full["n"] == N_TEST and len(full["misses"]) == 4
+    summary = json.loads(out.read_text())
+    assert summary["passed"] is False and "misses" in summary
+    code = main(["p3-q1", str(typed), str(linear)])
+    assert code == 2 and "p3-q2" in capsys.readouterr().err

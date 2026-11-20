@@ -69,6 +69,7 @@ from adr_store.tables.extract import (
     load_facts,
     units,
 )
+from adr_store.tables.overlay import TablesError
 from adr_store.tables.provenance import RowRecord, sort_key
 from adr_store.tables.semantic import describe
 
@@ -182,12 +183,15 @@ def phrasing_message(q: TableQuery, cs: dict[str, Contract] | None = None) -> st
 def fact_rows(store_path: Path, facts: list[Facts], all_units: list[Unit]
               ) -> dict[str, list[RowRecord]]:
     """The drawbridge rows of the facts whose documents the default applicability filters
-    admit (the version in force; every row when the store has no applicability overlay)."""
+    admit (the version in force); TablesError when the store has no applicability overlay
+    (without it every version would count)."""
     rows = drawbridge_rows(facts, all_units)
     store = Store.open(store_path)
     overlay = ap.load_overlay(store_path, store.snapshot_id)
     if overlay is None:
-        return rows
+        raise TablesError(f"{store_path}: no applicability overlay for snapshot "
+                          f"{store.snapshot_id[:12]}: the version in force is unknown\nfix: "
+                          f"derive it (`adr applicability derive --store {store_path}`)")
     docs = {r.doc_id for recs in rows.values() for r in recs}
     admitted, _ = overlay.allowed_docs(docs, ap.Filters())
     return {t: [r for r in recs if r.doc_id in admitted] for t, recs in rows.items()}

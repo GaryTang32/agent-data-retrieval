@@ -600,10 +600,14 @@ def run(
                  prices, typed, tables)
         return run_id
 
-    # tables mode with a cached client (every real one): each transport attempt takes a unit
-    # and an input rejection is stored as a failure; a stub without a reply cache has neither
-    # retries nor a failure cache: one unit per call
+    # tables mode: each transport attempt takes a unit and an input rejection is stored as a
+    # failure, which needs a cached client (every real adapter is one); only the built-in
+    # `stub` generator (no model, no retries) is metered per call
     cached = tables and isinstance(generator, _CachedClient)
+    if tables and not cached and not stub:
+        raise RunError(f"a {GOV_TABLES} run counts every transport attempt and caches input "
+                       f"rejections, which needs a cached client, not "
+                       f"{type(generator).__name__}")
     budget = Budget(max_dollars, max_calls, count_attempts=cached)
     gen_meter = MeteredClient(generator, budget, prices)
     judge_meter = None if tables else MeteredClient(judge, budget, prices)
