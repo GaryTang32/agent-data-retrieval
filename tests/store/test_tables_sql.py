@@ -10,7 +10,12 @@ import pytest
 from adr_store.tables import overlay as ov
 from adr_store.tables import sqlguard
 from adr_store.tables.build import build_tables
-from adr_store.tables.contracts import MAX_VALUE_BYTES, load_contracts
+from adr_store.tables.contracts import (
+    MAX_ROW_BYTES,
+    MAX_VALUE_BYTES,
+    load_contracts,
+    validate_row,
+)
 from adr_store.tables.engine import ViewDB, run_query
 from adr_store.tables.provenance import RowRecord
 from adr_store.tables.sqlguard import (
@@ -443,7 +448,9 @@ def test_a_wide_result_is_refused_without_holding_it(gov_db):
 
 
 def test_values_are_limited_to_the_shared_bound(gov_db):
-    assert SQL_MAX_VALUE >= MAX_VALUE_BYTES   # every stored value can be read
+    # one bound for reading and building: every stored value and row can be read
+    assert SQL_MAX_VALUE == 16_384
+    assert SQL_MAX_VALUE >= MAX_ROW_BYTES >= MAX_VALUE_BYTES
     near = SQL_MAX_VALUE - 100
     ok = f"SELECT length(replace(printf('%{near}d', 1), ' ', 'x'))"
     assert run_sql(gov_db, ok).rows == [[near]]
@@ -600,3 +607,22 @@ def test_query_table_works_after_run_sql(gov_db):
     assert {"value": "33 CFR 117", "count": 3} in groups
     rows = run_query(gov_db, "fr_documents", {"id": "2024-00003"}, "lookup").rows
     assert rows[0]["row"]["cfr_parts"] == ["47 CFR 73"]
+
+
+def test_a_stored_row_at_the_row_limit_is_selected_and_sorted_whole():
+    from tests.store.test_tables_overlay import CONTRACT, D, fr_row, with_row
+    rows = [with_row(fr_row(D, f"2024-0001{i}"), {"title": "t" * 6000, "action": "a" * 6000})
+            for i in range(3)]
+    assert all(validate_row(CONTRACT, r) == [] for r in rows)   # rows a build would store
+    db = ViewDB.from_rows({"fr_documents": CONTRACT}, {"fr_documents": rows})
+    try:
+        out = run_sql(db, "SELECT * FROM fr_documents")   # sorted on every output column
+        assert [r[1] for r in out.rows] == ["2024-00010", "2024-00011", "2024-00012"]
+        # DISTINCT with its own ORDER BY carries the row twice in SQLite's sorter once the
+        # tie-breakers are added (a known limit); DISTINCT in a subquery reads it whole
+        e = _refused(db, "SELECT DISTINCT * FROM fr_documents ORDER BY id DESC")
+        assert e.kind == "rows"
+        sub = "SELECT * FROM (SELECT DISTINCT * FROM fr_documents) ORDER BY id DESC"
+        assert [r[1] for r in run_sql(db, sub).rows] == ["2024-00012", "2024-00011", "2024-00010"]
+    finally:
+        db.close()

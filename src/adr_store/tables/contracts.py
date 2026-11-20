@@ -28,9 +28,14 @@ CONTRACT_DIR = REPO_ROOT / "config" / "tables"
 ColumnType = Literal["text", "int", "real", "bool", "date", "text[]", "real[]"]
 _INT64 = 2**63
 # The most bytes a stored value, or its provenance, takes in its stored form (UTF-8 text, or
-# canonical JSON for a list or provenance). Guarded SQL (`sqlguard`) reads values with the same
-# bound, so no stored value can be over it at read time (ruling P20).
+# canonical JSON for a list or provenance), and the most a whole stored row takes as its
+# canonical row record (row and provenance, the overlay line without its newline). Guarded SQL
+# (`sqlguard`) reads with SQLite's length limit at `MAX_ROW_BYTES`, which also bounds every row
+# SQLite builds (sorting, DISTINCT), so any stored row can be selected and sorted whole: the row
+# record repeats every column name, which outweighs SQLite's per-column record overhead
+# (ruling P20).
 MAX_VALUE_BYTES = 8192
+MAX_ROW_BYTES = 16_384
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -228,8 +233,9 @@ def validate_row(c: Contract, rec: RowRecord) -> list[str]:
     """What is wrong with `rec` under contract `c`; [] when it is valid. Checks that the row
     has exactly the stored columns, each value has its column's type (no coercion: a bool is not
     an int, a string is not a number) and allowed values, a null is allowed and has a null
-    reason, every value has provenance of the column's spec (one entry per list element), and
-    no value or provenance is over `MAX_VALUE_BYTES` in its stored form."""
+    reason, every value has provenance of the column's spec (one entry per list element), no
+    value or provenance is over `MAX_VALUE_BYTES` in its stored form, and the row record is
+    not over `MAX_ROW_BYTES`."""
     problems: list[str] = []
     stored = {col.name: col for col in c.stored_columns}
     for name in sorted(set(rec.row) - set(stored)):
@@ -257,4 +263,6 @@ def validate_row(c: Contract, rec: RowRecord) -> list[str]:
             problems.extend(found)
         elif _prov_bytes(rec.prov[name]) > MAX_VALUE_BYTES:
             problems.append(f"{name}: provenance over {MAX_VALUE_BYTES} bytes")
+    if len(canonical_json(rec)) - 1 > MAX_ROW_BYTES:
+        problems.append(f"row over {MAX_ROW_BYTES} bytes")
     return problems

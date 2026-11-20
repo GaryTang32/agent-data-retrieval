@@ -17,6 +17,7 @@ from adr_store.store import StoreError
 from adr_store.tables import overlay as ov
 from adr_store.tables.contracts import (
     CONTRACT_DIR,
+    MAX_ROW_BYTES,
     MAX_VALUE_BYTES,
     Contract,
     contract_sha256,
@@ -588,3 +589,16 @@ def test_a_build_with_a_9_kb_value_refuses_the_row(tmp_path):
     assert report["rejected"][0]["problems"] == ["action: value over 8192 bytes"]
     lines = (tmp_path / "tables" / SNAP / tf.file).read_text().splitlines()
     assert "2024-00009" not in "".join(lines)
+
+
+def test_a_stored_row_over_16_kb_is_a_problem(tmp_path):
+    assert MAX_ROW_BYTES == 16_384 >= 2 * MAX_VALUE_BYTES
+    wide = with_row(fr_row(D, "2024-00010"), {"title": "t" * 8000, "action": "a" * 8000})
+    assert len(canonical_json(wide)) - 1 > MAX_ROW_BYTES   # every value is under 8 KB
+    assert validate_row(CONTRACT, wide) == ["row over 16384 bytes"]
+    fits = with_row(fr_row(D, "2024-00011"), {"title": "t" * 6000, "action": "a" * 6000})
+    assert len(canonical_json(fits)) - 1 <= MAX_ROW_BYTES
+    assert validate_row(CONTRACT, fits) == []
+    tf = write_table(tmp_path, SNAP, CONTRACT, [fits, wide], report := {})
+    assert (tf.rows, tf.rejected) == (1, 1)
+    assert report["rejected"][0]["problems"] == ["row over 16384 bytes"]
