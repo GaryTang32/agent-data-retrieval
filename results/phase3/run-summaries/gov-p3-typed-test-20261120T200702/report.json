@@ -1,0 +1,413 @@
+{
+  "corpus": "gov",
+  "determinism": {
+    "answer_agreement": null,
+    "k": 1,
+    "pass^k": 1.0,
+    "retrieval_identity_rate": null
+  },
+  "determinism_violation": false,
+  "end_to_end": {
+    "abstention_rate": 0.0,
+    "accuracy": 1.0,
+    "by_qtype": {
+      "count_filter": {
+        "abstention_rate": 0.0,
+        "accuracy": 1.0,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "mean": 1.0,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 27,
+          "error": 0,
+          "partial": 0,
+          "wrong": 0
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 1.0,
+          "0.75": 1.0,
+          "0.9": 1.0
+        }
+      }
+    },
+    "by_rarity": {
+      "head": {
+        "abstention_rate": 0.0,
+        "accuracy": 1.0,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "mean": 1.0,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 27,
+          "error": 0,
+          "partial": 0,
+          "wrong": 0
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 1.0,
+          "0.75": 1.0,
+          "0.9": 1.0
+        }
+      }
+    },
+    "by_rarity_qtype": {
+      "head/count_filter": {
+        "abstention_rate": 0.0,
+        "accuracy": 1.0,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              1.0,
+              1.0
+            ],
+            "mean": 1.0,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                1.0,
+                1.0
+              ],
+              "mean": 1.0,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 27,
+          "error": 0,
+          "partial": 0,
+          "wrong": 0
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 1.0,
+          "0.75": 1.0,
+          "0.9": 1.0
+        }
+      }
+    },
+    "ci": {
+      "accuracy": {
+        "ci95": [
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "n": 27
+      },
+      "penalised": {
+        "0.5": {
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "n": 27
+        },
+        "0.75": {
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "n": 27
+        },
+        "0.9": {
+          "ci95": [
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "n": 27
+        }
+      }
+    },
+    "citation_precision": null,
+    "cost_usd": 0.0,
+    "counts": {
+      "abstained": 0,
+      "correct": 27,
+      "error": 0,
+      "partial": 0,
+      "wrong": 0
+    },
+    "error_count": 0,
+    "error_rate": 0.0,
+    "evidence_cited_rate": null,
+    "json_recovered_by_stage": {
+      "answer": 0,
+      "judge": 0,
+      "judge_check": 0,
+      "query": 0
+    },
+    "json_recovered_rows": 0,
+    "latency_n": 0,
+    "latency_p50_s": null,
+    "latency_p95_s": null,
+    "n": 27,
+    "partial_rate": 0.0,
+    "penalised": {
+      "0.5": 1.0,
+      "0.75": 1.0,
+      "0.9": 1.0
+    },
+    "spent_usd": 0.0,
+    "tokens": {
+      "in": 55027,
+      "out": 1757
+    }
+  },
+  "g1": {
+    "manifest": {
+      "applicability": "4c81d25fe905c0939e9e380d6c507ab8f6919768c34774dc6666062676792c3c",
+      "corpus": "gov",
+      "extraction": null,
+      "format_version": "0.1",
+      "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+      "tables": [
+        {
+          "contract_sha256": "15cff9c34ecbf81650db4c58a9026f4a8f0315db75e2ce8d79ead1e147df4c0a",
+          "contract_version": 1,
+          "file": "agencies-v1-3e057ea8ffc88ed1.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 278,
+          "sha256": "3e057ea8ffc88ed1af3f2411eefc482ecd95ea34f41825aa7ff749c2bae9ae19",
+          "table": "agencies"
+        },
+        {
+          "contract_sha256": "9acc077e1638ef9906e75abb94daa1f27518f4bdc0bba264cc236f79a430f96b",
+          "contract_version": 1,
+          "file": "cfr_parts-v1-2bfca69792c6bc0d.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 221,
+          "sha256": "2bfca69792c6bc0d2250975f945b6c84c716edfc604f042847d21b222c735e0a",
+          "table": "cfr_parts"
+        },
+        {
+          "contract_sha256": "44a4c6525c7d224489e5d56971d5f18aee8c32f9f8e13e492600fe0dbf825b3c",
+          "contract_version": 1,
+          "file": "dockets-v1-95bef43429e96cc6.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 171,
+          "sha256": "95bef43429e96cc6deb495b8f9c730d05564073cff236e30fc60697ed2ee0e53",
+          "table": "dockets"
+        },
+        {
+          "contract_sha256": "fe83edc0ea496aae87b60fb9e71e90239626326d1fd72de8ac437d1eede8c1e0",
+          "contract_version": 1,
+          "file": "fr_agencies-v1-1dfbcebd2414ba60.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 278,
+          "sha256": "1dfbcebd2414ba6069152cf37c961117917618d443e2befa37b786fdf7850e25",
+          "table": "fr_agencies"
+        },
+        {
+          "contract_sha256": "2628a8c939bee9a3c3acd34ec34694356d862d26f9a6dd10158465555ea1e42c",
+          "contract_version": 1,
+          "file": "fr_cfr_refs-v1-9cf55d63cf1bcdeb.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 221,
+          "sha256": "9cf55d63cf1bcdebc646f596669a734c6f4d9604ff4bf8f649558f46022f90ec",
+          "table": "fr_cfr_refs"
+        },
+        {
+          "contract_sha256": "1aaccae81c8a73c5f744ba3658040b82aa1d4ab2bd741a4ffa592ae486529cd8",
+          "contract_version": 1,
+          "file": "fr_dockets-v1-f8bf12bf472f2782.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 171,
+          "sha256": "f8bf12bf472f278257d43c637f931197574827c66ef895fe031c6c7977e188f8",
+          "table": "fr_dockets"
+        },
+        {
+          "contract_sha256": "5d832ea69c5a79f3a4afe09a419083b44c6e58707eed762f766ffc092aebdd89",
+          "contract_version": 1,
+          "file": "fr_documents-v1-5d8ac3b971b8366e.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 167,
+          "sha256": "5d8ac3b971b8366e872204f31150b091ddb659e50917c3670cc39f0a4e779ca8",
+          "table": "fr_documents"
+        },
+        {
+          "contract_sha256": "aab90a46e42e8b22a0ebd6f0ab4abd2fd4ac0b66fdbabc68243dad685a83fc8f",
+          "contract_version": 1,
+          "file": "waterways-v1-c3dc9b238d6ce15c.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 1320,
+          "sha256": "c3dc9b238d6ce15cb70aef853adefd659d97432381bdc23eda7ae8697850292c",
+          "table": "waterways"
+        }
+      ]
+    },
+    "tables": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8"
+  },
+  "g2": {
+    "entity_f1": 0.617283950617284,
+    "entity_n": 27,
+    "exact": 0.5925925925925926,
+    "exec_match": 1.0,
+    "exec_n": 27,
+    "n": 27,
+    "per_field": {
+      "as_of": 1.0,
+      "entities": 0.5925925925925926,
+      "filters": 1.0,
+      "op": 1.0,
+      "store": 1.0
+    },
+    "route_accuracy": 1.0,
+    "route_n": 27
+  },
+  "g3": {
+    "by_qtype": {},
+    "by_rarity": {},
+    "by_rarity_qtype": {},
+    "pooled": {
+      "ci": {
+        "coverage@10": null,
+        "mrr": null,
+        "ndcg@10": null,
+        "recall@10": null
+      },
+      "coverage@10": null,
+      "full_coverage": null,
+      "mrr": null,
+      "n": 0,
+      "n_multi_span": 0,
+      "ndcg@10": null,
+      "recall@10": null,
+      "tokens@10": null
+    }
+  },
+  "generator_model": "claude-sonnet-5-5",
+  "judge": {
+    "check_errors": 0,
+    "human_kappa": null,
+    "model": "claude-opus-5-5",
+    "proxy_agreement": null,
+    "proxy_kappa": null,
+    "proxy_kappa_binary": null,
+    "proxy_kappa_n": 0,
+    "proxy_kappa_note": "proxy, not human κ: judge vs the exact scorer on number/set/id items",
+    "same_family_judge": true,
+    "self_consistency": null,
+    "self_consistency_n": 0
+  },
+  "metrics_version": 2,
+  "n_items": 27,
+  "n_rows": 27,
+  "repeats": 1,
+  "run_id": "gov-p3-typed-test-20261120T200702",
+  "snapshot": "2ad8a136abbc0ae6f25f0570d74bc2a185fc3b99795054dfe59dddab5a26b532",
+  "split": "test",
+  "status": "complete",
+  "stub": false,
+  "system": "p3-typed",
+  "w": null,
+  "warnings": [
+    "judge and generator share a model family"
+  ]
+}

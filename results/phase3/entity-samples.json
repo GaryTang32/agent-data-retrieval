@@ -1,0 +1,3623 @@
+{
+  "corpora": {
+    "gov": {
+      "entities": {
+        "agencies": {
+          "clusters": 3,
+          "largest": [
+            {
+              "docs": 111,
+              "entity_id": "56d49bf4e3d4428fed7deb4fdb0cd95fe81db315fc3eafa0de87bf7131f7e5b9",
+              "forms": 1,
+              "key": "coast guard",
+              "raws": [
+                "Coast Guard"
+              ],
+              "rows": 111
+            },
+            {
+              "docs": 111,
+              "entity_id": "6f70bf5f45da006126d42514b5686c954226422aa3a59ef093dd7c7eba5c72a8",
+              "forms": 1,
+              "key": "homeland security department",
+              "raws": [
+                "Homeland Security Department"
+              ],
+              "rows": 111
+            },
+            {
+              "docs": 56,
+              "entity_id": "db65dd5a129bd9c14ca7a9a249017fe0fc2b0de9b5ca980aa32d822e599f1857",
+              "forms": 1,
+              "key": "federal communications commission",
+              "raws": [
+                "Federal Communications Commission"
+              ],
+              "rows": 56
+            }
+          ],
+          "merged": 0,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 278,
+          "sample": [
+            {
+              "docs": 56,
+              "entity_id": "db65dd5a129bd9c14ca7a9a249017fe0fc2b0de9b5ca980aa32d822e599f1857",
+              "forms": 1,
+              "key": "federal communications commission",
+              "raws": [
+                "Federal Communications Commission"
+              ],
+              "rows": 56
+            },
+            {
+              "docs": 111,
+              "entity_id": "6f70bf5f45da006126d42514b5686c954226422aa3a59ef093dd7c7eba5c72a8",
+              "forms": 1,
+              "key": "homeland security department",
+              "raws": [
+                "Homeland Security Department"
+              ],
+              "rows": 111
+            },
+            {
+              "docs": 111,
+              "entity_id": "56d49bf4e3d4428fed7deb4fdb0cd95fe81db315fc3eafa0de87bf7131f7e5b9",
+              "forms": 1,
+              "key": "coast guard",
+              "raws": [
+                "Coast Guard"
+              ],
+              "rows": 111
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 3
+        },
+        "cfr_parts": {
+          "clusters": 39,
+          "largest": [
+            {
+              "docs": 57,
+              "entity_id": "fa389f1f5dd397bf44275649857b28a75af57d74eaa9cdc7fa0ae56d92b1ad17",
+              "forms": 1,
+              "key": "33 cfr 165",
+              "raws": [
+                "33 CFR 165"
+              ],
+              "rows": 57
+            },
+            {
+              "docs": 56,
+              "entity_id": "f6fb81ae3c1f3c8eb90138e8ec5453014fd4d84b2d58aefe405622e8fde8b114",
+              "forms": 1,
+              "key": "33 cfr 117",
+              "raws": [
+                "33 CFR 117"
+              ],
+              "rows": 56
+            },
+            {
+              "docs": 56,
+              "entity_id": "1c9c67f44455e3210ba0de3b2411008de3893439c1afa9635dad301b807290fb",
+              "forms": 1,
+              "key": "47 cfr 73",
+              "raws": [
+                "47 CFR 73"
+              ],
+              "rows": 56
+            },
+            {
+              "docs": 5,
+              "entity_id": "3903f1c6e5f778c227a052ab60a139f2272650fcb61f9a2c59bafcdf28e3439e",
+              "forms": 1,
+              "key": "33 cfr 100",
+              "raws": [
+                "33 CFR 100"
+              ],
+              "rows": 5
+            },
+            {
+              "docs": 4,
+              "entity_id": "24e81d654576562eae289b799ee18a834cde82faf6be0027d76eca6a94a2cc47",
+              "forms": 1,
+              "key": "47 cfr 1",
+              "raws": [
+                "47 CFR 1"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 4,
+              "entity_id": "4dc40aada2f39ccbfaeb42b09a324eced6b3f34f9f8933ba82975d98f6a4ce1c",
+              "forms": 1,
+              "key": "47 cfr 74",
+              "raws": [
+                "47 CFR 74"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 3,
+              "entity_id": "5e27c1d16a5daccc50baf7e49a6b08fa4b166dff57a65d398a4ce4a82eab3749",
+              "forms": 1,
+              "key": "47 cfr 27",
+              "raws": [
+                "47 CFR 27"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "5e9a10c9b733da97b32d45a2bae8a6c14ef838f308b96a8bd82101662e9427e3",
+              "forms": 1,
+              "key": "47 cfr 76",
+              "raws": [
+                "47 CFR 76"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "c6e8ff57188ffce804c585a5db265613c1e9078ff941f1e43f6b75b23ce1ffc9",
+              "forms": 1,
+              "key": "47 cfr 0",
+              "raws": [
+                "47 CFR 0"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "4a387bc032cb5aa17ec13436aa683fe6eee2964cf276e44233d45c32822bbda4",
+              "forms": 1,
+              "key": "47 cfr 25",
+              "raws": [
+                "47 CFR 25"
+              ],
+              "rows": 2
+            }
+          ],
+          "merged": 0,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 221,
+          "sample": [
+            {
+              "docs": 1,
+              "entity_id": "d14d078c9dd233219aded6a0d828d14833ca1fb3482c790d6ea03d99eb2aa8b0",
+              "forms": 1,
+              "key": "47 cfr 2",
+              "raws": [
+                "47 CFR 2"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "6479688784e6907130cb8e73e66f48269b2972811142451317662d40d6097c92",
+              "forms": 1,
+              "key": "47 cfr 95",
+              "raws": [
+                "47 CFR 95"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 56,
+              "entity_id": "1c9c67f44455e3210ba0de3b2411008de3893439c1afa9635dad301b807290fb",
+              "forms": 1,
+              "key": "47 cfr 73",
+              "raws": [
+                "47 CFR 73"
+              ],
+              "rows": 56
+            },
+            {
+              "docs": 1,
+              "entity_id": "0683f0f2cfb13151cf7a6f7349540a082c06aa69786a224dbe688c5eec541a6f",
+              "forms": 1,
+              "key": "47 cfr 101",
+              "raws": [
+                "47 CFR 101"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "74575b5acf561bb40f513eec260ef541272da50b21f39cbf9e7e16fe128eb01a",
+              "forms": 1,
+              "key": "46 cfr 163",
+              "raws": [
+                "46 CFR 163"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "26c046f12209e207a461a97124bede6b3080a32fa95d82113b2accf68c88e0a0",
+              "forms": 1,
+              "key": "33 cfr 80",
+              "raws": [
+                "33 CFR 80"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "15c79746a45c50b255156a6255808063b36e8e0e03a62693341a9741e40964e1",
+              "forms": 1,
+              "key": "33 cfr 162",
+              "raws": [
+                "33 CFR 162"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c5e57839bb7eca9f594f260318040b6cc5d92001e4fb6d7a0296e52b9e1a8429",
+              "forms": 1,
+              "key": "47 cfr 15",
+              "raws": [
+                "47 CFR 15"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "356cba0b8e998088906d4c291b5e01ecdfb9f46e682d9dcc6b585c1b418fb833",
+              "forms": 1,
+              "key": "33 cfr 105",
+              "raws": [
+                "33 CFR 105"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "902acef665ad7be10e0d643b86bf36d7a2b49fc4cb9da4b6b01efe52591dbc70",
+              "forms": 1,
+              "key": "47 cfr 22",
+              "raws": [
+                "47 CFR 22"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "197370cca46c6951aefa195b18ce698d3955c9ef0e236943f49b71371b35a022",
+              "forms": 1,
+              "key": "47 cfr 90",
+              "raws": [
+                "47 CFR 90"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c8f2fc1d31c901dd26a07083bd2a61c8c5ac3f20225a208d5c90970d5435d4a6",
+              "forms": 1,
+              "key": "33 cfr 106",
+              "raws": [
+                "33 CFR 106"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "853644ddd792c4cb9c569dc7336755b794606eb69d856fac4e30bbd1260e9c4c",
+              "forms": 1,
+              "key": "47 cfr 18",
+              "raws": [
+                "47 CFR 18"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 57,
+              "entity_id": "fa389f1f5dd397bf44275649857b28a75af57d74eaa9cdc7fa0ae56d92b1ad17",
+              "forms": 1,
+              "key": "33 cfr 165",
+              "raws": [
+                "33 CFR 165"
+              ],
+              "rows": 57
+            },
+            {
+              "docs": 56,
+              "entity_id": "f6fb81ae3c1f3c8eb90138e8ec5453014fd4d84b2d58aefe405622e8fde8b114",
+              "forms": 1,
+              "key": "33 cfr 117",
+              "raws": [
+                "33 CFR 117"
+              ],
+              "rows": 56
+            },
+            {
+              "docs": 1,
+              "entity_id": "5e965cb17e5624b6412cfd01668f3e48ba221f3b61f83a37f5a25e9e4620b99d",
+              "forms": 1,
+              "key": "46 cfr 1",
+              "raws": [
+                "46 CFR 1"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8559f1088421647ed95e0136f67baf5188067097f20b7ddb1424e5d21799dda7",
+              "forms": 1,
+              "key": "33 cfr 5",
+              "raws": [
+                "33 CFR 5"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0d40b3d564b45f43a6b99aac66801614221e71ea8f98f4bd624566ba4d3fa297",
+              "forms": 1,
+              "key": "33 cfr 174",
+              "raws": [
+                "33 CFR 174"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "e93bf9bf45113b97ae2f57efb0bd06c8f76375729ffb79fe21cec488cb3a9e48",
+              "forms": 1,
+              "key": "33 cfr 115",
+              "raws": [
+                "33 CFR 115"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 4,
+              "entity_id": "4dc40aada2f39ccbfaeb42b09a324eced6b3f34f9f8933ba82975d98f6a4ce1c",
+              "forms": 1,
+              "key": "47 cfr 74",
+              "raws": [
+                "47 CFR 74"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "46f9bfc260ffd18ea5413c7e6748750450cae89696ee283a6360acaeb2c9bdd1",
+              "forms": 1,
+              "key": "46 cfr 162",
+              "raws": [
+                "46 CFR 162"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "289a96ef32d5e18d3f298545d01a9a129bcf6fd50b8505b4d071126ab6b7c7a7",
+              "forms": 1,
+              "key": "47 cfr 11",
+              "raws": [
+                "47 CFR 11"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "b9cc70ec0d5e6794903c7072052408232ca5407aa2b08f9752ad22213329c607",
+              "forms": 1,
+              "key": "33 cfr 104",
+              "raws": [
+                "33 CFR 104"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "44fabf647474083c31a0afd26eecd951a393e205c6310b121c8b67bf3f6fa11f",
+              "forms": 1,
+              "key": "46 cfr 173",
+              "raws": [
+                "46 CFR 173"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 5,
+              "entity_id": "3903f1c6e5f778c227a052ab60a139f2272650fcb61f9a2c59bafcdf28e3439e",
+              "forms": 1,
+              "key": "33 cfr 100",
+              "raws": [
+                "33 CFR 100"
+              ],
+              "rows": 5
+            },
+            {
+              "docs": 1,
+              "entity_id": "914da76dde343d27839befafd6aae4bb10719bad3042b4912a0d94504b9b6fa1",
+              "forms": 1,
+              "key": "33 cfr 101",
+              "raws": [
+                "33 CFR 101"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 2,
+              "entity_id": "c6e8ff57188ffce804c585a5db265613c1e9078ff941f1e43f6b75b23ce1ffc9",
+              "forms": 1,
+              "key": "47 cfr 0",
+              "raws": [
+                "47 CFR 0"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "f5d1b860b68bd4947edfbcf3778494b2c5dff1c78126bfdf758f8aa1a55f35ba",
+              "forms": 1,
+              "key": "46 cfr 178",
+              "raws": [
+                "46 CFR 178"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "5a292247d17f0123cd0313fb6632e031191a19dab659ee5dcf70435d9ad3971a",
+              "forms": 1,
+              "key": "46 cfr 160",
+              "raws": [
+                "46 CFR 160"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "5e9a10c9b733da97b32d45a2bae8a6c14ef838f308b96a8bd82101662e9427e3",
+              "forms": 1,
+              "key": "47 cfr 76",
+              "raws": [
+                "47 CFR 76"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "9f622acbc5df2d61421dc0452803e0c13fc922e81a55fce6fab312a73bc4c79b",
+              "forms": 1,
+              "key": "33 cfr 70",
+              "raws": [
+                "33 CFR 70"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "5e27c1d16a5daccc50baf7e49a6b08fa4b166dff57a65d398a4ce4a82eab3749",
+              "forms": 1,
+              "key": "47 cfr 27",
+              "raws": [
+                "47 CFR 27"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "062bf9bc50348abfb2a6041d82458e0f790a7fc8ac8390811e6f603707a8f3da",
+              "forms": 1,
+              "key": "47 cfr 24",
+              "raws": [
+                "47 CFR 24"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "5b71177c1989825f798e7a2ee10bbffa13c7c5bb49c436aa559c1c965359c8f7",
+              "forms": 1,
+              "key": "33 cfr 147",
+              "raws": [
+                "33 CFR 147"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "134c754281e5f0bc3cf7fd79e0db5c032fc19ced9978dc00ce2de940c6f8b4ee",
+              "forms": 1,
+              "key": "46 cfr 161",
+              "raws": [
+                "46 CFR 161"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 2,
+              "entity_id": "4a387bc032cb5aa17ec13436aa683fe6eee2964cf276e44233d45c32822bbda4",
+              "forms": 1,
+              "key": "47 cfr 25",
+              "raws": [
+                "47 CFR 25"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 4,
+              "entity_id": "24e81d654576562eae289b799ee18a834cde82faf6be0027d76eca6a94a2cc47",
+              "forms": 1,
+              "key": "47 cfr 1",
+              "raws": [
+                "47 CFR 1"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "06898e7570bee27ab568cd23d5e085c1ec668e68a741684151f1fbe6feca7247",
+              "forms": 1,
+              "key": "46 cfr 96",
+              "raws": [
+                "46 CFR 96"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "71b6865ec4b29fb08dbd613ba3834961e98cfba9e3382745ce960a4cc5f0bc37",
+              "forms": 1,
+              "key": "47 cfr 97",
+              "raws": [
+                "47 CFR 97"
+              ],
+              "rows": 1
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 39
+        },
+        "dockets": {
+          "clusters": 157,
+          "largest": [
+            {
+              "docs": 4,
+              "entity_id": "f047c09bc5bfebe6ffad2cc2763dd9f492fde4e73ba08699675e3815ec4ebdd2",
+              "forms": 1,
+              "key": "uscg-2022-0222",
+              "raws": [
+                "USCG-2022-0222"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 3,
+              "entity_id": "b09d01821e93946450bfe77fe4ffb163755718e391306725d81e193153d3465c",
+              "forms": 1,
+              "key": "mb 22-227",
+              "raws": [
+                "MB 22-227"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "7bc3a74091dfa68f485f2c47e880149b05a03695e12249aab63b2f0055a416bd",
+              "forms": 1,
+              "key": "mb 17-105",
+              "raws": [
+                "MB 17-105"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "af11890b994c44db510ee7129810959de14950a706aee1af483f385a628d0543",
+              "forms": 1,
+              "key": "mb 22-405",
+              "raws": [
+                "MB 22-405"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "9a570eede962b654b9078e08b8220d1a122d21a3e640ae1132e3adf51f96c4c1",
+              "forms": 1,
+              "key": "uscg-2019-0910",
+              "raws": [
+                "USCG-2019-0910"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "ab85afce495f83ced1e50af05d84ec28c822cfd3baa592928ae2dd15e68f8bae",
+              "forms": 1,
+              "key": "uscg-2019-0911",
+              "raws": [
+                "USCG-2019-0911"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "9c23cae73b841afdb1a460cd23e58b3560f5d21443114ec65204fba142c0cbd3",
+              "forms": 1,
+              "key": "uscg-2020-0691",
+              "raws": [
+                "USCG-2020-0691"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "8b79af075a398aa17d39e6a08c9622ab1718efcde49cf736750f05df515eaddf",
+              "forms": 1,
+              "key": "uscg-2022-0518",
+              "raws": [
+                "USCG-2022-0518"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "6e18f444e312c122975a95b37d86aa00122347671d9104cbade19555a31a2682",
+              "forms": 1,
+              "key": "uscg-2022-0519",
+              "raws": [
+                "USCG-2022-0519"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 2,
+              "entity_id": "afcbf4453ea90e618468b2e504de7b716e0d4697aa38853a80017ac97952d3f8",
+              "forms": 1,
+              "key": "uscg-2022-0520",
+              "raws": [
+                "USCG-2022-0520"
+              ],
+              "rows": 2
+            }
+          ],
+          "merged": 0,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 171,
+          "sample": [
+            {
+              "docs": 1,
+              "entity_id": "7aab08ffa3d3f5d198f1b14246086c4ba67e233fe23f7e241f01647e89684b75",
+              "forms": 1,
+              "key": "uscg-2022-0995",
+              "raws": [
+                "USCG-2022-0995"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "f8722fc9d008ee969b40d3c8d083f79a50cca34a1d58a3d335b091da30b5dbe6",
+              "forms": 1,
+              "key": "uscg-2025-0464",
+              "raws": [
+                "USCG-2025-0464"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "01d8397119b66ba6b36f6612c0dd645c312859133772d82f4e325bb5bcfa51c0",
+              "forms": 1,
+              "key": "uscg-2024-0070",
+              "raws": [
+                "USCG-2024-0070"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8991ffdab5ebfd88372fbfa982d16dfdf0717b424ebf067424a2ca070f64232f",
+              "forms": 1,
+              "key": "uscg-2022-0015",
+              "raws": [
+                "USCG-2022-0015"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "ed0a7570a02da2a29ade9f861c6c5a0acdc67d8de9fdfc48364e06a383fd4e62",
+              "forms": 1,
+              "key": "uscg-2019-0970",
+              "raws": [
+                "USCG-2019-0970"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "3a91bb7cd99d44dcbbb870a7667fa977c5cf17f2bae563feb3ec8693cef8813f",
+              "forms": 1,
+              "key": "mb 25-6",
+              "raws": [
+                "MB 25-6"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "9c180370d9b7e01a8ac5789406a43703f9ed99b4d710d4ada739b0980dcdf148",
+              "forms": 1,
+              "key": "mb 22-30",
+              "raws": [
+                "MB 22-30"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 2,
+              "entity_id": "6e18f444e312c122975a95b37d86aa00122347671d9104cbade19555a31a2682",
+              "forms": 1,
+              "key": "uscg-2022-0519",
+              "raws": [
+                "USCG-2022-0519"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "61db9a1c0549818520ec9c1c7184f61d76d585830d22dedd302aea6af398eb12",
+              "forms": 1,
+              "key": "mb 21-126",
+              "raws": [
+                "MB 21-126"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "fe6bd4b6654d61ddb849b6243ae3630a101fdd9b3e6596e47bdf674ccf3eb098",
+              "forms": 1,
+              "key": "uscg-2022-0854",
+              "raws": [
+                "USCG-2022-0854"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "b09d01821e93946450bfe77fe4ffb163755718e391306725d81e193153d3465c",
+              "forms": 1,
+              "key": "mb 22-227",
+              "raws": [
+                "MB 22-227"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "8f603cfa797db60e8fe963082aa236b99ec1c0e322e18ee6260c4bbb5f8cdea0",
+              "forms": 1,
+              "key": "mb 22-13",
+              "raws": [
+                "MB 22-13"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "efe4615c671fbeb97fcf5e982c25796cca5b2d65e88ba5d8ab8247feb60077a1",
+              "forms": 1,
+              "key": "uscg-2020-0531",
+              "raws": [
+                "USCG-2020-0531"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0b6eb8836f0826c2d15bde9ec72405473e4b4b62852e974708b6fae2900bfeee",
+              "forms": 1,
+              "key": "mb 25-84",
+              "raws": [
+                "MB 25-84"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "6b5e972a8706950fee95db6e56a6212099047a28a95b86ffc796425ec66154da",
+              "forms": 1,
+              "key": "uscg-2023-0113",
+              "raws": [
+                "USCG-2023-0113"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8ac9b996731be75ba2a14808851aecafb0f663d60906d89c17a2a01161257974",
+              "forms": 1,
+              "key": "uscg-2021-0917",
+              "raws": [
+                "USCG-2021-0917"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c5a3cac07aa7f803204483112e0448ec2aa17c7444d88ca02779b11fe2311fb5",
+              "forms": 1,
+              "key": "uscg-2020-0658",
+              "raws": [
+                "USCG-2020-0658"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "d5b2115028840caaf3890ecb5d36711706ad8aa52223b8dfaac6856cf8233736",
+              "forms": 1,
+              "key": "mb 22-456",
+              "raws": [
+                "MB 22-456"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8e4ecb4b4e7487bef3a3890a8839dc5c78b11a96e14a8dd89abbb1c1b4d99073",
+              "forms": 1,
+              "key": "uscg-2020-0137",
+              "raws": [
+                "USCG-2020-0137"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "96d0c982446e5b956605f7bd0c3b00e9146884da91f440669a531a9f884416c7",
+              "forms": 1,
+              "key": "mb 20-331",
+              "raws": [
+                "MB 20-331"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "02d90790e484e616e596abe258b7e1c6ae1907a74fa097247e2f73e916f6214c",
+              "forms": 1,
+              "key": "uscg-2024-1093",
+              "raws": [
+                "USCG-2024-1093"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 2,
+              "entity_id": "7bc3a74091dfa68f485f2c47e880149b05a03695e12249aab63b2f0055a416bd",
+              "forms": 1,
+              "key": "mb 17-105",
+              "raws": [
+                "MB 17-105"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "aca8c53be4c456c445c88d43521dd6c85fda6d994884a60ec5596bd37255cb8d",
+              "forms": 1,
+              "key": "mb 21-483",
+              "raws": [
+                "MB 21-483"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "39f531cfe80e1df147b735a4c8420a638b4acebbb47d053818fe7c6a7074024d",
+              "forms": 1,
+              "key": "uscg-2021-0056",
+              "raws": [
+                "USCG-2021-0056"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 4,
+              "entity_id": "f047c09bc5bfebe6ffad2cc2763dd9f492fde4e73ba08699675e3815ec4ebdd2",
+              "forms": 1,
+              "key": "uscg-2022-0222",
+              "raws": [
+                "USCG-2022-0222"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "a6492883da2497a4559747a05132d0d5811ee5b14ba692b2c381ac441b54f7a3",
+              "forms": 1,
+              "key": "uscg-2024-1099",
+              "raws": [
+                "USCG-2024-1099"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "66bfbce879e795504b1570d60d6a159a9b72f84574394a037e0ff3e6d62d5321",
+              "forms": 1,
+              "key": "uscg-2020-0556",
+              "raws": [
+                "USCG-2020-0556"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "919d58e82b170f315dbeef6774a8379612ddc02a3c4b54d13fb8128b894934e0",
+              "forms": 1,
+              "key": "uscg-2021-0931",
+              "raws": [
+                "USCG-2021-0931"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8fa8cabdb8f49ceb129296e66bcbb905897b83f974795768ff4aab589c0e9028",
+              "forms": 1,
+              "key": "uscg-2021-0778",
+              "raws": [
+                "USCG-2021-0778"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "77b6f055e8f91c834ef23d7d99e5e0ab952dc179a50b74c813c95600b403007c",
+              "forms": 1,
+              "key": "uscg-2024-0020",
+              "raws": [
+                "USCG-2024-0020"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "d56345be076bfcd26dc226b9a3c4e3a2524d936ff847a80d2dc4867085e96cb8",
+              "forms": 1,
+              "key": "au 26-105",
+              "raws": [
+                "AU 26-105"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "1620383d258873277119318dfc3993f5f7ca688607b160d36811b1e6ebafa0f7",
+              "forms": 1,
+              "key": "uscg-2022-0021",
+              "raws": [
+                "USCG-2022-0021"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "e0bb8617b9eeb154922bdbb63d230cf88b3780ded4c872d4aca1e3d5c530b50b",
+              "forms": 1,
+              "key": "uscg-2019-0947",
+              "raws": [
+                "USCG-2019-0947"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "04e803b9c3055bf414b532d37e51c12a461edad854b4ad594f316886a8e6aac6",
+              "forms": 1,
+              "key": "uscg-2025-1113",
+              "raws": [
+                "USCG-2025-1113"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c012dd1f3c292f3d44e22e133584226c74ca62e34709f79747af99bd2734b21a",
+              "forms": 1,
+              "key": "mb 21-502",
+              "raws": [
+                "MB 21-502"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "add46fa98d7c20d2e668461e85e2c4cd7c36cc1bb82189d6264c46012523f2d3",
+              "forms": 1,
+              "key": "mb 24-14",
+              "raws": [
+                "MB 24-14"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "1cb712eda3fa1a6d9a9d269873f9fddcf32019f625f2e51d60e8a230c1d8d9ec",
+              "forms": 1,
+              "key": "uscg-2024-0123",
+              "raws": [
+                "USCG-2024-0123"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "3ffd22252f1ae28db528051e9f797a4d3595b459bbb4c34be09e55239a9b0bd8",
+              "forms": 1,
+              "key": "uscg-2025-0143",
+              "raws": [
+                "USCG-2025-0143"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "6ae4e560e75c3123eb91c5f1ce040cb0f6d26bb1c61556885885abed41915e02",
+              "forms": 1,
+              "key": "uscg-2019-0682",
+              "raws": [
+                "USCG-2019-0682"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "890e07ab4ae5d90aeae710a0a5526ca39ec42423f8d950b3f08a37a84f6c2364",
+              "forms": 1,
+              "key": "mb 04-256",
+              "raws": [
+                "MB 04-256"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "d7ef628ed1d62c4214cedf9cb5fd23ca0dd74a2a071c27fc87808c2a3118b482",
+              "forms": 1,
+              "key": "uscg-2023-0992",
+              "raws": [
+                "USCG-2023-0992"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "559ac7aecd01e1784f2533a5df7ea3696d68c4bc8494790f73aab8438b8690dc",
+              "forms": 1,
+              "key": "mb 25-298",
+              "raws": [
+                "MB 25-298"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0abf2a865e6e6f7a6c789b0f860fc90bcc0c7e190bb1ed6ecf36b4b1fcb1e2b8",
+              "forms": 1,
+              "key": "mb 24-4",
+              "raws": [
+                "MB 24-4"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "586a73f7243922a2e6807f5c9d6958a7b9caf716b593727c67af5f59f0d06980",
+              "forms": 1,
+              "key": "gn 25-166",
+              "raws": [
+                "GN 25-166"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "77e19343779ae1c85eaf3781850b7a0da5341c35360229f1397ff35faafa783d",
+              "forms": 1,
+              "key": "uscg-2020-0459",
+              "raws": [
+                "USCG-2020-0459"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "df3884bfd4bae70e4df2a93d5b8e66224b464f3aad369a89ee7573de41ccc238",
+              "forms": 1,
+              "key": "uscg-2022-0988",
+              "raws": [
+                "USCG-2022-0988"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "cf0d710cd597bcdc24add4370970a6ce25297ba6e419977d908e57d5d8b5d882",
+              "forms": 1,
+              "key": "uscg-2019-0837",
+              "raws": [
+                "USCG-2019-0837"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 2,
+              "entity_id": "9a570eede962b654b9078e08b8220d1a122d21a3e640ae1132e3adf51f96c4c1",
+              "forms": 1,
+              "key": "uscg-2019-0910",
+              "raws": [
+                "USCG-2019-0910"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "7f64756a26ae85a0298290bcde982697273a6b3c79bbcd06d7b635b4cc6f2b22",
+              "forms": 1,
+              "key": "uscg-2024-1094",
+              "raws": [
+                "USCG-2024-1094"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "117648f8911b790395cd136f451848365e6e7812aaffedfba89fa0639d45713d",
+              "forms": 1,
+              "key": "uscg-2026-0017",
+              "raws": [
+                "USCG-2026-0017"
+              ],
+              "rows": 1
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 157
+        },
+        "waterways": {
+          "clusters": 467,
+          "largest": [
+            {
+              "docs": 6,
+              "entity_id": "b95f240e07c915455a1fa1eee607f81e2f8d568e3435cc46e3942c836c0d80c0",
+              "forms": 2,
+              "key": "atlantic intracoastal waterway",
+              "raws": [
+                "Atlantic Intracoastal Waterway",
+                "atlantic intracoastal waterway"
+              ],
+              "rows": 14
+            },
+            {
+              "docs": 5,
+              "entity_id": "97b08b8d239c27a458a86f37749c01b18a09dec3cf6637192b3637218e43c07f",
+              "forms": 2,
+              "key": "gulf intracoastal waterway",
+              "raws": [
+                "Gulf Intracoastal Waterway",
+                "gulf intracoastal waterway"
+              ],
+              "rows": 11
+            },
+            {
+              "docs": 4,
+              "entity_id": "89aa19d968ca5612b132df12592620db415f7afd836a24a32520c07dc892610b",
+              "forms": 2,
+              "key": "miami river",
+              "raws": [
+                "Miami River",
+                "miami river"
+              ],
+              "rows": 9
+            },
+            {
+              "docs": 9,
+              "entity_id": "76f0c6a811fc08a70da2a638995737649affab8d6e9a871cb723571fc44ebd64",
+              "forms": 2,
+              "key": "okeechobee waterway",
+              "raws": [
+                "Okeechobee Waterway",
+                "okeechobee waterway"
+              ],
+              "rows": 9
+            },
+            {
+              "docs": 4,
+              "entity_id": "341283378b32bae6f5d8f7534c86e988ce42db5c648312d622fd7e6009df65da",
+              "forms": 2,
+              "key": "new river",
+              "raws": [
+                "New River",
+                "new river"
+              ],
+              "rows": 7
+            },
+            {
+              "docs": 4,
+              "entity_id": "fab019083fc75fddc3664036ddc36141dbaf31e828d5d98282930e355ca35fb7",
+              "forms": 2,
+              "key": "savannah river",
+              "raws": [
+                "Savannah River",
+                "savannah river"
+              ],
+              "rows": 7
+            },
+            {
+              "docs": 6,
+              "entity_id": "323a41ce475ded7e09763fc0792e6c122912c4d32df4afa61c0ac08ef763bc91",
+              "forms": 2,
+              "key": "housatonic river",
+              "raws": [
+                "Housatonic River",
+                "housatonic river"
+              ],
+              "rows": 6
+            },
+            {
+              "docs": 5,
+              "entity_id": "3b4fa2569b261d4463ae0c6f277f1d7b7a52199d42cc470dc697ee518211e49e",
+              "forms": 2,
+              "key": "bayou sara",
+              "raws": [
+                "Bayou Sara",
+                "bayou sara"
+              ],
+              "rows": 5
+            },
+            {
+              "docs": 5,
+              "entity_id": "4596f6cdc0bd66d79af55ff2c5f403dc33f5d35ed9e764d3b264424e6bc35a5f",
+              "forms": 2,
+              "key": "chicago river",
+              "raws": [
+                "Chicago River",
+                "chicago river"
+              ],
+              "rows": 5
+            },
+            {
+              "docs": 5,
+              "entity_id": "d552e2fb16b45b7b73b3572500dafd2ae7bbede882fd14e33c96a17e11e1da21",
+              "forms": 2,
+              "key": "fox river",
+              "raws": [
+                "Fox River",
+                "fox river"
+              ],
+              "rows": 5
+            }
+          ],
+          "merged": 32,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 1416,
+          "sample": [
+            {
+              "docs": 3,
+              "entity_id": "4dc281a216ceb40c52d502dcda8de6364b806d65f1344fb0f3b7bc62e7e381cd",
+              "forms": 1,
+              "key": "manatee river",
+              "raws": [
+                "Manatee River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 4,
+              "entity_id": "e2a73fbebdb943dd046efd0604c515770ecb872c9740a01ef8024d63638b7027",
+              "forms": 2,
+              "key": "old fort bayou",
+              "raws": [
+                "Old Fort Bayou",
+                "old fort bayou"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 3,
+              "entity_id": "7752dfbaaa8842cd0736a6508ca05a529c14268da4034c2a9e51bf43e782e668",
+              "forms": 1,
+              "key": "nanticoke river",
+              "raws": [
+                "Nanticoke River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "341cc7b2e057ac94c94563fd899f5f58ae74c46c57c0921b5e875cc4c8c9e9ac",
+              "forms": 1,
+              "key": "kent island narrows",
+              "raws": [
+                "Kent Island Narrows"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "327a83a0e20adb22bcd66a5a8d324ee33901235beadc04caf6ef34976cfede5a",
+              "forms": 1,
+              "key": "gowanus canal",
+              "raws": [
+                "Gowanus Canal"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "340180fef49795b6ff90c65190e13c760e6d0c9c822eca01f8cc0c0751d3d57c",
+              "forms": 1,
+              "key": "schuylkill river",
+              "raws": [
+                "Schuylkill River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "7a8db92c48e25c4057995eb1a167b0bd267ac63f7e76da061d1c4a26fbb15dcb",
+              "forms": 1,
+              "key": "coos bay",
+              "raws": [
+                "Coos Bay"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "6c2d908d4726e707457a68f8632bb35ceaa60bcc0c09f4da86715c8e0f7e1a59",
+              "forms": 1,
+              "key": "savannah",
+              "raws": [
+                "savannah"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "6b68f365efdfba193d312ca07ea8180b005d2b47c49288b6e84bbca162a3984c",
+              "forms": 1,
+              "key": "cedar creek",
+              "raws": [
+                "Cedar Creek"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "e3d3d4d2b282ed302665e63571c682802fed855d92a4628e05cb317044cea36a",
+              "forms": 1,
+              "key": "little (petit) caillou bayou",
+              "raws": [
+                "Little (Petit) Caillou Bayou"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "ffd3d805de0317565b3145a602588c39550dab69477d6b850e24dcf81baa07e6",
+              "forms": 1,
+              "key": "brazoria county",
+              "raws": [
+                "brazoria county"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 3,
+              "entity_id": "897728df9b008f11920ddbcf0aa9019d63c9d9849756123e23b34d274c8a761c",
+              "forms": 1,
+              "key": "little potato slough",
+              "raws": [
+                "Little Potato Slough"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "929ba0b97dc245caaf1589e6daa74bfcfd02c3c1d8d613f955fb6220eb1b1306",
+              "forms": 1,
+              "key": "carlin bayou",
+              "raws": [
+                "Carlin Bayou"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "49775fd53891e8edb25dc49431130a982deac17c34413a7c1b85f744b1a72f29",
+              "forms": 1,
+              "key": "wabash river",
+              "raws": [
+                "Wabash River"
+              ],
+              "rows": 6
+            },
+            {
+              "docs": 3,
+              "entity_id": "68a2261e1d90d0fb240b24488230582073ae0969068f800b7ea5c07a3be59dda",
+              "forms": 1,
+              "key": "cambridge harbor",
+              "raws": [
+                "Cambridge Harbor"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "9f907732f1e6ebd6f744ceec06efe4639e13df0de8fbb5270119335c42fafd5d",
+              "forms": 1,
+              "key": "great wicomico river",
+              "raws": [
+                "Great Wicomico River"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 3,
+              "entity_id": "3aae3fe6345b85c9805db597fc57f36a5ec17564b1b9094d0315c0f78e2e09a5",
+              "forms": 1,
+              "key": "coosa river",
+              "raws": [
+                "Coosa River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "6308f511ab4b5945c173a2b0acc3cd288db7027d18490c8e273df18247760881",
+              "forms": 1,
+              "key": "willapa river south fork",
+              "raws": [
+                "Willapa River South Fork"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "f90f65f91004ebb5ea71f29e9fdb12dcdbf8f750dd9d9fbe90f08e7101d942e7",
+              "forms": 1,
+              "key": "menomonee",
+              "raws": [
+                "menomonee"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "66706e4c69d1300d28bb589abeb75fb49ac37268beba55bbfd5b341ea65833aa",
+              "forms": 1,
+              "key": "inside thorofare",
+              "raws": [
+                "inside thorofare"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "6837d69b29d08957494621f438b1fa504ba4afd906d42789397e58c6f42ec018",
+              "forms": 1,
+              "key": "upper mississippi river",
+              "raws": [
+                "Upper Mississippi River"
+              ],
+              "rows": 6
+            },
+            {
+              "docs": 3,
+              "entity_id": "def05fb06d6f81d1e48031e41cc833412f2323bffc15adc3373c61182604c5fa",
+              "forms": 1,
+              "key": "hillsboro inlet",
+              "raws": [
+                "Hillsboro Inlet"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "e3ca8dc001c4fbf4e8e7868deace207876a536ad0dba4181c013bb12492331c6",
+              "forms": 1,
+              "key": "chehalis river",
+              "raws": [
+                "Chehalis River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 4,
+              "entity_id": "fa02f7bc2909d211fd2eaf8e7088ea1dd92c6c04d9388f80c16ee3a90f2f5ced",
+              "forms": 2,
+              "key": "old brazos river",
+              "raws": [
+                "Old Brazos River",
+                "old brazos river"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 3,
+              "entity_id": "334803217d5b1e5b04c85cc3a151741754901d6e9ecb47c88354d75c9b4ada89",
+              "forms": 1,
+              "key": "rainy river",
+              "raws": [
+                "Rainy River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "d228d1eb28422976d9ff17e4d5d08fd9d0fd84d3b891829d43ea0f3317c7310f",
+              "forms": 1,
+              "key": "newport river",
+              "raws": [
+                "Newport River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "00998e12991090a883283cb58e9cacdcf237c0b2e7007d6f58bf434e0df2ab6e",
+              "forms": 1,
+              "key": "grand river",
+              "raws": [
+                "Grand River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "4ab2b34ca219f7e713fce8cc7ca7e5965564344554b212d8c2e178a025f8d722",
+              "forms": 1,
+              "key": "black river (port huron",
+              "raws": [
+                "Black River (Port Huron)"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "4a561049fa4632527cac3d65398a0f90dfef2906343f60380787a8345d6cbcb1",
+              "forms": 1,
+              "key": "banana river",
+              "raws": [
+                "Banana River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "7a68638d15deaf037da795282dad991d4e48644029b1245682166f78b2fd0cdf",
+              "forms": 1,
+              "key": "buffalo bayou",
+              "raws": [
+                "Buffalo Bayou"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "89f51b97771ed0602a6974232ef56df2f383fe4a5e2525747c5a4ae06eee9ae4",
+              "forms": 1,
+              "key": "schellenger creek",
+              "raws": [
+                "Schellenger Creek"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 6,
+              "entity_id": "323a41ce475ded7e09763fc0792e6c122912c4d32df4afa61c0ac08ef763bc91",
+              "forms": 2,
+              "key": "housatonic river",
+              "raws": [
+                "Housatonic River",
+                "housatonic river"
+              ],
+              "rows": 6
+            },
+            {
+              "docs": 3,
+              "entity_id": "1a27c2b283451370e7504b33c26eabf64bbaeee8d25687c6936094fd3ac259e2",
+              "forms": 1,
+              "key": "ohio river",
+              "raws": [
+                "Ohio River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "386fb65596d496057ca37b4fad385ccaf025ee7fc52331ea5fadebc487fdb7f6",
+              "forms": 1,
+              "key": "yellow mill channel",
+              "raws": [
+                "Yellow Mill Channel"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "ccc18de0eb61c975fc87f81a568c49109fc58f4934b1cf9cd6eef717a1cca23e",
+              "forms": 1,
+              "key": "sturgeon bay",
+              "raws": [
+                "Sturgeon Bay"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "66d8c19825a63836417897d48ae003f3ac178387d4f2a3e6fa01e7d2a75b7296",
+              "forms": 1,
+              "key": "lake champlain",
+              "raws": [
+                "Lake Champlain"
+              ],
+              "rows": 6
+            },
+            {
+              "docs": 3,
+              "entity_id": "4eaf7c53ffe528f66c636d38fa528387e4f20109e4af61ec0683cc07e10314e3",
+              "forms": 1,
+              "key": "greens bayou",
+              "raws": [
+                "Greens Bayou"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "a59b952d05936563a91f190d1118f80bee90cbd68164da4f70872826fe7c7195",
+              "forms": 1,
+              "key": "john day river",
+              "raws": [
+                "John Day River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "75bc53651d3e72fcd2b1db1286810c092c7edb8443b50e499b5ce7a6d91459bd",
+              "forms": 1,
+              "key": "salem river",
+              "raws": [
+                "Salem River"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 3,
+              "entity_id": "4607f3515dfae778ad5b81214a1911349187c9593ba062665a07b7226e3b2095",
+              "forms": 1,
+              "key": "inner harbor navigation canal",
+              "raws": [
+                "Inner Harbor Navigation Canal"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "71ada874606914c8ca0f7091db526dddb70ae588a4bee879b5954f3f3ba54c2c",
+              "forms": 1,
+              "key": "and kinnickinnic rivers and burnham canals",
+              "raws": [
+                "and kinnickinnic rivers and burnham canals"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 3,
+              "entity_id": "72d64f0f3061e1abb00bbef13d62c65431a4fce8b53a267ab837d9d2d44a885d",
+              "forms": 1,
+              "key": "stratford",
+              "raws": [
+                "stratford"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "f07ec33ccce9b70a5471fab0a97c6df3f6edf06f05a9351c0a75acfafed589d4",
+              "forms": 1,
+              "key": "oldmans creek",
+              "raws": [
+                "Oldmans Creek"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "67e02020dbfc3a8e7f4f891eda88dd052968e2a16d836c9ca698e63044f6a015",
+              "forms": 1,
+              "key": "darby creek",
+              "raws": [
+                "Darby Creek"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 2,
+              "entity_id": "3fb312f8c4f8ecac0a0586a9b443ed140697af9256f3208625a370c77d47c92d",
+              "forms": 1,
+              "key": "hurricane",
+              "raws": [
+                "hurricane"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 3,
+              "entity_id": "6a8e2236f243099b6a4b685374a8497e87ce03a1662a243145ab78555dfe3e27",
+              "forms": 1,
+              "key": "cow bayou",
+              "raws": [
+                "Cow Bayou"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "421b2aeddb5dfd7182038989d0eef6d4f0975b440b3c1e26cec2730821a6c412",
+              "forms": 1,
+              "key": "long island",
+              "raws": [
+                "Long Island"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "c3fbfdcea6852d064c4b9a54741552b4a9a002b9e046bbdebf1673ba228bca35",
+              "forms": 1,
+              "key": "miner slough",
+              "raws": [
+                "Miner Slough"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "7f94c9daac404bfb52475e611957cf59cc65d3dcd9ea0a6c1603e57852df6920",
+              "forms": 1,
+              "key": "shrewsbury river",
+              "raws": [
+                "Shrewsbury River"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 3,
+              "entity_id": "b11438355d3cb3e4e00c36ba9c081e27c11a5f821482c142ab74c07040808fc6",
+              "forms": 1,
+              "key": "little harbor",
+              "raws": [
+                "Little Harbor"
+              ],
+              "rows": 3
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 435
+        }
+      },
+      "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+      "store": ".cache/store-p2/gov",
+      "tables": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8"
+    },
+    "research": {
+      "entities": {
+        "authors": {
+          "clusters": 7413,
+          "largest": [
+            {
+              "docs": 1,
+              "entity_id": "fa9383a4bc9106e8f9d975a803a6f70096d9a2547cf9ff5347522cd71a1484f2",
+              "forms": 2,
+              "key": "inc",
+              "raws": [
+                "Inc.",
+                "Inc.)"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "219307fec36997312583fa8e5598fc43cc740193015ac2822f247735f374a31a",
+              "forms": 2,
+              "key": "anton troynikov",
+              "raws": [
+                "Anton Troynikov",
+                "Anton Troynikov)"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "30100d775596e8148035d9fe4ae5d93a574ab77cc63c4ef99971d4fe697f2a6e",
+              "forms": 2,
+              "key": "han xiao",
+              "raws": [
+                "Han Xiao",
+                "Han Xiao)"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "f70b45651643997c95f742b5ec26d33f00b735a137522e05919daffa70d8059b",
+              "forms": 2,
+              "key": "hung-yi lee",
+              "raws": [
+                "Hung-Yi Lee",
+                "Hung-yi Lee"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "c70eca6b0f88f44d81a41311647e50fda1ac454ec04ffd442b0eb4743a993131",
+              "forms": 1,
+              "key": "anthropic",
+              "raws": [
+                "Anthropic"
+              ],
+              "rows": 30
+            },
+            {
+              "docs": 1,
+              "entity_id": "9fbf261b62c1d7c00db73afb81dd97fdf20b3442e36e338cb9359b856a03bdc8",
+              "forms": 1,
+              "key": "microsoft",
+              "raws": [
+                "Microsoft"
+              ],
+              "rows": 24
+            },
+            {
+              "docs": 1,
+              "entity_id": "7d3194f79e645c42e4396dda38be04766810ec6a00d00aced3ffc2a0a1f1a9ef",
+              "forms": 1,
+              "key": "openai",
+              "raws": [
+                "OpenAI"
+              ],
+              "rows": 22
+            },
+            {
+              "docs": 1,
+              "entity_id": "c9545116c89d347f11cdc8c913ccf98e53c192ad13220977f049dfff75128729",
+              "forms": 1,
+              "key": "jimmy lin",
+              "raws": [
+                "Jimmy Lin"
+              ],
+              "rows": 20
+            },
+            {
+              "docs": 1,
+              "entity_id": "e286778b9c16222b1a789660bcf33f7b833fb1e44ae61064a95af9b614916774",
+              "forms": 1,
+              "key": "amazon web services",
+              "raws": [
+                "Amazon Web Services"
+              ],
+              "rows": 17
+            },
+            {
+              "docs": 1,
+              "entity_id": "de5a1adf4fedcce1533915edc60177547f1057b61b7119fd130e1f7428705f73",
+              "forms": 1,
+              "key": "snowflake",
+              "raws": [
+                "Snowflake"
+              ],
+              "rows": 15
+            }
+          ],
+          "merged": 4,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 9681,
+          "sample": [
+            {
+              "docs": 1,
+              "entity_id": "3b9d76b4a92a01bac8f7eb5c96244dcb497aec45bd78cefcb38681c57b18944f",
+              "forms": 1,
+              "key": "manzil zaheer",
+              "raws": [
+                "Manzil Zaheer"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "5535d9b8874446a9b9823eb27d7ea03a1427efb53c11c5d5e68abf9bffa925a3",
+              "forms": 1,
+              "key": "renata borovica-gajic",
+              "raws": [
+                "Renata Borovica-Gajic"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "849e188c3bbf6f695ab98cc4d4d73cd7d3baabbafe99fc39184d59bd579bcef2",
+              "forms": 1,
+              "key": "nomi l. harris",
+              "raws": [
+                "Nomi L. Harris"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "980cf67f73f2aaf5caf6b2a5d7029ff0ec8d47b1826de2d6cf0323b9bd0f8ab0",
+              "forms": 1,
+              "key": "ke xing",
+              "raws": [
+                "Ke Xing"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "1b60b34a3a18a6ab119082461b2b1036a59807ebdf6ead64b5bac9d085b45404",
+              "forms": 1,
+              "key": "ipwatchdog",
+              "raws": [
+                "IPWatchdog"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8ba1369baa6b77b00648b4e336d0344757dbfcc0bcbc7209873afff2ed3e1c37",
+              "forms": 1,
+              "key": "u kang",
+              "raws": [
+                "U Kang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "4638db5e565f275925588ae3bf30c23e07c5f799e48ffc9c648826c331e4ba97",
+              "forms": 1,
+              "key": "filippo menolascina et al",
+              "raws": [
+                "Filippo Menolascina et al."
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "924ef58a8156944baf6e2460180a1186c21ff270ccb6e80c8a6296522405da4e",
+              "forms": 1,
+              "key": "tom hennigan",
+              "raws": [
+                "Tom Hennigan"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "91691bb6db43020146cf491614018c3b6c1a17f1da642908093f951b8b9ae6f2",
+              "forms": 1,
+              "key": "corby rosset",
+              "raws": [
+                "Corby Rosset"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8f4d8aef8c180c38c410da2a7e738f70fa49a345d959795d067cccbceebdf3d2",
+              "forms": 1,
+              "key": "liangtai sun",
+              "raws": [
+                "Liangtai Sun"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0e15d4ef1eb81301697f664f1b5327c067b85cc38d2402852f9cf97978ba1df4",
+              "forms": 1,
+              "key": "changhua pei",
+              "raws": [
+                "Changhua Pei"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7c045d8c3c8b20f6944182998d35264bf011a7c94ed019570c06e9226c071ac2",
+              "forms": 1,
+              "key": "linzhuang sun",
+              "raws": [
+                "Linzhuang Sun"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "044e8e21683c060e65ea86001e3d1379219fc8a2e7f50cb571015a593f806855",
+              "forms": 1,
+              "key": "claudia kapp",
+              "raws": [
+                "Claudia Kapp"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7a7f38ea0bb9e32161c6b9eda7f47f5119c309be7b3cafd8c9293e1e91f3a1ed",
+              "forms": 1,
+              "key": "yuyao zhang",
+              "raws": [
+                "Yuyao Zhang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "dca0b7e501692692513575f16a2872c6c3c4fb134ea448f5cacce9b02c14a212",
+              "forms": 1,
+              "key": "christopher parisien",
+              "raws": [
+                "Christopher Parisien"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "66e99f635c106f4f054e52dc377b30a300f7d4d8a43eb3b080ecd299907eebb1",
+              "forms": 1,
+              "key": "jason ganz",
+              "raws": [
+                "Jason Ganz"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "380d2d1399e1c6ed68c0b001463a17a09ffe8bd46c5ef1307c5b1537f292d2d1",
+              "forms": 1,
+              "key": "frederick reiss",
+              "raws": [
+                "Frederick Reiss"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "63f8e235cbf285d15ce8655c30e3bd52698da278f4cdb5c813dfbf2ebc2b265b",
+              "forms": 1,
+              "key": "zihan zhao",
+              "raws": [
+                "Zihan Zhao"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8a0779a9973ed9fb9c4e98ea160124030160e9b0a2e2fa5dccef3e11283499cd",
+              "forms": 1,
+              "key": "meng wang",
+              "raws": [
+                "Meng Wang"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "21a2d735eb7d2b4eea9ccca60e09b20bcf704f7b1a14263966ec42385a78671f",
+              "forms": 1,
+              "key": "junjie ye",
+              "raws": [
+                "Junjie Ye"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "0cfe11d886dcc85a4ecbc9b8c7a5fe8c3bee0a8e284f1a28fe91a8f5ebb4d0c9",
+              "forms": 1,
+              "key": "yunxin li",
+              "raws": [
+                "Yunxin Li"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "771989e07cf9d8aedf8c58e4391e548ec018bfd44084d9105844dabd52e0257b",
+              "forms": 1,
+              "key": "jiawei zhang",
+              "raws": [
+                "Jiawei Zhang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "cb0a033c783c53c3bf7b503cf4e4d17c9cf7b6ca9114e236059e899b7ba13118",
+              "forms": 1,
+              "key": "david boaz",
+              "raws": [
+                "David Boaz"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "40b6d565a21f033cd9e841a4b70273e96f4bdf6884cf3a1f365358b386626e17",
+              "forms": 1,
+              "key": "razvan dinu",
+              "raws": [
+                "Razvan Dinu"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "416b9880002d733e5c0a995e8eebc3e667abbe0380f06d57c115f0d0e1e7956c",
+              "forms": 1,
+              "key": "shuyin ouyang",
+              "raws": [
+                "Shuyin Ouyang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c24cbf39cba35e9f464918804523f9b34912300a8bc8aa5757bc823fff80ca31",
+              "forms": 1,
+              "key": "peter frankl",
+              "raws": [
+                "Peter Frankl"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "e08b9de4e6dd4d5fe1b450295ab721438193809186a411b52692fe83d79675e3",
+              "forms": 1,
+              "key": "j. e. labra-gayo",
+              "raws": [
+                "J. E. Labra-Gayo"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "677b16bb77d3cc03bbc5ace387117c4109ddaef92b3255e34e97fdd34a313fd8",
+              "forms": 1,
+              "key": "bohan jiang",
+              "raws": [
+                "Bohan Jiang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "f03c8befc3bbab76cc58bf05921947111ea80195d6966055781442ae99511e79",
+              "forms": 1,
+              "key": "j. harry caufield",
+              "raws": [
+                "J. Harry Caufield"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "54b7998bc3f8ea506efd6e3b3c55b24e01b8c7517c9c2038f35f8321827d8e85",
+              "forms": 1,
+              "key": "anupam datta",
+              "raws": [
+                "Anupam Datta"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "3a99578a27aef617df38b1a94b94e16f9dc0d2fe6591cfe002723a1ce376c2e3",
+              "forms": 1,
+              "key": "chenlu guo",
+              "raws": [
+                "Chenlu Guo"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "eff7a62043de8ebe00648e0e32fe2f65442fa2372b4f7b0fc485c42f8b5d8bc9",
+              "forms": 1,
+              "key": "travis beauvais",
+              "raws": [
+                "Travis Beauvais"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "cbd9649e49b65a7de8d5ee7185e174860929475b4df3e9be1cc26c6a7ba5e523",
+              "forms": 1,
+              "key": "jipeng zhang",
+              "raws": [
+                "Jipeng Zhang"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "429744bba813f2d21e627619fb5beff7d32db533f424b555cc620eaff1baaaf0",
+              "forms": 1,
+              "key": "rainer hilscher",
+              "raws": [
+                "Rainer Hilscher"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "d655d85d621e1c1d7424ec047222781e3768fe975fe34d257e70a9b72310cf74",
+              "forms": 1,
+              "key": "xipeng qiu",
+              "raws": [
+                "Xipeng Qiu"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "175baf321669e410d838b9114a494f584415130a8c618b5de1320e7bcbd6da7d",
+              "forms": 1,
+              "key": "kushal tirumala",
+              "raws": [
+                "Kushal Tirumala"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "20f2f1faf4f3a368e462e8ed80b68389ae5613405a9159109f0f46b92bec88ae",
+              "forms": 1,
+              "key": "junpeng li",
+              "raws": [
+                "Junpeng Li"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "9c6c42403f05bab4c45dc90e3a605595d0822fa656510d8e0825a6936879d57d",
+              "forms": 1,
+              "key": "jeongyeon nam",
+              "raws": [
+                "Jeongyeon Nam"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "43ae0b494958de97748619b5989f9c4e6b34e21b17f59d4ff37c0fee78142e75",
+              "forms": 1,
+              "key": "kalotina machini",
+              "raws": [
+                "Kalotina Machini"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "8019ec402ede4609f556175f01079f590a84aedf130437ff76a4963c36cc70fb",
+              "forms": 1,
+              "key": "tanmay rajpurohit",
+              "raws": [
+                "Tanmay Rajpurohit"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "41e801f17b9300877d05e9e1e4aab6db00ac0a04588770d259125d0f0bb8a705",
+              "forms": 1,
+              "key": "junjie fei",
+              "raws": [
+                "Junjie Fei"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "14e9322b19defd35e4f232d63d8694615c837e4b64d7d7268e52e271c6bb9914",
+              "forms": 1,
+              "key": "junpeng ren",
+              "raws": [
+                "Junpeng Ren"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "9399affba2eef301b9cd55580021e3e29d6e1dd264ad053af852448c4d8daba9",
+              "forms": 1,
+              "key": "akash chavan",
+              "raws": [
+                "Akash Chavan"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "3af10f87634a453fbd491b61b116a85ab95d05a7f77a5bc3412ddad70ad978a8",
+              "forms": 1,
+              "key": "xinghuo yu",
+              "raws": [
+                "Xinghuo Yu"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7dfb26376ba6074b3c458655862943d706e3184b82432f60da3048780fd776da",
+              "forms": 1,
+              "key": "peter n. robinson",
+              "raws": [
+                "Peter N. Robinson"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c3b0e1ef02d8876bb271dad96029cd0a9eebb52e8327cd1751405122a1a4051c",
+              "forms": 1,
+              "key": "rina onda",
+              "raws": [
+                "Rina Onda"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "55577664b1a6147da35e5fe8e88e832b73ba92de11c4d6eb68c65391836388a3",
+              "forms": 1,
+              "key": "guoliang li",
+              "raws": [
+                "Guoliang Li"
+              ],
+              "rows": 8
+            },
+            {
+              "docs": 1,
+              "entity_id": "5735edde25461dd7038c6da791a9f98b9f50f5d09d571c06c62950c67ccc9f5b",
+              "forms": 1,
+              "key": "jonas geiping",
+              "raws": [
+                "Jonas Geiping"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c0b0109d9439de57fe3cf03abeccbc52f4c98170c732d3b69af5e6395ace574e",
+              "forms": 1,
+              "key": "github",
+              "raws": [
+                "GitHub"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "cafdb7e161774734caccdeee74f4e321a4f956f9d459cd2e7a6ac7e00a507fd2",
+              "forms": 1,
+              "key": "lucas hosseini",
+              "raws": [
+                "Lucas Hosseini"
+              ],
+              "rows": 1
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 7409
+        },
+        "licences": {
+          "clusters": 33,
+          "largest": [
+            {
+              "docs": 1,
+              "entity_id": "0ae5c335b3a6ee61a86c61d513d485efea04c471b1ba0c69a9321dd44b36a34e",
+              "forms": 2,
+              "key": "cc-by-4.0",
+              "raws": [
+                "CC BY 4.0",
+                "CC-BY-4.0"
+              ],
+              "rows": 53
+            },
+            {
+              "docs": 1,
+              "entity_id": "4b77b33be70c243e93630753368638e28bb66e77935606b15aba3614339c3ee0",
+              "forms": 1,
+              "key": "apache-2.0",
+              "raws": [
+                "Apache-2.0"
+              ],
+              "rows": 69
+            },
+            {
+              "docs": 1,
+              "entity_id": "78198e7ab262449ad56e4ca48e10a36f98dda6fd5a377875dd7425afcca2312b",
+              "forms": 1,
+              "key": "mit",
+              "raws": [
+                "MIT"
+              ],
+              "rows": 41
+            },
+            {
+              "docs": 1,
+              "entity_id": "34d1057d8facf43260e5c2b263316a670dcab87a04d627578908c6547af5304d",
+              "forms": 1,
+              "key": "arxiv-nonexclusive",
+              "raws": [
+                "arXiv-nonexclusive"
+              ],
+              "rows": 22
+            },
+            {
+              "docs": 1,
+              "entity_id": "b5752250d1b5c7ad8402269f9ecb8cd833cfa9e4e1d09298c3d88d126a484897",
+              "forms": 1,
+              "key": "cc-by-nc-nd-4.0",
+              "raws": [
+                "CC BY-NC-ND 4.0"
+              ],
+              "rows": 7
+            },
+            {
+              "docs": 1,
+              "entity_id": "aab00f0dc55f399f0745da43751ba337b2e7b7b3fc74126bfc09fcca720dbac9",
+              "forms": 1,
+              "key": "agpl-3.0",
+              "raws": [
+                "AGPL-3.0"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "f47afee7611dc74d2f76585dce91fbcd78899496e40ab9d868cdf5a9e2c9db3d",
+              "forms": 1,
+              "key": "cc-by-sa-4.0",
+              "raws": [
+                "CC BY-SA 4.0"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "a007f95459d2479fc8e53cd3e555188912e3aaa5a180ad83d2b25451369a43a5",
+              "forms": 1,
+              "key": "cc-by-nc-sa-3.0-(acl-anthology",
+              "raws": [
+                "CC BY-NC-SA 3.0 (ACL Anthology)"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "3cd1229ddd315005c3e82c58cdd5a905acd626eb0546c2abb6fe34b893eaeaef",
+              "forms": 1,
+              "key": "cc-by-nc-sa-4.0",
+              "raws": [
+                "CC-BY-NC-SA-4.0"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "70bb2540de2bb694679da223fe553db8b29b0cd2ab6434dbffc14837e17d7375",
+              "forms": 1,
+              "key": "elastic-license-2.0",
+              "raws": [
+                "Elastic License 2.0"
+              ],
+              "rows": 3
+            }
+          ],
+          "merged": 1,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 234,
+          "sample": [
+            {
+              "docs": 1,
+              "entity_id": "6c7221c297a6d94caf53011c7fd736062ebbd4b25b8c7241ba12457bb071dd41",
+              "forms": 1,
+              "key": "open-access-(springer",
+              "raws": [
+                "Open access (Springer)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "b6b06eb0e80c63c6bab8f1d60f422c81ef692488e59400d46dd13193b3bdc732",
+              "forms": 1,
+              "key": "ldc-license-(not-open",
+              "raws": [
+                "LDC license (not open)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "54af62458290aea2cd17c1174399883060928487946e14ec078301e4d9433a19",
+              "forms": 1,
+              "key": "bsd-3-clause-+-weaviate-license",
+              "raws": [
+                "BSD-3-Clause + Weaviate License"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7b91c3ba150878b68556b693834fcb376ab93e1ea57645911e90c686b6477566",
+              "forms": 1,
+              "key": "gpl-3.0",
+              "raws": [
+                "GPL-3.0"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c6f2f9d0c4a4993e00d99bff451e48421b42c8c0feeb3f5c09dbc8d6475ce328",
+              "forms": 1,
+              "key": "arxiv-assumed-1991-2003",
+              "raws": [
+                "arXiv-assumed-1991-2003"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "578cd30d693be0d4ef5101d7184d37ff33c5c8c086bbcd8a8eb5bc74fcd21bc5",
+              "forms": 1,
+              "key": "gpl-2.0-(git-documentation",
+              "raws": [
+                "GPL-2.0 (Git documentation)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "830ba4bbe40b4f73f7f575cc89968a9cdb5164aac80c001dbca1c61f4bc5e8fa",
+              "forms": 1,
+              "key": "apache-2.0-(core/sdk);-cc-by-4.0/agpl-3.0-(other-paths",
+              "raws": [
+                "Apache-2.0 (core/sdk); CC-BY-4.0/AGPL-3.0 (other paths)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "3f40b6c1662f8ee1f82a2d4b8548152c55fc3aeb6984e7814758369e1d29b839",
+              "forms": 1,
+              "key": "cc-by-nc-(c&rl-open-access",
+              "raws": [
+                "CC BY-NC (C&RL open access)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "bd4646807d7afa481624114aa82e54a6a6296c3ab75aa79dc6d9eea0ba7b4bce",
+              "forms": 1,
+              "key": "apache-2.0-(code);-modified-openrail-m-(weights",
+              "raws": [
+                "Apache-2.0 (code); modified OpenRAIL-M (weights)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "78198e7ab262449ad56e4ca48e10a36f98dda6fd5a377875dd7425afcca2312b",
+              "forms": 1,
+              "key": "mit",
+              "raws": [
+                "MIT"
+              ],
+              "rows": 41
+            },
+            {
+              "docs": 1,
+              "entity_id": "ec3b067c925434474cfb8fd24aa8ddd331f8cf53ba4bd81cf54f0ee53c03c9b2",
+              "forms": 1,
+              "key": "mit-(ce)-+-onyx-enterprise-license-(ee",
+              "raws": [
+                "MIT (CE) + Onyx Enterprise License (ee/)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "d68dd75869ea04701e65b37683dee2ba404f30ac71f94ae5767e5f0b58a1bf07",
+              "forms": 1,
+              "key": "mit-and-busl-1.1",
+              "raws": [
+                "MIT AND BUSL-1.1"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "951ffc5492ca8ecfdab10066727e65cef6366111071f4b433c23e274c99385b8",
+              "forms": 1,
+              "key": "postgresql-license",
+              "raws": [
+                "PostgreSQL License"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "44cb37eb1c7fea9358ecea377bea35099929959d79b35f9c304a2e5695f035bc",
+              "forms": 1,
+              "key": "w3c-document-license",
+              "raws": [
+                "W3C Document License"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "e2ccf360af6e08873a1491a6e7ad8932cdb58d24803977fc370715c7192f950f",
+              "forms": 1,
+              "key": "cc-by-nc-4.0",
+              "raws": [
+                "CC-BY-NC-4.0"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "026bf2e1c8a00f4045d29c60b0e836bbdff31334853be5d6d4132b43462531c3",
+              "forms": 1,
+              "key": "busl-1.1",
+              "raws": [
+                "BUSL-1.1"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "71170f892c421dc00f8cf79047a12cdf19b2fe165d8b5d3e0fb15cf0cd4bb5d8",
+              "forms": 1,
+              "key": "bsd-style-(bsd-3-clause",
+              "raws": [
+                "BSD-style (BSD-3-Clause)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "b48f00965691a4ca9b8c2c39a3a8d5613a9931ba025d31f006137404a21b39c5",
+              "forms": 1,
+              "key": "apache-2.0-with-additional-terms",
+              "raws": [
+                "Apache-2.0 with additional terms"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7c84429e8009a5494fc0234a858ebb49cb4841f3cc74619e8f0a375d538e1635",
+              "forms": 1,
+              "key": "dify-open-source-license",
+              "raws": [
+                "Dify Open Source License"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "a007f95459d2479fc8e53cd3e555188912e3aaa5a180ad83d2b25451369a43a5",
+              "forms": 1,
+              "key": "cc-by-nc-sa-3.0-(acl-anthology",
+              "raws": [
+                "CC BY-NC-SA 3.0 (ACL Anthology)"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "7db79e7481b9b39dbf028f7676aaa69a912464852de83e5bde4c683842ba7af0",
+              "forms": 1,
+              "key": "bsd-3-clause",
+              "raws": [
+                "BSD-3-Clause"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "70bb2540de2bb694679da223fe553db8b29b0cd2ab6434dbffc14837e17d7375",
+              "forms": 1,
+              "key": "elastic-license-2.0",
+              "raws": [
+                "Elastic License 2.0"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "2158113e80a8a2083534830bd14fc7f2843e5d0e12683226d761b092c484f37e",
+              "forms": 1,
+              "key": "agpl-3.0-or-sspl-1.0-or-elastic-license-2.0",
+              "raws": [
+                "AGPL-3.0 OR SSPL-1.0 OR Elastic License 2.0"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "3cd1229ddd315005c3e82c58cdd5a905acd626eb0546c2abb6fe34b893eaeaef",
+              "forms": 1,
+              "key": "cc-by-nc-sa-4.0",
+              "raws": [
+                "CC-BY-NC-SA-4.0"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "aab00f0dc55f399f0745da43751ba337b2e7b7b3fc74126bfc09fcca720dbac9",
+              "forms": 1,
+              "key": "agpl-3.0",
+              "raws": [
+                "AGPL-3.0"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "efb7e12d432bbfefa3912dcab6d87d2c0072a320746c302796df124aaf426644",
+              "forms": 1,
+              "key": "open-webui-license",
+              "raws": [
+                "Open WebUI License"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "b5752250d1b5c7ad8402269f9ecb8cd833cfa9e4e1d09298c3d88d126a484897",
+              "forms": 1,
+              "key": "cc-by-nc-nd-4.0",
+              "raws": [
+                "CC BY-NC-ND 4.0"
+              ],
+              "rows": 7
+            },
+            {
+              "docs": 1,
+              "entity_id": "4b77b33be70c243e93630753368638e28bb66e77935606b15aba3614339c3ee0",
+              "forms": 1,
+              "key": "apache-2.0",
+              "raws": [
+                "Apache-2.0"
+              ],
+              "rows": 69
+            },
+            {
+              "docs": 1,
+              "entity_id": "f47afee7611dc74d2f76585dce91fbcd78899496e40ab9d868cdf5a9e2c9db3d",
+              "forms": 1,
+              "key": "cc-by-sa-4.0",
+              "raws": [
+                "CC BY-SA 4.0"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "c5717b625cb56cf6e0aeb5f2fffc24c6249df17fb4599761e812249e67f07c6c",
+              "forms": 1,
+              "key": "w3c-community-final-specification-agreement",
+              "raws": [
+                "W3C Community Final Specification Agreement"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "34d1057d8facf43260e5c2b263316a670dcab87a04d627578908c6547af5304d",
+              "forms": 1,
+              "key": "arxiv-nonexclusive",
+              "raws": [
+                "arXiv-nonexclusive"
+              ],
+              "rows": 22
+            },
+            {
+              "docs": 1,
+              "entity_id": "39f859b034a8d9f0f50f8fb5860ce257c11b721724c87047416d272111059628",
+              "forms": 1,
+              "key": "cdla-permissive-2.0",
+              "raws": [
+                "CDLA-Permissive-2.0"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0ae5c335b3a6ee61a86c61d513d485efea04c471b1ba0c69a9321dd44b36a34e",
+              "forms": 2,
+              "key": "cc-by-4.0",
+              "raws": [
+                "CC BY 4.0",
+                "CC-BY-4.0"
+              ],
+              "rows": 53
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 32
+        },
+        "venues": {
+          "clusters": 905,
+          "largest": [
+            {
+              "docs": 1,
+              "entity_id": "93112796882f0bfb0b1e8964b572d37286cc993a9879abc672f1b3ec0c3cba8f",
+              "forms": 16,
+              "key": "arxiv",
+              "raws": [
+                "arXiv",
+                "arXiv 2019",
+                "arXiv 2021",
+                "arXiv 2022",
+                "arXiv 2023",
+                "arXiv 2024",
+                "arXiv 2025",
+                "arXiv 2026",
+                "arXiv preprint",
+                "arXiv preprint (2018)",
+                "arXiv preprint (2022)",
+                "arXiv preprint (2024)",
+                "arXiv preprint (2025)",
+                "arXiv preprint (2026)",
+                "arXiv preprint 2025",
+                "arXiv preprint 2026"
+              ],
+              "rows": 878
+            },
+            {
+              "docs": 1,
+              "entity_id": "419da048c8e09646c6628d7b509101e7a854942d2ef6bda4f1cc05ebcec1064a",
+              "forms": 15,
+              "key": "sigir",
+              "raws": [
+                "SIGIR 1997",
+                "SIGIR 1998",
+                "SIGIR 2001",
+                "SIGIR 2004",
+                "SIGIR 2006",
+                "SIGIR 2008",
+                "SIGIR 2009",
+                "SIGIR 2011",
+                "SIGIR 2018",
+                "SIGIR 2019",
+                "SIGIR 2020",
+                "SIGIR 2022",
+                "SIGIR 2023",
+                "SIGIR 2024",
+                "SIGIR 2025"
+              ],
+              "rows": 23
+            },
+            {
+              "docs": 1,
+              "entity_id": "2344f08e51026cf9ab687357a588e941f1a861cfed58272911c2288a7ab1f52b",
+              "forms": 12,
+              "key": "acl",
+              "raws": [
+                "ACL 2001",
+                "ACL 2002",
+                "ACL 2010",
+                "ACL 2011",
+                "ACL 2019",
+                "ACL 2020",
+                "ACL 2021",
+                "ACL 2022",
+                "ACL 2023",
+                "ACL 2024",
+                "ACL 2025",
+                "ACL 2026"
+              ],
+              "rows": 52
+            },
+            {
+              "docs": 1,
+              "entity_id": "0811138fc65a7023081b236f43e84f0b848be57d64d83041bf449263b0cf1d80",
+              "forms": 10,
+              "key": "iclr",
+              "raws": [
+                "ICLR 2017",
+                "ICLR 2018",
+                "ICLR 2019",
+                "ICLR 2020",
+                "ICLR 2021",
+                "ICLR 2022",
+                "ICLR 2023",
+                "ICLR 2024",
+                "ICLR 2025",
+                "ICLR 2026"
+              ],
+              "rows": 54
+            },
+            {
+              "docs": 1,
+              "entity_id": "4d86ae7524ddf7a1a5f887bcc04c2e13d62e783c73532ab5af3c09c7363c0629",
+              "forms": 9,
+              "key": "neurips",
+              "raws": [
+                "NeurIPS 2015",
+                "NeurIPS 2017",
+                "NeurIPS 2019",
+                "NeurIPS 2020",
+                "NeurIPS 2021",
+                "NeurIPS 2022",
+                "NeurIPS 2023",
+                "NeurIPS 2024",
+                "NeurIPS 2025"
+              ],
+              "rows": 30
+            },
+            {
+              "docs": 1,
+              "entity_id": "b2da3287945ae81d9a90578212c19ece865e56772ec1dd485a02eb8557aa8e5d",
+              "forms": 9,
+              "key": "icml",
+              "raws": [
+                "ICML 2008",
+                "ICML 2017",
+                "ICML 2019",
+                "ICML 2020",
+                "ICML 2022",
+                "ICML 2023",
+                "ICML 2024",
+                "ICML 2025",
+                "ICML 2026"
+              ],
+              "rows": 28
+            },
+            {
+              "docs": 1,
+              "entity_id": "904fc7c9ce010c2d3dee590e7e3ddf235e1e8850c2925d70b31a5f43272185d1",
+              "forms": 8,
+              "key": "emnlp",
+              "raws": [
+                "EMNLP 2018",
+                "EMNLP 2019",
+                "EMNLP 2020",
+                "EMNLP 2021",
+                "EMNLP 2022",
+                "EMNLP 2023",
+                "EMNLP 2024",
+                "EMNLP 2025"
+              ],
+              "rows": 45
+            },
+            {
+              "docs": 1,
+              "entity_id": "e546ff893f76877bae9445e087856702ae706b9a0eafc411bb270ab96ce36e74",
+              "forms": 7,
+              "key": "pvldb",
+              "raws": [
+                "PVLDB",
+                "PVLDB 2012",
+                "PVLDB 2018",
+                "PVLDB 2019",
+                "PVLDB 2020",
+                "PVLDB 2024",
+                "PVLDB 2025"
+              ],
+              "rows": 9
+            },
+            {
+              "docs": 1,
+              "entity_id": "39fca2ed2689a032c89e513e9a81b9f21d65c714c968c01acf99d9967ae2f696",
+              "forms": 7,
+              "key": "cikm",
+              "raws": [
+                "CIKM 2002",
+                "CIKM 2007",
+                "CIKM 2009",
+                "CIKM 2011",
+                "CIKM 2015",
+                "CIKM 2022",
+                "CIKM 2024"
+              ],
+              "rows": 8
+            },
+            {
+              "docs": 1,
+              "entity_id": "7c2ecd07f155648431e0f94b89247d713c5786e1e73e953f2fe7eca39534cd6d",
+              "forms": 7,
+              "key": "www",
+              "raws": [
+                "WWW 2001",
+                "WWW 2003",
+                "WWW 2007",
+                "WWW 2018",
+                "WWW 2020",
+                "WWW 2024",
+                "WWW 2025"
+              ],
+              "rows": 7
+            }
+          ],
+          "merged": 69,
+          "overrides": {
+            "merge": [],
+            "split": {},
+            "unmatched": []
+          },
+          "rows": 2570,
+          "sample": [
+            {
+              "docs": 1,
+              "entity_id": "58de277c2e5a851bad1acbc005489952aeb42b6c56c0e683cef3f38972128545",
+              "forms": 1,
+              "key": "internet mathematics 1(4",
+              "raws": [
+                "Internet Mathematics 1(4)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "ce991caf90c5e810de814f5bc8ac5e932c08fc9bc35a5fcaebe7b1a9bc3a0074",
+              "forms": 1,
+              "key": "neurips 2019 document intelligence workshop",
+              "raws": [
+                "NeurIPS 2019 Document Intelligence Workshop"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "38845e677afba2ffdb751240b5258207b5b2d4a7084299c31d4a83d99af7c0b6",
+              "forms": 1,
+              "key": "langsmith docs",
+              "raws": [
+                "LangSmith docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "2c39b10100912e1ab701842d99d2f150140ef9a87add5d39086be50f4039df95",
+              "forms": 1,
+              "key": "icml 2026 aiwild workshop",
+              "raws": [
+                "ICML 2026 AIWILD workshop"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "fecda74efc8261a981d76108746a1ae75539b488680a42c71b21601d26adf8b9",
+              "forms": 1,
+              "key": "findings of eacl 2024 / arxiv",
+              "raws": [
+                "Findings of EACL 2024 / arXiv"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c566d686bf5e4adc08b052b64e282938c0ce48735c059b6ea70182d95cd04fb1",
+              "forms": 1,
+              "key": "sap community",
+              "raws": [
+                "SAP Community"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "fbcc0ce415ef2c926e093c1d5415de9b80e63496842aa51b7871d59d73780ba2",
+              "forms": 1,
+              "key": "cursor docs",
+              "raws": [
+                "Cursor docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "50cd318de154a76199c9ede75f25ea3cefaf61aa0b00889c63e4f6ba4b4c0d6b",
+              "forms": 1,
+              "key": "rossum customer stories",
+              "raws": [
+                "Rossum customer stories"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "2b5787bbaec9dd86115ce8d90a6df14baa07e258e632dd7156cadfc2dc2088fd",
+              "forms": 1,
+              "key": "benchlm.ai",
+              "raws": [
+                "benchlm.ai"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "6471bdc54cecb2877a5dc5c0a12305e36b9811138049e0b5db6d5871c5ac966d",
+              "forms": 1,
+              "key": "indico data",
+              "raws": [
+                "Indico Data"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "481c936731fe38beff36fa583fe0914fa1db0d62894bac6c96c7c1b35f5865e8",
+              "forms": 1,
+              "key": "arxiv (tib",
+              "raws": [
+                "arXiv preprint (TIB)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "1578ed146dd61305cfd7a8b2db4ffad9096fde845de83526969590e4cce67aff",
+              "forms": 1,
+              "key": "information retrieval 10",
+              "raws": [
+                "Information Retrieval 10"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "31a3458e6ab4e947b4d9c8f5432e9d3a086ec27bc032323656a1692f1d2a8df4",
+              "forms": 1,
+              "key": "aws what's new",
+              "raws": [
+                "AWS What's New"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "44269a34ae23643138f81e43dac2f914ef17d92c1feca3cf38011fc452269ce2",
+              "forms": 1,
+              "key": "weaviate documentation",
+              "raws": [
+                "Weaviate documentation"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7d1507284a5757cac6b62708a4ef00bfc5d695256489cb704f12b4b9e6255df2",
+              "forms": 1,
+              "key": "aws",
+              "raws": [
+                "AWS"
+              ],
+              "rows": 3
+            },
+            {
+              "docs": 1,
+              "entity_id": "876a9f6f287271c9742eff74d87772e4159ec5d1bde7a93bd36fce34d066908c",
+              "forms": 1,
+              "key": "gem workshop 2025 (acl",
+              "raws": [
+                "GEM Workshop 2025 (ACL)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "07c11fdcafd3acc92515983dfd3734ce2fd20e39f26cbbf90ed3dccbc28c8efc",
+              "forms": 1,
+              "key": "dagster docs",
+              "raws": [
+                "Dagster docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c9dffda98186a33b21ea1c0192a2cc51418e059da0e5497545228e1acddc4fb7",
+              "forms": 1,
+              "key": "journal of applied meteorology",
+              "raws": [
+                "Journal of Applied Meteorology"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "fa04a819d0d3c898ccfd72e5673a68b153b36f0d4de67767194ee9eb69670712",
+              "forms": 1,
+              "key": "icassp",
+              "raws": [
+                "ICASSP 2022"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "f859bf7aab676861d86b50d40c9b4e6f8ae7606c0ce3d87583566c75d86cc42d",
+              "forms": 1,
+              "key": "voyage ai blog",
+              "raws": [
+                "Voyage AI blog"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "ab7d9ae5195c9d5f8045d6afd2c9ae807bbb2b12fbba967af2d002187b1d6abd",
+              "forms": 1,
+              "key": "google ai studio / gemini api docs",
+              "raws": [
+                "Google AI Studio / Gemini API docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "b6e023582a79c955b973ea31dd9c72563776df721523d0ad2d7f9a4cd12a888b",
+              "forms": 1,
+              "key": "casestudies.com",
+              "raws": [
+                "casestudies.com"
+              ],
+              "rows": 7
+            },
+            {
+              "docs": 1,
+              "entity_id": "f96699b5388b9d4b024d78a52effa62016805427b33b086559645b42ed379c41",
+              "forms": 1,
+              "key": "neo4j-graphrag-python docs",
+              "raws": [
+                "neo4j-graphrag-python docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "03eefcf504c6cd79d08a10006202ec2ca8216b41cb20cee3a657a83efe711441",
+              "forms": 1,
+              "key": "presidio docs",
+              "raws": [
+                "Presidio docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "2fec89d7c38a79890a869a659b37093704f206be3dc165e8611e682b3993790d",
+              "forms": 1,
+              "key": "manus blog",
+              "raws": [
+                "Manus blog"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "a9d21499d1b41fff3759226509c62adf15b698ab086d78cc9726b962389e137b",
+              "forms": 1,
+              "key": "forrester",
+              "raws": [
+                "Forrester"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "10a9c1675ea256306c26193e755dd7af50f3f1333e759ef1b745cdd7a2dc0f99",
+              "forms": 1,
+              "key": "arxiv (ibm research",
+              "raws": [
+                "arXiv preprint (IBM Research)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "24ba94182bc929e377be7f5747048f449cef9b0a2762b7c1d3e4d7a3d6324b76",
+              "forms": 1,
+              "key": "american political science review",
+              "raws": [
+                "American Political Science Review"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "0dfc6a8eb1419d4593025daa923c539ce8ee1fdb82b2ce1a07b37607562e5f7b",
+              "forms": 1,
+              "key": "arxiv 2024 (vectara; reported naacl 2025 findings",
+              "raws": [
+                "arXiv 2024 (Vectara; reported NAACL 2025 Findings)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "e01304ccfa72fe17ae97b715878999cfcd0c7c02178c0b6e866b79d38f9af004",
+              "forms": 2,
+              "key": "salesforce blog",
+              "raws": [
+                "Salesforce Blog",
+                "Salesforce blog"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "7cf8a567126e1135ef8aa9ef7ec524ac911b811b9e009695d51061e1445e59f9",
+              "forms": 1,
+              "key": "great expectations docs",
+              "raws": [
+                "Great Expectations docs"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "624cc3c97afc45b4a64ddf1c1e752ac3ad9ecde6537a97d2ba6f67888a42c41d",
+              "forms": 1,
+              "key": "nanonets.com",
+              "raws": [
+                "nanonets.com"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "13e3695d64eece5797a926901ebfe522c9faa43b2cf563d257109c7d5fa84366",
+              "forms": 1,
+              "key": "tacas",
+              "raws": [
+                "TACAS 2026"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "6b84e391a626b495c93d3a433d76bf16e5f2a3e303d3be78172c96e4d84fd4e1",
+              "forms": 1,
+              "key": "ieee mipr",
+              "raws": [
+                "IEEE MIPR 2024"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "313cbca8ff3962a9fdb622123a32396bacc697767298b3023d70bf92b5539c0f",
+              "forms": 3,
+              "key": "iccv",
+              "raws": [
+                "ICCV 2019",
+                "ICCV 2021",
+                "ICCV 2025"
+              ],
+              "rows": 4
+            },
+            {
+              "docs": 1,
+              "entity_id": "1eece6dd8ca293fc1ec329e1e4f90f02eb348be5a386d6461e45fb42af0b2d0a",
+              "forms": 1,
+              "key": "github (dify-docs",
+              "raws": [
+                "GitHub (dify-docs)"
+              ],
+              "rows": 8
+            },
+            {
+              "docs": 1,
+              "entity_id": "7198af4796a0b2e88e9ce39e0487e1962bdc9fa2fe59200e1a156c3f064177c7",
+              "forms": 1,
+              "key": "iclp 2025 (eptcs 439",
+              "raws": [
+                "ICLP 2025 (EPTCS 439)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "4b4f748832c1031916d0dde9bed6ff2abf40b49ecfad615476a0de3d42d2c93c",
+              "forms": 1,
+              "key": "pvldb 8(11",
+              "raws": [
+                "PVLDB 8(11) 2015"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7565596e156d44d780e2e1ca4ee1aba79a2713acf7fbe8a7ce40dcecaa149985",
+              "forms": 1,
+              "key": "icail",
+              "raws": [
+                "ICAIL 2026"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "369646341c44f9215ca3e57b5559f937aa7b5d75f11d96e484f3819c5256aa93",
+              "forms": 1,
+              "key": "acm ai summit 2026 (extended",
+              "raws": [
+                "ACM AI Summit 2026 (extended)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "4ea5878ff3a651a726f0c42bc6fa478bdd4d85e5ce6a0778e87c783123e143f4",
+              "forms": 1,
+              "key": "ssws 2015 @ iswc (ceur-ws vol. 1457",
+              "raws": [
+                "SSWS 2015 @ ISWC (CEUR-WS Vol. 1457)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "91429d8af4f70b9b2664dd4a4d76a6e9846e2e93911663aad29c9fdc262f9e1b",
+              "forms": 1,
+              "key": "neurips 2024 datasets and benchmarks",
+              "raws": [
+                "NeurIPS 2024 Datasets and Benchmarks"
+              ],
+              "rows": 8
+            },
+            {
+              "docs": 1,
+              "entity_id": "e2004bbb1e2952a25f8cb67c5b57bd0d83eb49ca3f7d24e63741c349264d72a3",
+              "forms": 1,
+              "key": "docling docs",
+              "raws": [
+                "Docling docs"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "13944f75f4a7a80f0f256372225df2803a0c1a6293d6151167a8e733a5bdebf9",
+              "forms": 1,
+              "key": "harvard data science review",
+              "raws": [
+                "Harvard Data Science Review (2024)"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "ea0f3cd0ad0bed6ebe3b7274609880d000c96fefaa92ee06a0c4b8ff86b80155",
+              "forms": 1,
+              "key": "decagon blog",
+              "raws": [
+                "Decagon blog"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "924fae4ea66e1f16a649548d061f67bd28cb08141f9f9152f8e404033ad4da7e",
+              "forms": 1,
+              "key": "infrrd.ai",
+              "raws": [
+                "infrrd.ai"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "c699def5ff928f39e120d31804d9de627f368901483d3c4d428fd9bedb032961",
+              "forms": 1,
+              "key": "journalism.co.uk",
+              "raws": [
+                "Journalism.co.uk"
+              ],
+              "rows": 1
+            },
+            {
+              "docs": 1,
+              "entity_id": "7b3d08afbdb077c7c75a71c31f75fd74b422dd752c9c0790759e4e97a46ebdfb",
+              "forms": 1,
+              "key": "ampcode.com",
+              "raws": [
+                "ampcode.com"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "b73e84087aa111f5e294cb6c7b9ac60090552b5ab76901f25e15ec7e9ca904b1",
+              "forms": 1,
+              "key": "search engine journal",
+              "raws": [
+                "Search Engine Journal"
+              ],
+              "rows": 2
+            },
+            {
+              "docs": 1,
+              "entity_id": "5a5ba7838b2ad7032534ddc61ff29f841d755d96214128ea318fa002ddfe6c97",
+              "forms": 1,
+              "key": "information processing & management 36(5",
+              "raws": [
+                "Information Processing & Management 36(5)"
+              ],
+              "rows": 1
+            }
+          ],
+          "seed": 20261120,
+          "singletons": 836
+        }
+      },
+      "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+      "store": ".cache/store-p2/research",
+      "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+    }
+  },
+  "note": "operator-only entity reports of the promoted 3A builds (store reports, never served to callers); seeded samples of clusters for inspection (spec section 6): every cluster when a type has 50 or fewer"
+}

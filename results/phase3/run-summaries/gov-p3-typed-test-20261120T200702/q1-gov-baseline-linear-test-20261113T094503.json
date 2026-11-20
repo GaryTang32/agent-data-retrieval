@@ -1,0 +1,178 @@
+{
+  "also_in": [],
+  "b": 25,
+  "baseline": {
+    "accuracy": 0.07407407407407407,
+    "correct": 2,
+    "n_run": 27,
+    "system": "baseline-linear"
+  },
+  "baseline_misses": [
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-001",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-005",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-006",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-012",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-013",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-014",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-015",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-016",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-017",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-019",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-021",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-023",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "abstained",
+      "item_id": "gov-count_filter-026",
+      "outcome": "abstained",
+      "query_exec_match": true
+    },
+    {
+      "cause": "abstained",
+      "item_id": "gov-count_filter-027",
+      "outcome": "abstained",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-028",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-029",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-030",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "abstained",
+      "item_id": "gov-count_filter-031",
+      "outcome": "abstained",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-032",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-034",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-039",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-040",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-046",
+      "outcome": "wrong",
+      "query_exec_match": true
+    },
+    {
+      "cause": "abstained",
+      "item_id": "gov-count_filter-047",
+      "outcome": "abstained",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "item_id": "gov-count_filter-050",
+      "outcome": "wrong",
+      "query_exec_match": true
+    }
+  ],
+  "baseline_run": "gov-baseline-linear-test-20261113T094503",
+  "c": 0,
+  "corpus": "gov",
+  "mcnemar_p": 5.960464477539063e-08,
+  "misses": [],
+  "n": 27,
+  "only_baseline": [],
+  "only_typed": [],
+  "split": "test",
+  "typed": {
+    "accuracy": 1.0,
+    "correct": 27,
+    "n_run": 27,
+    "system": "p3-typed"
+  },
+  "typed_run": "gov-p3-typed-test-20261120T200702"
+}

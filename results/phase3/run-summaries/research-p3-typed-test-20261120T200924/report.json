@@ -1,0 +1,383 @@
+{
+  "corpus": "research",
+  "determinism": {
+    "answer_agreement": null,
+    "k": 1,
+    "pass^k": 0.9629629629629629,
+    "retrieval_identity_rate": null
+  },
+  "determinism_violation": false,
+  "end_to_end": {
+    "abstention_rate": 0.0,
+    "accuracy": 0.9629629629629629,
+    "by_qtype": {
+      "count_filter": {
+        "abstention_rate": 0.0,
+        "accuracy": 0.9629629629629629,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              0.8888888888888888,
+              1.0
+            ],
+            "mean": 0.9629629629629629,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                0.7777777777777778,
+                1.0
+              ],
+              "mean": 0.9259259259259259,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                0.5555555555555556,
+                1.0
+              ],
+              "mean": 0.8518518518518519,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                -0.11111111111111137,
+                1.0
+              ],
+              "mean": 0.6296296296296297,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 26,
+          "error": 0,
+          "partial": 0,
+          "wrong": 1
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 0.9259259259259259,
+          "0.75": 0.8518518518518519,
+          "0.9": 0.6296296296296297
+        }
+      }
+    },
+    "by_rarity": {
+      "head": {
+        "abstention_rate": 0.0,
+        "accuracy": 0.9629629629629629,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              0.8888888888888888,
+              1.0
+            ],
+            "mean": 0.9629629629629629,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                0.7777777777777778,
+                1.0
+              ],
+              "mean": 0.9259259259259259,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                0.5555555555555556,
+                1.0
+              ],
+              "mean": 0.8518518518518519,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                -0.11111111111111137,
+                1.0
+              ],
+              "mean": 0.6296296296296297,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 26,
+          "error": 0,
+          "partial": 0,
+          "wrong": 1
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 0.9259259259259259,
+          "0.75": 0.8518518518518519,
+          "0.9": 0.6296296296296297
+        }
+      }
+    },
+    "by_rarity_qtype": {
+      "head/count_filter": {
+        "abstention_rate": 0.0,
+        "accuracy": 0.9629629629629629,
+        "ci": {
+          "accuracy": {
+            "ci95": [
+              0.8888888888888888,
+              1.0
+            ],
+            "mean": 0.9629629629629629,
+            "n": 27
+          },
+          "penalised": {
+            "0.5": {
+              "ci95": [
+                0.7777777777777778,
+                1.0
+              ],
+              "mean": 0.9259259259259259,
+              "n": 27
+            },
+            "0.75": {
+              "ci95": [
+                0.5555555555555556,
+                1.0
+              ],
+              "mean": 0.8518518518518519,
+              "n": 27
+            },
+            "0.9": {
+              "ci95": [
+                -0.11111111111111137,
+                1.0
+              ],
+              "mean": 0.6296296296296297,
+              "n": 27
+            }
+          }
+        },
+        "counts": {
+          "abstained": 0,
+          "correct": 26,
+          "error": 0,
+          "partial": 0,
+          "wrong": 1
+        },
+        "error_rate": 0.0,
+        "n": 27,
+        "partial_rate": 0.0,
+        "penalised": {
+          "0.5": 0.9259259259259259,
+          "0.75": 0.8518518518518519,
+          "0.9": 0.6296296296296297
+        }
+      }
+    },
+    "ci": {
+      "accuracy": {
+        "ci95": [
+          0.8888888888888888,
+          1.0
+        ],
+        "mean": 0.9629629629629629,
+        "n": 27
+      },
+      "penalised": {
+        "0.5": {
+          "ci95": [
+            0.7777777777777778,
+            1.0
+          ],
+          "mean": 0.9259259259259259,
+          "n": 27
+        },
+        "0.75": {
+          "ci95": [
+            0.5555555555555556,
+            1.0
+          ],
+          "mean": 0.8518518518518519,
+          "n": 27
+        },
+        "0.9": {
+          "ci95": [
+            -0.11111111111111137,
+            1.0
+          ],
+          "mean": 0.6296296296296297,
+          "n": 27
+        }
+      }
+    },
+    "citation_precision": null,
+    "cost_usd": 0.0,
+    "counts": {
+      "abstained": 0,
+      "correct": 26,
+      "error": 0,
+      "partial": 0,
+      "wrong": 1
+    },
+    "error_count": 0,
+    "error_rate": 0.0,
+    "evidence_cited_rate": null,
+    "json_recovered_by_stage": {
+      "answer": 0,
+      "judge": 0,
+      "judge_check": 0,
+      "query": 0
+    },
+    "json_recovered_rows": 0,
+    "latency_n": 0,
+    "latency_p50_s": null,
+    "latency_p95_s": null,
+    "n": 27,
+    "partial_rate": 0.0,
+    "penalised": {
+      "0.5": 0.9259259259259259,
+      "0.75": 0.8518518518518519,
+      "0.9": 0.6296296296296297
+    },
+    "spent_usd": 0.0,
+    "tokens": {
+      "in": 59671,
+      "out": 2027
+    }
+  },
+  "g1": {
+    "manifest": {
+      "applicability": null,
+      "corpus": "research",
+      "extraction": null,
+      "format_version": "0.1",
+      "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+      "tables": [
+        {
+          "contract_sha256": "dba12b9c7a80b7bd646b4bda2af5178458e407a6331a8f091cfe68f5cb60c8ed",
+          "contract_version": 1,
+          "file": "authors-v1-83a332be92bce656.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 7417,
+          "sha256": "83a332be92bce656184672787c69ed8d985913d9d2621d68276317d94f9cb42c",
+          "table": "authors"
+        },
+        {
+          "contract_sha256": "f6d05fd223dd444cb1414c07ab420c0c03318fac2141ea2e4b7d8fdc63772d95",
+          "contract_version": 1,
+          "file": "licences-v1-24c5dd909ecc4c87.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 34,
+          "sha256": "24c5dd909ecc4c878c5fce07edfffee7e3a14553d8105c395680421c2448ac5a",
+          "table": "licences"
+        },
+        {
+          "contract_sha256": "f30f70b5aa0ea0ff6a9d61b6f53817ec4764c122881aa24e284c448c27bc889b",
+          "contract_version": 1,
+          "file": "paper_authors-v1-4447fdfff1dfebe7.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 9683,
+          "sha256": "4447fdfff1dfebe7af9ff7410e05004d2b45849b863b737e3d2efa64ee0198d5",
+          "table": "paper_authors"
+        },
+        {
+          "contract_sha256": "a85744ab89450ac0c3ec4d7376d16ba1e5619a7ddddaec86e173b8a5d95388c4",
+          "contract_version": 1,
+          "file": "papers-v1-3bfc8d1f9068dc74.jsonl",
+          "kind": "data",
+          "rejected": 0,
+          "rows": 2570,
+          "sha256": "3bfc8d1f9068dc7438228286aae56e433ad1d5b9dda4ac5095a1b14418359077",
+          "table": "papers"
+        },
+        {
+          "contract_sha256": "24d8350d2d29ddd780915e9aa922fc14b19e2e54c6b9661f6ac7ff4bcfdb1fb3",
+          "contract_version": 1,
+          "file": "venues-v1-4c7a0b3f3358db3c.jsonl",
+          "kind": "entity",
+          "rejected": 0,
+          "rows": 1098,
+          "sha256": "4c7a0b3f3358db3cf63ed00b38b8354472ae7f4e8fa197059f2835fbb7c2b301",
+          "table": "venues"
+        }
+      ]
+    },
+    "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+  },
+  "g2": {
+    "entity_f1": 0.5555555555555556,
+    "entity_n": 27,
+    "exact": 0.3333333333333333,
+    "exec_match": 0.9629629629629629,
+    "exec_n": 27,
+    "n": 27,
+    "per_field": {
+      "as_of": 1.0,
+      "entities": 0.4074074074074074,
+      "filters": 0.8888888888888888,
+      "op": 1.0,
+      "store": 1.0
+    },
+    "route_accuracy": 1.0,
+    "route_n": 27
+  },
+  "g3": {
+    "by_qtype": {},
+    "by_rarity": {},
+    "by_rarity_qtype": {},
+    "pooled": {
+      "ci": {
+        "coverage@10": null,
+        "mrr": null,
+        "ndcg@10": null,
+        "recall@10": null
+      },
+      "coverage@10": null,
+      "full_coverage": null,
+      "mrr": null,
+      "n": 0,
+      "n_multi_span": 0,
+      "ndcg@10": null,
+      "recall@10": null,
+      "tokens@10": null
+    }
+  },
+  "generator_model": "claude-sonnet-5-5",
+  "judge": {
+    "check_errors": 0,
+    "human_kappa": null,
+    "model": "claude-opus-5-5",
+    "proxy_agreement": null,
+    "proxy_kappa": null,
+    "proxy_kappa_binary": null,
+    "proxy_kappa_n": 0,
+    "proxy_kappa_note": "proxy, not human κ: judge vs the exact scorer on number/set/id items",
+    "same_family_judge": true,
+    "self_consistency": null,
+    "self_consistency_n": 0
+  },
+  "metrics_version": 2,
+  "n_items": 27,
+  "n_rows": 27,
+  "repeats": 1,
+  "run_id": "research-p3-typed-test-20261120T200924",
+  "snapshot": "23ad670175b7fa58f4ba5464842f512adabc53821b44d86a3cb9426dc74099d1",
+  "split": "test",
+  "status": "complete",
+  "stub": false,
+  "system": "p3-typed",
+  "w": null,
+  "warnings": [
+    "judge and generator share a model family"
+  ]
+}
