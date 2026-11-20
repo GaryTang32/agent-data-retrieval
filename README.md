@@ -3,8 +3,8 @@
 > **Status: work in progress.** This repository is under active development and is not
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
 > harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, and Phase 2:
-> applicability filters, permissions, tools as data and an MCP server. Phase 3 is being designed;
-> Phases 3–6 are not built yet. Interfaces, file formats and results may change without notice.
+> applicability filters, permissions, tools as data and an MCP server. Phase 3, the typed database, is being
+> built (8 of 12 tasks done); Phases 4–6 are not started. Interfaces, file formats and results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -47,7 +47,7 @@ flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
     P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
     P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ merged"]
-    P3["Phase 3<br/>Typed database<br/>🔄 in design"]
+    P3["Phase 3<br/>Typed database<br/>🔄 in build"]
     P4["Phase 4<br/>Knowledge units"]
     P5["Phase 5<br/>Graph and<br/>navigation"]
     P6["Phase 6<br/>Closed loop and<br/>governance"]
