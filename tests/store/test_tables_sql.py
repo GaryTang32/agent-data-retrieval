@@ -73,12 +73,16 @@ def gov_db(tmp_path_factory):
     path = tmp_path_factory.mktemp("sql") / "store"
     make_tables_store(path)
     result = build_tables(path, "gov")
-    return ViewDB.build(path, ov.load_manifest(path, result.tables_id), result.tables_id, None)
+    db = ViewDB.build(path, ov.load_manifest(path, result.tables_id), result.tables_id, None)
+    yield db
+    db.close()   # refusals kept in tracebacks hold the database in cycles: close it here
 
 
 @pytest.fixture(scope="module")
 def gov_db_reversed(gov_db):
-    return _copy_reversed(gov_db)
+    db = _copy_reversed(gov_db)
+    yield db
+    db.close()
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +94,9 @@ def big_db():
         "year": 2024, "title": None, "cfr_parts": [], "action": None, "effective_on": None,
         "status": None, "other_ids": [], "title_state": None, "title_waterway_keys": []})
         for i in range(1205)]
-    return ViewDB.from_rows({"fr_documents": c}, {"fr_documents": rows})
+    db = ViewDB.from_rows({"fr_documents": c}, {"fr_documents": rows})
+    yield db
+    db.close()
 
 
 def _schema(db):

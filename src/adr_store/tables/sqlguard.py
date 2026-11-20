@@ -210,6 +210,7 @@ class _Guard:
     def close(self) -> None:
         if self._dates is not None:
             self._dates.close()
+            self._dates = None
 
     def refusal(self, e: sqlite3.Error) -> SqlRefused:
         if self.over_budget:
