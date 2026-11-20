@@ -16,6 +16,9 @@ A cell is {"value": <value or null>, "quote": "<text from the section>" or null,
   text[] column give one quote that holds every item of the list.
 - When the section states nothing for a column, the cell is {"value": null, "quote": null,
   "null_reason": "absent"}; use "not_applicable" when the column cannot apply to the section.
+- Every non-null value needs a quote, false included: a bool is false only when the section
+  states it (for example "need not open"). A false that would rest on the section saying
+  nothing is {"value": null, "quote": null, "null_reason": "absent"}.
 
 Section columns (one cell each, under "section"):
 $section_columns

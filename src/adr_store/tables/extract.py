@@ -70,8 +70,8 @@ from adr_store.tables.provenance import (
     value_prov,
 )
 
-PROMPT_VERSION = "drawbridge-extract@1"
-SECOND_PASS_VERSION = "drawbridge-questions@1"
+PROMPT_VERSION = "drawbridge-extract@2"
+SECOND_PASS_VERSION = "drawbridge-questions@2"
 MAX_TOKENS = 4000   # up to 10 draws x 5 columns x (value, quote, reason) per section
 SECTION_COLUMNS = ("waterway", "seasonal", "owner_or_agency", "vhf_channel")
 DRAW_COLUMNS = ("bridge", "mile", "notice_hours", "opens_on_signal", "closed_periods")
