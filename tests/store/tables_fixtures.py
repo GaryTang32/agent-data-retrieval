@@ -13,7 +13,7 @@ from pathlib import Path
 
 from adr_eval.corpora.base import Document, LoadedCorpus
 from adr_eval.corpora.extract import extract_text
-from adr_eval.corpora.gov import fr_document_url
+from adr_eval.corpora.gov import ecfr_url, fr_document_url
 from adr_eval.models import Manifest, ManifestDoc
 from adr_store import acl
 from adr_store import applicability as ap
@@ -79,8 +79,24 @@ FR_DOCS: list[tuple[Document, bytes]] = [
     # no agencies, no references, no docket ids
     fr_doc("2024-00006", agencies=[], cfr=(), dockets=(), title="Temporary change – \"x\""),
 ]
+# a bare continuation number: "17-105" carries the letters of the docket part before it
+FR_DOCS.append(fr_doc(
+    "2024-00007", agencies=[FCC], cfr=({"title": 47, "part": "73"},),
+    title="Television Broadcasting Services; Fixture",
+    dockets=("MB Docket Nos. 17-317, 17-105", "ET Docket No. 99-1, 99-2")))
 MANIFEST: tuple[Document, bytes] = _doc(MANIFEST_BYTES, "csv", "sha256:fixture",
                                          "file://papers/manifest.csv")
+
+
+ECFR_117 = (Path(__file__).parents[1] / "fixtures" / "tables" / "ecfr_117.xml").read_bytes()
+ECFR_OLD, ECFR_NEW = "2025-06-27", "2026-06-26"
+
+
+def ecfr_doc(date: str, raw: bytes = ECFR_117) -> tuple[Document, bytes]:
+    """33 CFR 117 as of `date`; the older version differs from the newest in one section."""
+    if date != ECFR_NEW:
+        raw = raw.replace(b"four hours notice", b"two hours notice")
+    return _doc(raw, "xml", date, ecfr_url(33, "117", date))
 
 
 def make_tables_store(path: Path, docs=None, *, rules=None) -> Store:

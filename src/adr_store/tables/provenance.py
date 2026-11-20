@@ -30,7 +30,14 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adr_eval.corpora.research import _csv_rows_with_spans, _row_id
-from adr_store.tables.parse import author_key, author_tokens, header_line, scan_dockets
+from adr_store.tables.parse import (
+    STATES,
+    author_key,
+    author_tokens,
+    header_line,
+    scan_dockets,
+    waterway_key,
+)
 
 if TYPE_CHECKING:
     from adr_store.tables.contracts import Contract
@@ -227,6 +234,9 @@ RESLICERS.update({
     "fr.cfr_part": _cfr_label,
     "fr.cfr_title": _int_of("title"),
     "fr.cfr_part_number": _int_of("part"),
+    # a drawbridge title's state code, and one comma part of it (as written in the title)
+    "fr.title_state": lambda t, s, e: STATES[_string_part(t, s, e)],
+    "fr.title_waterway_keys": lambda t, s, e: waterway_key(_string_part(t, s, e)),
 })
 
 MANIFEST_COLUMNS = ("research", "topic", "also_in", "type", "title", "authors", "year", "venue",

@@ -75,6 +75,7 @@ def fr_row(doc_id: str, number: str, **over) -> RowRecord:
         "publication_date": "2024-01-17", "year": 2024, "title": FR_BODY["title"],
         "cfr_parts": ["33 CFR 117", "46 CFR 2"], "action": FR_BODY["action"],
         "effective_on": None, "status": "final_rule", "other_ids": ["FCC 19-123"],
+        "title_state": None, "title_waterway_keys": [],
     }
     prov = {
         "id": value_prov(doc_id, "fr.id@1", at("document_number")),
@@ -90,6 +91,8 @@ def fr_row(doc_id: str, number: str, **over) -> RowRecord:
         "effective_on": null_prov(doc_id, "fr.effective_on@1", "absent"),
         "status": value_prov(doc_id, "fr.status@1"),
         "other_ids": [value_prov(doc_id, "fr.other_ids@1", at("docket_ids", 1))],
+        "title_state": null_prov(doc_id, "fr.title_state@1", "not_applicable"),
+        "title_waterway_keys": [],
     }
     row.update({k: v for k, v in over.items() if k in row})
     return RowRecord(doc_id=doc_id, row=row, prov=prov)
@@ -119,15 +122,18 @@ def test_committed_contracts_load_and_reference_their_own_columns():
 
 
 def test_contracts_load_by_corpus():
-    assert set(load_contracts(corpus="gov")) == {"fr_documents", "fr_cfr_refs", "fr_agencies",
-                                                 "fr_dockets"}
-    assert set(load_contracts(corpus="research")) == {"papers", "paper_authors"}
+    assert set(load_contracts(corpus="gov")) == {
+        "fr_documents", "fr_cfr_refs", "fr_agencies", "fr_dockets",
+        "agencies", "cfr_parts", "dockets", "waterways"}
+    assert set(load_contracts(corpus="research")) == {"papers", "paper_authors", "venues",
+                                                      "licences", "authors"}
 
 
 def test_committed_fr_documents_contract_has_the_brief_columns():
     cols = {c.name: c for c in CONTRACT.columns}
     assert list(cols) == ["id", "type", "agency", "publication_date", "year", "title",
-                          "cfr_parts", "action", "effective_on", "status", "other_ids"]
+                          "cfr_parts", "action", "effective_on", "status", "other_ids",
+                          "title_state", "title_waterway_keys"]
     assert cols["type"].allowed == ["Rule", "Proposed Rule", "Notice", "Presidential Document"]
     assert cols["status"].allowed == ["codified", "final_rule", "temporary_rule",
                                       "proposed_rule", "notice", "guidance", "unknown"]
@@ -400,7 +406,8 @@ def test_a_second_row_with_the_same_key_is_rejected(tmp_path):
 def test_the_report_counts_rows_and_null_reasons_by_column(tmp_path):
     tf = write_table(tmp_path, SNAP, CONTRACT, ROWS, report := {})
     assert report["rows"] == 3 and report["table"] == "fr_documents"
-    assert report["null_reasons"] == {"effective_on": {"absent": 3}}
+    assert report["null_reasons"] == {"effective_on": {"absent": 3},
+                                      "title_state": {"not_applicable": 3}}
     rp = tmp_path / "tables" / SNAP / tf.file.replace(".jsonl", ".report.json")
     assert json.loads(rp.read_text(encoding="utf-8")) == report
     assert rp.name != tf.file and rp.read_bytes() != (tmp_path / "tables" / SNAP / tf.file

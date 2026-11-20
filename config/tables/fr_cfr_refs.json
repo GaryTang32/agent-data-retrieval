@@ -31,6 +31,13 @@
       "nullable": true,
       "description": "CFR part number.",
       "spec_id": "fr.cfr_part_number@1"
+    },
+    {
+      "name": "cfr_part_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the CFR part (SHA-256 of its normalisation key).",
+      "spec_id": "fr.cfr_part_id@1"
     }
   ],
   "key": [
@@ -47,5 +54,7 @@
     "selector": "fr",
     "loader": "metadata"
   },
-  "entities": {}
+  "entities": {
+    "cfr_part_id": "cfr_parts"
+  }
 }

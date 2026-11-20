@@ -14,6 +14,7 @@ from adr_store import applicability as ap
 from adr_store.store import Store
 from adr_store.tables import overlay as ov
 from adr_store.tables.build import build_tables
+from adr_store.tables.ecfr import chain_docs, ecfr_sections, link_summary, waterway_links
 from adr_store.tables.loaders import fr_tables, papers_tables, records_view
 from adr_store.tables.provenance import MANIFEST_COLUMNS, reslice
 from tests.store.tables_fixtures import loaded_of
@@ -23,6 +24,11 @@ GOV_FIELDS = ["id", "type", "agency", "publication_date", "year", "title", "cfr_
 RESEARCH_FIELDS = ["id", *MANIFEST_COLUMNS[:6], "year", *MANIFEST_COLUMNS[7:]]
 
 pytestmark = pytest.mark.realdata
+
+# values computed from several places, or from the entity overrides, have no span of their own
+NO_SPAN = {"fr.agency_position@1", "fr.agency_specific@1", "fr.status@1", "fr.agency_id@1",
+           "fr.cfr_part_id@1", "fr.docket_id@1", "papers.venue_id@1", "papers.licence_id@1",
+           "papers.author_id@1"}
 
 
 def as_list(x):
@@ -46,6 +52,8 @@ def all_spans_reslice(store: Store, tables: dict) -> int:
             text = texts[r.doc_id]
             for col, p in r.prov.items():
                 for one, v in zip(as_list(p), as_list(r.row[col]), strict=True):
+                    if one.start is None and one.null_reason is None:
+                        assert one.spec_id in NO_SPAN, (r.doc_id[:8], col, one.spec_id)
                     if one.start is not None:
                         assert reslice(text, one, v), (r.doc_id[:8], col, one.span, v)
                         checked += 1
@@ -103,3 +111,22 @@ def test_real_federal_register_reference_and_docket_counts():
     assert len({r.row["docket"] for r in tables["fr_dockets"]}) == 157
     assert sum(len(r.row["other_ids"]) for r in tables["fr_documents"]) == 140
     assert len(tables["fr_agencies"]) == 278
+
+
+def test_real_drawbridge_titles_link_to_the_newest_sections_of_part_117():
+    """54 drawbridge titles (the survey's count, colon form included); 47 link on (waterway key,
+    state); the 7 that do not are named, by reason."""
+    store = store_of("gov")
+    path = store.path
+    m = ov.load_manifest(path, build_tables(path, "gov").tables_id)
+    fr = ov.load_rows(path, m, "fr_documents")
+    sections = ecfr_sections(store, chain_docs(store)[-1])
+    assert len(sections) == 424 and sum(1 for u in sections if u.state is None) == 26
+    assert all(u.state_span is not None for u in sections if u.state is not None)
+    links = waterway_links(fr, sections)
+    assert link_summary(links) == {
+        "titles": 54, "linked": 47, "unlinked": 7,
+        "unlinked_by_reason": {"no_matching_heading": 5, "state_mismatch": 2}}
+    assert {u["id"] for u in links["unlinked"]} == {
+        "2023-06925", "2024-02084", "2024-03455", "2024-03462", "2026-00932", "2026-01398",
+        "2026-01400"}

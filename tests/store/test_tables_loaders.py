@@ -102,8 +102,8 @@ def test_every_value_span_reslices(tables_store, fr, papers):
 
 
 def test_every_value_without_a_span_is_derived_or_null(fr, papers):
-    """Only values computed from several places (positions, flags, the overlay's status) and
-    nulls carry no span."""
+    """Only values computed from several places (positions, flags, the overlay's status, the
+    entity ids) and nulls carry no span."""
     unlocated = set()
     for rows in [*fr.values(), *papers.values()]:
         for r in rows:
@@ -111,7 +111,21 @@ def test_every_value_without_a_span_is_derived_or_null(fr, papers):
                 for one in as_list(p):
                     if one.start is None and one.null_reason is None:
                         unlocated.add(one.spec_id)
-    assert unlocated == {"fr.agency_position@1", "fr.agency_specific@1", "fr.status@1"}
+    assert unlocated == {"fr.agency_position@1", "fr.agency_specific@1", "fr.status@1",
+                         "fr.agency_id@1", "fr.cfr_part_id@1", "fr.docket_id@1",
+                         "papers.venue_id@1", "papers.licence_id@1", "papers.author_id@1"}
+
+
+def test_a_bare_continuation_number_is_located_and_reslices(tables_store, fr):
+    """"MB Docket Nos. 17-317, 17-105": the second number stands in a part of its own, and its
+    docket is read with the letters of the part before it."""
+    rows = by_id(fr["fr_dockets"], "2024-00007")
+    assert [r.row["docket"] for r in rows] == ["MB 17-317", "MB 17-105", "ET 99-1", "ET 99-2"]
+    text = tables_store.text(rows[0].doc_id)
+    spans = [text[slice(*r.prov["docket"].span)] for r in rows]
+    assert spans == ["17-317", "17-105", "99-1", "99-2"]
+    assert all(reslice(text, r.prov["docket"], r.row["docket"]) for r in rows)
+    assert not reslice(text, rows[1].prov["docket"], "17-105")    # the letters matter
 
 
 # -- dockets and authors -------------------------------------------------------------------------
@@ -329,7 +343,7 @@ def test_paper_authors_one_row_per_author_with_et_al_as_a_flag(papers):
             for r in papers["paper_authors"]]
     assert rows == [
         (1, 0, "A. Smith", "a. smith", True), (1, 1, "B. Jones", "b. jones", True),
-        (2, 0, "Ann Lee", "ann lee", False), (2, 1, "Bo Chen.", "bo chen.", False),
+        (2, 0, "Ann Lee", "ann lee", False), (2, 1, "Bo Chen.", "bo chen", False),
         (3, 0, 'Dr "Bob" Smith', 'dr "bob" smith', False), (3, 1, "C. Doe", "c. doe", False)]
     assert {r.row["id"] for r in papers["paper_authors"] if r.row["row"] in (1, 2)} == {
         "2501.00001"}
@@ -372,10 +386,11 @@ def test_build_writes_every_metadata_table_of_the_corpus(tmp_path):
     store = make_tables_store(tmp_path / "s")
     result = build_tables(store.path, "gov")
     assert isinstance(result, BuildResult)
-    assert [t.table for t in result.tables] == ["fr_agencies", "fr_cfr_refs", "fr_dockets",
-                                                "fr_documents"]
-    assert {t.table: t.rows for t in result.tables} == {
-        "fr_agencies": 8, "fr_cfr_refs": 6, "fr_dockets": 8, "fr_documents": 6}
+    data = [t for t in result.tables if t.kind == "data"]
+    assert [t.table for t in data] == ["fr_agencies", "fr_cfr_refs", "fr_dockets",
+                                       "fr_documents"]
+    assert {t.table: t.rows for t in data} == {
+        "fr_agencies": 9, "fr_cfr_refs": 7, "fr_dockets": 12, "fr_documents": 7}
     assert all(t.rejected == 0 for t in result.tables)
     m = ov.load_manifest(store.path, result.tables_id)
     assert (m.snapshot, m.corpus, m.extraction) == (store.snapshot_id, "gov", None)
@@ -389,7 +404,7 @@ def test_build_writes_every_metadata_table_of_the_corpus(tmp_path):
 def test_build_writes_the_research_tables_without_an_overlay(tmp_path):
     store = make_tables_store(tmp_path / "s")
     result = build_tables(store.path, "research")
-    assert {t.table: (t.rows, t.rejected) for t in result.tables} == {
+    assert {t.table: (t.rows, t.rejected) for t in result.tables if t.kind == "data"} == {
         "paper_authors": (6, 0), "papers": (5, 0)}
     assert ov.load_manifest(store.path, result.tables_id).applicability is None
     rows = ov.load_rows(store.path, ov.load_manifest(store.path, result.tables_id), "papers")

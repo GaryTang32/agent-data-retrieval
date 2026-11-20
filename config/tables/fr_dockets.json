@@ -24,6 +24,13 @@
       "nullable": false,
       "description": "The docket string as the document gives it.",
       "spec_id": "fr.docket_raw@1"
+    },
+    {
+      "name": "docket_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the docket (SHA-256 of its normalisation key).",
+      "spec_id": "fr.docket_id@1"
     }
   ],
   "key": [
@@ -40,5 +47,7 @@
     "selector": "fr",
     "loader": "metadata"
   },
-  "entities": {}
+  "entities": {
+    "docket_id": "dockets"
+  }
 }

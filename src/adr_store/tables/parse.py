@@ -1,6 +1,7 @@
-"""String parsing shared by the 3A loaders and the T3 re-slicers (Phase 3 spec §5.3, §5.4): the
-docket strings of a Federal Register document, the authors string of a manifest row, and the
-character offsets of the pieces in the text they were read from. Pure functions of their
+"""String parsing shared by the 3A loaders and the T3 re-slicers (Phase 3 spec §5.3, §5.4, §6):
+the docket strings of a Federal Register document, the authors string of a manifest row, the
+drawbridge titles, the base normalisation key, and the character offsets of the pieces in the
+text they were read from. Pure functions of their
 arguments; nothing here reads a store.
 
 `scan_dockets` and `author_parts` return each piece with its offsets in the string, so a loader
@@ -12,6 +13,8 @@ from __future__ import annotations
 
 import csv
 import re
+import string
+import unicodedata
 from dataclasses import dataclass
 
 _DOCKET = re.compile(r"^(?:([A-Z]{2,3}) )?Docket (?:Nos?\.|Numbers?) ?\[?(.+)$")
@@ -107,10 +110,58 @@ def split_authors(authors: str) -> tuple[list[str], bool]:
     return [n.text for n in names], et_al
 
 
+def base_key(raw: str) -> str:
+    """The base normalisation key (§6): Unicode NFKC, case-folded, whitespace collapsed to
+    single spaces, surrounding punctuation and spaces stripped."""
+    s = " ".join(unicodedata.normalize("NFKC", raw).casefold().split())
+    return s.strip(string.punctuation + " ")
+
+
 def author_key(raw: str) -> str:
-    """The normalised name key of an author as written (the plain case-folded form, until the
-    entity layer defines the authors key)."""
-    return raw.casefold()
+    """The normalised name key of an author as written: the base key. The one definition of the
+    authors key: the loader and the re-slicer both call it."""
+    return base_key(raw)
+
+
+def waterway_key(raw: str) -> str:
+    """The key of a waterway as written: the base key without a leading "the "."""
+    return re.sub(r"^the\s+", "", base_key(raw))
+
+
+# -- drawbridge titles ---------------------------------------------------------------------------
+
+STATES: dict[str, str] = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia",
+    "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
+    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire",
+    "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina",
+    "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania",
+    "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee",
+    "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming", "DC": "District of Columbia",
+    "PR": "Puerto Rico", "VI": "Virgin Islands", "GU": "Guam", "AS": "American Samoa",
+    "MP": "Northern Mariana Islands",
+}
+_DRAWBRIDGE_TITLE = re.compile(r"^Drawbridge Operation Regulations?(?:\s*[;:]\s*|\s*$)")
+
+
+def drawbridge_title(title: str) -> tuple[list[Piece], Piece | None] | None:
+    """The comma parts of a drawbridge title with their offsets in it, and the state code that
+    ends it (a part of two capital letters that is a USPS code, not among the parts), or None
+    when the title is no drawbridge title: it starts "Drawbridge Operation Regulation" or
+    "Regulations" and goes on with `;` or `:` (or ends). Empty parts are dropped."""
+    m = _DRAWBRIDGE_TITLE.match(title)
+    if m is None:
+        return None
+    parts = [Piece(p.text, p.start + m.end(), p.end + m.end())
+             for p in _comma_parts(title[m.end():])]
+    state = None
+    if parts and parts[-1].text in STATES:
+        state = parts.pop()
+    return parts, state
 
 
 # -- CSV fields with their offsets -------------------------------------------------------------

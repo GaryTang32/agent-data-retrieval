@@ -136,6 +136,20 @@
       "nullable": false,
       "description": "also_in split on ; into topics.",
       "spec_id": "papers.also_in_list@1"
+    },
+    {
+      "name": "venue_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the venue (SHA-256 of its normalisation key).",
+      "spec_id": "papers.venue_id@1"
+    },
+    {
+      "name": "licence_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the licence (SHA-256 of its normalisation key).",
+      "spec_id": "papers.licence_id@1"
     }
   ],
   "key": [
@@ -152,5 +166,8 @@
     "selector": "papers_manifest",
     "loader": "metadata"
   },
-  "entities": {}
+  "entities": {
+    "venue_id": "venues",
+    "licence_id": "licences"
+  }
 }

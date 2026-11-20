@@ -45,6 +45,13 @@
       "nullable": false,
       "description": "True for the document's most specific agency.",
       "spec_id": "fr.agency_specific@1"
+    },
+    {
+      "name": "agency_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the agency (SHA-256 of its normalisation key).",
+      "spec_id": "fr.agency_id@1"
     }
   ],
   "key": [
@@ -61,5 +68,7 @@
     "selector": "fr",
     "loader": "metadata"
   },
-  "entities": {}
+  "entities": {
+    "agency_id": "agencies"
+  }
 }

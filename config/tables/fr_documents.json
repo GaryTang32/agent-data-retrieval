@@ -95,6 +95,20 @@
       "nullable": false,
       "description": "Identifiers in docket_ids that are not dockets, e.g. FCC 19-123.",
       "spec_id": "fr.other_ids@1"
+    },
+    {
+      "name": "title_state",
+      "type": "text",
+      "nullable": true,
+      "description": "State a drawbridge title names by its USPS code, e.g. Florida; null for other titles.",
+      "spec_id": "fr.title_state@1"
+    },
+    {
+      "name": "title_waterway_keys",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Waterway keys of a drawbridge title's comma parts, in order.",
+      "spec_id": "fr.title_waterway_keys@1"
     }
   ],
   "key": [

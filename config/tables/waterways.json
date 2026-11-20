@@ -1,0 +1,86 @@
+{
+  "table": "waterways",
+  "version": 1,
+  "kind": "entity",
+  "description": "Waterways named by drawbridge titles and 33 CFR 117 headings: one row per entity, raw form, source and document.",
+  "columns": [
+    {
+      "name": "entity_id",
+      "type": "text",
+      "nullable": false,
+      "description": "Canonical id of the entity: SHA-256 of its key.",
+      "spec_id": "entity.entity_id@1"
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "nullable": false,
+      "description": "Normalisation key shared by every raw form of the entity.",
+      "spec_id": "entity.key@1"
+    },
+    {
+      "name": "raw",
+      "type": "text",
+      "nullable": false,
+      "description": "The raw form as a source row gives it.",
+      "spec_id": "entity.raw@1"
+    },
+    {
+      "name": "source_table",
+      "type": "text",
+      "nullable": false,
+      "description": "Table the raw form was read from, or ecfr_headings.",
+      "spec_id": "entity.source_table@1"
+    },
+    {
+      "name": "source_column",
+      "type": "text",
+      "nullable": false,
+      "description": "Column the raw form was read from.",
+      "spec_id": "entity.source_column@1"
+    },
+    {
+      "name": "doc_id",
+      "type": "text",
+      "nullable": false,
+      "description": "Document the raw form comes from (the row's access is its).",
+      "spec_id": "entity.doc_id@1"
+    },
+    {
+      "name": "rows",
+      "type": "int",
+      "nullable": false,
+      "description": "Source rows of the document that hold this raw form.",
+      "spec_id": "entity.rows@1"
+    },
+    {
+      "name": "display_name",
+      "type": "text",
+      "nullable": false,
+      "description": "Per-view name: the byte-smallest raw form among the visible rows.",
+      "spec_id": "entity.display_name@1",
+      "computed": "display_name"
+    }
+  ],
+  "key": [
+    "entity_id",
+    "raw",
+    "source_table",
+    "source_column",
+    "doc_id"
+  ],
+  "order": [
+    "entity_id",
+    "raw",
+    "source_table",
+    "source_column",
+    "doc_id"
+  ],
+  "list_column": "entity_id",
+  "source": {
+    "corpus": "gov",
+    "selector": "entities",
+    "loader": "entities"
+  },
+  "entities": {}
+}

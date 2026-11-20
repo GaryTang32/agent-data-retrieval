@@ -36,7 +36,7 @@
       "name": "name_key",
       "type": "text",
       "nullable": false,
-      "description": "The author's normalised name key.",
+      "description": "The author's normalised name key (the authors entity key).",
       "spec_id": "papers.author_key@1"
     },
     {
@@ -45,6 +45,13 @@
       "nullable": false,
       "description": "True when the authors string ends with et al.",
       "spec_id": "papers.author_et_al@1"
+    },
+    {
+      "name": "author_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the author (SHA-256 of the name key).",
+      "spec_id": "papers.author_id@1"
     }
   ],
   "key": [
@@ -61,5 +68,7 @@
     "selector": "papers_manifest",
     "loader": "metadata"
   },
-  "entities": {}
+  "entities": {
+    "author_id": "authors"
+  }
 }
