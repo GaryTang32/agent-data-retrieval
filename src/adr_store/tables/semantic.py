@@ -28,7 +28,8 @@ METRICS = [
 ]
 SQL_NOTE = ("One SELECT statement. Every table also has _doc_id (source document) and "
             "_prov_<column> (JSON provenance of the value). type[] columns are JSON arrays: "
-            "unnest with json_each, read with json_extract.")
+            "unnest with json_each, read with json_extract. DISTINCT with its own ORDER BY "
+            "refuses rows over about 8 KB; put the DISTINCT in a subquery.")
 DETAIL_NOTE = 'describe_tables(table="<name>") gives column descriptions and allowed values.'
 
 
