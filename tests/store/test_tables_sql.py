@@ -20,6 +20,7 @@ from adr_store.tables.sqlguard import (
     ERR_SYNTAX,
     FUNCTIONS,
     SQL_MAX_BYTES,
+    SQL_MAX_VALUE,
     SQL_ROW_CAP,
     SQL_STEP_BUDGET,
     SQL_STEP_EVERY,
@@ -158,8 +159,8 @@ def test_the_function_whitelist():
 
 
 def test_the_limits():
-    assert (SQL_ROW_CAP, SQL_STEP_BUDGET, SQL_STEP_EVERY, SQL_MAX_BYTES) == \
-        (1000, 5_000_000, 1000, 2_000_000)
+    assert (SQL_ROW_CAP, SQL_STEP_BUDGET, SQL_STEP_EVERY, SQL_MAX_BYTES, SQL_MAX_VALUE) == \
+        (1000, 5_000_000, 1000, 2_000_000, 65_536)
 
 
 # -- date and time functions (deterministic replacements) ----------------------------------
@@ -204,12 +205,29 @@ def test_writes_ddl_attach_and_pragma_are_refused_with_fixed_messages(gov_db, st
     "SELECT * FROM sqlite_master", "SELECT name FROM sqlite_schema",
     "SELECT * FROM temp.sqlite_master", "SELECT * FROM pragma_table_info('fr_documents')",
     "SELECT * FROM json_tree('[1]')",
-    "INSERT INTO fr_documents SELECT * FROM fr_documents ORDER BY 1",
-    "CREATE TEMP TABLE x AS SELECT * FROM fr_documents ORDER BY 1",
+    # a FROM item whose columns are not used is reported with no database (review probes)
+    "SELECT count(*) FROM sqlite_master", "SELECT 1 FROM sqlite_schema",
+    "SELECT count(*) FROM sqlite_temp_master", "SELECT count(*) FROM json_tree('[1,[2,3]]')",
+    "SELECT count(*) FROM fr_documents, sqlite_master", "SELECT count(*) FROM pragma_function_list",
+    "SELECT 1 WHERE EXISTS (SELECT 1 FROM sqlite_master)",
+    "SELECT (SELECT count(*) FROM sqlite_master WHERE 1)",
+    "SELECT count(*) FROM SQLITE_MASTER", "SELECT count(*) FROM main.sqlite_master",
+    # a CTE named like a system object does not open the real one
+    "SELECT (SELECT count(*) FROM sqlite_master), (WITH sqlite_master AS (SELECT 1) SELECT 1)",
+    "SELECT (SELECT count(*) FROM json_tree('[1]')), (WITH json_tree AS (SELECT 1) SELECT 1)",
 ])
 def test_reading_anything_but_the_listed_tables_is_denied(gov_db, stmt):
     e = _refused(gov_db, stmt)
     assert e.kind == "denied" and str(e) == ERR_DENIED
+
+
+@pytest.mark.parametrize("stmt", [
+    "WITH json_tree AS (SELECT 1) SELECT (SELECT count(*) FROM json_tree('[1,2]'))",
+    "WITH pragma_table_info AS (SELECT 1) SELECT count(*) FROM pragma_table_info('fr_documents')",
+    "WITH sqlite_master AS (SELECT 1) SELECT count(*) FROM main.sqlite_master",
+])
+def test_system_objects_behind_a_cte_name_are_refused(gov_db, stmt):
+    assert str(_refused(gov_db, stmt)) in {ERR_SYNTAX, ERR_DENIED}
 
 
 def test_two_statements_are_a_syntax_refusal(gov_db):
@@ -380,3 +398,177 @@ def test_strip_terminator(stmt, expected):
 ])
 def test_has_top_level_order_by(stmt, expected):
     assert has_top_level_order_by(stmt) is expected
+
+
+# -- fix round 1: case-folded names, CTEs, memory, per-step work, total order -----------------
+
+@pytest.mark.parametrize("stmt, rows", [
+    ("SELECT count(*) FROM FR_DOCUMENTS", [[N]]),
+    ("SELECT count(*) FROM main.FR_DOCUMENTS", [[N]]),
+    ("SELECT count(F.ID) FROM Fr_Documents AS F", [[N]]),
+    ("SELECT value FROM JSON_EACH('[1]')", [[1]]),
+    ("SELECT count(*) FROM json_each('[1,2]')", [[2]]),
+    ("SELECT count(*) FROM (SELECT 1)", [[1]]),
+    ("WITH r(n) AS (SELECT 1) SELECT count(*) FROM r", [[1]]),
+    ("WITH R(n) AS (SELECT 1) SELECT count(*) FROM r", [[1]]),
+    ("WITH \"q r\"(n) AS (SELECT 1) SELECT count(*) FROM \"q r\"", [[1]]),
+    ("WITH a AS (SELECT 1), b AS MATERIALIZED (SELECT 2), c AS NOT MATERIALIZED (SELECT 3) "
+     "SELECT count(*) FROM a, b, c", [[1]]),
+    ("WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 3) "
+     "SELECT count(*) FROM r", [[3]]),
+    ("SELECT (WITH x AS (SELECT 1) SELECT count(*) FROM x)", [[1]]),
+])
+def test_tables_ctes_and_json_each_are_read_in_any_case(gov_db, stmt, rows):
+    assert run_sql(gov_db, stmt).rows == rows
+
+
+def test_rows_stream_and_the_size_refusal_comes_before_all_are_fetched(gov_db, monkeypatch):
+    seen = []
+    real = sqlguard._row
+    monkeypatch.setattr(sqlguard, "_row", lambda r: seen.append(r) or real(r))
+    monkeypatch.setattr(sqlguard, "SQL_MAX_BYTES", 10_000)
+    stmt = ("WITH RECURSIVE r(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < 200) "
+            "SELECT n, replace(printf('%1000d', n), ' ', 'x') FROM r")
+    e = _refused(gov_db, stmt)
+    assert e.kind == "rows" and str(e) == ERR_ROWS
+    assert 9 <= len(seen) <= 11   # about 1 KB a row: stopped at the tenth of 200 rows
+
+
+def test_a_wide_result_is_refused_without_holding_it(gov_db):
+    # the review's memory probe, at the 64 KB value limit: 343 rows of about 60 KB
+    e = _refused(gov_db, "SELECT replace(printf('%60000d', 1), ' ', 'x') || a.id "
+                         "FROM fr_documents a, fr_documents b, fr_documents c")
+    assert e.kind == "rows"
+
+
+def test_values_are_limited_to_64_kb(gov_db):
+    ok = "SELECT length(replace(printf('%60000d', 1), ' ', 'x'))"
+    assert run_sql(gov_db, ok).rows == [[60000]]
+    for stmt in ("SELECT length(replace(printf('%40000d', 1), ' ', 'xx'))",
+                 "SELECT length(group_concat(replace(printf('%30000d', n), ' ', 'x'))) FROM "
+                 "(SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3)",
+                 "WITH RECURSIVE r(n, s) AS (SELECT 1, 'x' UNION ALL SELECT n + 1, s || s FROM r "
+                 "WHERE n < 30) SELECT max(length(s)) FROM r"):
+        e = _refused(gov_db, stmt)   # an intermediate value over the limit
+        assert e.kind == "rows" and str(e) == ERR_ROWS
+
+
+def test_amplifying_functions_are_charged_by_result_size(gov_db, monkeypatch):
+    # under 1,000 virtual-machine steps, so only the charges can exceed the budget:
+    # each 60,000-character result charges 60000 // 1024 = 58 steps
+    one = "SELECT length(replace(printf('%60000d', 1), ' ', 'x'))"
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 116)
+    assert run_sql(gov_db, one).rows == [[60000]]           # printf 58 + replace 58
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 115)
+    assert _refused(gov_db, one).kind == "budget"
+    for fn, charged in (("format('%60000d', 1)", 58), ("substr(printf('%60000d', 1), 1)", 116)):
+        monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged)
+        assert run_sql(gov_db, f"SELECT length({fn})").rows == [[60000]]
+        monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", charged - 1)
+        assert _refused(gov_db, f"SELECT length({fn})").kind == "budget"
+    agg = ("SELECT length(group_concat(x, '')) FROM (SELECT printf('%30000d', 1) AS x "
+           "UNION ALL SELECT printf('%30000d', 2))")   # printf 2 x 29, group_concat 58
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 116)
+    assert run_sql(gov_db, agg).rows == [[60000]]
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 115)
+    assert _refused(gov_db, agg).kind == "budget"
+
+
+def test_large_value_joins_and_recursion_stop_at_the_budget(gov_db, monkeypatch):
+    big = "replace(printf('%60000d', a.id), ' ', 'x')"
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 10_000)
+    small = ("SELECT max(length(replace(printf('%10d', a.id), ' ', 'x'))) "
+             "FROM fr_documents a, fr_documents b, fr_documents c")
+    assert run_sql(gov_db, small).rows == [[10]]   # 343 rows: the steps alone are in budget
+    e = _refused(gov_db, small.replace("replace(printf('%10d', a.id), ' ', 'x')", big))
+    assert e.kind == "budget" and str(e) == ERR_BUDGET
+    # at the production budget these run about 16 s and 25 s (see the Task 5 report); a tenth
+    # of it keeps the test quick while the large-value work still dominates the steps
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 500_000)
+    for stmt in (f"SELECT max(length({big} || b.id)) FROM fr_documents a, fr_documents b, "
+                 "fr_documents c, fr_documents d, fr_documents e, fr_documents f",
+                 "WITH RECURSIVE r(n, s) AS (SELECT 1, '' UNION SELECT n + 1, "
+                 "replace(printf('%60000d', n), ' ', 'x') FROM r) SELECT count(*) FROM r"):
+        e = _refused(gov_db, stmt)
+        assert e.kind == "budget" and str(e) == ERR_BUDGET
+
+
+def test_group_concat_keeps_sqlite_semantics(gov_db):
+    q = ("SELECT group_concat(x), group_concat(x, ' | '), group_concat(DISTINCT x), "
+         "group_concat(x ORDER BY x DESC), group_concat(y), group_concat(x, NULL) FROM "
+         "(SELECT 'b' AS x, NULL AS y UNION ALL SELECT NULL, NULL UNION ALL SELECT 'a', NULL "
+         "UNION ALL SELECT 'b', NULL)")
+    assert run_sql(gov_db, q).rows == [["b,a,b", "b | a | b", "b,a", "b,b,a", None, "bab"]]
+    nums = run_sql(gov_db, "SELECT group_concat(v) FROM (SELECT 1 AS v UNION ALL SELECT 2.5 "
+                           "UNION ALL SELECT 1e20 UNION ALL SELECT 100.0)").rows
+    plain = sqlite3.connect(":memory:")   # SQLite's own group_concat as the oracle
+    assert nums == [list(r) for r in plain.execute(
+        "SELECT group_concat(v) FROM (SELECT 1 AS v UNION ALL SELECT 2.5 UNION ALL "
+        "SELECT 1e20 UNION ALL SELECT 100.0)")]
+    plain.close()
+    assert nums == [["1,2.5,1.0e+20,100.0"]]
+    assert run_sql(gov_db, "SELECT type, group_concat(id, ';') FROM fr_documents "
+                           "WHERE type = 'Proposed Rule' GROUP BY type").rows == \
+        [["Proposed Rule", "2024-00002;2024-00005"]]
+
+
+def test_non_finite_numbers_come_back_as_null(gov_db):
+    assert run_sql(gov_db, "SELECT 9e999, -9e999, 1.5").rows == [[None, None, 1.5]]
+
+
+def test_the_overrides_hold_no_finished_call(gov_db):
+    import gc
+    import warnings
+    assert run_sql(gov_db, "SELECT date('2024-01-01'), replace('ab', 'a', 'c')").rows == \
+        [["2024-01-01", "cb"]]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # outside a guarded call the overrides refuse: no finished call's guard, no stray
+        # private connection
+        for q in ("SELECT date('2024-02-01')", "SELECT replace('ab', 'a', 'c')",
+                  "SELECT group_concat(x) FROM (SELECT 'a' AS x)"):
+            with pytest.raises(sqlite3.OperationalError):
+                gov_db.execute(q)
+        gc.collect()
+    assert gov_db.execute("SELECT casefold('A'), instr('ab', 'b')") == [("a", 2)]
+    assert run_sql(gov_db, "SELECT date('2024-03-01')").rows == [["2024-03-01"]]
+
+
+def test_ties_under_a_statement_order_by_come_out_in_a_total_order(gov_db, gov_db_reversed):
+    q = "SELECT type, id FROM fr_documents ORDER BY type"
+    assert gov_db.execute(q) != gov_db_reversed.execute(q)   # unbroken ties show storage order
+    expected = sorted([list(r) for r in gov_db.execute(q)])
+    assert run_sql(gov_db, q).rows == run_sql(gov_db_reversed, q).rows == expected
+    desc = "SELECT type, id FROM fr_documents ORDER BY type DESC"
+    assert [r[1] for r in run_sql(gov_db_reversed, desc).rows] == \
+        ["2024-00001", "2024-00003", "2024-00004", "2024-00006", "2024-00007",
+         "2024-00002", "2024-00005"]
+
+
+@pytest.mark.parametrize("q, expected", [
+    ("SELECT id FROM fr_documents ORDER BY type LIMIT 3",
+     [["2024-00002"], ["2024-00005"], ["2024-00001"]]),
+    ("SELECT id FROM fr_documents ORDER BY type LIMIT 2 OFFSET 1",
+     [["2024-00005"], ["2024-00001"]]),
+    ("SELECT id FROM fr_documents ORDER BY type LIMIT 1, 2", [["2024-00005"], ["2024-00001"]]),
+    ("SELECT id, 'ORDER BY x LIMIT 1' FROM fr_documents ORDER BY type /* LIMIT 1 */ LIMIT 2",
+     [["2024-00002", "ORDER BY x LIMIT 1"], ["2024-00005", "ORDER BY x LIMIT 1"]]),
+    ("SELECT type FROM (SELECT type, id FROM fr_documents ORDER BY id LIMIT 4) ORDER BY type",
+     [["Proposed Rule"], ["Rule"], ["Rule"], ["Rule"]]),
+    ("SELECT type FROM fr_documents UNION ALL SELECT type FROM fr_documents ORDER BY 1 LIMIT 5",
+     [["Proposed Rule"]] * 4 + [["Rule"]]),
+    ("SELECT year, id FROM fr_documents WHERE id IN (SELECT id FROM fr_documents ORDER BY id "
+     "DESC LIMIT 2) ORDER BY year", [[2024, "2024-00006"], [2024, "2024-00007"]]),
+])
+def test_a_statement_order_by_keeps_its_limit_and_gets_tie_breakers(gov_db, gov_db_reversed,
+                                                                    q, expected):
+    assert run_sql(gov_db, q).rows == run_sql(gov_db_reversed, q).rows == expected
+
+
+@pytest.mark.parametrize("code, kind", [(13, "budget"), (7, "budget"), (18, "rows"),
+                                        (1, "syntax")])
+def test_error_codes_map_to_fixed_classes(code, kind):
+    e = sqlite3.OperationalError("engine text")
+    e.sqlite_errorcode = code   # SQLITE_FULL, SQLITE_NOMEM, SQLITE_TOOBIG, SQLITE_ERROR
+    refusal = sqlguard._Guard(frozenset(), frozenset()).refusal(e)
+    assert refusal.kind == kind and "engine" not in str(refusal)
