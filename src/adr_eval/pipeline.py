@@ -5,6 +5,9 @@ query (G2), answers from the retrieved chunks, and scores the answer exactly or 
 judge. Judge validation calls run on repeat 0 only. Replies are parsed with the recovering JSON
 parser (the context's Judge should be built with `recover=True`); each row lists the stages
 that needed it in "json_recovered".
+
+A typed system (`Context.typed`, Phase 3 `p3-typed`) answers with the generated query
+instead: no answer call, no judge, exact scoring only, no retrieval metrics.
 """
 
 from __future__ import annotations
@@ -12,7 +15,9 @@ from __future__ import annotations
 import re
 import threading
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 from adr_eval.answer.answerer import answer_question
@@ -250,6 +255,8 @@ class Context:
     # evidence groups by item id (`scoring.evidence_groups.build_all`); an item missing here
     # is scored with each evidence span as its own group
     groups: dict[str, list[list[Evidence]]] = field(default_factory=dict)
+    # a typed system's answer to a generated query: (value, tool error); None for the chunk path
+    typed: Callable[[GoldQuery | None], tuple[Any, str | None]] | None = None
 
     def groups_for(self, item: GoldenItem) -> list[list[Evidence]]:
         return self.groups.get(item.id) or [[e] for e in item.evidence]
@@ -279,7 +286,10 @@ def _judge_check(item: GoldenItem, candidate: Any, repeat: int, purpose: str,
 
 def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
                    ctx: Context) -> dict:
-    """One result row. ModelError → outcome "error"; BudgetExceeded propagates."""
+    """One result row. ModelError → outcome "error"; BudgetExceeded propagates.
+
+    With `ctx.typed` the generated query is answered by `ctx.typed` and scored exactly
+    (`typed_error` holds the tool's refusal, `metrics` is None)."""
     _ledger.entries = entries = []
     ranked = [ctx.index.chunks[cid] for cid, _ in hits]
     groups = ctx.groups_for(item)
@@ -293,6 +303,8 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
         "tokens": None, "cost_usd": 0.0, "notional_cost_usd": None, "served_models": [],
         "latency_s": None, "error": None, "json_recovered": [],
     }
+    if ctx.typed is not None:
+        row.update(metrics=None, typed_error=None)
     recovered: set[str] = set()  # stages whose reply was parsed by the recovering parser
     stage = "query_gen"
     try:
@@ -306,32 +318,40 @@ def process_repeat(item: GoldenItem, repeat: int, hits: list[tuple[str, float]],
                    query_exec_match=exec_match(item.gold_query, gq, ctx.records),
                    route_ok=route_ok(item.gold_query, gq),
                    entity_f1=entity_f1(item.gold_query, gq))
-        stage = "answer"
-        sa = answer_question(item.question, item.as_of, ranked, ctx.generator, repeat,
-                             recover=True)
-        if _recovered(sa.completion):
-            recovered.add("answer")
-        row["answer"] = {"value": sa.value, "kind": sa.kind, "citations": sa.citations,
-                         "abstain": sa.abstain, "confidence": sa.confidence}
-        row["latency_s"] = None if sa.completion.cached else sa.completion.latency_s
-        if item.evidence and not sa.abstain:
-            cited = [ctx.index.chunks[c] for c in sa.citations]
-            row["citation"] = {"precision": rm.citation_precision(cited, groups),
-                               "evidence_cited": rm.evidence_cited(cited, groups)}
-        stage = "judge"
-        outcome = exact_outcome(item.answer, sa)
-        if outcome is None:
-            label, reason, jc = ctx.judge.judge(item.question, item.answer, sa.value)
-            if _recovered(jc):
-                recovered.add("judge")
-            row.update(judge_label=label, judge_reason=reason)
-            outcome = label_to_outcome(label)
-            if repeat == 0:
-                row["judge_check"] = _judge_check(item, sa.value, 1, "self_consistency", ctx,
-                                                 recovered)
-        elif repeat == 0 and item.answer.kind in _PROXY_KINDS and outcome in EXACT_TO_JUDGE:
-            row["judge_check"] = _judge_check(item, sa.value, 0, "proxy", ctx, recovered)
-        row["outcome"] = outcome
+        if ctx.typed is not None:
+            stage = "typed"
+            value, row["typed_error"] = ctx.typed(gq)
+            row["answer"] = {"value": value, "kind": item.answer.kind, "citations": [],
+                             "abstain": False, "confidence": None}
+            row["outcome"] = exact_outcome(item.answer,
+                                           SimpleNamespace(value=value, abstain=False))
+        else:
+            stage = "answer"
+            sa = answer_question(item.question, item.as_of, ranked, ctx.generator, repeat,
+                                 recover=True)
+            if _recovered(sa.completion):
+                recovered.add("answer")
+            row["answer"] = {"value": sa.value, "kind": sa.kind, "citations": sa.citations,
+                             "abstain": sa.abstain, "confidence": sa.confidence}
+            row["latency_s"] = None if sa.completion.cached else sa.completion.latency_s
+            if item.evidence and not sa.abstain:
+                cited = [ctx.index.chunks[c] for c in sa.citations]
+                row["citation"] = {"precision": rm.citation_precision(cited, groups),
+                                   "evidence_cited": rm.evidence_cited(cited, groups)}
+            stage = "judge"
+            outcome = exact_outcome(item.answer, sa)
+            if outcome is None:
+                label, reason, jc = ctx.judge.judge(item.question, item.answer, sa.value)
+                if _recovered(jc):
+                    recovered.add("judge")
+                row.update(judge_label=label, judge_reason=reason)
+                outcome = label_to_outcome(label)
+                if repeat == 0:
+                    row["judge_check"] = _judge_check(item, sa.value, 1, "self_consistency", ctx,
+                                                     recovered)
+            elif repeat == 0 and item.answer.kind in _PROXY_KINDS and outcome in EXACT_TO_JUDGE:
+                row["judge_check"] = _judge_check(item, sa.value, 0, "proxy", ctx, recovered)
+            row["outcome"] = outcome
     except ModelError as e:
         row["outcome"], row["error"] = "error", f"{stage}: {e}"
     finally:

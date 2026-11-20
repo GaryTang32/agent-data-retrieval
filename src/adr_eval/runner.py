@@ -327,8 +327,9 @@ class _Recorder:
 
 def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index,
              schema: dict, gen_model: tuple[str, str], judge_model: tuple[str, str],
-             prices: dict) -> None:
-    """`gen_model` / `judge_model` are (model, provider) pairs for the price lookup."""
+             prices: dict, typed: bool = False) -> None:
+    """`gen_model` / `judge_model` are (model, provider) pairs for the price lookup; a typed
+    system (`typed`) makes the query-generation calls only."""
     gen = _Recorder(json.dumps(_ABSTAIN), gen_model[0])
     jrec = _Recorder('{"label": "correct", "reason": ""}', judge_model[0])
     providers = {"generator": gen_model[1], "judge": judge_model[1]}
@@ -336,6 +337,8 @@ def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index,
     for item in items:
         for repeat, hits in enumerate(retrieved[item.id]):
             generate_query(item.question, item.as_of, schema, gen, repeat)
+            if typed:
+                continue
             answer_question(item.question, item.as_of, [index.chunks[c] for c, _ in hits],
                             gen, repeat)
             judged = item.answer.kind == "text" or (
@@ -428,6 +431,18 @@ def _check_system(system: str) -> None:
         raise RunError(f"unknown system {system!r}; expected one of {', '.join(names)}")
 
 
+TYPED_QTYPES = ("count_filter",)
+
+
+def _check_qtypes(system: str, qtypes: tuple[str, ...] | None) -> None:
+    """A typed system (`p3-typed`) answers count_filter items only, so its run must name that
+    question type alone (Phase 3 spec §10.1): it never falls back to answering from chunks."""
+    from adr_eval import systems
+
+    if system in systems.P3_NAMES and tuple(qtypes or ()) != TYPED_QTYPES:
+        raise RunError(f"{system} answers count_filter items only; pass --qtype count_filter")
+
+
 def run(
     corpus: str,
     system: str,
@@ -442,26 +457,34 @@ def run(
     generator: ModelClient | None = None,
     judge: ModelClient | None = None,
     max_calls: int | None = None,
+    qtypes: tuple[str, ...] | None = None,
 ) -> str:
     """Run `system` over the `split` items; returns the run id (the run directory's name).
 
     `config["generator"]` / `config["judge"]` name profiles in config/models.json;
-    `generator` / `judge` override the clients built from them (tests).
+    `generator` / `judge` override the clients built from them (tests). `qtypes` keeps only
+    the items of those question types (None: every item); a typed system (`p3-typed`) needs
+    exactly ("count_filter",). A typed system answers with the generated query alone
+    (`Context.typed`; no answer or judge call) and its compile.json names its tables.
     """
     from adr_eval import systems
 
     _check_system(system)
+    _check_qtypes(system, qtypes)
     stub = bool(config.get("stub"))
     clients, names, specs = _role_clients(config, {"generator": generator, "judge": judge},
                                           stub, dry_run)
     generator, judge = clients["generator"], clients["judge"]
     loaded = load_checked_corpus(corpus)
     all_items = load_golden(corpus, loaded)
-    items = sorted((i for i in all_items if i.split == split), key=lambda i: i.id)
+    items = sorted((i for i in all_items if i.split == split
+                    and (qtypes is None or i.qtype in qtypes)), key=lambda i: i.id)
     if not items:
-        raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}")
+        kinds = "" if qtypes is None else f" of question type {', '.join(qtypes)}"
+        raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}{kinds}")
     groups = evidence_groups.build_all(all_items, loaded.docs)
     index = systems.build(system, corpus, loaded, all_items, groups, config, rebuild=rebuild)
+    typed = bool(getattr(index, "answers_typed", False))
     source, w = index.source, index.w
     retrieved = {i.id: [retrieve_item(index, i) for _ in range(repeats)] for i in items}
     prices = load_prices(_repo_path(config.get("prices", "config/prices.json")))
@@ -484,7 +507,7 @@ def run(
     if dry_run:
         _dry_run(run_id, items, retrieved, index, schema,
                  pricing.get("generator") or (model_id(generator), generator.name),
-                 pricing.get("judge") or (model_id(judge), judge.name), prices)
+                 pricing.get("judge") or (model_id(judge), judge.name), prices, typed)
         return run_id
 
     run_dir = _new_run_dir(Path(out_root), run_id)
@@ -496,6 +519,7 @@ def run(
         "run_id": run_dir.name, "metrics_version": METRICS_VERSION,
         "corpus": corpus, "system": system, "split": split,
         "repeats": repeats, "n_items": len(items), "stub": stub,
+        "qtypes": None if qtypes is None else list(qtypes),
         "generator": _client_info(generator, prices, names["generator"], specs["generator"]),
         "judge": _client_info(judge, prices, names["judge"], specs["judge"]),
         "same_family_judge": Judge(judge).same_family_as(generator),
@@ -515,12 +539,16 @@ def run(
         "status": "running", "started": datetime.now(UTC).isoformat(),
     }
     _write_json(run_dir / "config.json", cfg)
-    copies = evidence_groups.copy_stats(groups[i.id] for i in items)
-    _write_json(run_dir / "compile.json",
-                compile_report(all_items, loaded, index, source, copies))
+    if typed:
+        _write_json(run_dir / "compile.json",
+                    {"tables": index.fingerprint, "manifest": index.manifest()})
+    else:
+        copies = evidence_groups.copy_stats(groups[i.id] for i in items)
+        _write_json(run_dir / "compile.json",
+                    compile_report(all_items, loaded, index, source, copies))
 
     ctx = Context(index, adapter.records(loaded), schema,
-                  gen_meter, judge_, groups)
+                  gen_meter, judge_, groups, typed=index.answer if typed else None)
     results = run_dir / "results.jsonl"
     rows: list[dict] = []
 

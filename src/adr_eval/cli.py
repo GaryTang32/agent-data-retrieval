@@ -1,5 +1,5 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
-retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence; the
+retrieval-compare, retrieval-identical, p2-compare, p3-q1, probes (temporal, acl, equivalence; the
 table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
 tables-applicability, tables-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
@@ -14,6 +14,7 @@ import tempfile
 import time
 from collections import Counter
 from pathlib import Path
+from typing import get_args
 
 from pydantic import ValidationError
 
@@ -28,7 +29,7 @@ from adr_eval.corpora.registry import (
     get_adapter,
 )
 from adr_eval.corpora.toolret import ToolRetMissing
-from adr_eval.models import GoldenItem, jsonl_lines, write_items
+from adr_eval.models import GoldenItem, QType, jsonl_lines, write_items
 from adr_eval.report import (
     compare,
     compare_retrieval,
@@ -479,7 +480,8 @@ def _run(a: argparse.Namespace) -> int:
     repeats = a.repeats if a.repeats is not None else config["repeats"]
     run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
                         max_dollars=a.max_dollars, dry_run=a.dry_run, rebuild=a.rebuild,
-                        max_calls=a.max_calls)
+                        max_calls=a.max_calls,
+                        qtypes=None if a.qtype is None else tuple(a.qtype))
     if a.dry_run:
         return 0
     run_dir = a.out / run_id
@@ -553,6 +555,23 @@ def _p2_compare(a: argparse.Namespace) -> int:
     d = phase2.write_compare(c, out)
     print((d / "compare.md").read_text(encoding="utf-8"))
     print(f"written: {d / 'compare.json'}")
+    return 0
+
+
+def _p3_q1(a: argparse.Namespace) -> int:
+    """`adr-eval p3-q1 TYPED_RUN BASELINE_RUN`: Q1 (`phase3.q1_compare`) with the `also_in`
+    readings of the corpus's golden items; printed and written to
+    `<typed run>/q1-<baseline run>.json`."""
+    from adr_eval import phase3
+
+    typed, base = Path(a.typed_run), Path(a.baseline_run)
+    c = phase3.q1_compare(typed, base)
+    loaded = runner.load_checked_corpus(c["corpus"])
+    c["also_in"] = phase3.also_in_readings(runner.load_golden(c["corpus"], loaded),
+                                           get_adapter(c["corpus"]).records(loaded))
+    text = json.dumps(c, indent=2, sort_keys=True) + "\n"
+    (typed / f"q1-{base.name}.json").write_text(text, encoding="utf-8")
+    print(text, end="")
     return 0
 
 
@@ -1272,6 +1291,9 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.add_argument("--stub", action="store_true",
                    help="deterministic stub generator and judge (tests and demos)")
+    p.add_argument("--qtype", action="append", default=None, choices=get_args(QType),
+                   help="run only the items of this question type (repeatable); p3-typed "
+                        "needs --qtype count_filter")
     _profile_args(p, judge=True)
     p.set_defaults(fn=_run)
 
@@ -1319,6 +1341,14 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="run output root (default runs); writes p2-compare-<a>--<b>/")
     p.set_defaults(fn=_p2_compare)
+
+    p = sub.add_parser("p3-q1",
+                       help="Phase 3 Q1: a p3-typed run against a baseline run on their "
+                            "common count_filter items (accuracy, McNemar, misses, also_in "
+                            "readings); writes <typed run>/q1-<baseline run>.json")
+    p.add_argument("typed_run", help="the p3-typed run directory")
+    p.add_argument("baseline_run", help="the baseline run directory")
+    p.set_defaults(fn=_p3_q1)
 
     p = sub.add_parser("probes", help="probe sets (no model calls): Phase 2 temporal (gov), "
                                       "acl (leak and fail-closed), equivalence (B2); Phase 3 "

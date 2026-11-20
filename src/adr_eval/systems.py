@@ -44,6 +44,14 @@ run config; its fingerprint differs from the full system's.
   Phase 1 matrix-product dense path (the ACL layer's row-exact kernel may differ in the last
   float32 bits) and criterion A5 holds bit for bit.
 
+- `p3-typed` (Phase 3 spec §10.1): no retrieval. It answers a `count_filter` item from the
+  typed tables of the p2 store (`<p2_store_dir>/<corpus>`, its promoted `tables/HEAD`): the
+  item's generated query, compiled by `tables.engine.from_gold_query`, runs through
+  `Tools.query_table` as `config["p2_caller"]` (required; the ACL layer resolves it at build,
+  as for the Phase 2 configurations, and again on every call). It never answers from
+  chunks; its fingerprint is the tables id. Registered apart (`P3_NAMES`); `ALL_NAMES` is
+  every system.
+
 This module is the harness's only entry to `adr_store` for the Phase 0/1 harness modules
 (plan, shared rules).
 """
@@ -55,10 +63,11 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from adr_eval import runner
 from adr_eval.corpora.base import LoadedCorpus
-from adr_eval.models import Evidence, GoldenItem
+from adr_eval.models import Evidence, GoldenItem, GoldQuery
 from adr_eval.retrieval.chunker import Chunk
 from adr_eval.retrieval.fusion import _GRID, linear
 from adr_eval.retrieval.index import _CHANNEL_K, RRF_K, TOP_N, HybridIndex
@@ -634,6 +643,101 @@ def _p2_system(name: str):
     return build
 
 
+# -- Phase 3 ------------------------------------------------------------------------------
+
+
+@dataclass
+class TypedSystem:
+    """`p3-typed`: answers a generated query from the typed tables of the p2 store through
+    `Tools.query_table` as the configured caller (`tools`: an ACL-layer `Tools`), never from
+    chunks; `tables` is the promoted tables id the system was built on."""
+
+    name: str
+    corpus: str
+    tools: object  # adr_store.tools.Tools(p2_store_dir(config, corpus), acl=True, caller=...)
+    tables: str
+    acl: dict | None = None  # the caller's access at build (ACL snapshot, sequence, view)
+    answers_typed = True
+    source = "tables"
+    w = None
+    chunks: dict = field(default_factory=dict)
+
+    @property
+    def fingerprint(self) -> str:
+        return self.tables
+
+    def retrieve(self, question: str) -> list:
+        return []
+
+    def answer(self, gq: GoldQuery | None) -> tuple[Any, str | None]:
+        """(value, tool error) of the generated query `gq`: its op over the corpus's default
+        table with its filters, whatever its `store` says (as `pipeline.exec_match` runs it)
+        and ignoring its `as_of`; `count` gives the count, `list` the sorted unique ids,
+        `lookup` the one field of the one matching row. A refused query (or none) gives
+        value None; so does an answer from another tables build than `tables`."""
+        from adr_store.tables.engine import from_gold_query
+        from adr_store.tools import ToolError
+
+        if gq is None:
+            return None, None
+        try:
+            res = self.tools.query_table(**from_gold_query(gq, self.corpus))
+        except ToolError as e:
+            return None, str(e)
+        if res.tables != self.tables:
+            return None, f"answered from tables {res.tables[:12]}, not {self.tables[:12]}"
+        value = {"count": res.count, "list": res.ids}.get(gq.op, res.value)
+        return value, ("truncated" if res.truncated else None)
+
+    def manifest(self) -> dict:
+        """The manifest of the tables build `tables` (its JSON content)."""
+        from adr_store.handles import tables_manifest
+
+        return tables_manifest(self.tools.store_path, self.tables).model_dump(mode="json")
+
+    def run_config(self) -> dict:
+        return {"store": runner._display_path(self.tools.store_path),
+                "snapshot": self.tools.snapshot, "tables": self.tables,
+                "caller": self.tools.caller, "acl": self.acl}
+
+
+def _typed_system(name: str):
+    def build(corpus: str, loaded: LoadedCorpus, items: list[GoldenItem], groups: Groups,
+              config: dict, *, rebuild: bool = False, lexical_only: bool = False) -> TypedSystem:
+        from adr_store.handles import tables_head
+        from adr_store.tables.engine import DEFAULT_TABLE
+
+        if lexical_only:
+            raise runner.RunError(f"{name} retrieves nothing: it has no lexical-only form")
+        if corpus not in DEFAULT_TABLE:
+            raise runner.RunError(f"{name} has no typed tables for {corpus}; expected one of "
+                                  f"{', '.join(DEFAULT_TABLE)}")
+        caller = config.get("p2_caller")
+        if caller is None:
+            raise runner.RunError(f"{name} queries the tables as a caller and none is set\nfix: "
+                                  f"set p2_caller in config/eval.json (user:auditor)")
+        path = p2_store_dir(config, corpus)
+        store = _checked_store(path, loaded, "copied")
+        if store is None:
+            raise runner.RunError(f"{path}: no store\nfix: run a Phase 2 configuration of "
+                                  f"{corpus} (it copies the Phase 1 store), then build and "
+                                  f"promote its tables")
+        if store.doc_ids() != sorted(d.doc_id for d in loaded.manifest.documents):
+            raise runner.RunError(f"{path}: holds other documents than the {corpus} corpus\n"
+                                  f"fix: remove {path} so that it is copied again")
+        emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+        tools, access = _acl_searcher(path, emb, caller)
+        tables_id = tables_head(path, tools.snapshot)
+        if tables_id is None:
+            raise runner.RunError(
+                f"{path}: no promoted tables for snapshot {tools.snapshot[:12]}\nfix: `adr "
+                f"tables build --store {path}` and `adr tables gate --store {path} "
+                f"--candidate <tables id>`")
+        return TypedSystem(name, corpus, tools, tables_id, acl=access)
+
+    return build
+
+
 Builder = Callable[..., object]
 REGISTRY: dict[str, Builder] = {
     "baseline-rrf": _baseline("baseline-rrf"),
@@ -643,13 +747,15 @@ REGISTRY: dict[str, Builder] = {
 NAMES = tuple(REGISTRY)  # the Phase 0 and Phase 1 systems
 P2_REGISTRY: dict[str, Builder] = {name: _p2_system(name) for name in P2_SPECS}
 P2_NAMES = tuple(P2_REGISTRY)
-ALL_NAMES = (*NAMES, *P2_NAMES)
+P3_REGISTRY: dict[str, Builder] = {"p3-typed": _typed_system("p3-typed")}
+P3_NAMES = tuple(P3_REGISTRY)
+ALL_NAMES = (*NAMES, *P2_NAMES, *P3_NAMES)
 
 
 def build(name: str, corpus: str, loaded: LoadedCorpus, items: list[GoldenItem],
           groups: Groups, config: dict, *, rebuild: bool = False, lexical_only: bool = False):
     """Build the system `name` for `corpus`; `items` are all golden items (dev ones tune)."""
-    builder = REGISTRY.get(name) or P2_REGISTRY.get(name)
+    builder = REGISTRY.get(name) or P2_REGISTRY.get(name) or P3_REGISTRY.get(name)
     if builder is None:
         raise runner.RunError(f"unknown system {name!r}; expected one of "
                               f"{', '.join(ALL_NAMES)}")
