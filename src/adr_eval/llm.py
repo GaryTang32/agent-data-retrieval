@@ -21,6 +21,9 @@ import httpx
 from adr_eval.cache import Cache
 
 BACKOFF_SECONDS = (1, 2, 4, 8, 16)
+# HTTP statuses that reject the request's input (malformed, too large, unprocessable): the
+# only failures an adapter raises as InputRejected. 401/403/404 and the rest are configuration.
+INPUT_REJECTED_STATUSES = (400, 413, 422)
 USAGE_LIMIT_BACKOFF_SECONDS = (60, 120, 240, 480, 900)
 
 
@@ -45,9 +48,20 @@ class ModelOutputError(ModelError):
     pass
 
 
+class InputRejected(ModelError):
+    """The provider refused the request because of its input (HTTP 400, 413 or 422): the same
+    input fails again, so it is the one failure `cache_failures=True` stores."""
+
+
+class RetriesExhausted(ModelError):
+    """Every attempt failed with a retryable error (a transport error, an overload, the
+    subscription usage limit); chains the last one. Never cached: a later run retries."""
+
+
 class CachedFailure(ModelError):
-    """A call that failed after its retries, stored in the cache (`cache_failures=True`) and
-    raised again on every later call with the same key, without a call."""
+    """An input rejection (InputRejected) stored in the cache by a call with
+    `cache_failures=True`, raised for it and again on every later call with the same key,
+    without a call."""
 
 
 class ModelClient(Protocol):
@@ -89,17 +103,20 @@ def _with_retries(attempt: Callable[[], Completion], max_retries: int,
                 n = waits[e.backoff]
                 waits[e.backoff] += 1
                 time.sleep(e.backoff[min(n, len(e.backoff) - 1)])
-    raise ModelError(f"giving up after {max_retries} retries: {last}") from last
+    raise RetriesExhausted(f"giving up after {max_retries} retries: {last}") from last
 
 
 class _CachedClient:
     """A client whose replies are cached by (adapter, model, system, user, max tokens, repeat).
 
-    `complete(..., cache_failures=True)` also stores a call that failed after its retries (a
-    ModelError) at `Cache.key("failure", key)` and raises it as CachedFailure, then and on every
-    later call with that key, without a call; the default stores nothing on failure (Phase 0).
-    `before_attempt` runs before each transport attempt, retries included (a per-attempt
-    budget); what it raises propagates and is never cached.
+    `complete(..., cache_failures=True)` also stores a call the provider rejected for its input
+    (InputRejected) at `Cache.key("failure", key)` and raises it as CachedFailure, then and on
+    every later call with that key, without a call (ruling P21). Every other failure (retries
+    exhausted, the usage limit, authentication or configuration errors, a missing binary, a
+    malformed response) is raised as it is and never stored, so a later run retries it. The
+    default stores nothing on failure (Phase 0). `before_attempt` runs before each transport
+    attempt, retries included (a per-attempt budget); what it raises propagates and is never
+    cached.
     """
 
     name: str
@@ -149,7 +166,7 @@ class _CachedClient:
         try:
             c = _with_retries(lambda: self._attempt(system, user, max_tokens, repeat),
                               self.max_retries, before_attempt)
-        except ModelError as e:
+        except InputRejected as e:
             if not cache_failures:
                 raise
             self.cache.put(self._failure_key(key), {"error": str(e)})
@@ -191,6 +208,8 @@ class AnthropicClient(_CachedClient):
         except anthropic.APIStatusError as e:
             if e.status_code == 429 or e.status_code >= 500:
                 raise _Retryable(f"HTTP {e.status_code}") from e
+            if e.status_code in INPUT_REJECTED_STATUSES:
+                raise InputRejected(f"HTTP {e.status_code}: {e}") from e
             raise ModelError(f"HTTP {e.status_code}: {e}") from e
         text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         return Completion(
@@ -240,6 +259,8 @@ class OpenAICompatibleClient(_CachedClient):
             raise _Retryable(str(e)) from e
         if r.status_code == 429 or r.status_code >= 500:
             raise _Retryable(f"HTTP {r.status_code}")
+        if r.status_code in INPUT_REJECTED_STATUSES:
+            raise InputRejected(f"HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code >= 400:
             raise ModelError(f"HTTP {r.status_code}: {r.text[:200]}")
         try:
@@ -286,7 +307,9 @@ class ClaudeCodeClient(_CachedClient):
     reply comes from the model alone. The CLI has no max-tokens or temperature flag:
     `max_tokens` only enters the cache key, and sampling is the CLI's default. The default
     runner strips Anthropic API credentials from the CLI's environment so that it always
-    uses the subscription login.
+    uses the subscription login. It raises no InputRejected: the CLI's exit status and error
+    text do not reliably tell an input rejection from other failures, so none of its
+    failures is cached (ruling P21).
     """
 
     name = "claude_code"

@@ -221,10 +221,14 @@ def test_adr_tables_gate_refuses_flips_and_keeps_head(tables_store, tmp_path, ca
 
 
 def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
-    from adr_eval import runner
+    from adr_eval import llm, runner
     from adr_store.tables import build as tables_build
     from tests.store.tables_fixtures import FR_DOCS, MANIFEST, make_tables_store
 
+    def no_cli(*a, **kw):
+        raise AssertionError("the model CLI must never run in a test")
+
+    monkeypatch.setattr(llm, "_run_subprocess", no_cli)     # whatever the budget does
     seen = []
     real = tables_build.build_tables
 
@@ -327,6 +331,36 @@ def test_adr_tables_extract_stops_at_the_cap_then_extracts(tables_store, tmp_pat
     assert len(load_facts(tables_store, facts_id)) == 8
     report = json.loads((snapshot_dir / "second-pass-report.json").read_text())
     assert report["pass"] == "second" and report["facts_id"] == facts_id
+
+
+@pytest.mark.parametrize("error", ["usage", "auth"])
+def test_adr_tables_extract_and_build_stop_on_a_failure_that_is_no_input_rejection(
+        tables_store, tmp_path, capsys, monkeypatch, error):                      # P21
+    from adr_eval import llm
+    from adr_store.store import Store
+
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+
+    def fail(system, user, repeat):
+        if error == "usage":
+            raise llm.RateLimitedError("usage limit: resets at 5pm")
+        raise llm.ModelError("HTTP 401: authentication")
+
+    _stub_profiles(monkeypatch, tmp_path, fail)
+    snapshot_dir = tables_store / "tables" / Store.open(tables_store).snapshot_id
+    for second in ([], ["--second-pass"]):
+        code, out, err = adr(["tables", "extract", "--store", tables_store, *second,
+                              "--generator", "claude_code_sonnet", "--max-calls", 5], capsys)
+        assert code == 1 and "Traceback" not in err
+        assert "status: stopped:" in out and "nothing written" in out
+        assert ("usage limit" if error == "usage" else "HTTP 401") in out
+    code, out, err = adr(["tables", "build", "--store", tables_store, "--with-extraction",
+                          "--generator", "claude_code_sonnet", "--max-calls", 5], capsys)
+    assert code == 1 and "status: stopped:" in out and "Traceback" not in err
+    written = sorted(f.name for f in snapshot_dir.iterdir()) if snapshot_dir.exists() else []
+    assert not [f for f in written if f.startswith(("extraction-report", "second-pass",
+                                                    "drawbridge", "tables-"))], written
+    assert not any((tmp_path / "llm").rglob("*.json"))          # no failure stored
 
 
 def test_adr_tables_extract_needs_a_generator(tables_store, capsys):

@@ -17,9 +17,12 @@ section text, else null `ungrounded`; the stored quote is the located slice; (4)
 columns the number (digits or a number word up to one hundred) is in the quote, else status
 `auto-accepted` with `checks_failed=("value_in_quote",)`; (5) where a regular expression finds
 values in the section, whether the value is among them (`regex_agrees`; recorded, never used to
-reject). A failed call (ModelError after retries, stored as a failure and raised as
-CachedFailure later) makes every model column of its group null `model_error`. A budget stop
-(BudgetExceeded) is no model error: it propagates and nothing is stored.
+reject; lenient for sections with several draws, where a value of another draw also agrees).
+A call the provider rejected for its input (InputRejected, stored as a failure and raised as
+CachedFailure, then and later) makes every model column of its group null `model_error`. Any
+other failure (retries exhausted, the usage limit, a configuration error, a malformed
+response) and a budget stop (BudgetExceeded) propagate: the run stops, nothing is stored for
+that call and a later run retries it (ruling P21).
 
 `drawbridge_rows` writes the rows of every occurrence: the unit's offsets plus the occurrence's
 start, so each span slices that version's document text to the quote. `closed_periods` is a
@@ -50,7 +53,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from adr_eval.golden.verify import find_quote
-from adr_eval.llm import ModelError, ModelOutputError, parse_json_recovering
+from adr_eval.llm import CachedFailure, ModelOutputError, parse_json_recovering
 from adr_store.records import _HEX64
 from adr_store.store import Store
 from adr_store.tables.contracts import CONTRACT_DIR, EXTRACTION_CONFIG, Column, Contract
@@ -77,7 +80,8 @@ NUMERIC = ("vhf_channel", "mile", "notice_hours")
 STRUCTURE_COLUMNS = ("section", "version", "heading", "state", "waterway_key")
 SECTIONS_TABLE, BRIDGES_TABLE = "drawbridge_sections", "drawbridge_bridges"
 REGEXES: dict[str, re.Pattern] = {
-    "mile": re.compile(r"\bmile\s+(\d+(?:\.\d+)?)", re.IGNORECASE),
+    "mile": re.compile(r"\bmile\s+(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)",
+                       re.IGNORECASE),
     "notice_hours": re.compile(r"\b(\d+)[\s-]+hours?\s+(?:advance\s+)?notice", re.IGNORECASE),
     "vhf_channel": re.compile(r"\bchannel\s+(\d+)", re.IGNORECASE),
 }
@@ -236,13 +240,13 @@ def coerce(ctype: str, raw: Any) -> Any:
     elif ctype == "int":
         if isinstance(raw, float) and raw.is_integer():
             raw = int(raw)
-        elif isinstance(raw, str) and re.fullmatch(r"\s*[+-]?\d+\s*", raw):
-            raw = int(raw)
+        elif isinstance(raw, str) and re.fullmatch(r"\s*[+-]?(\d{1,3}(,\d{3})+|\d+)\s*", raw):
+            raw = int(raw.replace(",", ""))
         if isinstance(raw, int) and not isinstance(raw, bool) and -2**63 <= raw < 2**63:
             return raw
     elif ctype == "real":
-        if isinstance(raw, str) and re.fullmatch(r"\s*[+-]?\d+(\.\d+)?\s*", raw):
-            raw = float(raw)
+        if isinstance(raw, str) and re.fullmatch(rf"\s*[+-]?(?:{_NUMBER})\s*", raw):
+            raw = float(raw.replace(",", ""))
         if isinstance(raw, (int, float)) and not isinstance(raw, bool):
             try:
                 v = float(raw)
@@ -270,26 +274,43 @@ _UNITS = ("one two three four five six seven eight nine ten eleven twelve thirte
           "fifteen sixteen seventeen eighteen nineteen").split()
 _TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
 WORDS: dict[str, int] = {w: i for i, w in enumerate(_UNITS, 1)}
-for _t, _tens in enumerate(_TENS, 2):
-    WORDS[_tens] = _t * 10
-    for _u, _unit in enumerate(_UNITS[:9], 1):
-        WORDS[f"{_tens}-{_unit}"] = _t * 10 + _u
-WORDS["hundred"] = 100
-_DIGITS = re.compile(r"\d+(?:\.\d+)?")
-_WORD = re.compile(r"[a-z]+(?:-[a-z]+)*")
+WORDS.update({w: t * 10 for t, w in enumerate(_TENS, 2)})
+_NUMBER = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?"     # digits, with thousands commas
+_DIGITS = re.compile(_NUMBER)
+_WORD = re.compile(r"[a-z]+")
+_JOIN = re.compile(r"-|\s+")       # what may stand between the words of one number
+
+
+def _number(text: str) -> float:
+    return float(text.replace(",", ""))
 
 
 def _numbers(quote: str) -> set[float]:
-    """The numbers a quote states, as digits or number words (one to one hundred; a tens word
-    and a unit word written apart also count as one number)."""
-    found = {float(m) for m in _DIGITS.findall(quote)}
-    tokens = _WORD.findall(quote.casefold())
-    found |= {float(WORDS[t]) for t in tokens if t in WORDS}
-    for a, b in zip(tokens, tokens[1:], strict=False):
-        if a in _TENS and b in _UNITS[:9]:
-            found.add(float(WORDS[f"{a}-{b}"]))
-        elif a == "one" and b == "hundred":
-            found.add(100.0)
+    """The numbers a quote states: digits ("26.8", "1,088.5") or number words from one to
+    ninety-nine, a tens word and a unit word joined by a hyphen or a space ("twenty-four",
+    "twenty four") being one number, "hundred" with a unit word before it that many hundreds
+    ("two hundred") and alone 100. A word fused to another by a hyphen counts ("two-hour",
+    "twenty-four-hour"); a word inside another does not ("fourteen" states no four)."""
+    found = {_number(m) for m in _DIGITS.findall(quote)}
+    text = quote.casefold()
+    words = list(_WORD.finditer(text))
+    i = 0
+    while i < len(words):
+        w = words[i].group()
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        joined = nxt is not None and _JOIN.fullmatch(text[words[i].end():nxt.start()])
+        if joined and w in _TENS and nxt.group() in _UNITS[:9]:
+            found.add(float(WORDS[w] + WORDS[nxt.group()]))
+            i += 2
+        elif joined and w in _UNITS[:9] and nxt.group() == "hundred":
+            found.add(float(WORDS[w] * 100))
+            i += 2
+        else:
+            if w in WORDS:
+                found.add(float(WORDS[w]))
+            elif w == "hundred":
+                found.add(100.0)
+            i += 1
     return found
 
 
@@ -300,12 +321,13 @@ def number_in_quote(value: float, quote: str) -> bool:
 
 def regex_value(column: str, section_text: str) -> tuple | None:
     """Check 5: the distinct values the column's regular expression finds in the section text,
-    sorted; None when it has no expression or finds nothing."""
+    sorted; None when it has no expression or finds nothing. A value agrees when it is among
+    them: lenient for sections with several draws (another draw's value also agrees)."""
     pattern = REGEXES.get(column)
     if pattern is None:
         return None
     cast = float if column == "mile" else int
-    found = sorted({cast(m.group(1)) for m in pattern.finditer(section_text)})
+    found = sorted({cast(m.group(1).replace(",", "")) for m in pattern.finditer(section_text)})
     return tuple(found) or None
 
 
@@ -343,14 +365,15 @@ def check_value(column: str, ctype: str, raw: dict, section_text: str) -> Value:
 def _call(client, system: str, text: str, parse: Callable[[str], dict]
           ) -> tuple[dict | None, str, Counter]:
     """(parsed reply or None, outcome, call counts) of one unit's call, with one retry at
-    repeat 1 for an unparseable reply. A ModelError (a fresh or a cached failure) is the
-    outcome `model_error`; anything else (a budget stop) propagates."""
+    repeat 1 for an unparseable reply. A rejected input (CachedFailure, fresh or replayed) is
+    the outcome `model_error`; every other failure (retries exhausted, the usage limit, a
+    configuration error, a budget stop) propagates and stops the run (ruling P21)."""
     counts: Counter = Counter()
     for repeat in (0, 1):
         try:
             c = client.complete(system, text, max_tokens=MAX_TOKENS, repeat=repeat,
                                 cache_failures=True)
-        except ModelError:
+        except CachedFailure:
             counts["failed"] += 1
             return None, "model_error", counts
         counts["cached" if c.cached else "made"] += 1
@@ -403,7 +426,11 @@ def _extract_unit(unit: Unit, client, cfg: ExtractionConfig, contracts: dict[str
     base = next(g for g, cols in cfg.groups.items() if "bridge" in cols)
     base_draws = replies[base]
     draws: list[dict[str, Value]] = []
-    if not isinstance(base_draws, str):
+    if isinstance(base_draws, str):     # no draws: other groups' draws match nothing
+        counts["draws_dropped"] += sum(len(got) for g, got in replies.items()
+                                       if g != base and not isinstance(got, str)
+                                       and any(c in DRAW_COLUMNS for c in cfg.groups[g]))
+    else:
         draws = [{} for _ in base_draws]
         for group in sorted(cfg.groups):
             cols = [c for c in DRAW_COLUMNS if c in cfg.groups[group]]
@@ -470,7 +497,10 @@ def _count(counts: dict, v: Value) -> None:
 
 def _report(store: Store, us: list[Unit], results: list, counts: Counter, extra: dict) -> dict:
     """The unhashed extraction report: units and sections, calls, draws and, per model column,
-    values by outcome (over units, not occurrences). E1 is grounded / non_null."""
+    values by outcome (over units, not occurrences). E1 is grounded / non_null. `regex`
+    counts grounded values: agree when the value is among the values the column's expression
+    finds anywhere in the section (lenient for sections with several draws), disagree when
+    it finds others only, none when it finds nothing."""
     docs = chain_docs(store)
     columns = {c: _empty_counts() for c in MODEL_COLUMNS}
     outcomes: dict[str, Counter] = {}

@@ -19,7 +19,8 @@ reply beyond the cap stops with exit 1), `adr tables extract` (the 3B extraction
 33 CFR 117 sections with a model profile, first pass or `--second-pass`, under `--max-calls`,
 which counts every transport attempt, retries included; it prints the units, writes the
 unhashed `extraction-report.json` or `second-pass-report.json` and the second pass's facts
-file, and stops with exit 1 and nothing written at the cap), `adr tables gate` (the merge gate:
+file, and stops with exit 1 and nothing written at the cap or on a model failure that is no
+stored input rejection), `adr tables gate` (the merge gate:
 evaluate a candidate against `tables/HEAD` on gold sets and promote it when it has at most
 `--max-flips` flips; exit 1 when refused), `adr tables show` (a build's manifest and its
 semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the `query_table`
@@ -946,7 +947,16 @@ def _stopped(max_calls: int, calls: int) -> str:
             f"written. Completed calls are cached: rerun to continue.")
 
 
+def _failed(error: Exception, calls: int | None = None) -> str:
+    """The stop status of a model failure that is not cached (retries exhausted, the usage
+    limit, a configuration error): the run stops and a later run retries it (ruling P21)."""
+    made = "" if calls is None else f" ({calls} budget unit(s) used)"
+    return (f"status: stopped: {_one_line(error)}{made}; nothing written. Completed calls are "
+            f"cached: rerun to continue.")
+
+
 def _tables_build(a: argparse.Namespace) -> int:
+    from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded
 
     corpus = _tables_corpus(a)
@@ -960,6 +970,9 @@ def _tables_build(a: argparse.Namespace) -> int:
         raise tools.ToolError(str(e)) from e
     except BudgetExceeded:
         print(_stopped(a.max_calls, a.max_calls))
+        return 1
+    except ModelError as e:            # a stored input rejection never reaches here
+        print(_failed(e))
         return 1
     m = tables_overlay.load_manifest(a.store, res.tables_id)
     head = tables_overlay.read_head(a.store)
@@ -982,7 +995,9 @@ def _tables_build(a: argparse.Namespace) -> int:
 
 def _tables_extract(a: argparse.Namespace) -> int:
     """`adr tables extract`: the first (or with --second-pass the second) extraction pass over
-    the store's 33 CFR 117 sections, under --max-calls (every transport attempt counts)."""
+    the store's 33 CFR 117 sections, under --max-calls (every transport attempt counts). A
+    model failure other than a stored input rejection stops it with exit 1, nothing written."""
+    from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded
     from adr_store.tables.contracts import load_contracts
     from adr_store.tables.ecfr import chain_docs
@@ -1008,6 +1023,9 @@ def _tables_extract(a: argparse.Namespace) -> int:
                                                    contracts, workers=workers)
     except BudgetExceeded:
         print(_stopped(a.max_calls, meter.budget.calls))
+        return 1
+    except ModelError as e:            # a stored input rejection never reaches here
+        print(_failed(e, meter.budget.calls))
         return 1
     report = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
               "max_calls": a.max_calls, "budget_units": meter.budget.calls,

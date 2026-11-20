@@ -88,7 +88,8 @@ class Budget:
     `count_attempts=False` (Phase 0) counts one unit per call, whatever its transport retries.
     With `count_attempts=True` (every Phase 3 command that calls a model) a `MeteredClient`
     over a cached client reserves one unit before every transport attempt, retries included
-    (`attempt`), so real use never exceeds `max_calls`.
+    (`attempt`), so real use never exceeds `max_calls`; a `MeteredClient` refuses (TypeError)
+    a client that has no per-attempt hook.
     """
 
     def __init__(self, max_dollars: float | None, max_calls: int | None = None, *,
@@ -152,6 +153,10 @@ class MeteredClient:
     """
 
     def __init__(self, inner: ModelClient, budget: Budget, prices: dict):
+        if budget.count_attempts and not isinstance(inner, _CachedClient):
+            raise TypeError(f"count_attempts needs a client with per-attempt hooks (a cached "
+                            f"client), not {type(inner).__name__}: its retries would go "
+                            f"uncounted")
         self.inner, self.budget, self.prices = inner, budget, prices
         self.name, self.family, self.model = inner.name, inner.family, model_id(inner)
         self.served_models: set[str] = set()
@@ -160,14 +165,13 @@ class MeteredClient:
     def complete(self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
                  cache_failures: bool = False) -> Completion:
         """`inner.complete` under the budget. `cache_failures` is passed on (a stored failure
-        is a cache hit: it reserves nothing). With `budget.count_attempts` and a cached inner
-        client, each transport attempt takes its own unit (`Budget.attempt`)."""
+        is a cache hit: it reserves nothing). With `budget.count_attempts` each transport
+        attempt takes its own unit (`Budget.attempt`)."""
         extra = {"cache_failures": True} if cache_failures else {}
         is_cached = getattr(self.inner, "is_cached", None)
         call = not (is_cached and is_cached(system, user, max_tokens=max_tokens, repeat=repeat,
                                             **extra))
-        per_attempt = call and self.budget.count_attempts and isinstance(self.inner,
-                                                                         _CachedClient)
+        per_attempt = call and self.budget.count_attempts
         if per_attempt:
             extra["before_attempt"] = self.budget.attempt
         # a cache hit costs nothing, so it reserves nothing: a fully cached rerun never stops

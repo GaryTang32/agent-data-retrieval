@@ -448,10 +448,16 @@ def test_build_takes_the_generator_profile_and_call_cap_but_makes_no_call(tmp_pa
     assert a.tables_id == build_tables(store.path, "gov").tables_id
 
 
-def test_an_extraction_build_without_cached_replies_stops_at_the_call_cap(tmp_path):
+def test_an_extraction_build_without_cached_replies_stops_at_the_call_cap(tmp_path,
+                                                                         monkeypatch):
+    from adr_eval import llm
     from adr_eval.pipeline import BudgetExceeded
     from tests.store.tables_fixtures import ECFR_NEW, ecfr_doc
 
+    def no_cli(*a, **kw):
+        raise AssertionError("the model CLI must never run in a test")
+
+    monkeypatch.setattr(llm, "_run_subprocess", no_cli)     # whatever the budget does
     store = make_tables_store(tmp_path / "s", [*FR_DOCS, ecfr_doc(ECFR_NEW)])
     with pytest.raises(BudgetExceeded):     # default --max-calls 0: cached replies only
         build_tables(store.path, "gov", with_extraction=True)

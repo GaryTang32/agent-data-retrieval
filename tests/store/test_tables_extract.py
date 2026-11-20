@@ -6,8 +6,16 @@ import json
 
 import pytest
 
+from adr_eval import llm
 from adr_eval.cache import Cache
-from adr_eval.llm import CachedFailure, CachedStubClient, ModelError, ModelOutputError
+from adr_eval.llm import (
+    CachedFailure,
+    CachedStubClient,
+    InputRejected,
+    ModelError,
+    ModelOutputError,
+    RetriesExhausted,
+)
 from adr_eval.pipeline import Budget, BudgetExceeded, MeteredClient
 from adr_store.tables import extract as ex
 from adr_store.tables.build import build_tables
@@ -167,6 +175,16 @@ def test_number_words_pass_value_in_quote():
     assert number_in_quote(12, "12 hours notice") and number_in_quote(30, "Thirty minutes")
     assert not number_in_quote(4, "fourteen hours") and not number_in_quote(4, "24 hours")
     assert not number_in_quote(4, "twenty-four hours") and not number_in_quote(3, "mile 3.1")
+    # hyphenated with a unit, hundreds, thousands separators
+    assert number_in_quote(2, "two-hour advance notice") and number_in_quote(1, "one-hour notice")
+    assert number_in_quote(6, "six-hours notice") and number_in_quote(8, "an Eight-Hour notice")
+    assert number_in_quote(24, "a twenty-four-hour notice")
+    assert not number_in_quote(4, "a twenty-four-hour notice")
+    assert not number_in_quote(4, "fourteen-hour") and number_in_quote(14, "fourteen-hour")
+    assert number_in_quote(200, "two hundred feet") and not number_in_quote(100, "two hundred")
+    assert not number_in_quote(2, "two hundred feet") and number_in_quote(100, "a hundred feet")
+    assert number_in_quote(1088.5, "mile 1,088.5") and not number_in_quote(88.5, "mile 1,088.5")
+    assert not number_in_quote(1, "mile 1,088.5") and number_in_quote(4, "3,4 and 5")
     v = check_value("notice_hours", "int",
                     {"value": 4, "quote": "the draw shall open on signal"}, TEXT)
     assert v.status == "auto-accepted" and v.checks_failed == ("value_in_quote",)
@@ -227,11 +245,12 @@ def test_a_reply_without_its_section_and_draws_is_unparseable(ecfr_store, tmp_pa
     assert got.calls == {"main": "unparseable"} and stub.calls == 2
 
 
-def test_a_failed_call_is_cached_as_model_error(ecfr_store, tmp_path):
-    def down(system, user, repeat):
-        raise ModelError("HTTP 400: refused")
+def input_rejected(system, user, repeat):
+    raise InputRejected("HTTP 400: input rejected")
 
-    stub = stub_of(tmp_path, down)
+
+def test_a_rejected_input_is_cached_as_model_error(ecfr_store, tmp_path):
+    stub = stub_of(tmp_path, input_rejected)
     first, report = extract_all(ecfr_store, stub, CFG, CONTRACTS)
     n = stub.calls
     assert n == len(units(ecfr_store)) and report["calls"]["failed"] == n
@@ -259,6 +278,71 @@ def test_a_budget_stop_is_no_model_error_and_is_not_cached(ecfr_store, tmp_path)
     full, _ = extract_all(ecfr_store, stub, CFG, CONTRACTS)
     assert all(g.calls == {"main": "reply"} for g in full)
     assert stub.calls == len(units(ecfr_store))
+
+
+def test_thousands_separators_parse():
+    assert regex_value("mile", "the draw, mile 1,088.5, shall open") == (1088.5,)
+    assert coerce("real", "1,088.5") == 1088.5 and coerce("int", "1,200") == 1200
+    with pytest.raises(ValueError):
+        coerce("real", "1,08.5")
+
+
+@pytest.mark.parametrize("error", [
+    lambda: llm._Retryable("connection reset"),                  # retries exhausted
+    lambda: llm.RateLimitedError("usage limit: resets at 5pm"),  # the subscription limit
+    lambda: ModelError("HTTP 401: authentication"),               # configuration
+])
+def test_a_failure_that_is_no_input_rejection_stops_the_run(ecfr_store, tmp_path, error,
+                                                             monkeypatch):     # P21
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+
+    def fn(system, user, repeat):
+        raise error()
+
+    stub = stub_of(tmp_path, fn, max_retries=1)
+    with pytest.raises(ModelError) as e:
+        extract_all(ecfr_store, stub, CFG, CONTRACTS)
+    assert not isinstance(e.value, CachedFailure)
+    assert stub.calls == (2 if isinstance(e.value, RetriesExhausted) else 1)   # first unit only
+    with pytest.raises(ModelError) as e:
+        second_pass_all(ecfr_store, stub, CONTRACTS)
+    assert not isinstance(e.value, CachedFailure)
+    assert not any((tmp_path / "llm").rglob("*.json"))          # nothing stored
+    # a later run retries and completes
+    calls = stub.calls
+    stub.fn = fixture_reply
+    done, report = extract_all(ecfr_store, stub, CFG, CONTRACTS)
+    assert stub.calls == calls + len(done) and report["calls"]["failed"] == 0
+    assert all(g.calls == {"main": "reply"} for g in done)
+
+
+def test_the_unparseable_retry_takes_its_own_budget_unit(ecfr_store, tmp_path):
+    def flaky(system, user, repeat):
+        return "not json" if repeat == 0 else fixture_reply(system, user, repeat)
+
+    u = unit_of(ecfr_store, "117.263")
+    meter = MeteredClient(stub_of(tmp_path, flaky, "a"), Budget(None, 2, count_attempts=True),
+                          {})
+    assert extract_unit(u, meter, CFG, CONTRACTS).calls == {"main": "reply_repeat_1"}
+    assert meter.budget.calls == 2
+    stub = stub_of(tmp_path, flaky, "b")
+    meter = MeteredClient(stub, Budget(None, 1, count_attempts=True), {})
+    with pytest.raises(BudgetExceeded):
+        extract_unit(u, meter, CFG, CONTRACTS)
+    assert stub.calls == 1 and meter.budget.calls == 1
+
+
+@pytest.mark.parametrize("cap", [0, 3])
+def test_concurrent_extraction_holds_the_call_cap(ecfr_store, tmp_path, cap):
+    stub = stub_of(tmp_path)
+    meter = MeteredClient(stub, Budget(None, cap, count_attempts=True), {})
+    with pytest.raises(BudgetExceeded):
+        extract_all(ecfr_store, meter, CFG, CONTRACTS, workers=4)
+    assert stub.calls == cap and meter.budget.calls == cap
+    with pytest.raises(BudgetExceeded):
+        second_pass_all(ecfr_store, MeteredClient(stub_of(tmp_path, fixture_numbered, "s"),
+                                                  Budget(None, cap, count_attempts=True), {}),
+                        CONTRACTS, workers=4)
 
 
 def test_regex_cross_check_records_agreement():
@@ -333,18 +417,30 @@ def test_a_group_without_bridge_is_matched_to_the_draws_of_the_bridge_group(ecfr
 
 
 def test_a_failed_group_nulls_only_its_columns(ecfr_store, tmp_path):
-    def b_down(system, user, repeat):
+    def b_rejected(system, user, repeat):
         if "Specs: bridge.notice_hours" in system:
-            raise ModelError("down")
+            raise InputRejected("HTTP 400: input rejected")
         return fixture_reply(system, user, repeat)
 
-    got = extract_unit(unit_of(ecfr_store, "117.823"), stub_of(tmp_path, b_down), SPLIT,
+    got = extract_unit(unit_of(ecfr_store, "117.823"), stub_of(tmp_path, b_rejected), SPLIT,
                        CONTRACTS)
     assert got.calls == {"A": "reply", "B": "model_error"}
     assert [d["bridge"].value for d in got.draws] == [
         "US 17 Bridge", "Norfolk Southern Railroad Bridge", "NC 55 Bridge"]
     assert {d[c].null_reason for d in got.draws for c in SPLIT.groups["B"]} == {"model_error"}
     assert got.section["waterway"].value == "Neuse River"
+
+
+def test_when_the_bridge_group_fails_the_other_groups_draws_are_counted_dropped(ecfr_store,
+                                                                                tmp_path):
+    def a_rejected(system, user, repeat):
+        if "Specs: bridge.waterway" in system:
+            raise InputRejected("HTTP 400: input rejected")
+        return fixture_reply(system, user, repeat)
+
+    got, report = extract_all(ecfr_store, stub_of(tmp_path, a_rejected), SPLIT, CONTRACTS)
+    assert all(g.draws == [] for g in got)
+    assert report["draws"] == 0 and report["draws_dropped"] == 8
 
 
 def test_unmatched_draws_of_another_group_are_dropped_and_counted(ecfr_store, tmp_path):
@@ -617,10 +713,8 @@ def test_second_pass_unparseable_and_failed_calls(ecfr_store, tmp_path):
     assert stub.calls == 2 * len(facts)
     assert all({v.null_reason for v in f.section.values()} == {"unparseable"} for f in facts)
 
-    def down(system, user, repeat):
-        raise ModelError("down")
-
-    facts, report = second_pass_all(ecfr_store, stub_of(tmp_path, down, "d"), CONTRACTS)
+    facts, report = second_pass_all(ecfr_store, stub_of(tmp_path, input_rejected, "d"),
+                                    CONTRACTS)
     assert report["calls"]["failed"] == len(facts)
     assert all({v.null_reason for v in f.section.values()} == {"model_error"} for f in facts)
 
