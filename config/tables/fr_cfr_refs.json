@@ -1,0 +1,51 @@
+{
+  "table": "fr_cfr_refs",
+  "version": 1,
+  "kind": "data",
+  "description": "CFR references of Federal Register documents: one row per document and part.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Federal Register document number.",
+      "spec_id": "fr.id@1"
+    },
+    {
+      "name": "cfr_part",
+      "type": "text",
+      "nullable": false,
+      "description": "CFR part as text, e.g. 33 CFR 117.",
+      "spec_id": "fr.cfr_part@1"
+    },
+    {
+      "name": "title",
+      "type": "int",
+      "nullable": false,
+      "description": "CFR title number.",
+      "spec_id": "fr.cfr_title@1"
+    },
+    {
+      "name": "part",
+      "type": "int",
+      "nullable": true,
+      "description": "CFR part number.",
+      "spec_id": "fr.cfr_part_number@1"
+    }
+  ],
+  "key": [
+    "id",
+    "cfr_part"
+  ],
+  "order": [
+    "id",
+    "cfr_part"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "gov",
+    "selector": "fr",
+    "loader": "metadata"
+  },
+  "entities": {}
+}

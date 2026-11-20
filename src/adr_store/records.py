@@ -102,11 +102,14 @@ def canonical_json(model: BaseModel) -> bytes:
 
 def schemas() -> dict[str, dict]:
     """File name -> JSON Schema for every record model: Phase 1 records, Phase 2 overlays,
-    the ACL directory, policy and snapshot, and the tool record and tool snapshot (imported
-    here: those modules import this one)."""
+    the ACL directory, policy and snapshot, the tool record and tool snapshot, and the table
+    contract, row and manifest (imported here: those modules import this one)."""
     from adr_store.acl import AclSnapshot, Directory, Policy
     from adr_store.applicability import ApplicabilityOverlay
     from adr_store.dedup import DedupOverlay
+    from adr_store.tables.contracts import Contract
+    from adr_store.tables.overlay import Manifest
+    from adr_store.tables.provenance import RowRecord
     from adr_store.tool_catalog import ToolSnapshot
     from adr_store.tool_records import ToolRecord
 
@@ -116,6 +119,9 @@ def schemas() -> dict[str, dict]:
         "document.schema.json": DocRecord.model_json_schema(),
         "applicability.schema.json": ApplicabilityOverlay.model_json_schema(),
         "dedup.schema.json": DedupOverlay.model_json_schema(),
+        "table-contract.schema.json": Contract.model_json_schema(),
+        "table-row.schema.json": RowRecord.model_json_schema(),
+        "table-manifest.schema.json": Manifest.model_json_schema(),
         "acl-directory.schema.json": Directory.model_json_schema(),
         "acl-policy.schema.json": Policy.model_json_schema(),
         "acl-snapshot.schema.json": AclSnapshot.model_json_schema(),

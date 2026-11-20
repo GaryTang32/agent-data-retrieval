@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "ValueProv": {
+      "additionalProperties": false,
+      "description": "The provenance of one stored value (or one element of a list value).",
+      "properties": {
+        "checks_failed": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Checks Failed",
+          "type": "array"
+        },
+        "doc_id": {
+          "minLength": 1,
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "null_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "absent",
+                "not_applicable",
+                "unparseable",
+                "ungrounded",
+                "model_error"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Null Reason"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "regex_agrees": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regex Agrees"
+        },
+        "spec_id": {
+          "pattern": "^[a-z_]+\\.[a-z_]+@\\d+$",
+          "title": "Spec Id",
+          "type": "string"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "verified",
+                "auto-accepted",
+                "rejected",
+                "review-pending"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        }
+      },
+      "required": [
+        "doc_id",
+        "spec_id",
+        "status"
+      ],
+      "title": "ValueProv",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One table row with the provenance of each of its values.",
+  "properties": {
+    "doc_id": {
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "prov": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ValueProv"
+          },
+          {
+            "items": {
+              "$ref": "#/$defs/ValueProv"
+            },
+            "type": "array"
+          }
+        ]
+      },
+      "title": "Prov",
+      "type": "object"
+    },
+    "row": {
+      "additionalProperties": true,
+      "title": "Row",
+      "type": "object"
+    }
+  },
+  "required": [
+    "doc_id",
+    "row",
+    "prov"
+  ],
+  "title": "RowRecord",
+  "type": "object"
+}

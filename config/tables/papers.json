@@ -1,0 +1,156 @@
+{
+  "table": "papers",
+  "version": 1,
+  "kind": "data",
+  "description": "Research sources: one row per manifest row, every column raw.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Paper id: arXiv id, else DOI, else url: and a hash of the URL.",
+      "spec_id": "papers.id@1"
+    },
+    {
+      "name": "row",
+      "type": "int",
+      "nullable": false,
+      "description": "Row number in the manifest, from 1 (the header is not a row).",
+      "spec_id": "papers.row@1"
+    },
+    {
+      "name": "research",
+      "type": "text",
+      "nullable": false,
+      "description": "Research report the source was gathered for.",
+      "spec_id": "papers.research@1"
+    },
+    {
+      "name": "topic",
+      "type": "text",
+      "nullable": false,
+      "description": "Topic folder of the source.",
+      "spec_id": "papers.topic@1"
+    },
+    {
+      "name": "also_in",
+      "type": "text",
+      "nullable": false,
+      "description": "Other topics that cite the source, ;-joined (may be empty).",
+      "spec_id": "papers.also_in@1"
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "description": "Source type: paper or web.",
+      "spec_id": "papers.type@1"
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": false,
+      "description": "Source title.",
+      "spec_id": "papers.title@1"
+    },
+    {
+      "name": "authors",
+      "type": "text",
+      "nullable": false,
+      "description": "Comma-separated author list as the manifest gives it.",
+      "spec_id": "papers.authors@1"
+    },
+    {
+      "name": "year",
+      "type": "int",
+      "nullable": true,
+      "description": "Publication year (empty in the manifest: null).",
+      "spec_id": "papers.year@1"
+    },
+    {
+      "name": "venue",
+      "type": "text",
+      "nullable": false,
+      "description": "Venue as the manifest gives it, e.g. arXiv preprint.",
+      "spec_id": "papers.venue@1"
+    },
+    {
+      "name": "url",
+      "type": "text",
+      "nullable": false,
+      "description": "Landing page URL.",
+      "spec_id": "papers.url@1"
+    },
+    {
+      "name": "pdf_url",
+      "type": "text",
+      "nullable": false,
+      "description": "PDF URL (may be empty).",
+      "spec_id": "papers.pdf_url@1"
+    },
+    {
+      "name": "arxiv_id",
+      "type": "text",
+      "nullable": false,
+      "description": "arXiv identifier (may be empty).",
+      "spec_id": "papers.arxiv_id@1"
+    },
+    {
+      "name": "doi",
+      "type": "text",
+      "nullable": false,
+      "description": "DOI (may be empty).",
+      "spec_id": "papers.doi@1"
+    },
+    {
+      "name": "license",
+      "type": "text",
+      "nullable": false,
+      "description": "Licence of the source as the manifest gives it.",
+      "spec_id": "papers.license@1"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false,
+      "description": "Download status, e.g. downloaded or no_pdf_link.",
+      "spec_id": "papers.status@1"
+    },
+    {
+      "name": "local_file",
+      "type": "text",
+      "nullable": false,
+      "description": "Repository-relative PDF path when downloaded.",
+      "spec_id": "papers.local_file@1"
+    },
+    {
+      "name": "relevance",
+      "type": "text",
+      "nullable": false,
+      "description": "One-sentence note on why the source matters.",
+      "spec_id": "papers.relevance@1"
+    },
+    {
+      "name": "also_in_list",
+      "type": "text[]",
+      "nullable": false,
+      "description": "also_in split on ; into topics.",
+      "spec_id": "papers.also_in_list@1"
+    }
+  ],
+  "key": [
+    "id",
+    "row"
+  ],
+  "order": [
+    "row",
+    "id"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "research",
+    "selector": "papers_manifest",
+    "loader": "metadata"
+  },
+  "entities": {}
+}

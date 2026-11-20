@@ -1,0 +1,44 @@
+{
+  "table": "fr_dockets",
+  "version": 1,
+  "kind": "data",
+  "description": "Dockets of Federal Register documents: one row per document and docket.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Federal Register document number.",
+      "spec_id": "fr.id@1"
+    },
+    {
+      "name": "docket",
+      "type": "text",
+      "nullable": false,
+      "description": "One docket identifier parsed from a docket string.",
+      "spec_id": "fr.docket@1"
+    },
+    {
+      "name": "raw",
+      "type": "text",
+      "nullable": false,
+      "description": "The docket string as the document gives it.",
+      "spec_id": "fr.docket_raw@1"
+    }
+  ],
+  "key": [
+    "id",
+    "docket"
+  ],
+  "order": [
+    "id",
+    "docket"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "gov",
+    "selector": "fr",
+    "loader": "metadata"
+  },
+  "entities": {}
+}

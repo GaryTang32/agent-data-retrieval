@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "TableFile": {
+      "additionalProperties": false,
+      "description": "One table of a build: which contract it was made under and its file.",
+      "properties": {
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "contract_version": {
+          "minimum": 1,
+          "title": "Contract Version",
+          "type": "integer"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "rejected": {
+          "minimum": 0,
+          "title": "Rejected",
+          "type": "integer"
+        },
+        "rows": {
+          "minimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "table": {
+          "title": "Table",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "kind",
+        "contract_version",
+        "contract_sha256",
+        "file",
+        "sha256",
+        "rows",
+        "rejected"
+      ],
+      "title": "TableFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `tables-<id[:16]>.json`: every table file of one build.",
+  "properties": {
+    "applicability": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Applicability"
+    },
+    "corpus": {
+      "title": "Corpus",
+      "type": "string"
+    },
+    "extraction": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Extraction"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "snapshot": {
+      "minLength": 1,
+      "title": "Snapshot",
+      "type": "string"
+    },
+    "tables": {
+      "items": {
+        "$ref": "#/$defs/TableFile"
+      },
+      "title": "Tables",
+      "type": "array"
+    }
+  },
+  "required": [
+    "format_version",
+    "snapshot",
+    "corpus",
+    "applicability",
+    "extraction",
+    "tables"
+  ],
+  "title": "TablesManifest",
+  "type": "object"
+}
