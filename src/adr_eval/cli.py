@@ -978,8 +978,9 @@ def _probes_tables(a: argparse.Namespace) -> int:
         rows = [r.to_dict() for r in results]
         ok = summary["total"]["leaks"] == 0 and summary["total"]["invalid"] == 0
         head = f"{summary['total']['n']} leak probes, {summary['total']['leaks']} leaks, " \
-               f"{summary['total']['invalid']} invalid ({summary['total']['ghost']} as " \
-               f"user:ghost, denied F4)"
+               f"{summary['total']['invalid']} invalid; {summary['total']['compared']} " \
+               f"compared with a reference store, {summary['total']['ghost']} as user:ghost " \
+               f"(denied F4: no directory user has a hidden row)"
         table = ("| family | probes | leaks | invalid | callers | outcomes |\n"
                  "|---|---|---|---|---|---|\n" + "".join(
                      f"| {n} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
@@ -1027,12 +1028,14 @@ def _probes_tables(a: argparse.Namespace) -> int:
         clones = Path(a.clones) if a.clones is not None else p2 / "clones" / a.corpus
         rows = tp.failclosed(a.store, clones, a.corpus, logs=extra_logs, **kw)
         extra_logs.pop("store", None)   # the store's log is scanned below
+        probe_set["target"] = rows[0]["target"]
         summary = tp.summarize_failclosed(rows)
         cfg["failclosed_callers"] = sorted({r["caller"] for r in rows
                                             if r["family"] == "no_entry"})
         ok = summary["total"]["passed"] == summary["total"]["n"]
         head = f"{summary['total']['n']} probes, {summary['total']['passed']} passed, " \
-               f"{summary['total']['content']} with content"
+               f"{summary['total']['content']} with content; target document " \
+               f"`{rows[0]['target']['doc_id'][:12]}` ({rows[0]['target']['table']})"
         table = ("| condition | probes | passed | with content | outcomes |\n"
                  "|---|---|---|---|---|\n" + "".join(
                      f"| {n} | {b['n']} | {b['passed']} | {b['content']} | "
@@ -1040,6 +1043,7 @@ def _probes_tables(a: argparse.Namespace) -> int:
                      for n, b in summary["conditions"].items()))
     elif a.kind == "tables-applicability":
         rows = tp.applicability_probes(a.store, n=a.n or 50)
+        statements = [tp.applicability_statement(t) for t in sorted({r["table"] for r in rows})]
         summary = tp.summarize_applicability(rows)
         ok = summary["total"]["passed"] == summary["total"]["n"]
         head = (f"{summary['total']['n']} probes on {', '.join(summary['tables'])} "
@@ -1052,7 +1056,9 @@ def _probes_tables(a: argparse.Namespace) -> int:
     scans = {"store": tp.scan_table_log(store_log, offset, statements),
              **{f"reference/{k}": v for k, v in refs.log_scans(statements).items()},
              **extra_logs}
-    logs = {"total": tp.total_table_scan(scans), "by_store": scans}
+    logs = {"total": tp.total_table_scan(scans), "by_store": scans,
+            "statements_checked": len({x for x in statements
+                                       if len(x) >= tp.MIN_STATEMENT})}
     ok = ok and logs["total"]["complete"]
     if a.kind in ("tables-leak", "tables-equivalence"):   # the kinds that use them
         cfg["views"] = refs.info
@@ -1324,24 +1330,27 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--store", type=Path, required=True,
                    help="the store to probe (its active index and overlays)")
     p.add_argument("--views", type=Path, default=None, metavar="DIR",
-                   help="acl, equivalence: where the reference stores are built or reused "
-                        "(default <p2_store_dir>/views/<corpus>)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: where "
+                        "the reference stores are built or reused (default "
+                        "<p2_store_dir>/views/<corpus>; tables-*: views-tables/<corpus>)")
     p.add_argument("--keep-views", action="store_true",
-                   help="acl, equivalence: keep the reference stores (default: removed)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: keep "
+                        "the reference stores (default: removed)")
     p.add_argument("--clones", type=Path, default=None, metavar="DIR",
-                   help="acl: where the fail-closed clones go (default "
+                   help="acl, tables-failclosed: where the fail-closed clones go (default "
                         "<p2_store_dir>/clones/<corpus>; removed)")
     acl_config = runner.REPO_ROOT / "config" / "acl"
     p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
-                   help="acl, equivalence: the directory the reference stores and clones sync "
-                        "from (default config/acl/directory.json)")
+                   help="acl, equivalence and the tables-* kinds: the directory the reference "
+                        "stores and clones sync from (default config/acl/directory.json)")
     p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
-                   help="acl, equivalence: the policy (default config/acl/policy.json)")
+                   help="acl, equivalence and the tables-* kinds: the policy (default "
+                        "config/acl/policy.json)")
     p.add_argument("--questions", type=int, default=50, metavar="N",
                    help="equivalence: golden questions per view (default 50)")
     p.add_argument("--per-family", type=int, default=None, metavar="N",
-                   help="acl: N leak probes per family instead of the spec's counts (a quick "
-                        "check; recorded in the output)")
+                   help="acl, tables-leak: N leak probes per family instead of the spec's "
+                        "counts (a quick check; recorded in the output)")
     p.add_argument("--as", dest="as_user", default=None, metavar="USER",
                    help="search as this caller (needs the ACL layer of Phase 2B)")
     p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,

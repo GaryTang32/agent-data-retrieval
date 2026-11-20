@@ -12,13 +12,15 @@ documents re-ingested and the ACL synced, nothing else (a table tool refuses on 
 reads anything an index or overlay would give).
 
 **Leak probes** (`leak_probes`, §10.4, S1). Each probe is a (caller, hidden document) pair drawn
-by seeded hash, with a hidden row of that document and one of its values: callers are the
-directory's users and `user:ghost`, among those with a hidden row; for probe `k` of a family the
-caller, then a (table, column) of the family, then a row of a document the caller cannot see,
-whose value in that column only such documents hold (never a document the caller sees); a
-(caller, document, table, column, value) already taken draws again. Values are scalar cells
-(text, int, date) of at most 1,000 characters. Every call reads with `include_superseded`
-(nothing masked by applicability). Families:
+by seeded hash, with a hidden row of that document and one of its values. Callers are the
+directory users with such a row, so every probe is compared with a reference store;
+`user:ghost` (who must be denied F4) only when no directory user has one (research: the
+manifest, the only document with rows, is public). For probe `k` of a family: the caller, then
+a (table, column) of the family, then a row of a document the caller cannot see whose value in
+that column only such documents hold (never a document the caller sees); a (caller, document,
+table, column, value) already taken draws again. Values are scalar cells (text, int, date) of
+at most 1,000 characters. Every call reads with `include_superseded` (nothing masked by
+applicability). Families:
 
 - `by-key`: `query_table(table, {key: v}, "lookup")` on a table's first key column;
 - `by-filter`: `query_table(table, {column: v}, "count")`;
@@ -538,8 +540,12 @@ def leak_probes(store_path: Path, corpus: str, seed: int = SEED3,
     for family in LEAK_SIZES[corpus]:
         taken: set = set()
         columns = _family_columns(ctx, family)
-        callers = [c for c in ctx.callers()
+        # directory users with a hidden row, so each probe is compared with a reference store;
+        # `user:ghost` (denied F4) only when no user has one (the research manifest is public)
+        callers = [c for c in sorted(ctx.snap.directory)
                    if any(ctx.hidden_values(c, t, col) for t, col in columns)]
+        if not callers and any(ctx.hidden_values(GHOST, t, col) for t, col in columns):
+            callers = [GHOST]
         if not callers and sizes[family]:
             raise ValueError(f"{family}: no caller has a hidden row with a probe value")
         for k in range(sizes[family]):
@@ -663,6 +669,7 @@ def summarize_leaks(results: list[ProbeResult]) -> dict:
     total = {"n": len(results), "leaks": sum(r.leak for r in results),
              "invalid": sum(not r.valid for r in results),
              "ghost": sum(r.caller == GHOST for r in results),
+             "compared": sum(r.kinds["rows_differ"] is not None for r in results),
              "leak_kinds": {k: sum(bool(r.kinds[k]) for r in results) for k in LEAK_KINDS},
              "checked_kinds": {k: sum(r.kinds[k] is not None for r in results)
                                for k in LEAK_KINDS}}
@@ -1097,6 +1104,12 @@ def failclosed_target(ctx: TableContext, callers: list[str], clock: Callable,
                      "visible to every fail-closed caller, found by its lookup and select)")
 
 
+def failclosed_identity(target: dict) -> dict:
+    """What identifies the fail-closed target in the results: its document id, table and key
+    column (not the key's value, which is content)."""
+    return {"doc_id": target["doc_id"], "table": target["table"], "key": target["key"]}
+
+
 def failclosed_calls(target: dict) -> tuple[dict, dict]:
     """(the three calls of the fail-closed probes, the same naming the absent key)."""
     t, key = target["table"], target["key"]
@@ -1153,6 +1166,7 @@ def failclosed(store_path: Path, clone_root: Path, corpus: str, seed: int = SEED
     users = acl_probes.failclosed_callers(ctx, seed)
     target = failclosed_target(ctx, users, clock, seed)
     calls, controls = failclosed_calls(target)
+    ident = failclosed_identity(target)
     statements = [c["args"]["statement"] for c in (calls["sql"], controls["sql"])]
     rows: list[dict] = []
     logs = {} if logs is None else logs
@@ -1165,7 +1179,7 @@ def failclosed(store_path: Path, clone_root: Path, corpus: str, seed: int = SEED
                 ctrl = run_table_call(t, controls[tool]) if cond == "no_entry" else None
                 b = target["before"].get(caller)
                 rows.append({"probe_id": f"{cond}:{i}:{tool}", "family": cond, "tool": tool,
-                             "caller": caller, "variant": variant,
+                             "caller": caller, "variant": variant, "target": ident,
                              "visible_before": None if b is None else b["visible"],
                              **judge_table_failclosed(cond, tool, target, out, ctrl)})
 
@@ -1242,6 +1256,11 @@ def summarize_failclosed(rows: list[dict]) -> dict:
 # -- applicability -----------------------------------------------------------------------------
 
 
+def applicability_statement(table: str) -> str:
+    """The per-document row count the applicability probes run through `sql`."""
+    return f"SELECT _doc_id, count(*) FROM {_q(table)} GROUP BY _doc_id"
+
+
 def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_documents",),
                          n: int = 50, seed: int = SEED3, *, caller: str = "user:auditor",
                          clock: Callable = acl.utc_now) -> list[dict]:
@@ -1274,7 +1293,7 @@ def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_docume
                 "table": table, "op": "lookup", "fields": [key], "limit": QUERY_LIMIT_MAX,
                 "applicability": filters}})
             per = run_table_call(t, {"tool": "sql", "args": {
-                "statement": f"SELECT _doc_id, count(*) FROM {_q(table)} GROUP BY _doc_id",
+                "statement": applicability_statement(table),
                 "applicability": filters}})
             ok = count[0] == look[0] == per[0] == "ok"
             got = Counter({r[0]: r[1] for r in per[1].rows}) if ok else Counter()

@@ -80,9 +80,28 @@ def test_leak_probes_cover_every_family_and_find_no_leak(built, tmp_path):
     assert all(not any(r.kinds.values()) for r in results)
     checked = {k for r in results for k, v in r.kinds.items() if v is not None}
     assert checked == set(tp.LEAK_KINDS)
-    assert {r.caller for r in results} >= {"user:ghost", "user:outsider"}
+    # a directory user has a hidden row, so every probe compares against a reference store
+    assert "user:outsider" in {r.caller for r in results}
+    assert not any(p.caller == "user:ghost" for p in probes)
     summary = tp.summarize_leaks(results)
     assert summary["total"]["n"] == 20 and summary["total"]["leaks"] == 0
+    assert summary["total"]["compared"] == 20 and summary["total"]["ghost"] == 0
+
+
+def test_ghost_is_drawn_only_when_no_user_has_a_hidden_row(tmp_path):
+    """The research manifest is public: no directory user has a hidden row, so the probes
+    fall back to `user:ghost`, who must be denied F4."""
+    from tests.store.tables_fixtures import MANIFEST
+
+    rules = [{"match": {"uri_prefix": "file://papers/"}, "access": ["public"]}]
+    store = make(tmp_path / "r", [MANIFEST], rules=rules, corpus="research")
+    sizes = dict.fromkeys(tp.LEAK_SIZES["research"], 2)
+    probes = tp.leak_probes(store.path, "research", sizes=sizes)
+    assert {p.caller for p in probes} == {"user:ghost"} and len(probes) == 10
+    results = tp.run_leaks(probes, store.path, tmp_path / "views", **kw(store, tmp_path))
+    assert all(r.valid and not r.leak and r.outcome.startswith("denied:F4") for r in results)
+    total = tp.summarize_leaks(results)["total"]
+    assert total["ghost"] == 10 and total["compared"] == 0
 
 
 def test_by_error_probes_mention_the_hidden_value(built):
@@ -219,6 +238,10 @@ def test_failclosed_90_on_the_fixture(public, tmp_path):
     assert all(r["visible_before"] for r in entry)
     assert all(r["outcome"] == "ok" for r in entry)   # "no entry" returns nothing, not a refusal
     assert not any((tmp_path / "clones").glob("*/HEAD"))   # clones removed
+    target = rows[0]["target"]   # the target is recorded on every row
+    assert all(r["target"] == target for r in rows)
+    assert target["doc_id"] in public.doc_ids() and target["table"] == FR
+    assert target["key"] == "id"
     total = tp.total_table_scan(logs)
     assert total["complete"] and total["lines"] >= 90
     assert rows == tp.failclosed(public.path, tmp_path / "clones", "gov",
@@ -296,14 +319,15 @@ def test_scan_table_log_requires_tables_on_allowed_lines(tmp_path):
     assert scan["allowed_unresolved"] == 3   # null or no tables, and the caller-less line
     assert scan["sql_lines"] == 3 and scan["sql_text_lines"] == 2
     assert not scan["complete"]
-    first = log.read_bytes().index(b"\n") + 1
+    first = log.read_bytes().index(b"\n") + 1   # the offset of the second line
     assert tp.scan_table_log(log, len(log.read_bytes()))["lines"] == 0
+    after = tp.scan_table_log(log, first, statements=[stmt])
+    assert after["lines"] == 8 and after["allowed_unresolved"] == 3
     assert tp.scan_table_log(log, 0, statements=[stmt])["lines"] == 9
     ok = tmp_path / "ok.jsonl"
     ok.write_text("".join(json.dumps(x) + "\n" for x in (lines[0], lines[2], lines[3],
                                                           lines[5])), encoding="utf-8")
     assert tp.scan_table_log(ok, statements=[stmt])["complete"]
-    assert first > 0
 
 
 # -- the MCP leg (D1) ----------------------------------------------------------------------------
@@ -339,7 +363,7 @@ def test_the_mcp_leg_finds_no_leak_and_replays_handles(built, tmp_path):
 # -- the command line ----------------------------------------------------------------------------
 
 
-def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys):
+def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys, monkeypatch):
     from adr_store.tables import sqlguard
 
     directory, policy = config_of(public)
@@ -354,12 +378,9 @@ def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys):
     assert main(["probes", "tables-failclosed", "gov", *common,
                  "--clones", str(tmp_path / "clones")]) == 0
     assert main(["probes", "tables-applicability", "gov", *common]) == 0
-    old = sqlguard.SQL_STEP_BUDGET
-    sqlguard.SQL_STEP_BUDGET = 300_000
-    try:
+    with monkeypatch.context() as m:
+        m.setattr(sqlguard, "SQL_STEP_BUDGET", 300_000)
         assert main(["probes", "tables-sql", "gov", *common]) == 0
-    finally:
-        sqlguard.SQL_STEP_BUDGET = old
     assert sorted((tmp_path / "views").iterdir()) == kept   # untouched by kinds without views
     assert main(["probes", "tables-equivalence", "gov", *common, "--gold", str(GOLD)]) == 0
     capsys.readouterr()
@@ -370,6 +391,15 @@ def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys):
         assert summary["summary"]["total"]["n"] == total, kind
         assert summary["logs"]["total"]["complete"], kind
         assert (d / "summary.md").exists() and (d / "results.json").exists()
+    (d,) = out.glob("probes-tables-applicability-gov-*")
+    summary = json.loads((d / "summary.json").read_text())
+    assert summary["logs"]["statements_checked"] == 1   # the GROUP BY _doc_id statement
+    (d,) = out.glob("probes-tables-failclosed-gov-*")
+    target = json.loads((d / "probes.json").read_text())["target"]
+    rows = json.loads((d / "results.json").read_text())["results"]
+    assert target["doc_id"] in public.doc_ids() and all(r["target"] == target for r in rows)
+    (d,) = out.glob("probes-tables-leak-gov-*")
+    assert json.loads((d / "summary.json").read_text())["summary"]["total"]["compared"] == 10
     (d,) = out.glob("probes-tables-equivalence-gov-*")
     summary = json.loads((d / "summary.json").read_text())
     assert summary["summary"]["differing"] == 0 and summary["summary"]["n"] > 0
