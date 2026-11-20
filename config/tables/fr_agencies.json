@@ -30,7 +30,7 @@
       "type": "int",
       "nullable": true,
       "description": "The Federal Register's numeric agency id.",
-      "spec_id": "fr.agency_id@1"
+      "spec_id": "fr.fr_agency_id@1"
     },
     {
       "name": "parent_id",

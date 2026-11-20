@@ -518,3 +518,36 @@ def test_the_three_table_schemas_are_registered():
     names = records.schemas()
     assert {"table-contract.schema.json", "table-row.schema.json",
             "table-manifest.schema.json"} <= set(names)
+
+
+# -- Task 2 follow-ups to Task 1 ---------------------------------------------------------------
+
+def test_manifest_row_reads_only_the_header_line_of_the_manifest():
+    class Guarded(str):
+        def splitlines(self, *a, **k):
+            raise AssertionError("manifest_row must not split the whole manifest into lines")
+
+    from adr_store.tables.provenance import manifest_row
+    header = "a,b\r"      # a CRLF manifest
+    text = Guarded(f"{header}\n1,2\r\n3,4\r\n")
+    assert manifest_row(text, len(header) + 1, len(header) + 4) == {"a": "1", "b": "2"}
+
+
+def test_a_real_beyond_float_range_is_a_problem_not_an_exception():
+    from adr_store.tables.contracts import _type_problem
+    assert _type_problem("real", 10**400) == "real outside float range"
+    assert _type_problem("real", 10**300) is None
+    assert _type_problem("real", float("inf")) == "real is not finite"
+
+
+@pytest.mark.parametrize("name", ["Fr", "1x", "a-b", "", "a b"])
+def test_a_table_file_names_a_valid_table(name):
+    with pytest.raises(ValidationError):
+        ov.TableFile(table=name, kind="data", contract_version=1, contract_sha256="a" * 64,
+                     file=f"{name}-v1-{'b' * 16}.jsonl", sha256="b" * 64, rows=0, rejected=0)
+
+
+def test_the_federal_register_agency_id_spec_is_fr_agency_id():
+    col = {c.name: c for c in CONTRACTS["fr_agencies"].columns}["fr_agency_id"]
+    assert col.spec_id == "fr.fr_agency_id@1"
+    assert "fr.fr_agency_id" in RESLICERS and "fr.agency_id" not in RESLICERS

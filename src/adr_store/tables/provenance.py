@@ -181,7 +181,7 @@ def _year(text: str, start: int, end: int) -> int:
 RESLICERS: dict[str, Callable[[str, int, int], Any]] = {
     f"fr.{name}": _loads for name in (
         "id", "type", "agency", "publication_date", "title", "action", "effective_on",
-        "other_ids", "agency_name", "agency_id", "agency_parent_id", "docket_raw")
+        "other_ids", "agency_name", "fr_agency_id", "agency_parent_id", "docket_raw")
 }
 RESLICERS.update({
     "fr.year": _year,
@@ -198,8 +198,7 @@ MANIFEST_COLUMNS = ("research", "topic", "also_in", "type", "title", "authors", 
 
 def manifest_row(text: str, start: int, end: int) -> dict[str, str]:
     """The manifest row whose CSV lines are `text[start:end]`, read with the header line."""
-    lines = text.splitlines(keepends=True)
-    header = lines[0].rstrip("\r\n")
+    header = text.partition("\n")[0].rstrip("\r")
     rows = list(csv.reader((header + "\n" + text[start:end]).splitlines(keepends=True)))
     if len(rows) != 2:
         raise ValueError("the span is not one CSV row")

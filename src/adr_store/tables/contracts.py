@@ -134,7 +134,10 @@ def _type_problem(typ: str, v: Any) -> str | None:
     if typ == "real":
         if isinstance(v, bool) or not isinstance(v, (int, float)):
             return f"expected real, got {_kind(v)}"
-        return None if math.isfinite(v) else "real is not finite"
+        try:
+            return None if math.isfinite(v) else "real is not finite"
+        except OverflowError:  # an int beyond the range of a float
+            return "real outside float range"
     if typ == "bool":
         return None if isinstance(v, bool) else f"expected bool, got {_kind(v)}"
     if typ == "date":

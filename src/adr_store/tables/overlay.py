@@ -46,7 +46,7 @@ class TableFile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, title="TableFile")
 
-    table: str
+    table: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     kind: str
     contract_version: int = Field(ge=1)
     contract_sha256: str = Field(pattern=_HEX64)
