@@ -540,10 +540,15 @@ class UnitIndex:
 
     @classmethod
     def build(cls, store_path: Path, units_id: str, docs: list[UnitDoc],
-              emb: EmbeddingCache | None, tuning: dict) -> UnitIndex:
+              emb: EmbeddingCache | None, tuning: dict, *, install: bool = True) -> UnitIndex:
         """The index of `docs` (`unit_docs` of build `units_id`), with dense vectors from
         `emb` stored under `<store_path>/units-index/<units id>/`; `emb=None` builds a
-        lexical-only index (C8). `tuning` is a corpus's entry of the tuning file."""
+        lexical-only index (C8). `tuning` is a corpus's entry of the tuning file.
+        `install=False` (lexical-only only) builds it in memory and writes nothing: the
+        tools' path, where a read call never writes into the store."""
+        if not install and emb is not None:
+            raise ValueError("a dense unit index stores its vectors: install=False needs "
+                             "emb=None")
         docs = sorted(docs, key=lambda d: d.unit_id)
         if len({d.unit_id for d in docs}) != len(docs):
             raise ValueError("unit docs repeat a unit id")
@@ -557,8 +562,9 @@ class UnitIndex:
         meta = {"format": FORMAT_VERSION, "units_id": units_id, "units": len(docs),
                 "docs_sha256": index.docs_sha256}
         if emb is None:
-            _install(index.directory, {"index.json": _json_bytes(
-                {**meta, "lexical_only": True, "embedding": None})})
+            if install:
+                _install(index.directory, {"index.json": _json_bytes(
+                    {**meta, "lexical_only": True, "embedding": None})})
             return index
         rows = _rows(docs)
         directory = root / f"dense-{emb.model_hash[:16]}"

@@ -219,32 +219,33 @@ fallback to HEAD. Each unit belongs to one document and inherits its access and 
 envelope (P5, P31): a call considers only the units of the documents of the caller's view that
 the filters admit (the default drops superseded documents; `as_of` and `include_superseded` as
 for `search`), and it does so before any ranking. The unit index (`units.index`, lexical-only
-under preflight ruling C8, so no call loads an embedding model; one per build, kept in a
-process LRU of `UNIT_CACHE` builds) takes the caller's view as `view`, which sets its BM25
-statistics and concept expansion, and the admitted documents as `admitted`, a mask only (P41),
-so a caller's results equal a store of the caller's documents alone (criterion S1). A hidden
-unit, sense, label or closure entry does not exist: an unknown, malformed, hidden or filtered
-rule id is `UNKNOWN_RULE`, a procedure id `UNKNOWN_PROCEDURE`, both byte for byte; the hidden
-ids a request named are logged in `not_visible`, never returned. `rule_lookup(rule_id=…)`
-normalises with `units.ecfr.normalise_rule_id` ("§117.1081(a)(2)", "33 CFR 117.1081 (a)(2)",
-"117.1081(a)(2)") and returns the cards whose provision id is it or lies under it (a section id
-gives every card of the section), newest version first, then in document order; at most
-`limit` (`UNIT_LIMIT_MAX` at most), with `truncated` when more matched. A query ranks cards;
-`part` masks to one CFR part. Each card carries its closure (one level, in `RELATIONS` order,
-each entry's text re-sliced from the document; an entry whose target the caller cannot see is
-dropped; an entry already shown under an earlier card of the result is not repeated).
-`define` matches the term's base key against preferred and alternate labels, then hidden
-labels, and ranks senses by whether the scope holds `context` (a canonical ref or unit id; the
-subpart of a bare ref comes from the visible card of its section in force), then narrowest
-scope, then unit id; an unknown term gives no sense and at most `NEAREST` visible labels by
-edit distance (ties by label), which clients show as `NO_DEFINITION`. `procedure_lookup`
-gives catalog entries (canonical ref, title, `when_to_use`) ranked for a task, or one
-procedure as its catalog entry, SKILL.md, Mermaid or IR (`units.render`; SKILL.md keeps the
-spec's own limits, and the IR is the whole body however large). `unit_search` ranks units of
-any type; a hit carries the envelope, the first span, a reader text (never aids) of at most
-`HIT_TEXT_MAX` characters with `truncated` beyond, and a table record's pointer. Results carry
-the units id, the filters applied (`applicability_filters`) and the handle; log lines carry
-`units`, `filters` and `applicability` beside the Phase 2 fields.
+under preflight ruling C8, so no call loads an embedding model; built in memory, so no call
+writes into the store; one per build, kept in the process LRU of `units.tools_units`) takes the
+caller's view as `view`, which sets its BM25 statistics and concept expansion, and the admitted
+documents as `admitted`, a mask only (P41), so a caller's results equal a store of the caller's
+documents alone (criterion S1). A hidden unit, sense, label or closure entry does not exist: an
+unknown, malformed, hidden or filtered rule id is `UNKNOWN_RULE`, a procedure id
+`UNKNOWN_PROCEDURE`, both byte for byte; the hidden ids a request named are logged in
+`not_visible`, never returned. `rule_lookup(rule_id=…)` normalises with
+`units.ecfr.normalise_rule_id` ("§117.1081(a)(2)", "33 CFR 117.1081 (a)(2)", "117.1081(a)(2)")
+and returns the cards whose provision id is it or lies under it (a section id gives every card
+of the section), newest version first, then in document order; at most `limit`
+(`UNIT_LIMIT_MAX` at most), with `truncated` when more matched. A query ranks cards; `part`
+masks to one CFR part. Each card carries its closure (one level, in `RELATIONS` order, each
+entry's text re-sliced from the document; an entry whose target the caller cannot see is
+dropped; an entry already shown under an earlier card of the result is not repeated). `define`
+matches the term's base key against preferred and alternate labels, then hidden labels, and
+ranks senses by whether the scope holds `context` (a canonical ref or unit id; the subpart of a
+bare ref comes from the visible card of its section in force), then narrowest scope, then unit
+id; an unknown term gives no sense and at most `NEAREST` visible labels by edit distance (ties
+by label), which clients show as `NO_DEFINITION`. `procedure_lookup` gives catalog entries
+(canonical ref, title, `when_to_use`) ranked for a task, or one procedure as its catalog entry,
+SKILL.md, Mermaid or IR (`units.render`; SKILL.md keeps the spec's own limits, and the IR is
+the whole body however large). `unit_search` ranks units of any type; a hit carries the
+envelope, the first span, a reader text (never aids) of at most `HIT_TEXT_MAX` characters with
+`truncated` beyond, and a table record's pointer. Results carry the units id, the filters
+applied (`applicability_filters`) and the handle; log lines carry `units`, `filters` and
+`applicability` beside the Phase 2 fields.
 """
 
 from __future__ import annotations
@@ -298,12 +299,11 @@ from adr_store.tables.semantic import UnknownTable, describe
 from adr_store.tables.sqlguard import SQL_ROW_CAP, SqlRefused, run_sql
 from adr_store.tool_catalog import ToolCatalog
 from adr_store.tool_records import definition as tool_definition
-from adr_store.units import index as units_index
+from adr_store.units import tools_units as tu
 from adr_store.units.concepts import _KIND_RANK, _UNIT_ID, scope_contains
 from adr_store.units.contracts import UNIT_TYPES
-from adr_store.units.ecfr import _TITLE_OF_PART, normalise_rule_id
+from adr_store.units.ecfr import normalise_rule_id
 from adr_store.units.envelope import Unit
-from adr_store.units.overlay import UnitsManifest, load_units
 from adr_store.units.procedures import ProcedureBody
 from adr_store.units.render import render_mermaid, render_skill
 
@@ -341,9 +341,6 @@ UNIT_LIMIT_MAX = 100  # most hits, cards or catalog entries one unit call return
 NEAREST = 5  # labels `define` suggests for an unknown term
 HIT_TEXT_MAX = 1_000  # characters of reader text in a `unit_search` hit (`truncated` beyond)
 PROCEDURE_VIEWS = ("catalog", "skill", "mermaid", "ir")
-UNIT_CACHE = 4  # unit builds (units, index) kept in memory, by store and units id
-_UNIT_SETS: OrderedDict[tuple[str, str, str], _UnitSet] = OrderedDict()
-_UNIT_LOCK = threading.Lock()
 
 
 class ToolError(Exception):
@@ -641,7 +638,7 @@ class RuleLookupResult(_Result):
     snapshot: str
     units: str
     applicability_filters: dict
-    excluded_by_filter: int
+    excluded_by_filter: int  # documents of the view (within `part`) the filters excluded
     truncated: bool = False  # a rule_id matched more cards than `limit`
     handle: dict | None = None
 
@@ -935,58 +932,18 @@ class _GrepWorker:
 
 
 # -- knowledge units (Phase 4) ---------------------------------------------------------------
+# The units of a build, their index and the pure helpers are in `units.tools_units`; the
+# argument checks (which raise `ToolError`) are here.
 
-
-@dataclass(frozen=True)
-class _UnitSet:
-    """The units of one build and their lexical unit index (C8: `emb=None`), shared by every
-    `Tools` of the process while the build is one of the `UNIT_CACHE` last used, by (store,
-    units id, the corpus's field weights from `config/units/tuning.json`). A build is
-    immutable (its id is the SHA-256 of a manifest naming every file by its hash), so the
-    cache never changes an answer."""
-
-    units_id: str
-    corpus: str
-    types: tuple[str, ...]
-    units: dict[str, Unit]
-    by_type: dict[str, list[Unit]]  # each sorted by unit id
-    index: units_index.UnitIndex
-
-    @classmethod
-    def of(cls, store_path: Path, units_id: str, manifest: UnitsManifest) -> _UnitSet:
-        tuning = units_index.load_tuning(manifest.corpus)
-        key = (str(Path(store_path).resolve()), units_id, json.dumps(tuning, sort_keys=True))
-        with _UNIT_LOCK:
-            if key in _UNIT_SETS:
-                _UNIT_SETS.move_to_end(key)
-                return _UNIT_SETS[key]
-        units = sorted(load_units(store_path, manifest), key=lambda u: u.unit_id)
-        by_type: dict[str, list[Unit]] = {}
-        for u in units:
-            by_type.setdefault(u.type, []).append(u)
-        docs = units_index.unit_docs(units, by_type.get("concept", []))
-        index = units_index.UnitIndex.build(store_path, units_id, docs, None, tuning)
-        found = cls(units_id, manifest.corpus, tuple(f.type for f in manifest.units),
-                    {u.unit_id: u for u in units}, by_type, index)
-        with _UNIT_LOCK:
-            _UNIT_SETS[key] = found
-            _UNIT_SETS.move_to_end(key)
-            while len(_UNIT_SETS) > UNIT_CACHE:
-                _UNIT_SETS.popitem(last=False)
-        return found
-
-
-_PART = re.compile(r"^(?:(\d+)\s*C\.?\s?F\.?\s?R\.?\s*)?(?:part\s+)?(\d+)$", re.IGNORECASE)
+_UNIT_SETS = tu.UNIT_SETS  # the process cache of unit builds (tests read it)
+_edit_distance = tu.edit_distance
 
 
 def _part_prefix(part: str) -> str:
-    """"<title> CFR <part>" for a part written as "33 CFR 117", "33 CFR part 117", "part 117"
-    or "117" (a bare number takes its title as `normalise_rule_id` does)."""
-    m = _PART.match(part.strip())
-    title = None if m is None else (m.group(1) or _TITLE_OF_PART.get(m.group(2)))
-    if title is None:
+    prefix = tu.part_prefix(part)
+    if prefix is None:
         raise ToolError(f"bad part {part!r}: give a CFR part, such as '33 CFR 117' or '117'")
-    return f"{int(title)} CFR {m.group(2)}"
+    return prefix
 
 
 def _unit_limit(limit: object) -> int:
@@ -1005,94 +962,6 @@ def _unit_types(types: object) -> tuple[str, ...] | None:
         raise ToolError(f"types must be a non-empty list of unit types "
                         f"({', '.join(UNIT_TYPES)}), got {_filters_arg(types)!r}")
     return tuple(sorted(set(types)))
-
-
-def _under(ref: str, target: str) -> bool:
-    """Whether provision `ref` is `target` or lies under it ("33 CFR 117.5(p1)" is under
-    "33 CFR 117.5"; "33 CFR 117.50" is not)."""
-    return ref == target or ref.startswith(target + "(")
-
-
-def _section_of(ref: str) -> str:
-    return re.sub(r"\s*\(.*$", "", ref)
-
-
-def _subpart(unit: Unit) -> str | None:
-    return next((h.removeprefix("Subpart ") for h in unit.heading_path
-                 if h.startswith("Subpart ")), None)
-
-
-def _span(unit: Unit) -> tuple[int, int]:
-    """The unit's first source span: a card's paragraph, a concept's first definition."""
-    return unit.source_refs[0].start, unit.source_refs[0].end
-
-
-def _model_value(field: object):
-    """The value of a model-written body field when it was extracted, else None."""
-    return field.get("value") if isinstance(field, dict) and field.get("status") else None
-
-
-def _labels(concept: Unit) -> list[str]:
-    return [concept.body["pref_label"], *concept.body["alt_labels"]]
-
-
-def _edit_distance(a: str, b: str) -> int:
-    """Levenshtein distance (insert, delete, substitute; each 1)."""
-    if len(a) < len(b):
-        a, b = b, a
-    row = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        prev, row[0] = row[0], i
-        for j, cb in enumerate(b, 1):
-            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
-    return row[-1]
-
-
-def _reader_text(unit: Unit) -> str:
-    """The reader text of a unit for a search hit (§11.1: body fields, never its aids)."""
-    b = unit.body
-    if unit.type == "concept":
-        return b["definition"]["text"]
-    if unit.type == "rule_card":
-        return b["text"]
-    if unit.type == "procedure":
-        value = _model_value(b.get("when_to_use"))
-        if isinstance(value, str):
-            return value
-        return "\n".join(s["text"] for s in b["steps"] if s["text"])
-    if unit.type == "faq":
-        if b.get("question") is not None:
-            return f"Q: {b['question']['text']}\nA: {b['answer']['text']}"
-        return "\n".join(f"{f.capitalize()}: {b[f]['text']}"
-                         for f in ("issue", "environment", "cause", "resolution")
-                         if b.get(f) is not None)
-    if unit.type == "table_record":
-        return b["description"]
-    return unit.title
-
-
-def _catalog_entry(unit: Unit, rank: int, score: float | None) -> dict:
-    value = _model_value(unit.body.get("when_to_use"))
-    return {"rank": rank, "unit_id": unit.unit_id, "canonical_ref": unit.canonical_ref,
-            "title": unit.title, "when_to_use": value if isinstance(value, str) else None,
-            "doc_id": unit.doc_id, "score": score}
-
-
-def _hit(unit: Unit, rank: int, score: float) -> dict:
-    text = _reader_text(unit)
-    start, end = _span(unit)
-    return {"rank": rank, "unit_id": unit.unit_id, "type": unit.type, "title": unit.title,
-            "canonical_ref": unit.canonical_ref, "doc_id": unit.doc_id, "start": start,
-            "end": end, "status": unit.applicability.status, "score": score,
-            "text": text[:HIT_TEXT_MAX], "truncated": len(text) > HIT_TEXT_MAX,
-            "pointer": unit.body.get("pointer") if unit.type == "table_record" else None}
-
-
-def _card_order(unit: Unit) -> tuple:
-    """Cards of one rule id: the newest version first, then document order."""
-    when = unit.applicability.effective_from
-    return (when is None, -(when.toordinal() if when else 0), unit.doc_id, _span(unit)[0],
-            unit.unit_id)
 
 
 # -- the tools ------------------------------------------------------------------------------
@@ -2477,7 +2346,7 @@ class Tools:
 
     # -- knowledge units (Phase 4) -----------------------------------------------------
 
-    def _units(self, fields: dict) -> _UnitSet:
+    def _units(self, fields: dict) -> tu.UnitSet:
         """The unit build the call reads (logged in `fields`): the handle's, or `units/HEAD`
         when its manifest is of the call's content snapshot (NO_UNITS otherwise: a build not
         yet promoted, or one of an older snapshot, is never used; NO_HANDLE_UNITS for a
@@ -2496,7 +2365,7 @@ class Tools:
                 raise handles_mod.unavailable("units")
             raise ToolError(NO_UNITS.format(self.snapshot[:12]))
         fields["units"] = self._memo["units"] = units_id
-        return _UnitSet.of(self.store_path, units_id, m)
+        return tu.UnitSet.of(self.store_path, units_id, m)
 
     def _unit_scope(self, filters: dict, fields: dict
                     ) -> tuple[_Applied, frozenset[str] | None, frozenset[str] | None,
@@ -2520,7 +2389,7 @@ class Tools:
     def _unit_fields() -> dict:
         return {"units": None, "filters": None, "applicability": None}
 
-    def _sense_context(self, context: str | None, us: _UnitSet, allowed: frozenset[str]
+    def _sense_context(self, context: str | None, us: tu.UnitSet, allowed: frozenset[str]
                        ) -> tuple[str | None, str | None]:
         """(the canonical ref of `context`, the subpart holding it). A unit id gives its
         ref; another context is normalised as a rule id when it is one. The subpart comes
@@ -2537,11 +2406,11 @@ class Tools:
         else:
             ref = normalise_rule_id(c) or c
         if unit is None:
-            section = _section_of(ref)
+            section = tu.section_of(ref)
             unit = next((u for u in us.by_type.get("rule_card", ())
-                         if u.doc_id in allowed and _section_of(u.canonical_ref) == section),
+                         if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section),
                         None)
-        return ref, None if unit is None else _subpart(unit)
+        return ref, None if unit is None else tu.subpart(unit)
 
     def define(self, term: str, context: str | None = None, *, as_of=None,
                include_superseded: bool = False,
@@ -2562,7 +2431,7 @@ class Tools:
                 {"as_of": as_of, "include_superseded": include_superseded}, fields)
             concepts = [u for u in us.by_type.get("concept", ()) if u.doc_id in allowed]
             key = base_key(term)
-            found = [u for u in concepts if key and key in {base_key(x) for x in _labels(u)}]
+            found = [u for u in concepts if key and key in {base_key(x) for x in tu.labels(u)}]
             if not found:
                 found = [u for u in concepts if key and key in u.body["hidden_labels"]]
             ref, sub = self._sense_context(context, us, allowed)
@@ -2577,8 +2446,8 @@ class Tools:
                             *u.body["definition"]["span"]) for u in sorted(found, key=rank)]
             nearest = []
             if not senses:
-                labels = sorted({x for u in concepts for x in _labels(u)})
-                nearest = sorted(labels, key=lambda x: (_edit_distance(key, base_key(x)), x)
+                labels = sorted({x for u in concepts for x in tu.labels(u)})
+                nearest = sorted(labels, key=lambda x: (tu.edit_distance(key, base_key(x)), x)
                                  )[:NEAREST]
             res = DefineResult(term, senses, nearest, self.snapshot, us.units_id,
                                applied.filters.to_dict(), handle=self._result_handle())
@@ -2600,7 +2469,9 @@ class Tools:
         when given, are considered, before any ranking. An unknown, malformed, hidden or
         filtered rule id is `UNKNOWN_RULE`. With `closure`, each card carries its closure
         (one level, in `RELATIONS` order) with the text re-sliced; an entry already shown
-        under an earlier card is not repeated. `handle` pins the call."""
+        under an earlier card is not repeated. `excluded_by_filter` counts the documents of
+        the view (of `part`, when given) that the filters excluded. `handle` pins the
+        call."""
         fields = self._unit_fields()
 
         def run():
@@ -2617,16 +2488,19 @@ class Tools:
             applied, view, admitted, allowed = self._unit_scope(
                 {"as_of": as_of, "include_superseded": include_superseded}, fields)
             cards = us.by_type.get("rule_card", [])
+            excluded = applied.excluded
             if prefix is not None:
-                allowed = allowed & {u.doc_id for u in cards
-                                     if u.canonical_ref.startswith(prefix + ".")}
+                in_part = {u.doc_id for u in cards if u.canonical_ref.startswith(prefix + ".")}
+                # the count covers the documents of the view the part would otherwise admit
+                excluded = len(in_part.intersection(self._doc_ids()) - allowed)
+                allowed = allowed & in_part
                 admitted = allowed
             truncated = False
             if rule_id is not None:
                 rid = normalise_rule_id(rule_id)
-                named = [] if rid is None else [u for u in cards if _under(u.canonical_ref, rid)]
+                named = [] if rid is None else [u for u in cards if tu.under(u.canonical_ref, rid)]
                 self._note_hidden(named, view)
-                hits = sorted((u for u in named if u.doc_id in allowed), key=_card_order)
+                hits = sorted((u for u in named if u.doc_id in allowed), key=tu.card_order)
                 if not hits:
                     raise ToolError(UNKNOWN_RULE)
                 truncated, hits = len(hits) > n, hits[:n]
@@ -2635,7 +2509,7 @@ class Tools:
                     query, types=("rule_card",), view=view, admitted=admitted, k=n)]
             out = self._rule_cards(hits, us, allowed, closure)
             res = RuleLookupResult(query, rule_id, out, self.snapshot, us.units_id,
-                                   applied.filters.to_dict(), applied.excluded, truncated,
+                                   applied.filters.to_dict(), excluded, truncated,
                                    handle=self._result_handle())
             return res, [c.unit_id for c in out], {}
 
@@ -2645,7 +2519,7 @@ class Tools:
                 "limit": _filters_arg(limit)}
         return self._call("rule_lookup", args, run, fields, handle=handle)
 
-    def _rule_cards(self, hits: list[Unit], us: _UnitSet, allowed: frozenset[str],
+    def _rule_cards(self, hits: list[Unit], us: tu.UnitSet, allowed: frozenset[str],
                     closure: bool) -> list[RuleCard]:
         texts: dict[str, str] = {}
 
@@ -2675,7 +2549,7 @@ class Tools:
                 shown |= mine
             b = u.body
             out.append(RuleCard(u.unit_id, u.canonical_ref, u.version, u.doc_id, b["modality"],
-                                b["text"], *_span(u), _model_value(b.get("conditions")),
+                                b["text"], *tu.span(u), tu.model_value(b.get("conditions")),
                                 [{"id": x} for x in b.get("bindings", [])], entries))
         return out
 
@@ -2708,7 +2582,7 @@ class Tools:
             applied, docs, admitted, allowed = self._unit_scope({"as_of": as_of}, fields)
             catalog = rendering = None
             if task is not None:
-                catalog = [_catalog_entry(us.units[i], rank, score) for rank, (i, score)
+                catalog = [tu.catalog_entry(us.units[i], rank, score) for rank, (i, score)
                            in enumerate(us.index.search(task, types=("procedure",), view=docs,
                                                         admitted=admitted, k=n), 1)]
                 shown = [e["unit_id"] for e in catalog]
@@ -2721,7 +2595,7 @@ class Tools:
                 if unit is None:
                     raise ToolError(UNKNOWN_PROCEDURE)
                 if view == "catalog":
-                    catalog = [_catalog_entry(unit, 1, None)]
+                    catalog = [tu.catalog_entry(unit, 1, None)]
                 elif view == "skill":
                     rendering = render_skill(unit)
                 elif view == "mermaid":
@@ -2755,8 +2629,9 @@ class Tools:
             n = _unit_limit(limit)
             us = self._units(fields)
             applied, docs, admitted, _ = self._unit_scope({"as_of": as_of}, fields)
-            hits = [_hit(us.units[i], rank, score) for rank, (i, score) in enumerate(
-                us.index.search(query, types=wanted, view=docs, admitted=admitted, k=n), 1)]
+            ranked = us.index.search(query, types=wanted, view=docs, admitted=admitted, k=n)
+            hits = [tu.hit(us.units[i], rank, score, HIT_TEXT_MAX)
+                    for rank, (i, score) in enumerate(ranked, 1)]
             res = UnitSearchResult(query, list(us.types if wanted is None else wanted), hits,
                                    self.snapshot, us.units_id, applied.filters.to_dict(),
                                    handle=self._result_handle())

@@ -164,7 +164,7 @@ def test_unit_tools_follow_document_access(store, tmp_path_factory):
 
 def test_unit_tools_load_no_embedding_model(tmp_path, monkeypatch):
     """C8: the unit tools serve a lexical-only unit index; no call embeds or loads a model, and
-    the index directory records `lexical_only`."""
+    the index is built in memory (no `units-index/` is written)."""
     import fastembed
 
     from adr_store.embedding import EmbeddingCache
@@ -180,9 +180,32 @@ def test_unit_tools_load_no_embedding_model(tmp_path, monkeypatch):
     for call in UNIT_CALLS:
         outcome(call, t)
     head = units_overlay.read_units_head(s.path)
-    meta = json.loads((s.path / "units-index" / head / "lexical" / "index.json").read_text())
-    assert meta["lexical_only"] is True and meta["embedding"] is None
-    assert [p.name for p in (s.path / "units-index" / head).iterdir()] == ["lexical"]
+    us = next(v for k, v in tools._UNIT_SETS.items() if k[:2] == (str(s.path.resolve()), head))
+    assert us.index.lexical_only and not (s.path / "units-index").exists()
+
+
+def test_a_unit_call_never_writes_into_the_store(tmp_path, monkeypatch):
+    """M7: the unit tools build their index in memory: with the index writer refusing, every
+    call still runs, and nothing in the store but the retrieval log changes."""
+    from adr_store.units import index as units_index
+
+    def no_write(*a, **kw):
+        raise AssertionError("a read call wrote into the store")
+
+    monkeypatch.setattr(units_index, "_install", no_write)
+    s = make_units_built(tmp_path / "store")
+
+    def tree() -> dict:
+        return {str(p.relative_to(s.path)): p.read_bytes() for p in s.path.rglob("*")
+                if p.is_file() and p.relative_to(s.path).parts[0] != "log"}
+
+    before = tree()
+    t = as_(s)
+    results = [outcome(call, t) for call in UNIT_CALLS]
+    assert sum(not isinstance(r, Exception) for r in results) > 20
+    assert tree() == before and not (s.path / "units-index").exists()
+    with pytest.raises(ValueError, match="install=False needs emb=None"):
+        units_index.UnitIndex.build(s.path, "x", [], object(), {}, install=False)
 
 
 def test_the_outsider_sees_no_unit(store):
@@ -343,6 +366,17 @@ def test_query_ranking_masks_before_the_cut(store):
                                  include_superseded=True, part=form,
                                  limit=UNIT_LIMIT_MAX)) == ids(part165)
     assert t.rule_lookup("drawbridge", part="47 CFR 73").cards == []
+    # M3: the excluded count covers the part's documents only
+    assert t.rule_lookup("drawbridge").excluded_by_filter == 1         # the old 117 version
+    assert t.rule_lookup("drawbridge", part="117").excluded_by_filter == 1
+    assert t.rule_lookup("drawbridge", part="165").excluded_by_filter == 0
+    assert t.rule_lookup("drawbridge", part="47 CFR 73").excluded_by_filter == 0
+    assert t.rule_lookup("drawbridge", part="117", include_superseded=True
+                         ).excluded_by_filter == 0
+    r = as_(store, "user:acme-1").rule_lookup("designated representative", part="33 CFR 165")
+    assert r.cards == [] and r.excluded_by_filter == 0
+    assert as_(store, "user:acme-1").rule_lookup(rule_id="117.5", part="117"
+                                                 ).excluded_by_filter == 1
     with pytest.raises(ToolError, match="bad part"):
         t.rule_lookup("drawbridge", part="IRM 21")
     one = t.rule_lookup("designated representative area vessel", include_superseded=True,

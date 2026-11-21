@@ -792,10 +792,12 @@ def build_server(store_path: Path, caller: str, *, emb_cache: Path | None = None
     ) -> UnitSearchOut:
         """Knowledge units you can see, of any type (concepts, rule cards, procedures, FAQ
         and KCS articles, table records), best first, each with its reference, span and a
-        reader text (cut at 1,000 characters, flagged) and, for a table record, the pointer
-        `query_table` or `read` accepts."""
+        reader text (cut at {hit_text_max} characters, flagged) and, for a table record, the
+        pointer `query_table` or `read` accepts."""
         return run("unit_search", lambda: t.unit_search(query, types, as_of=as_of,
                                                         limit=limit, handle=_handle(handle)))
+
+    unit_search.__doc__ = unit_search.__doc__.format(hit_text_max=f"{tools.HIT_TEXT_MAX:,}")
 
     fns = {"search": search, "read": read, "grep": grep, "search_tools": search_tools,
            "load_tool": load_tool, "describe_tables": describe_tables,
