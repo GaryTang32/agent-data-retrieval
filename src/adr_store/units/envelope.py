@@ -21,7 +21,8 @@ P31).
   SHA-256 of the canonical JSON of every envelope field (all but `body` and `hashes`).
 - **Versions.** `link_versions` sets `superseded_by` on a unit of a superseded document to the
   unit with the same type and `canonical_ref` in the successor document, and `supersedes` on
-  that one; a unit never names itself.
+  that one (a ref repeated within a document is paired by occurrence, in document order); a
+  unit never names itself.
 """
 
 from __future__ import annotations
@@ -267,26 +268,37 @@ def doc_envelope(store: Store, overlay: Applicability | None, doc_id: str, corpu
 
 # -- versions --------------------------------------------------------------------------------
 
+def _doc_order(u: Unit) -> tuple:
+    """Where a unit stands in its document: its first source span, then its unit id."""
+    first = min(((r.start, r.end) for r in u.source_refs), default=(0, 0))
+    return (*first, u.unit_id)
+
+
 def link_versions(units: list[Unit], overlay: Applicability | None) -> list[Unit]:
     """`units` in the same order, each unit of a superseded document pointing at the unit of
-    the same type and `canonical_ref` in its successor document (`superseded_by`; the first
-    by unit id when the successor has several) and that unit pointing back (`supersedes`; the
-    first predecessor by unit id). Meta hashes are recomputed; without an overlay nothing
+    the same type and `canonical_ref` in its successor document (`superseded_by`) and that
+    unit pointing back (`supersedes`). A `canonical_ref` held by several units of one
+    document (a marker repeated in the source) is paired by occurrence: the k-th such unit in
+    document order (by first source span) with the k-th in the successor; one with no k-th
+    counterpart links nothing. Meta hashes are recomputed; without an overlay nothing
     changes."""
     if overlay is None:
         return list(units)
-    by_key: dict[tuple[str, str, str], list[str]] = {}
+    by_key: dict[tuple[str, str, str], list[Unit]] = {}
     for u in units:
-        by_key.setdefault((u.type, u.canonical_ref, u.doc_id), []).append(u.unit_id)
+        by_key.setdefault((u.type, u.canonical_ref, u.doc_id), []).append(u)
+    for group in by_key.values():
+        group.sort(key=_doc_order)
     successor: dict[str, str] = {}
     for u in units:
         env = overlay.records.get(u.doc_id)
         if env is None or env.superseded_by is None:
             continue
-        found = sorted(i for i in by_key.get((u.type, u.canonical_ref, env.superseded_by), [])
-                       if i != u.unit_id)
-        if found:
-            successor[u.unit_id] = found[0]
+        k = next(i for i, x in enumerate(by_key[(u.type, u.canonical_ref, u.doc_id)])
+                 if x.unit_id == u.unit_id)
+        found = by_key.get((u.type, u.canonical_ref, env.superseded_by), [])
+        if k < len(found) and found[k].unit_id != u.unit_id:
+            successor[u.unit_id] = found[k].unit_id
     predecessor: dict[str, str] = {}
     for old, new in sorted(successor.items()):
         predecessor.setdefault(new, old)

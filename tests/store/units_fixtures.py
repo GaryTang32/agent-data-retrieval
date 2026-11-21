@@ -224,3 +224,133 @@ def sample_unit(type_: str = "rule_card", *, ref: str = "33 CFR 117.821(a)",
     return draft.model_copy(update={"hashes": {
         "text": text_sha256(text), "meta": meta_sha256(draft)}})
 
+
+
+# -- a units store with its Phase 3 tables (Task 6) ---------------------------------------------
+
+# Per section of `ecfr_117_units.xml`: section-level and per-draw facts, column -> (value, quote),
+# as a model would extract them (the `tables_fixtures.ECFR_FACTS` form). A column left out is
+# absent. The older version of 117.821 says "two hours notice" (`ecfr_117_doc`).
+UNITS_ECFR_FACTS: dict[str, dict] = {
+    "117.4": {"section": {}, "draws": []},
+    "117.5": {"section": {}, "draws": []},
+    "117.31": {"section": {}, "draws": []},
+    "117.40": {"section": {}, "draws": []},
+    "117.821": {"section": {"waterway": ("Smith River", "Smith River")}, "draws": [
+        {"bridge": ("Main Street drawbridge", "Main Street drawbridge"),
+         "mile": (3.4, "mile 3.4"), "opens_on_signal": (False, "need not open"),
+         "closed_periods": (["7 a.m. to 9 a.m.", "4 p.m. to 6 p.m."],
+                            "need not open from 7 a.m. to 9 a.m. and from 4 p.m. to 6 p.m.")},
+        {"bridge": ("Smith River Railroad Bridge", "Smith River Railroad Bridge"),
+         "mile": (5.1, "mile 5.1"), "notice_hours": (4, "four hours notice"),
+         "opens_on_signal": (True, "shall open on signal")}]},
+    "117.901": {"section": {"waterway": ("Harbor River", "Harbor River"),
+                            "seasonal": (True, "From November 1 through March 31")}, "draws": [
+        {"bridge": ("Harbor Avenue Bridge", "Harbor Avenue Bridge"), "mile": (0.8, "mile 0.8"),
+         "notice_hours": (24, "24 hours notice"),
+         "opens_on_signal": (True, "shall open on signal")}]},
+    "117.1081": {"section": {"waterway": ("Coast Channel", "Coast Channel")}, "draws": [
+        {"bridge": ("Coast Channel Bridge", "Coast Channel Bridge"), "mile": (2.2, "mile 2.2"),
+         "closed_periods": (["6:30 a.m. to 8:30 a.m."],
+                            "need not open from 6:30 a.m. to 8:30 a.m.")}]},
+}
+
+
+def units_ecfr_facts(section_text: str) -> dict:
+    """The facts of one section text of `ecfr_117_units.xml` (the version is read from the
+    text: the older one says "two hours notice")."""
+    from tests.store.tables_fixtures import _SECTION_NUMBER
+
+    facts = UNITS_ECFR_FACTS[_SECTION_NUMBER.match(section_text).group(1)]
+    if "two hours notice" in section_text:
+        draws = [{**d, "notice_hours": (2, "two hours notice")} if "notice_hours" in d else d
+                 for d in facts["draws"]]
+        facts = {**facts, "draws": draws}
+    return facts
+
+
+def units_fixture_reply(system: str, user: str, repeat: int) -> str:
+    """A first-pass reply to an extraction prompt over `ecfr_117_units.xml`, as
+    `tables_fixtures.fixture_reply` gives for the Phase 3 fixture."""
+    from adr_store.tables.extract import DRAW_COLUMNS, SECTION_COLUMNS
+    from tests.store.tables_fixtures import _cell, asked_columns
+
+    asked = asked_columns(system)
+    facts = units_ecfr_facts(user)
+    section = {c: _cell(facts["section"], c) for c in SECTION_COLUMNS if c in asked}
+    draw_cols = [c for c in DRAW_COLUMNS if c in asked]
+    if draw_cols and "bridge" not in draw_cols:
+        draw_cols = ["bridge", "mile", *[c for c in draw_cols if c != "mile"]]
+    draws = [{c: _cell(d, c) for c in draw_cols} for d in facts["draws"]] if draw_cols else []
+    return json.dumps({"section": section, "draws": draws})
+
+
+def units_fixture_numbered(system: str, user: str, repeat: int) -> str:
+    """A second-pass reply (numbered answers) for a section of `ecfr_117_units.xml`."""
+    from tests.store.tables_fixtures import _answer
+
+    facts = units_ecfr_facts(user)
+    s = facts["section"]
+    lines = [f"1. WATERWAY: {_answer(s, 'waterway')}",
+             f"2. SEASONAL: {_answer(s, 'seasonal', 'bool')}",
+             f"3. OWNER: {_answer(s, 'owner_or_agency')}",
+             f"4. VHF CHANNEL: {_answer(s, 'vhf_channel')}",
+             f"5. DRAWS: {len(facts['draws'])}"]
+    for k, d in enumerate(facts["draws"], 1):
+        lines += [f"5.{k}.a BRIDGE: {_answer(d, 'bridge')}",
+                  f"5.{k}.b MILE: {_answer(d, 'mile')}",
+                  f"5.{k}.c NOTICE HOURS: {_answer(d, 'notice_hours')}",
+                  f"5.{k}.d OPENS ON SIGNAL: {_answer(d, 'opens_on_signal', 'bool')}",
+                  f"5.{k}.e CLOSED PERIODS: {_answer(d, 'closed_periods', 'list')}"]
+    return "\n".join(lines) + "\n"
+
+
+# every fixture document is readable by tenant acme (the auditor's groups hold acme's)
+UNITS_RULES = [{"match": {"uri_prefix": "https://"}, "access": ["tenant:acme"]}]
+
+
+def make_units_store_with_tables(path: Path) -> Store:
+    """`UNITS_DOCS` and the Phase 3 Federal Register documents, with ACL state (`UNITS_RULES`,
+    clock `T0`), a lexical index, and the Phase 3 tables built (metadata, entities and the
+    33 CFR 117 extraction from `units_fixture_reply` behind a cached stub whose cache sits
+    beside the store) and promoted to `tables/HEAD` through the Phase 3 merge gate."""
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+    from adr_store import tools
+    from adr_store.tables import extract as ex
+    from adr_store.tables.build import build_tables
+    from adr_store.tables.gate import gate
+    from tests.store.tables_fixtures import FR_DOCS
+
+    store = make_units_store(path, [*UNITS_DOCS, *FR_DOCS[:3]], rules=UNITS_RULES)
+    tools.Tools(path).index("p1-struct", lexical_only=True)
+    stub = CachedStubClient("stub-sonnet", Cache(Path(path).parent / f"{Path(path).name}-llm"),
+                            units_fixture_reply)
+    tables_id = build_tables(path, "gov", with_extraction=True, client=stub,
+                             max_calls=len(ex.units(store))).tables_id
+    assert gate(path, tables_id, [], 0).promoted
+    return store
+
+
+@pytest.fixture
+def units_store_with_tables(tmp_path) -> Store:
+    return make_units_store_with_tables(tmp_path / "units-tables-store")
+
+
+def as_auditor(store: Store):
+    """The tools of `store` as the auditor (ACL on), one minute after the ACL sync."""
+    from datetime import timedelta
+
+    from adr_store import tools
+
+    return tools.Tools(store.path, acl=True, caller="user:auditor",
+                       clock=lambda: T0 + timedelta(minutes=1))
+
+
+@pytest.fixture
+def built_units(units_store_with_tables):
+    """(store, the gov build of `units_store_with_tables`, and its bench build)."""
+    from adr_store.units.build import build_units
+
+    store = units_store_with_tables
+    return store, build_units(store.path, "gov"), build_units(store.path, "bench")

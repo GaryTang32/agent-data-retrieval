@@ -428,3 +428,78 @@ def test_adr_query_without_tables_names_the_commands(tables_store, capsys):
     assert code == 2 and "run `adr tables build` and `adr tables gate`" in err
     code, _, err = adr(["tables", "show", "--store", tables_store], capsys)
     assert code == 2 and "adr tables gate" in err
+
+
+# -- `adr units build|show|gate` (Phase 4, Task 6) ------------------------------------------------
+
+@pytest.fixture
+def units_store(tmp_path):
+    from tests.store.units_fixtures import make_units_store
+
+    return make_units_store(tmp_path / "units").path
+
+
+def test_adr_units_build_show_gate(units_store, capsys, monkeypatch):
+    from adr_eval import llm
+    from adr_store.units.overlay import read_units_head
+
+    def no_cli(*a, **kw):
+        raise AssertionError("the model CLI must never run in a test")
+
+    monkeypatch.setattr(llm, "_run_subprocess", no_cli)
+    # the fixture store holds gov and bench documents: the corpus must be named
+    code, _, err = adr(["units", "build", "--store", units_store], capsys)
+    assert code == 2 and "--units-for" in err
+    code, out, err = adr(["units", "build", "--store", units_store, "--units-for", "gov"], capsys)
+    assert code == 0, err
+    cand = out.splitlines()[0]
+    assert len(cand) == 64 and "candidate units of gov" in out and "rule_card" in out
+    assert f"adr units gate --store {units_store} --candidate {cand}" in out
+    assert read_units_head(units_store) is None                 # a build is only a candidate
+    code, out, err = adr(["units", "build", "--store", units_store, "--units-for", "gov",
+                          "--json"], capsys)
+    built = json.loads(out)
+    assert code == 0 and built["units_id"] == cand and built["head"] is None
+    assert [f["type"] for f in built["manifest"]["units"]] == ["concept", "procedure",
+                                                               "rule_card", "table_record"]
+    # no HEAD yet: show needs --units
+    code, _, err = adr(["units", "show", "--store", units_store], capsys)
+    assert code == 2 and "adr units gate" in err
+    code, out, _ = adr(["units", "show", "--store", units_store, "--units", cand], capsys)
+    assert code == 0 and cand[:12] in out and "not HEAD" in out and "procedure" in out
+    # gold kinds are wired later: --gold is refused, HEAD unchanged
+    code, _, err = adr(["units", "gate", "--store", units_store, "--candidate", cand, "--gold",
+                        units_store, "--max-flips", 0], capsys)
+    assert code == 2 and "gold" in err and read_units_head(units_store) is None
+    # the first promotion needs no cases
+    code, out, err = adr(["units", "gate", "--store", units_store, "--candidate", cand,
+                          "--max-flips", 0], capsys)
+    assert code == 0, err
+    assert "promoted" in out and read_units_head(units_store) == cand
+    code, out, _ = adr(["units", "show", "--store", units_store, "--json"], capsys)
+    shown = json.loads(out)
+    assert shown["units_id"] == shown["head"] == cand
+    assert set(shown["reports"]) == {"concept", "procedure", "rule_card", "table_record"}
+    assert shown["reports"]["procedure"]["procedures"] == 2
+    # with a HEAD, a gate without cases is refused
+    code, out, _ = adr(["units", "build", "--store", units_store, "--units-for", "bench"], capsys)
+    other = out.splitlines()[0]
+    code, out, err = adr(["units", "gate", "--store", units_store, "--candidate", other,
+                          "--max-flips", 0, "--json"], capsys)
+    assert code == 2 and "empty" in err and read_units_head(units_store) == cand
+
+
+def test_adr_units_build_with_passes(units_store, capsys, monkeypatch):
+    from adr_eval import llm, runner
+
+    def no_cli(*a, **kw):
+        raise AssertionError("the model CLI must never run in a test")
+
+    monkeypatch.setattr(llm, "_run_subprocess", no_cli)
+    monkeypatch.setattr(runner, "profile_status", lambda profile: None)   # CI has no model CLI
+    code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
+                        "--with-passes", "summaries"], capsys)
+    assert code == 2 and "summaries" in err
+    code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
+                        "--with-passes", "procedure", "--max-calls", 0], capsys)
+    assert code == 2 and "procedure" in err and "not built yet" in err

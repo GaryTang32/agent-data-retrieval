@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -134,14 +135,16 @@ def _summaries(units: list[Unit]) -> tuple[dict, dict]:
 
 
 def write_units(store_path: Path, snapshot: str, c: UnitContract, units: list[Unit],
-                report: dict) -> UnitFile:
+                report: dict, check: Callable[[Unit], list[str]] | None = None) -> UnitFile:
     """Validate `units` against `c` and write the valid ones once, sorted by unit id, with a
-    `.report.json` beside them. A unit that fails validation is rejected and counted, not
-    stored. Two units with the same id are a compiler error and refused (UnitsError) before
-    anything is written, so the file never depends on input order. `report` is filled in place
-    (and written): `type`, `contract_version`, `contract_sha256`, `sha256`, `units`,
-    `rejected` (one entry per rejected unit: `unit_id`, `doc_id`, `problems`), `null_reasons`
-    and `grounding` (over the stored units' model-written fields). An existing unit file of
+    `.report.json` beside them. A unit that fails validation, or for which `check` (the
+    caller's further checks, such as the build's span re-slice) reports a problem, is
+    rejected and counted, not stored. Two units with the same id are a compiler error and
+    refused (UnitsError) before anything is written, so the file never depends on input
+    order. `report` is filled in place (and written): `type`, `contract_version`,
+    `contract_sha256`, `sha256`, `units`, `rejected` (one entry per rejected unit: `unit_id`,
+    `doc_id`, `problems`), `null_reasons` and `grounding` (over the stored units'
+    model-written fields). An existing unit file of
     this id is left as it is when its bytes are the same and refused (UnitsError) when they
     are not; so is its report."""
     directory = _dir(store_path, snapshot)
@@ -154,7 +157,7 @@ def write_units(store_path: Path, snapshot: str, c: UnitContract, units: list[Un
     rejected: list[dict] = []
     stored: list[tuple[bytes, Unit]] = []
     for u in units:
-        if problems := validate_unit(c, u):
+        if problems := validate_unit(c, u) + (check(u) if check is not None else []):
             rejected.append({"unit_id": u.unit_id, "doc_id": u.doc_id, "problems": problems})
         else:
             stored.append((canonical_json(u), u))

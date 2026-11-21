@@ -24,7 +24,12 @@ stored input rejection), `adr tables gate` (the merge gate:
 evaluate a candidate against `tables/HEAD` on gold sets and promote it when it has at most
 `--max-flips` flips; exit 1 when refused), `adr tables show` (a build's manifest and its
 semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the `query_table`
-and `sql` tools, with the filter flags and `--as USER` of `adr search`). `adr`
+and `sql` tools, with the filter flags and `--as USER` of `adr search`), and the knowledge
+units (Phase 4 spec §5.2, §6.6): `adr units build` (every unit type of the store's corpus as a
+candidate build, by code; `--units-for` when the store holds documents of several corpora;
+only `--with-passes` makes a model client), `adr units show` (a build's manifest, counts per
+type and its reports) and `adr units gate` (the units merge gate; without gold sets only a
+first promotion, with no `units/HEAD`, can pass; exit 1 when refused). `adr`
 is not a security boundary (Phase 2 spec §7.1): whoever can run it
 can read the store directory.
 
@@ -108,6 +113,9 @@ from adr_store.tables import overlay as tables_overlay
 from adr_store.tables.engine import OPS, QUERY_LIMIT, contracts_of
 from adr_store.tables.loaders import FR_PREFIX, PAPERS_URI
 from adr_store.tables.semantic import describe
+from adr_store.units import build as units_build
+from adr_store.units import gate as units_gate_mod
+from adr_store.units import overlay as units_overlay
 
 UNKNOWN_LICENSES = frozenset({"", "unknown"})
 PROBLEMS_SHOWN = 5
@@ -1093,6 +1101,144 @@ def _tables_gate(a: argparse.Namespace) -> int:
     return 0 if r.promoted else EXIT_CONFORMANCE
 
 
+BENCH_URI = json.loads((REPO_ROOT / "corpora" / "bench" / "config.json").read_text(
+    encoding="utf-8"))["documents"]["url"]
+
+
+def _units_corpus(a: argparse.Namespace) -> str:
+    """The corpus whose units to build: `--units-for`, else the one the store's documents are
+    of (Federal Register, eCFR or IRM documents: gov; the papers manifest: research; bench
+    documents: bench)."""
+    if a.units_for is not None:
+        return a.units_for
+    store = Store.open(a.store)
+    found = set()
+    for doc_id in store.doc_ids():
+        uri = store.source(doc_id).uri
+        if applicability.family_of(uri) != "unknown":
+            found.add("gov")
+        elif uri == PAPERS_URI:
+            found.add("research")
+        elif uri.startswith(BENCH_URI):
+            found.add("bench")
+    if len(found) != 1:
+        what = f"documents of {' and '.join(sorted(found))}" if found else \
+            "no gov, research or bench document it can tell"
+        raise _UsageError(f"{a.store}: the store holds {what}; give --units-for gov, "
+                          f"research or bench")
+    return found.pop()
+
+
+def _passes(text: str | None) -> tuple[str, ...]:
+    if not text:
+        return ()
+    names = tuple(p.strip() for p in text.split(","))
+    for p in names:
+        if p not in units_build.PASSES:
+            raise _UsageError(f"--with-passes: unknown model pass {p!r}; one of "
+                              f"{', '.join(units_build.PASSES)}")
+    return names
+
+
+def _print_units(m: units_overlay.UnitsManifest) -> None:
+    for f in m.units:
+        print(f"  {f.type:<13} v{f.contract_version}  {f.units:>7} unit(s)  {f.rejected:>5} "
+              f"rejected  {f.sha256[:12]}")
+
+
+def _units_build(a: argparse.Namespace) -> int:
+    """`adr units build`: a candidate units build (units/HEAD does not move). Only a build
+    with --with-passes makes a model client (and resolves a profile); none is built yet."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+
+    corpus = _units_corpus(a)
+    passes = _passes(a.with_passes)
+    meter = None
+    try:
+        if passes:
+            generator = a.generator or eval_runner.load_config()["generator"]
+            meter = tables_extract.metered_client(a.max_calls, profile=generator)
+        res = units_build.build_units(a.store, corpus, passes=passes, client=meter)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    except NotImplementedError as e:
+        raise tools.ToolError(str(e)) from e
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget if meter is not None else None, e))
+        return 1
+    m = units_overlay.load_units_manifest(a.store, res.units_id)
+    head = units_overlay.read_units_head(a.store)
+    if a.json:
+        print(json.dumps({"units_id": res.units_id, "manifest_path": str(res.manifest_path),
+                          "head": head, "manifest": m.model_dump(mode="json")}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    print(res.units_id)
+    print(f"candidate units of {m.corpus} for snapshot {m.snapshot[:12]}: {len(m.units)} "
+          f"type(s), {sum(f.units for f in m.units)} unit(s), "
+          f"{sum(f.rejected for f in m.units)} rejected; tables "
+          f"{m.tables_id[:12] if m.tables_id else 'none'}; HEAD "
+          f"{'is this build' if head == res.units_id else head[:12] if head else 'none'}")
+    _print_units(m)
+    if head != res.units_id:
+        print(f"  not current until promoted: adr units gate --store {a.store} --candidate "
+              f"{res.units_id} --max-flips 0")
+    return 0
+
+
+def _units_show(a: argparse.Namespace) -> int:
+    head = units_overlay.read_units_head(a.store)
+    units_id = a.units or head
+    if units_id is None:
+        raise tools.ToolError(f"{a.store}: no current units (units/HEAD); run `adr units "
+                              f"build` and `adr units gate`, or give --units ID")
+    m = units_overlay.load_units_manifest(a.store, units_id)
+    reports = units_build.unit_reports(a.store, units_id)
+    if a.json:
+        print(json.dumps({"units_id": units_id, "head": head,
+                          "manifest": m.model_dump(mode="json"), "reports": reports},
+                         indent=2, ensure_ascii=False))
+        return 0
+    state = "HEAD" if units_id == head else "not HEAD"
+    print(f"units {units_id[:12]} ({state}) of {m.corpus} for snapshot {m.snapshot[:12]}; "
+          f"tables {m.tables_id[:12] if m.tables_id else 'none'}; applicability overlay "
+          f"{m.applicability[:12] if m.applicability else 'none'}; model passes "
+          f"{', '.join(m.passes) or 'none'}")
+    _print_units(m)
+    directory = a.store / units_overlay.UNITS_DIR / m.snapshot
+    for f in m.units:
+        print(f"  report {f.type}: {(directory / f.file).with_suffix('.report.json')}")
+    return 0
+
+
+def _units_gate(a: argparse.Namespace) -> int:
+    if a.gold:
+        raise tools.ToolError("unit gold sets are not wired yet: the rule and procedure gold "
+                              "kinds come with the retrieval measurement; without --gold the "
+                              "gate runs only a first promotion")
+    units_overlay.load_units_manifest(a.store, a.candidate)
+
+    def no_hit(store_path, units_id, case):
+        raise AssertionError("no gold case to evaluate")
+
+    try:
+        r = units_gate_mod.units_gate(a.store, a.candidate, [], a.max_flips, hit=no_hit)
+    except ValueError as e:
+        raise tools.ToolError(str(e)) from e
+    if a.json:
+        print(json.dumps(dataclasses.asdict(r), indent=2, ensure_ascii=False))
+    else:
+        was = r.current[:12] if r.current else "none"
+        verdict = (f"promoted: {r.candidate[:12]} is HEAD (was {was})" if r.promoted else
+                   f"refused: HEAD stays {was}")
+        print(f"{verdict}; {len(r.flips)} flip(s) of {r.n} case(s) (at most {a.max_flips}), "
+              f"{len(r.gains)} gain(s)")
+        if r.flips:
+            print(f"  flips: {', '.join(r.flips)}")
+    return 0 if r.promoted else EXIT_CONFORMANCE
+
+
 def _query_filters(a: argparse.Namespace) -> dict | None:
     if a.query_filters is None:
         return None
@@ -1424,6 +1570,47 @@ def _parser() -> argparse.ArgumentParser:
     tbs.add_argument("--tables", default=None, metavar="ID", help="a tables id (default HEAD)")
     tbs.add_argument("--json", action="store_true", help="print the result as JSON")
     tbs.set_defaults(fn=_tables_show)
+    un = sub.add_parser("units", help="the knowledge units (Phase 4): build, gate and show",
+                        description="Knowledge units of the store's HEAD snapshot: `build` "
+                                    "writes a candidate build, `gate` promotes it to "
+                                    "units/HEAD through the units merge gate, `show` prints a "
+                                    "build. " + NOT_A_BOUNDARY)
+    un_sub = un.add_subparsers(dest="action", required=True)
+    unb = un_sub.add_parser("build", help="build the units of the store's HEAD snapshot (a "
+                                          "candidate: units/HEAD does not move)")
+    unb.add_argument("--store", type=Path, required=True, help="store directory")
+    unb.add_argument("--units-for", choices=tuple(units_build.CORPUS_TYPES), default=None,
+                     help="the corpus whose units to build (default: the one the store's "
+                          "documents are of)")
+    unb.add_argument("--with-passes", default=None, metavar="PASS[,PASS]",
+                     help=f"model passes whose cached replies fill model-written fields "
+                          f"({', '.join(units_build.PASSES)}); without it the build makes no "
+                          f"model client")
+    unb.add_argument("--generator", metavar="PROFILE", default=None,
+                     help="model profile in config/models.json of the passes (default: config "
+                          "generator)")
+    unb.add_argument("--max-calls", type=_non_negative, default=0,
+                     help="model calls the passes may make (default 0: cached replies only)")
+    unb.add_argument("--json", action="store_true", help="print the result as JSON")
+    unb.set_defaults(fn=_units_build)
+    uns = un_sub.add_parser("show", help="a build's manifest, counts per type and reports "
+                                         "(default: units/HEAD)")
+    uns.add_argument("--store", type=Path, required=True, help="store directory")
+    uns.add_argument("--units", default=None, metavar="ID", help="a units id (default HEAD)")
+    uns.add_argument("--json", action="store_true", help="print the result as JSON (reports "
+                                                         "included)")
+    uns.set_defaults(fn=_units_show)
+    ung = un_sub.add_parser("gate", help="evaluate a candidate against units/HEAD on gold sets "
+                                         "and promote it when it has at most --max-flips flips")
+    ung.add_argument("--store", type=Path, required=True, help="store directory")
+    ung.add_argument("--candidate", required=True, help="the candidate's units id")
+    ung.add_argument("--gold", type=Path, action="append", default=[], metavar="DIR",
+                     help="a unit golden set (not wired yet); without one only a first "
+                          "promotion (no units/HEAD) can pass")
+    ung.add_argument("--max-flips", type=_non_negative, required=True,
+                     help="cases HEAD hits that the candidate may miss")
+    ung.add_argument("--json", action="store_true", help="print the result as JSON")
+    ung.set_defaults(fn=_units_gate)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "
