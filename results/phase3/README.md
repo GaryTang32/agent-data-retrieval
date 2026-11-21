@@ -428,6 +428,9 @@ Spec §14 lists the rulings made without the user. P1–P17 were fixed with the 
 - **E1 and Q2 fail as measured.** The bars were not moved (P13). `closed_periods` is the weakest column on every measure: E1 89.9%, E2 0.707, and 9 of the 26 Q2 value misses.
 - **The merge gate's threshold is untested on a real regression** (P12): every real promotion had 0 flips.
 - **The SQL guard's residual cost.** A recursive copy of a stored value is bounded only by the step budget (about 13 s and 4 GB of temporary disk in the worst probe; documented in `sqlguard.py`).
+- **Number words in quotes** (check 4, `number_in_quote`). The reader of numbers in a quote has quirks: "three-quarter-hour" reads as 3, "eleven hundred" gives {11, 100} rather than 1,100, and "twenty- four" (a hyphen then a space) reads as 20 and 4. Check 4 is soft: a failure turns `verified` into `auto-accepted` and never rejects a value. A read-only scan of the 3B build found no stored `notice_hours` or `mile` value whose quote has such a phrase. The reader was left as it is, because changing it could change statuses, and so the table bytes and ids.
+- **A `query_table` lookup has no byte cap.** `sql` refuses a result over 2 MB, but a `lookup` returns up to 1,000 rows (`limit`) whatever their size: one lookup on `papers` with limit 1,000 returned 6.1 MB, and the worst case is about 16 MB (1,000 rows at the 16 KB row bound). Nothing leaks, since the rows are the caller's view, but one call can fill an agent's context.
+- **Contracts must not change under a running server.** `describe_tables` re-reads the contracts on every call and refuses once one differs from the build's. `query_table` and `sql` keep answering from the view databases they already hold until those are evicted or a new view is opened. Edit a contract only with no `adr mcp` server running.
 - **One machine.**
 
 ## Files
