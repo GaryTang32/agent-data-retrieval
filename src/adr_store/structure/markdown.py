@@ -136,6 +136,12 @@ def _read(text: str) -> tuple[list[Heading], list[Block]]:
     return headings, r.blocks
 
 
+def read_blocks(text: str) -> tuple[list[Heading], list[Block]]:
+    """The headings and the other leaves of markdown `text` in document order, as the parser
+    reads them (offsets in `text`, no outer whitespace)."""
+    return _read(text)
+
+
 def parse_with_stats(raw: bytes, text: str, doc_id: str) -> Parsed:
     headings, blocks = _read(text)
     return Parsed(assemble(doc_id, text, headings, blocks), len(headings), len(headings))

@@ -15,14 +15,15 @@ condition outcome (a body without conditions: its one path start to end). Every 
 boundaries come from the raw HTML (`blobs/`): every `div.section` whose `sectioninfo` holds a
 section or exhibit number ("21.4.1.3 (10-01-2026)", "Exhibit 21.4.1-1"; the chapter's own
 `div.section` has none). A section's own text is its content without its nested sections, its
-`sectioninfo` and its `titlepage`. Its first own line is searched in the canonical text in
-document order, from the end of the previous located section's first line, ignoring whitespace
-(the extractor spaces inline markup differently); a match that starts or ends with a letter has
-no letter beside it there, one that starts or ends with a digit no digit (the extractor glues
-some table cells, "1424Fees"). A section runs from that line to the next located section (the
-last to the end of the text), trailing whitespace off. A section whose line is not found is
-unlocated: it is merged into the preceding located section (named in its `merged`, its HTML
-appended to that section's) and reported (P10).
+`sectioninfo`, its `titlepage` and the labels of its notes ("Note:", "Reminder:"), which the
+extractor drops. Its first own line is searched in the canonical text in document order, from
+the end of the previous located section's first line, ignoring whitespace (the extractor spaces
+inline markup differently); a match that starts or ends with a letter has no letter beside it
+there, one that starts or ends with a digit no digit (the extractor glues some table cells,
+"1424Fees"). A section runs from that line to the next located section (the last to the end of
+the text), trailing whitespace off. A section whose line is not found is unlocated: it is
+merged into the preceding located section (named in its `merged`, its HTML appended to that
+section's) and reported (P10).
 
 **IRM skeletons** (`irm_skeleton`, for the procedure-like sections: at least one If/Then table,
 a table whose header row has a cell starting "If" and one starting "Then"). The numbered
@@ -32,27 +33,43 @@ lettered items folded into their text. Each row of an If/Then table in a paragra
 canonical text and its guard their HTML lines, a cell's lines joined by spaces and the cells by
 "; "), whose first edge leads, under that guard, to the row's action step (the Then cell) and
 whose "otherwise" edge leads to the next row's condition step; the last row's "otherwise", like
-every action step, leads to what follows the table (the next table of the paragraph, or the
-next paragraph). A paragraph or action naming `Command Code <code>` or `TC <nnn>` is a
-`tool_call` whose `tool` is the first code ("REQ77", "TC 971"); else "refer to IRM <n>" makes a
-`subprocedure` whose `tool` is "IRM <n>"; else "refer the case to" or "escalate" makes a
-`handoff`; else an `instruction`. A final `end` step is appended.
+every action step, leads to what follows the table. The paragraph's own text after a table (a
+note, a reminder, further lettered items, up to its next If/Then table) is an unconditional
+step of its own, entered from every exit of the table; the paragraph's next table or the next
+paragraph follows. Chaining the rows by "otherwise" reads the table as a decision table (a
+ruling of the Task 4 review, M2). A paragraph, text after a table or action naming a command
+code ("Command Code REQ77", "Command Code (CC) ERINV", or, by the ruling on review I4, "CC
+ENMOD": four or more capitals and digits) or a transaction code ("TC 971") is a `tool_call`
+whose `tool` is the first code ("REQ77", "TC 971"); else "refer to IRM <n>" makes a
+`subprocedure` whose `subprocedure_ref` is "IRM <n>" (ruling M1: no edge leads to it, and
+`tool` names systems and codes only); else "refer the case to" or "escalate" makes a `handoff`;
+else an `instruction`. A final `end` step is appended.
 
-Each step is located by its first line, searched in document order inside its section's span as
-sections are (a row's condition after the row's "Row" cells); its span runs to the next located
-anchor (the next paragraph, table header, row cell or the section's end), trailing whitespace,
-bullet remnants and, at a table cell, pipes off. A step's text is that slice of the canonical
-text, so it always re-slices. A paragraph or row whose anchor is not found is dropped and
-reported.
+Each step is located by its first line inside its section's span, the anchors placed as
+sections are found (whitespace ignored, letter and digit bounds) but jointly: of all the ways
+to give the anchors matches that follow one another in order, the one that places the most,
+each at its earliest match that still allows that many (a row's condition is matched with the
+row's "Row" cells before it). So a Then cell the extractor dropped, whose first line also opens
+a later cell, does not take that cell's place and push out the anchors between them. A step's
+span runs to the next placed anchor (the next paragraph, text after a table, table header, row
+cell or the section's end), trailing whitespace, bullet remnants and, at a table cell, pipes
+off. A step's text is that slice of the canonical text, so it always re-slices. A paragraph,
+text after a table or row whose anchor is not placed is dropped and reported with the reason:
+`not_in_text` (nowhere in the section), `out_of_order` (only where it would displace other
+anchors) or `empty_cell`.
 
 **Bench skeletons** (`bench_skeleton`). Headings starting "Step <n>" or "<n>." are the steps
 when there are at least `MIN_STEPS` of them, each running to the next heading of the same or an
-outer level; else the top-level numbered list items, each with the more indented list items
-that follow it. A list item starting with "If" and holding a comma becomes a `condition`
-(guard: the If clause) whose action is the rest of the item; every other step is an
-`instruction`. A bench candidate (`bench_candidates`) is a markdown document whose title (its
-first line) holds a word of `BENCH_KINDS` and that has at least `MIN_STEPS` steps; at most
-`BENCH_CAP` are drawn, the smallest SHA-256 of "<seed>:<doc id>".
+outer level; else the top-level numbered list items, each with its sub-items: the list items
+that follow it, more indented, or bullets at its own indent right under it (no blank line
+between). A list item starting with "If" becomes a `condition` whose guard is its If clause,
+which ends at the first colon or comma followed by a space or the line's end, else at the end
+of the first line; the rest of the item (its sub-items when the line ends there, a leading
+bullet skipped) is the action. An "If" item with nothing after its clause stays an
+`instruction` (counted as `no_action`). Every other step is an `instruction`. A bench candidate
+(`bench_candidates`) is a markdown document whose title (its first line) holds a word of
+`BENCH_KINDS` and that has at least `MIN_STEPS` steps; at most `BENCH_CAP` are drawn, the
+smallest SHA-256 of "<seed>:<doc id>".
 
 A skeleton with fewer than `MIN_STEPS` steps besides the end is flagged `coarse` and kept.
 `procedure_units` builds one `procedure` unit per procedure-like IRM section (`canonical_ref`
@@ -64,6 +81,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+from bisect import bisect_left
 from collections import Counter, deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -119,7 +137,8 @@ class Step(BaseModel):
     type: StepType
     text: str
     span: tuple[int, int] | None  # document offsets of `text`
-    tool: str | None = None
+    tool: str | None = None              # the system or command code a step uses
+    subprocedure_ref: str | None = None  # the procedure a subprocedure step calls (no edge)
     args_schema: dict | None = None
     condition: str | None = None
     next: list[Edge] = []
@@ -259,24 +278,24 @@ class _Graph:
             self._link(i, j, guard)
         self.exits = []
 
-    def step(self, type_: str, text: str, span: tuple[int, int], tool: str | None = None
-             ) -> None:
-        j = self._new(type_, text, span, tool=tool)
+    def step(self, type_: str, text: str, span: tuple[int, int], tool: str | None = None,
+             ref: str | None = None) -> None:
+        j = self._new(type_, text, span, tool=tool, subprocedure_ref=ref)
         self._enter(j)
         self.exits = [(j, None)]
 
     def rows(self, rows: list[tuple[str, str, tuple[int, int], tuple]]) -> None:
         """Condition steps chained by "otherwise", each with its action: rows of (guard,
-        condition text, its span, (action type, text, span, tool))."""
+        condition text, its span, (action type, text, span, tool, subprocedure ref))."""
         actions: list[int] = []
         prev = None
-        for guard, text, span, (a_type, a_text, a_span, a_tool) in rows:
+        for guard, text, span, (a_type, a_text, a_span, a_tool, a_ref) in rows:
             c = self._new("condition", text, span, condition=guard)
             if prev is None:
                 self._enter(c)
             else:
                 self._link(prev, c, "otherwise")
-            a = self._new(a_type, a_text, a_span, tool=a_tool)
+            a = self._new(a_type, a_text, a_span, tool=a_tool, subprocedure_ref=a_ref)
             self._link(c, a, guard)
             actions.append(a)
             prev = c
@@ -359,33 +378,54 @@ def _is_section(el) -> bool:
     return el.tag == "div" and "section" in (el.get("class") or "").split()
 
 
+_HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+
+
 def _skipped(el) -> bool:
+    """Nested sections, `sectioninfo`, `titlepage`, and the label of a note ("Note:",
+    "Reminder:", a heading in a `div.note`), which the extractor drops."""
     cls = el.get("class") or ""
+    if el.tag in _HEADINGS:
+        parent = el.getparent()
+        if parent is not None and "note" in (parent.get("class") or "").split():
+            return True
     return _is_section(el) or "sectioninfo" in cls or "titlepage" in cls
 
 
-def _lines(root) -> list[str]:
+def _lines(root, after=None, until=None) -> list[str]:
     """The non-empty lines of `root`'s own text, whitespace collapsed: block elements break
-    lines, inline ones do not; nested sections, `sectioninfo` and `titlepage` are left out."""
+    lines, inline ones do not; what `_skipped` names is left out. With `after`, only the text
+    after that element counts; with `until`, the text stops at that element."""
     parts: list[str] = []
+    state = {"on": after is None, "stop": False}
+
+    def emit(s: str | None) -> None:
+        if s and state["on"] and not state["stop"]:
+            parts.append(s)
 
     def walk(el) -> None:
-        if not isinstance(el.tag, str) or (el is not root and _skipped(el)):
+        if state["stop"] or not isinstance(el.tag, str):
+            return
+        if el is until:
+            state["stop"] = True
+            return
+        if el is after:
+            state["on"] = True
+            return
+        if el is not root and _skipped(el):
             return
         if el.tag == "br":
-            parts.append("\n")
+            emit("\n")
             return
         block = el.tag not in _INLINE
         if block:
-            parts.append("\n")
-        if el.text:
-            parts.append(el.text)
+            emit("\n")
+        emit(el.text)
         for child in el:
             walk(child)
-            if child.tail:
-                parts.append(child.tail)
+            emit(child.tail)
         if block:
-            parts.append("\n")
+            emit("\n")
 
     walk(root)
     return [line for line in map(_norm, "".join(parts).split("\n")) if line]
@@ -490,7 +530,11 @@ def irm_sections(store: Store, doc_id: str) -> tuple[list[IrmSection], list[str]
 
 _HEAD_IF = re.compile(r"if\b", re.IGNORECASE)
 _HEAD_THEN = re.compile(r"then\b", re.IGNORECASE)
-_COMMAND = re.compile(r"\bCommand\s+Code\s+([A-Z0-9]+)\b")
+# a command code: "Command Code REQ77", "Command Code (CC) ERINV", "command codes ENREQ, ..."
+# and, by the ruling on review I4, "CC ENMOD" (four or more capitals and digits, so the closing
+# codes "cc 088" and words such as "CC ADD" do not count)
+_COMMAND = re.compile(r"\b[Cc]ommand\s+[Cc]odes?\s+(?:\(CC\)\s+)?([A-Z][A-Z0-9]+)\b"
+                      r"|\bCC\s+([A-Z][A-Z0-9]{3,})\b")
 _TC = re.compile(r"\bTC\s+(\d{3})\b")
 _IRM_REF = re.compile(r"\brefer\s+to\s+IRM\s+(\d+(?:\.\d+)+)", re.IGNORECASE)
 _HANDOFF = re.compile(r"\brefer\s+the\s+case\s+to\b|\bescalate\b", re.IGNORECASE)
@@ -519,41 +563,97 @@ def is_procedure_like(s: IrmSection) -> bool:
     return any(_if_then(t) is not None for t in _group(s).iter("table"))
 
 
-def _classify(text: str) -> tuple[str, str | None]:
-    codes = sorted([(m.start(), m.group(1)) for m in _COMMAND.finditer(text)]
+def _classify(text: str) -> tuple[str, str | None, str | None]:
+    """(step type, tool, subprocedure reference) of a paragraph's or action's text."""
+    codes = sorted([(m.start(), m.group(1) or m.group(2)) for m in _COMMAND.finditer(text)]
                    + [(m.start(), f"TC {m.group(1)}") for m in _TC.finditer(text)])
     if codes:
-        return "tool_call", codes[0][1]
+        return "tool_call", codes[0][1], None
     if m := _IRM_REF.search(text):
-        return "subprocedure", f"IRM {m.group(1)}"
+        return "subprocedure", None, f"IRM {m.group(1)}"
     if _HANDOFF.search(text):
-        return "handoff", None
-    return "instruction", None
+        return "handoff", None, None
+    return "instruction", None, None
 
 
 @dataclass
 class _Anchor:
     """A step's (or table header's) first line, `segments`, found after `lead` (a row's
-    "Row" cells): `found` is the whole match, `start` where the step's text begins."""
+    "Row" cells): `found` is the whole match, `start` where the step's text begins; `reason`
+    says why an anchor was not found."""
 
-    kind: Literal["paragraph", "header", "condition", "action"]
+    kind: Literal["paragraph", "after_table", "header", "condition", "action"]
     segments: tuple[str, ...]
     lead: tuple[str, ...] = ()
     found: tuple[int, int] | None = None
     start: int = 0
+    reason: str | None = None
 
 
-def _first(el) -> str | None:
-    lines = _lines(el)
+def _first(el, after=None, until=None) -> str | None:
+    lines = _lines(el, after, until)
     return lines[0] if lines else None
 
 
+def _locate(anchors: list[_Anchor], text: str, lo: int, hi: int) -> None:
+    """Place the anchors in [lo, hi): of all the ways to give anchors matches that follow one
+    another in anchor order, the one that places the most anchors, each placed anchor at its
+    earliest match that still allows that many. So an anchor missing from the text never
+    takes a later anchor's match when that would cost anchors (a Then cell dropped by the
+    extractor whose first line opens a later cell), and a later anchor's text met early,
+    inside an earlier step, does not unseat the anchor before it. An anchor left out is
+    `not_in_text` when its text is nowhere in [lo, hi), else `out_of_order`."""
+    occ = []
+    for a in anchors:
+        pat = _pattern(a.lead + a.segments)
+        occ.append([m.span() for m in pat.finditer(text, lo, hi)] if pat is not None else [])
+    starts = sorted({st for o in occ for st, _ in o})
+    n = len(starts)
+    tree = [0] * (n + 1)  # a Fenwick tree of maxima over match starts, high starts first
+
+    def put(st: int, v: int) -> None:
+        i = n - bisect_left(starts, st)
+        while i <= n:
+            tree[i] = max(tree[i], v)
+            i += i & -i
+
+    def best_from(pos: int) -> int:  # the longest chain of later anchors starting at >= pos
+        i, out = n - bisect_left(starts, pos), 0
+        while i > 0:
+            out = max(out, tree[i])
+            i -= i & -i
+        return out
+
+    best = [[0] * len(o) for o in occ]
+    for i in reversed(range(len(anchors))):
+        best[i] = [1 + best_from(en) for _, en in occ[i]]
+        for (st, _), v in zip(occ[i], best[i], strict=True):
+            put(st, v)
+    need = max((v for vs in best for v in vs), default=0)
+    cursor = lo
+    for i, a in enumerate(anchors):
+        pick = next((m for m, v in zip(occ[i], best[i], strict=True)
+                     if m[0] >= cursor and v == need), None) if need else None
+        if pick is None:
+            a.found = None
+            a.reason = "out_of_order" if occ[i] else "not_in_text"
+            continue
+        a.found, cursor, need = pick, pick[1], need - 1
+        a.start = (_find(text, a.segments, *pick) or pick)[0] if a.lead else pick[0]
+
+
 def _irm_skeleton(s: IrmSection, text: str) -> tuple[ProcedureBody, list[dict]]:
-    # 1. the anchors in document order: paragraph, then per If/Then table its header and per
-    # row its condition and action; rows also keep their guard (the If-side cells' lines)
+    # 1. the anchors in document order: per paragraph its first line, then per If/Then table
+    # its header, per row its condition and action, and the paragraph's first line after the
+    # table (before the next If/Then table); rows keep their guard (the If-side cells' lines)
     anchors: list[_Anchor] = []
     plan: list[tuple] = []  # ("p", anchor index) or ("t", [(guard, cond index, act index)])
     dropped: list[dict] = []
+
+    def add(a: _Anchor) -> int:
+        anchors.append(a)
+        return len(anchors) - 1
+
     for sec in _group(s):
         if not isinstance(sec.tag, str) or not _is_section(sec):
             continue
@@ -561,14 +661,10 @@ def _irm_skeleton(s: IrmSection, text: str) -> tuple[ProcedureBody, list[dict]]:
             first = _first(li)
             if first is None:
                 continue
-            anchors.append(_Anchor("paragraph", (first,)))
-            plan.append(("p", len(anchors) - 1))
-            for table in li.iter("table"):
-                shape = _if_then(table)
-                if shape is None:
-                    continue
-                head, then, if_cols, row_cols = shape
-                anchors.append(_Anchor("header", tuple(
+            plan.append(("p", add(_Anchor("paragraph", (first,)))))
+            tables = [(t, shape) for t in li.iter("table") if (shape := _if_then(t)) is not None]
+            for k, (table, (head, then, if_cols, row_cols)) in enumerate(tables):
+                add(_Anchor("header", tuple(
                     _norm(c.text_content()) for c in head.xpath("./th | ./td"))))
                 rows = []
                 for tr in table.xpath("./tbody/tr | ./tr"):
@@ -580,26 +676,25 @@ def _irm_skeleton(s: IrmSection, text: str) -> tuple[ProcedureBody, list[dict]]:
                     cond = next((f for c in sides if (f := _first(c))), None)
                     act = _first(cells[then]) if then < len(cells) else None
                     if not guard or cond is None or act is None:
-                        dropped.append({"kind": "row", "text": (guard or act or "")[:80]})
+                        dropped.append({"kind": "row", "reason": "empty_cell",
+                                        "text": (guard or act or "")[:80]})
                         continue
                     lead = tuple(f for i in row_cols if i < len(cells) and (f := _first(cells[i])))
-                    anchors.append(_Anchor("condition", (cond,), lead))
-                    anchors.append(_Anchor("action", (act,)))
-                    rows.append((guard, len(anchors) - 2, len(anchors) - 1))
+                    rows.append((guard, add(_Anchor("condition", (cond,), lead)),
+                                 add(_Anchor("action", (act,)))))
                 plan.append(("t", rows))
+                nxt = tables[k + 1][0] if k + 1 < len(tables) else None
+                if (after := _first(li, after=table, until=nxt)) is not None:
+                    plan.append(("p", add(_Anchor("after_table", (after,)))))
     # 2. locate them in order inside the section
-    cursor = s.start
-    for a in anchors:
-        a.found = _find(text, a.lead + a.segments, cursor, s.end)
-        if a.found is not None:
-            cursor = a.found[1]
-            a.start = (_find(text, a.segments, *a.found) or a.found)[0] if a.lead else a.found[0]
+    _locate(anchors, text, s.start, s.end)
 
     def span(i: int) -> tuple[int, int]:
         a = anchors[i]
         nxt = next((b for b in anchors[i + 1:] if b.found is not None), None)
         stop = nxt.found[0] if nxt is not None else s.end
-        pipes = a.kind in ("condition", "action") or (nxt is not None and nxt.kind != "paragraph")
+        pipes = a.kind in ("condition", "action") or (
+            nxt is not None and nxt.kind in ("header", "condition", "action"))
         return a.start, _trim_end(text, a.start, stop, pipes)
 
     # 3. the graph
@@ -608,21 +703,23 @@ def _irm_skeleton(s: IrmSection, text: str) -> tuple[ProcedureBody, list[dict]]:
         if kind == "p":
             a = anchors[item]
             if a.found is None:
-                dropped.append({"kind": "paragraph", "text": a.segments[0][:80]})
+                dropped.append({"kind": a.kind, "reason": a.reason, "text": a.segments[0][:80]})
                 continue
             st, en = span(item)
-            p_type, p_tool = _classify(text[st:en])
-            g.step(p_type, text[st:en], (st, en), tool=p_tool)
+            p_type, p_tool, p_ref = _classify(text[st:en])
+            g.step(p_type, text[st:en], (st, en), tool=p_tool, ref=p_ref)
             continue
         rows = []
         for guard, ci, ai in item:
-            if anchors[ci].found is None or anchors[ai].found is None:
-                dropped.append({"kind": "row", "text": guard[:80]})
+            missing = next((anchors[i] for i in (ai, ci) if anchors[i].found is None), None)
+            if missing is not None:
+                dropped.append({"kind": "row", "reason": missing.reason, "text": guard[:80]})
                 continue
             cs, ce = span(ci)
             as_, ae = span(ai)
-            a_type, a_tool = _classify(text[as_:ae])
-            rows.append((guard, text[cs:ce], (cs, ce), (a_type, text[as_:ae], (as_, ae), a_tool)))
+            a_type, a_tool, a_ref = _classify(text[as_:ae])
+            rows.append((guard, text[cs:ce], (cs, ce),
+                         (a_type, text[as_:ae], (as_, ae), a_tool, a_ref)))
         g.rows(rows)
     return _body(g.finish(), "irm"), dropped
 
@@ -638,7 +735,9 @@ def irm_skeleton(s: IrmSection, text: str) -> ProcedureBody:
 _KIND = re.compile(r"\b(?:" + "|".join(BENCH_KINDS) + r")s?\b", re.IGNORECASE)
 _NUMBERED = re.compile(r"\d{1,9}[.)](?:[ \t]+|$)")
 _STEP_HEAD = re.compile(r"(?:step\s+\d+\b|\d+[.)](?:\s|$))", re.IGNORECASE)
-_IF_CLAUSE = re.compile(r"If\b[^,\n]*(?=,)")
+_IF_ITEM = re.compile(r"If\b")
+_IF_END = re.compile(r"[:,](?=\s|$)")         # a colon or comma ending the If clause
+_BULLET = re.compile(r"(?:[-*+]|\d{1,9}[.)])[ \t]+")
 
 
 def _title(text: str) -> str:
@@ -652,7 +751,7 @@ def _indent(text: str, at: int) -> int:
 
 def _bench_steps(text: str) -> list[tuple[int, int, bool]]:
     """(start, end, is a list item) of the steps of a bench document."""
-    headings, blocks = md._read(text)
+    headings, blocks = md.read_blocks(text)
     heads = [h for h in headings if _STEP_HEAD.match(h.title)]
     if len(heads) >= MIN_STEPS:
         out = []
@@ -668,14 +767,51 @@ def _bench_steps(text: str) -> list[tuple[int, int, bool]]:
         m = _NUMBERED.match(text, b.start)
         if m is None:
             continue
-        end = b.end
+        end, own = b.end, _indent(text, b.start)
         for nxt in blocks[k + 1:]:
-            if (nxt.type != "list_item" or _indent(text, nxt.start) <= _indent(text, b.start)
+            at = _indent(text, nxt.start)
+            sub = at > own or (at == own and not _NUMBERED.match(text, nxt.start)
+                               and "\n\n" not in text[end:nxt.start])
+            if (nxt.type != "list_item" or not sub
                     or any(end <= h.start < nxt.start for h in headings)):
                 break
             end = nxt.end
         out.append((m.end(), end, True))
     return out
+
+
+def _if_split(text: str, start: int, end: int) -> tuple[int, int] | None:
+    """(end of the If clause, start of the action) of a list item starting with "If" in
+    [start, end): the clause runs to the first colon or comma followed by a space or the end
+    of the line, else to the end of the first line; the action is what follows (a leading
+    list bullet skipped), the item's sub-items when the line ends there. None when there is
+    no action."""
+    line_end = text.find("\n", start, end)
+    line_end = end if line_end < 0 else line_end
+    m = _IF_END.search(text, start, line_end)
+    clause_end = m.start() if m else _trim_end(text, start, line_end)
+    rest = m.end() if m else line_end
+    while rest < end and text[rest].isspace():
+        rest += 1
+    if (b := _BULLET.match(text, rest, end)) is not None:
+        rest = b.end()
+    return (clause_end, rest) if rest < end and clause_end > start else None
+
+
+def _bench_skeleton(text: str) -> tuple[ProcedureBody, Counter]:
+    g, ifs = _Graph(), Counter()
+    for start, end, item in _bench_steps(text):
+        split = _if_split(text, start, end) if item and _IF_ITEM.match(text, start) else None
+        if item and _IF_ITEM.match(text, start):
+            ifs["conditions" if split else "no_action"] += 1
+        if split is None:
+            g.step("instruction", text[start:end], (start, end))
+            continue
+        clause_end, rest = split
+        guard = text[start:clause_end]
+        g.rows([(guard, guard, (start, clause_end),
+                 ("instruction", text[rest:end], (rest, end), None, None))])
+    return _body(g.finish(), "bench"), ifs
 
 
 def _bench_candidates(store: Store) -> list[str]:
@@ -689,29 +825,19 @@ def _bench_candidates(store: Store) -> list[str]:
     return out
 
 
+def _draw(candidates: list[str], seed: int, cap: int) -> list[str]:
+    key = lambda d: hashlib.sha256(f"{seed}:{d}".encode()).hexdigest()  # noqa: E731
+    return sorted(sorted(candidates, key=key)[:cap])
+
+
 def bench_candidates(store: Store, seed: int = SEED4, cap: int = BENCH_CAP) -> list[str]:
     """The bench procedure documents drawn (module docstring), sorted by doc id."""
-    key = lambda d: hashlib.sha256(f"{seed}:{d}".encode()).hexdigest()  # noqa: E731
-    return sorted(sorted(_bench_candidates(store), key=key)[:cap])
+    return _draw(_bench_candidates(store), seed, cap)
 
 
 def bench_skeleton(store: Store, doc_id: str) -> ProcedureBody:
     """The step skeleton of bench document `doc_id` (rules in the module docstring)."""
-    text = store.text(doc_id)
-    g = _Graph()
-    for start, end, item in _bench_steps(text):
-        m = _IF_CLAUSE.match(text, start, end) if item else None
-        rest = None
-        if m is not None:
-            rest = m.end() + 1
-            while rest < end and text[rest].isspace():
-                rest += 1
-        if m is None or rest >= end:
-            g.step("instruction", text[start:end], (start, end))
-            continue
-        g.rows([(m.group(0), m.group(0), (start, m.end()),
-                 ("instruction", text[rest:end], (rest, end), None))])
-    return _body(g.finish(), "bench")
+    return _bench_skeleton(store.text(doc_id))[0]
 
 
 # -- units -----------------------------------------------------------------------------------
@@ -729,11 +855,15 @@ def procedure_units(store: Store, corpus: str, overlay: Applicability | None
     reported. The report holds no run-varying value: IRM documents, sections (raw), located,
     unlocated (with the section each merged into), procedure-like sections and their If/Then
     tables, bench candidates and drawn, procedures, coarse ones, steps per type, dropped
-    paragraphs and rows, rejected bodies."""
+    paragraphs, rows and text after tables (with the reason: `not_in_text`, `out_of_order`,
+    `empty_cell`), procedure-like sections left with no condition step (with the reason),
+    bench "If" items made conditions or left instructions for want of an action, rejected
+    bodies."""
     report: dict = {"corpus": corpus, "documents": 0, "sections": 0, "located": 0,
                     "unlocated": [], "procedure_like": 0, "if_then_tables": 0,
                     "candidates": 0, "drawn": 0, "procedures": 0, "coarse": 0, "steps": {},
-                    "dropped": [], "rejected": []}
+                    "dropped": [], "no_condition": [],
+                    "if_items": {"conditions": 0, "no_action": 0}, "rejected": []}
     built: list[tuple[str, list[str], str, str, int, int, ProcedureBody, list[dict]]] = []
     if corpus == "gov":
         irm = sorted(d for d in store.doc_ids() if ap.family_of(store.source(d).uri) == "irm")
@@ -760,17 +890,26 @@ def procedure_units(store: Store, corpus: str, overlay: Applicability | None
                 built.append((s.title, [f"IRM {chapter}", *ancestors, f"IRM {s.number} {s.title}"],
                               f"IRM {s.number}", d, s.start, s.end, body, dropped))
     elif corpus == "bench":
-        report["candidates"] = len(_bench_candidates(store))
-        for d in bench_candidates(store):
+        candidates = _bench_candidates(store)
+        report["candidates"] = len(candidates)
+        for d in _draw(candidates, SEED4, BENCH_CAP):
             text = store.text(d)
             title = _title(text)
-            built.append((title, [title], f"bench:{d}", d, 0, len(text),
-                          bench_skeleton(store, d), []))
+            body, ifs = _bench_skeleton(text)
+            for k in report["if_items"]:
+                report["if_items"][k] += ifs[k]
+            built.append((title, [title], f"bench:{d}", d, 0, len(text), body, []))
         report["drawn"] = len(built)
     units, steps = [], Counter()
     for title, path, ref, d, start, end, body, dropped in built:
         text = store.text(d)
         report["dropped"] += [{"canonical_ref": ref, "doc_id": d, **x} for x in dropped]
+        if ref.startswith("IRM ") and not any(s.type == "condition" for s in body.steps):
+            rows = Counter(x["reason"] for x in dropped if x["kind"] == "row")
+            report["no_condition"].append({
+                "canonical_ref": ref, "doc_id": d,
+                "reason": f"all {sum(rows.values())} If/Then rows dropped ("
+                          + ", ".join(f"{k} {v}" for k, v in sorted(rows.items())) + ")"})
         problems = validate_ir(body) + _resliced(body, text)
         if problems:
             report["rejected"].append({"canonical_ref": ref, "doc_id": d, "problems": problems})

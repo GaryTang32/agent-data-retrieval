@@ -213,19 +213,21 @@ def test_irm_skeleton_of_the_missing_refund_section(units_store):
     action behind its guard and an "otherwise" edge to the next row, the last one's to the
     next paragraph; codes, IRM references and referrals type the steps; an end step."""
     b = irm_skeleton(proc_section(units_store), units_store.text(DOC_IRM))
-    got = [(s.id, s.type, s.tool, [(e.to, e.guard) for e in s.next]) for s in b.steps]
+    got = [(s.id, s.type, s.tool, s.subprocedure_ref, [(e.to, e.guard) for e in s.next])
+           for s in b.steps]
     g1 = "If the taxpayer received a paper check that was lost or stolen"
     g2 = "If the taxpayer requested a direct deposit and TC 846 shows the RTN on file"
     assert got == [
-        ("s1", "tool_call", "IMFOLT", [("s2", None)]),
-        ("s2", "tool_call", "REQ77", [("s3", None)]),
-        ("s3", "instruction", None, [("s4", None)]),
-        ("s4", "condition", None, [("s5", g1), ("s6", "otherwise")]),
-        ("s5", "tool_call", "TC 971", [("s8", None)]),
-        ("s6", "condition", None, [("s7", g2), ("s8", "otherwise")]),
-        ("s7", "subprocedure", "IRM 21.4.1.3.2", [("s8", None)]),
-        ("s8", "handoff", None, [("s9", None)]),
-        ("s9", "end", None, []),
+        ("s1", "tool_call", "IMFOLT", None, [("s2", None)]),
+        ("s2", "tool_call", "REQ77", None, [("s3", None)]),
+        ("s3", "instruction", None, None, [("s4", None)]),
+        ("s4", "condition", None, None, [("s5", g1), ("s6", "otherwise")]),
+        ("s5", "tool_call", "TC 971", None, [("s8", None)]),
+        ("s6", "condition", None, None, [("s7", g2), ("s8", "otherwise")]),
+        # the reference is not a tool and gets no edge (ruling M1)
+        ("s7", "subprocedure", None, "IRM 21.4.1.3.2", [("s8", None)]),
+        ("s8", "handoff", None, None, [("s9", None)]),
+        ("s9", "end", None, None, []),
     ]
     assert [s.text for s in b.steps] == [
         "Research the account with Command Code IMFOLT to find the refund transaction.",
@@ -316,18 +318,21 @@ def test_procedure_units_report(units_store):
         # the paragraphs of the merged § 21.4.1.3.3 are not in the text (see above)
         "dropped": [
             {"canonical_ref": "IRM 21.4.1.3.2", "doc_id": DOC_IRM, "kind": "paragraph",
+             "reason": "not_in_text",
              "text": "Research the account with Command Code IMFOLT to find the refund "
                      "transaction."},
             {"canonical_ref": "IRM 21.4.1.3.2", "doc_id": DOC_IRM, "kind": "paragraph",
+             "reason": "not_in_text",
              "text": ("Check the account for a refund hold code before you tell the taxpayer "
                       "when the refund will issue")[:80]}],
-        "rejected": []}
+        "no_condition": [], "if_items": {"conditions": 0, "no_action": 0}, "rejected": []}
     again, report2 = procedure_units(units_store, "gov", overlay_of(units_store))
     assert again == units and report2 == report
     assert procedure_units(units_store, "research", None) == ([], {
         "corpus": "research", "documents": 0, "sections": 0, "located": 0, "unlocated": [],
         "procedure_like": 0, "if_then_tables": 0, "candidates": 0, "drawn": 0,
-        "procedures": 0, "coarse": 0, "steps": {}, "dropped": [], "rejected": []})
+        "procedures": 0, "coarse": 0, "steps": {}, "dropped": [], "no_condition": [],
+        "if_items": {"conditions": 0, "no_action": 0}, "rejected": []})
 
 
 def test_an_unlocatable_row_is_dropped_and_reported(tmp_path):
@@ -350,8 +355,9 @@ def test_an_unlocatable_row_is_dropped_and_reported(tmp_path):
     assert [s.type for s in b.steps] == ["instruction", "instruction", "condition",
                                          "instruction", "end"]
     assert validate_ir(b) == [] and b.ambiguity_flags == []
-    assert report["dropped"] == [{"canonical_ref": "IRM 1.2.1", "doc_id": doc,
-                                  "kind": "row", "text": "If the notice is lost"}]
+    assert report["dropped"] == [{"canonical_ref": "IRM 1.2.1", "doc_id": doc, "kind": "row",
+                                  "reason": "not_in_text", "text": "If the notice is lost"}]
+    assert report["no_condition"] == []
 
 
 def test_row_and_and_columns(tmp_path):
@@ -384,6 +390,178 @@ def test_row_and_and_columns(tmp_path):
     assert b.steps[4].tool == "NOTIC" and b.steps[4].text.startswith("Resend it")
     assert all(text[s.span[0]:s.span[1]] == s.text for s in b.steps[:-1])
     assert validate_ir(b) == []
+
+
+def if_table(*rows: tuple[str, str]) -> str:
+    """An If/Then table of (If cell, Then cell HTML) rows, headed "If..." and "Then..."."""
+    body = "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in rows)
+    return ('<div class="informaltable"><table><thead><tr><th>If...</th><th>Then...</th></tr>'
+            f"</thead><tbody>{body}</tbody></table></div>")
+
+
+def lis(*items: str) -> str:
+    return ('<div class="orderedlist"><ol class="orderedlist" type="1">'
+            + "".join(f'<li class="listitem">{i}</li>' for i in items) + "</ol></div>")
+
+
+def section_skeleton(tmp_path, items: str):
+    raw = irm_html([("1.5.1", "Detainees", items),
+                    ("1.5.2", "After", ol("Close out the file.", "Archive the box."))])
+    store, doc = irm_store(tmp_path, raw)
+    units, report = procedure_units(store, "gov", overlay_of(store))
+    text = store.text(doc)
+    assert all(text[s["span"][0]:s["span"][1]] == s["text"]
+               for u in units for s in u.body["steps"] if s["span"] is not None)
+    return store, doc, text, units, report
+
+
+def test_a_missing_then_cell_does_not_match_a_later_table(tmp_path):
+    """The shape of IRM 5.19.1.5.12.2: the extractor drops table 1's Then cells (here an
+    `<aside>`), and row 1's first Then line also opens a Then cell of table 2, after the next
+    paragraph. That line may not be matched past the next anchor, so table 1's rows are
+    dropped and the next paragraph and table 2 keep their own text."""
+    t1 = if_table(("Telephone call and an open collection issue,",
+                   "<aside><p>Input the HSTG indicator</p><p>Suspend the account for 60 days"
+                   "</p></aside>"),
+                  ("Telephone call and no open collection issues,",
+                   "<aside><p>Suspend the account for 60 days pending the letter</p></aside>"))
+    t2 = if_table(("Telephone call and there is an open collection issue,",
+                   "<p>Input the HSTG indicator</p><p>Suspend the account for 90 days</p>"),
+                  ("Telephone call and there are no open collection issues,",
+                   "<p>Input the HSTG indicator</p><p>Close the case</p>"))
+    items = lis("<p>Check the detainee list.</p>",
+                f"<p>Use the table below to address wrongful detainee cases:</p>{t1}",
+                f"<p>If the taxpayer was a former detainee, use the table below:</p>{t2}")
+    store, doc, text, units, report = section_skeleton(tmp_path, items)
+    assert "Suspend the account for 60 days" not in text           # dropped by the extractor
+    steps = units[0].body["steps"]
+    by = {s["id"]: s for s in steps}
+    assert [s["type"] for s in steps] == ["instruction", "instruction", "instruction",
+                                         "condition", "instruction", "condition",
+                                         "instruction", "end"]
+    assert steps[2]["text"] == "If the taxpayer was a former detainee, use the table below:"
+    for c in (s for s in steps if s["type"] == "condition"):
+        action = by[c["next"][0]["to"]]
+        assert action["span"][0] > c["span"][0]
+        assert "90 days" in action["text"] if "is an open" in c["text"] else (
+            "Close the case" in action["text"])
+    assert [(d["kind"], d["reason"], d["text"]) for d in report["dropped"]] == [
+        ("row", "out_of_order", "Telephone call and an open collection issue,"),
+        ("row", "not_in_text", "Telephone call and no open collection issues,")]
+
+
+def test_a_missing_then_cell_does_not_take_the_next_row_s_action(tmp_path):
+    """The shape of IRM 21.4.1.4: row 2's Then cell is dropped, and its first line also
+    opens row 3's Then cell. Row 2 is dropped; row 3 keeps its condition and its action."""
+    table = if_table(("No, and the time frame has not been met.", "Do not research."),
+                     ("Yes, and the time frame has been met.",
+                      "<aside><p>Authenticate the taxpayer.</p></aside>"),
+                     ("Yes, but the application cannot help.",
+                      "<p>Authenticate the taxpayer. Then check the shared secrets.</p>"))
+    items = lis("<p>Ask the taxpayer whether they used the automated tools.</p>",
+                f"<p>Use the table:</p>{table}", "<p>Close the call.</p>")
+    store, doc, text, units, report = section_skeleton(tmp_path, items)
+    steps = units[0].body["steps"]
+    conds = [s for s in steps if s["type"] == "condition"]
+    by = {s["id"]: s for s in steps}
+    assert [c["condition"] for c in conds] == ["No, and the time frame has not been met.",
+                                               "Yes, but the application cannot help."]
+    assert by[conds[1]["next"][0]["to"]]["text"] == (
+        "Authenticate the taxpayer. Then check the shared secrets.")
+    assert [(d["kind"], d["reason"], d["text"]) for d in report["dropped"]] == [
+        ("row", "out_of_order", "Yes, and the time frame has been met.")]
+
+
+def test_a_later_anchor_s_text_inside_an_earlier_step_unseats_nothing(tmp_path):
+    """The shape of IRM 5.19.1.6.4.14: row 2's Then cell opens with "For NSIAs or PPIAs:",
+    which row 1's Then cell also holds. Bounding row 2's condition by the next anchor's first
+    match would drop it; placing the most anchors keeps every row."""
+    table = if_table(("The customer can fax the request,",
+                      "<p>Have the customer fax the form.</p><p>For NSIAs or PPIAs: send the "
+                      "letter.</p>"),
+                     ("The customer cannot fax the request,",
+                      "<p>For NSIAs or PPIAs:</p><p>mail the form.</p>"))
+    items = lis("<p>Offer a payroll deduction.</p>", f"<p>Use the table:</p>{table}",
+                "<p>Advise the taxpayer.</p>")
+    *_, units, report = section_skeleton(tmp_path, items)
+    steps = units[0].body["steps"]
+    assert [s["condition"] for s in steps if s["type"] == "condition"] == [
+        "The customer can fax the request,", "The customer cannot fax the request,"]
+    assert steps[3]["text"].startswith("Have the customer fax the form.")
+    assert steps[5]["text"].startswith("For NSIAs or PPIAs:") and "mail" in steps[5]["text"]
+    assert report["dropped"] == []
+
+
+def test_text_after_a_table_is_its_own_unconditional_step(tmp_path):
+    """The shape of IRM 5.19.1.3.2.4: a Reminder note after the paragraph's table is a step
+    of its own, entered from every exit of the table (each action and the last
+    "otherwise"), not part of the last row's action; the note's label, which the extractor
+    drops, is no anchor."""
+    table = if_table(("The case is assigned to a specific RO,", "Advise the taxpayer."),
+                     ("The case is assigned to a group,", "Transfer the call to the group."))
+    items = lis(f"<p>Refer to the following table to determine the appropriate action:</p>"
+                f'{table}<div class="note"><h3 class="title">Reminder:</h3><p>Inform the '
+                "taxpayer it is in their best interest to make payments.</p></div><p/>",
+                "<p>If any correspondence is received, forward it to the RO.</p>")
+    store, doc, text, units, report = section_skeleton(tmp_path, items)
+    assert "Reminder:" not in text
+    steps = units[0].body["steps"]
+    got = [(s["id"], s["type"], [(e["to"], e["guard"]) for e in s["next"]]) for s in steps]
+    assert got == [
+        ("s1", "instruction", [("s2", None)]),
+        ("s2", "condition", [("s3", "The case is assigned to a specific RO,"),
+                             ("s4", "otherwise")]),
+        ("s3", "instruction", [("s6", None)]),
+        ("s4", "condition", [("s5", "The case is assigned to a group,"), ("s6", "otherwise")]),
+        ("s5", "instruction", [("s6", None)]),
+        ("s6", "instruction", [("s7", None)]),
+        ("s7", "instruction", [("s8", None)]),
+        ("s8", "end", [])]
+    assert steps[4]["text"] == "Transfer the call to the group."
+    assert steps[5]["text"] == ("Inform the taxpayer it is in their best interest to make "
+                                "payments.")
+    assert report["dropped"] == []
+
+
+def test_text_between_two_tables_of_a_paragraph_is_a_step(tmp_path):
+    t1 = if_table(("The account is open,", "Hold it."))
+    t2 = if_table(("The letter is back,", "File it."))
+    items = lis(f"<p>Use table 1:</p>{t1}<p>Then use table 2:</p>{t2}", "<p>Close out.</p>")
+    *_, units, report = section_skeleton(tmp_path, items)
+    steps = units[0].body["steps"]
+    assert [(s["type"], s["text"]) for s in steps] == [
+        ("instruction", "Use table 1:"), ("condition", "The account is open,"),
+        ("instruction", "Hold it."), ("instruction", "Then use table 2:"),
+        ("condition", "The letter is back,"), ("instruction", "File it."),
+        ("instruction", "Close out."), ("end", "")]
+
+
+def test_a_procedure_whose_rows_are_all_dropped_is_listed(tmp_path):
+    """The shape of IRM 5.19.1.5.12.1: both Then cells are missing from the text."""
+    table = if_table(("The account has an open issue,", "<aside>Suspend it.</aside>"),
+                     ("The account has no open issue,", "<aside>Close it.</aside>"))
+    items = lis("<p>Check the account.</p>", f"<p>Use the table below:</p>{table}",
+                "<p>Record the action.</p>")
+    *_, units, report = section_skeleton(tmp_path, items)
+    assert [s["type"] for s in units[0].body["steps"]] == ["instruction"] * 3 + ["end"]
+    assert report["no_condition"] == [{"canonical_ref": "IRM 1.5.1",
+                                       "doc_id": units[0].doc_id,
+                                       "reason": "all 2 If/Then rows dropped (not_in_text 2)"}]
+
+
+def test_cc_command_codes_are_tool_calls(tmp_path):
+    """Ruling I4: "CC ENMOD" names a command code as "Command Code ENMOD" does; "cc 088"
+    (a closing code) and "CC ADD" (too short) do not."""
+    items = lis("<p>Research the module with CC TXMOD and CC ENMOD.</p>",
+                "<p>Input TC 290 with cc 088 and CC ADD fields.</p>",
+                "<p>Use Command Code (CC) ERINV to find the return.</p>",
+                "<p>Check the closing code with cc 088 only.</p>",
+                f"<p>Use the chart:</p>{if_table(('The code is 60,', 'Use CC STAUP.'))}")
+    *_, units, _ = section_skeleton(tmp_path, items)
+    got = [(s["type"], s["tool"]) for s in units[0].body["steps"]]
+    assert got == [("tool_call", "TXMOD"), ("tool_call", "TC 290"), ("tool_call", "ERINV"),
+                   ("instruction", None), ("instruction", None), ("condition", None),
+                   ("tool_call", "STAUP"), ("end", None)]
 
 
 # -- validation and branch paths --------------------------------------------------------------
@@ -542,6 +720,58 @@ def test_bench_procedure_units(units_store):
     assert validate_unit(load_unit_contracts()["procedure"], u) == []
     assert report["candidates"] == report["drawn"] == report["procedures"] == 1
     assert report["documents"] == 0 and report["sections"] == 0
+    assert report["if_items"] == {"conditions": 1, "no_action": 0}
+
+
+def test_bench_if_items_split_at_the_first_colon_or_comma(tmp_path):
+    """Review I3: the guard ends at the first ":" or "," followed by a space or the end of
+    the line, whichever comes first; with nothing after it on the line, the item's sub-items
+    (more indented, or bullets right under it at its own indent) are the action; an "If"
+    item with no action stays an instruction."""
+    md = bench_md("Queue Triage Runbook", "\n".join([
+        "1. If routed to SE consult: assign to SE queue, tag customer tier.",
+        "2. If the backlog grows, page the on-call at 10:30 or later.",
+        "3. If p99 is rising and queue depth is rising:",
+        "   - Scale the pool.",
+        "   - Shed batch traffic.",
+        "4. If single-link kernel regression",
+        "   - Open a kernel perf ticket.",
+        "5. If the cache is cold:",
+        "- Warm the cache.",
+        "- Recheck latency.",
+        "6. If in doubt ask the lead.",
+        "7. Close the incident.",
+        "",
+        "- A note list after a blank line, no part of step 7."]))
+    store, (doc,) = bench_store(tmp_path, [md])
+    text = store.text(doc)
+    b = bench_skeleton(store, doc)
+    conds = [(s.condition, next(t for t in b.steps if t.id == s.next[0].to).text)
+             for s in b.steps if s.type == "condition"]
+    assert conds == [
+        ("If routed to SE consult", "assign to SE queue, tag customer tier."),
+        ("If the backlog grows", "page the on-call at 10:30 or later."),
+        ("If p99 is rising and queue depth is rising", "Scale the pool.\n   - Shed batch traffic."),
+        ("If single-link kernel regression", "Open a kernel perf ticket."),
+        # bullets right under the item at its own indent are its sub-items
+        ("If the cache is cold", "Warm the cache.\n- Recheck latency.")]
+    assert [s.type for s in b.steps[-3:]] == ["instruction", "instruction", "end"]
+    assert b.steps[-3].text == "If in doubt ask the lead."
+    assert all(text[s.span[0]:s.span[1]] == s.text for s in b.steps[:-1])
+    assert all(s.text == s.condition for s in b.steps if s.type == "condition")
+    _, report = procedure_units(store, "bench", None)
+    assert b.steps[-2].text == "Close the incident."
+    assert report["if_items"] == {"conditions": 5, "no_action": 1}
+
+
+def test_bench_candidates_are_scanned_once(units_store, monkeypatch):
+    import adr_store.units.procedures as procedures_mod
+    calls = []
+    real = procedures_mod._bench_candidates
+    monkeypatch.setattr(procedures_mod, "_bench_candidates",
+                        lambda store: calls.append(1) or real(store))
+    procedure_units(units_store, "bench", None)
+    assert calls == [1]
 
 
 def test_step_types_and_flags_match_the_contract():

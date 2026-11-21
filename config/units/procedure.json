@@ -1,7 +1,7 @@
 {
   "type": "procedure",
   "version": 1,
-  "description": "A procedure: its steps from explicit structure (§5.3, §9)",
+  "description": "A procedure: its steps from explicit structure (§5.3, §9); a subprocedure step names the procedure it calls in subprocedure_ref, never in tool, and has no edge to it",
   "fields": [
     {
       "name": "when_to_use",
@@ -325,7 +325,14 @@
           "name": "tool",
           "type": "text",
           "nullable": true,
-          "description": "The system the step uses, e.g. a command code",
+          "description": "The system or command code the step uses (\"REQ77\", \"TC 971\"); null for other steps",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "subprocedure_ref",
+          "type": "text",
+          "nullable": true,
+          "description": "The procedure a subprocedure step calls (\"IRM 21.4.1.3.2\"); null for other steps",
           "spec_id": "procedure.steps@1"
         },
         {
