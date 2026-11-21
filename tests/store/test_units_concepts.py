@@ -3,13 +3,17 @@
 under `tmp_path`; nothing reads `data/` or `.cache/`."""
 
 import pytest
+from lxml import etree
 
 from adr_eval.corpora.gov import ecfr_url
 from adr_store.tables.parse import base_key
+from adr_store.units import concepts as concepts_mod
+from adr_store.units import ecfr as ecfr_mod
 from adr_store.units.closure import RELATIONS, ClosureEntry, closure
 from adr_store.units.concepts import (
     DEFINING,
     Definition,
+    concept_census,
     concepts,
     ecfr_definitions,
     hidden_labels,
@@ -83,6 +87,7 @@ SCOPES_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <P>(e) <I>Escort vessel</I> means any Coast Guard vessel.</P>
 <P>(f) <I>Escort vessel</I> means any Coast Guard vessel on patrol.</P>
 <P>(g) The term <I>vessel</I>, as used in this section, means any watercraft.</P>
+<P>(h) As used in this part, <I>harbor</I> means a sheltered water.</P>
 </DIV8>
 </DIV6>
 </DIV5>
@@ -153,7 +158,8 @@ def test_scope_words_subpart_paragraph_lead_in_and_defining_phrases(tmp_path):
         ("Master", "section", "33 CFR 165.21"),                        # "includes"; no words
         ("pilot", "section", "33 CFR 165.21"),                         # italic, then "means"
         ("Escort vessel", "section", "33 CFR 165.21"),
-        ("Escort vessel", "section", "33 CFR 165.21")]
+        ("Escort vessel", "section", "33 CFR 165.21"),
+        ("harbor", "part", "33 CFR part 165")]                         # "As used in this part"
     two =[d for d in ecfr_definitions(store, doc) if d.term in ("Escorted vessel",
                                                                   "escort zone")]
     # a definition runs through the next defined term of its paragraph
@@ -294,7 +300,10 @@ def test_irm_acronym_tables_by_section_title_or_header(tmp_path, monkeypatch):
     # the extractor keeps every row here; drop one from the text to see it left out
     full = full.replace("| ZZZ | A row the text does not hold | \n", "")
     monkeypatch.setattr(type(store), "text", lambda self, doc_id: full)
-    ds = irm_acronyms(store, d)
+    misses = []
+    ds = irm_acronyms(store, d, misses)
+    assert misses == [{"doc_id": d, "where": "5.19.1.1.6 Acronyms", "reason": "row_not_found",
+                       "detail": "ZZZ | A row the text does not hold"}]       # review M2
     # a table under an "Acronyms" section title counts whatever its header ("ABBREVIATIONS");
     # the expansion is its first line, cut at ": "; a row the text lacks is left out; the
     # "Name | Phone" table of another section is not an acronyms table
@@ -330,6 +339,8 @@ def test_long_forms(text, found):
     ("Homeland Security in (HS)", []),                    # the word before must be used
     ("see the table (A)", []),                            # one letter is no abbreviation
     ("Regulated\nNavigation Area (RNA)", [("Regulated\nNavigation Area", "RNA")]),
+    ("before (BA) and after (AA)", []),                   # a stop word never begins it
+    ("the Onion Router (TOR)", []),                       # not even as a letter
 ])
 def test_long_form_rules(text, found):
     assert [(a, b) for a, b, _, _ in long_forms(text)] == found
@@ -548,6 +559,20 @@ LEAD_IN_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <HEAD>&#xA7; 165.30 Security zones.</HEAD>
 <P>(a) <I>Credential</I> means a card issued by the Captain of the Port.</P>
 <P>(b) No person may enter a security zone without a credential.</P>
+<P>(c) A vessel shall stop when hailed by the Coast Guard.</P>
+</DIV8>
+</DIV6>
+<DIV6 N="G" TYPE="SUBPART">
+<HEAD>Subpart G&#8212;Protection of Naval Vessels</HEAD>
+<DIV8 N="165.2015" TYPE="SECTION">
+<HEAD>&#xA7; 165.2015 Definitions.</HEAD>
+<P>The following definitions apply to this subpart:</P>
+<P><I>Official patrol</I> means those persons designated by the Navy.</P>
+<P><I>Vessel</I> means every description of watercraft used on water.</P>
+</DIV8>
+<DIV8 N="165.2020" TYPE="SECTION">
+<HEAD>&#xA7; 165.2020 Enforcement.</HEAD>
+<P>(a) A vessel shall stop when hailed by the official patrol.</P>
 </DIV8>
 </DIV6>
 </DIV5>
@@ -567,7 +592,9 @@ def test_a_lead_in_scopes_the_section_and_or_forms_give_alternate_labels(tmp_pat
         ("Merchant mariner credential", ("MMC",), "33 CFR part 165"),
         ("Certain Dangerous Cargo", ("CDC",), "33 CFR part 165"),
         ("Reporting Unit", ("D9 CDCRU",), "33 CFR part 165"),
-        ("Credential", (), "33 CFR 165.30")]
+        ("Credential", (), "33 CFR 165.30"),
+        ("Official patrol", (), "33 CFR part 165, subpart G"),
+        ("Vessel", (), "33 CFR part 165, subpart G")]
     for x in ds:
         assert full[x.start:x.end] == x.text
     assert ds[2].text == "Certain Dangerous Cargo or (CDC) includes any of the following:"
@@ -581,3 +608,66 @@ def test_a_lead_in_scopes_the_section_and_or_forms_give_alternate_labels(tmp_pat
     linked, _ = link_concepts(cards, units, closure(cards, provs))
     b = card(linked, "33 CFR 165.30(b)", d)
     assert b.body["defined_terms"] == [cred["section"].unit_id, cred["part"].unit_id]
+
+
+def test_a_subpart_lead_in_scopes_its_terms_to_the_subpart(tmp_path):    # review M1
+    doc = _doc(LEAD_IN_XML, "xml", ECFR_NEW, ecfr_url(33, "165", ECFR_NEW))
+    store = uf.make_units_store(tmp_path / "lead", docs=[doc])
+    d = doc[0].doc_id
+    units = concepts(store, "gov", overlay_of(store))
+    (vessel,) = [u for u in units if u.canonical_ref.endswith(":vessel")]
+    # the real § 165.2015 shape: an unmarked "apply to this subpart:" lead-in, then unmarked
+    # italic terms
+    assert vessel.body["scope"] == {"kind": "subpart", "ref": "33 CFR part 165, subpart G"}
+    assert vessel.heading_path[:3] == ["33 CFR 165", "Subpart G", "§ 165.2015 Definitions."]
+    cards, provs = rule_cards(store, d, overlay_of(store))
+    linked, _ = link_concepts(cards, units, closure(cards, provs))
+    patrol = [u.unit_id for u in units if u.canonical_ref.endswith(":official patrol")]
+    # a card of subpart G links the sense; a card of subpart A that says "vessel" does not
+    assert card(linked, "33 CFR 165.2020(a)", d).body["defined_terms"] == [
+        vessel.unit_id, *patrol]
+    assert card(linked, "33 CFR 165.30(c)", d).body["defined_terms"] == []
+
+
+# -- what the sources cannot read is listed (review M2) ---------------------------------------
+
+def test_a_census_of_the_fixture_lists_no_misses(units_store):
+    census = concept_census(units_store, "gov")
+    # 117: two terms per version; 165: three statements; IRM: three rows
+    assert census == {"statements": 10, "terms": 9, "missed": [], "reasons": {}}
+
+
+def test_a_paragraph_whose_text_is_no_provision_is_listed(units_store, monkeypatch):
+    real = ecfr_mod.provisions
+
+    def changed(store, doc_id, misses=None):
+        return [p if p.provision_id != "33 CFR 117.4(p2)" else
+                type(p)(**{**p.__dict__, "text": p.text + " (changed)"})
+                for p in real(store, doc_id, misses)]
+
+    monkeypatch.setattr(ecfr_mod, "provisions", changed)
+    misses = []
+    ds = ecfr_definitions(units_store, DOC_117_NEW, misses)
+    assert ds == []        # the alignment stalls at 117.4(p2): nothing of § 117.4 is read
+    assert [(m["where"], m["reason"]) for m in misses] == [
+        ("33 CFR 117.4", "paragraph_unaligned"),          # "Drawbridge means …"
+        ("33 CFR 117.4", "paragraph_unaligned"),          # "Drawtender. means …"
+        ("33 CFR 117.4(p2)", "provision_unaligned"),
+        ("33 CFR 117.4(p3)", "provision_unaligned")]
+    assert misses[0]["doc_id"] == DOC_117_NEW
+    assert misses[0]["detail"].startswith("Drawbridge means a bridge")
+    census = concept_census(units_store, "gov")
+    assert census["reasons"] == {"paragraph_unaligned": 4, "provision_unaligned": 4}
+    assert len(census["missed"]) == 8                       # both 117 versions
+
+
+def test_an_italic_run_the_text_lacks_is_listed():
+    p = etree.fromstring(b"<P><I>Drawtender</I> means the person; <I>Draw</I> means it;"
+                         b" E<I>2</I> is a value.</P>")
+    lost = []
+    found = concepts_mod._candidates(
+        p, "Drawman means the person; Draw means it; E2 is a value.", lost)
+    # "Drawtender" is nowhere in the text: listed. "Draw" is not read inside "Drawman", and
+    # the subscript "2" stands only inside a word, so it cannot be a term: not listed
+    assert lost == ["Drawtender"]
+    assert [raw for _, _, raw, _ in found] == ["Draw"]

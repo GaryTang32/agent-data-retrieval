@@ -27,15 +27,16 @@ spec §5.3, §7, §8.3 `defines`, P9, P31; criterion D1's sources). Code only, n
   header cell is "Acronym(s)" or "Abbreviation(s)". Each body row gives the acronym (an
   alternate label) and the first line of its expansion, cut at ": " (the term). The row is
   located in the canonical text in document order (acronym, then the expansion's words; table
-  pipes or plain spaces between them); a row the text does not hold is left out. Scope: the
+  pipes or plain spaces between them); a row the text does not hold is left out and listed
+  (`misses`, `concept_census`); so is an eCFR paragraph that cannot be read. Scope: the
   chapter, kind `document` ("IRM 21.4.1"), since one stored document is one chapter.
 - **research and bench** (`long_forms` over every document's text): "Long Form (ABBR)" where
   the initials of the long form's words spell the abbreviation, case-insensitive. Stop words
-  `LONG_FORM_STOP` may be skipped inside the long form; a hyphenated word gives the initials
-  of its parts (stop-word parts optional, "state-of-the-art" for SOTA) or its first initial
-  alone; the word just before the parenthesis must be used; a trailing plural "s" of the
-  abbreviation ("LLMs") is not a letter. The long form never crosses `.,;:!?`, brackets,
-  quotes or a blank line. Scope: the document, ref `"<corpus>:<doc id>"`.
+  `LONG_FORM_STOP` may be skipped inside the long form but never begin it; a hyphenated word
+  gives the initials of its parts (stop-word parts optional, "state-of-the-art" for SOTA) or
+  its first initial alone; the word just before the parenthesis must be used; a trailing
+  plural "s" of the abbreviation ("LLMs") is not a letter. The long form never crosses
+  `.,;:!?`, brackets, quotes or a blank line. Scope: the document, ref `"<corpus>:<doc id>"`.
 
 **Units.** One `concept` per (term key, scope, document) (P31): `canonical_ref` is
 `concept:<scope ref>:<term key>`, the term key is `tables.parse.base_key` of the term. When a
@@ -76,7 +77,8 @@ from adr_store.units import ecfr
 from adr_store.units.closure import RELATIONS, ClosureEntry
 from adr_store.units.envelope import Unit, make_unit, text_sha12, unit_id
 
-__all__ = ["DEFINING", "LONG_FORM_STOP", "Definition", "concepts", "defines_entries",
+__all__ = ["DEFINING", "LONG_FORM_STOP", "Definition", "concept_census", "concepts",
+           "defines_entries",
            "ecfr_definitions", "hidden_labels", "irm_acronyms", "link_concepts", "long_forms",
            "scope_contains"]
 
@@ -164,7 +166,8 @@ def _spellings(word: str) -> set[str]:
 
 def _long_start(words: list[str], letters: str) -> int | None:
     """The index of the first word of the long form ending at `words[-1]` whose spellings give
-    `letters`, or None. Stop words may be skipped once a word has been used."""
+    `letters`, or None. Stop words may be skipped once a word has been used, and the first
+    word is never a stop word ("before (BA) and after (AA)" gives no "and after")."""
     stop = set(LONG_FORM_STOP)
     memo: dict[tuple[int, int, bool], int | None] = {}
 
@@ -177,7 +180,8 @@ def _long_start(words: list[str], letters: str) -> int | None:
         if key not in memo:
             found = None
             for s in sorted(_spellings(words[j]), key=lambda s: (-len(s), s)):
-                if len(s) <= n and letters[n - len(s):n] == s:
+                if len(s) <= n and letters[n - len(s):n] == s and not (
+                        n == len(s) and words[j].lower() in stop):  # no stop word first
                     found = go(j - 1, n - len(s), True)
                     if found is not None:
                         break
@@ -241,11 +245,25 @@ _OR_RUN = re.compile(r"\s+or\s+(\()?")
 _TRAILING_JOIN = re.compile(r"(?:[\s,;]|\band\b|\bor\b)+$")
 
 
-def _candidates(p: etree._Element, text: str) -> list[tuple[int, int, str, tuple[str, ...]]]:
+def _find_run(text: str, run: str, cursor: int) -> int:
+    """Where italic run `run` stands in `text` from `cursor`, not inside a longer word; -1
+    when nowhere."""
+    at = text.find(run, cursor)
+    while at >= 0:
+        j = at + len(run)
+        if not ((run[0].isalnum() and at > 0 and text[at - 1].isalnum())
+                or (run[-1].isalnum() and j < len(text) and text[j].isalnum())):
+            return at
+        at = text.find(run, at + 1)
+    return -1
+
+
+def _candidates(p: etree._Element, text: str, lost: list[str] | None = None
+                ) -> list[tuple[int, int, str, tuple[str, ...]]]:
     """The defined terms of paragraph `p` (extracted text `text`): (statement start, end of
     the term and its closing quote, raw term, alternate labels) in text order. Italic runs are
     found in order in the text; two runs "<I>Term</I> or (<I>ABBR</I>)" are one term with an
-    alternate label."""
+    alternate label. An italic run the text does not hold at all is appended to `lost`."""
     found: list[tuple[int, int, str, tuple[str, ...]]] = []
     cursor = 0
     for el in p.iter(*_ITALIC):
@@ -254,8 +272,12 @@ def _candidates(p: etree._Element, text: str) -> list[tuple[int, int, str, tuple
         run = " ".join("".join(el.itertext()).split())
         if not run:
             continue
-        at = text.find(run, cursor)
+        at = _find_run(text, run, cursor)
         if at < 0:
+            # a run found only inside a word ("E<I>2</I>", "f<I>i</I>le") is not a term: a
+            # term is followed by whitespace; a run found nowhere is lost
+            if lost is not None and text.find(run, cursor) < 0:
+                lost.append(run)
             continue
         cursor = at + len(run)
         if found and (gap := _OR_RUN.fullmatch(text, found[-1][1], at)):
@@ -298,7 +320,12 @@ def _last_words(text: str, end: int | None = None) -> re.Match | None:
     return found
 
 
-def _ecfr_found(store: Store, doc_id: str) -> list[_Found]:
+def _miss(misses: list | None, doc_id: str, where: str, reason: str, detail: str) -> None:
+    if misses is not None:
+        misses.append({"doc_id": doc_id, "where": where, "reason": reason, "detail": detail})
+
+
+def _ecfr_found(store: Store, doc_id: str, misses: list | None = None) -> list[_Found]:
     title, part = ecfr._part_of(store, doc_id)
     provs = ecfr.provisions(store, doc_id)
     by_section: dict[str, list[ecfr.Provision]] = {}
@@ -317,9 +344,18 @@ def _ecfr_found(store: Store, doc_id: str) -> list[_Found]:
         k = 0
         for el in div.iter("P"):
             t = extract_text(etree.tostring(el, with_tail=False), "xml")
-            if t and k < len(section) and section[k].text == t:
-                cands.append(_candidates(el, t))
+            if not t:
+                continue
+            if k < len(section) and section[k].text == t:
+                lost: list[str] = []
+                cands.append(_candidates(el, t, lost))
+                for run in lost:
+                    _miss(misses, doc_id, section[k].provision_id, "italic_run_not_found", run)
                 k += 1
+            elif _candidates(el, t):
+                _miss(misses, doc_id, f"{title} CFR {number}", "paragraph_unaligned", t[:80])
+        for prov in section[k:]:
+            _miss(misses, doc_id, prov.provision_id, "provision_unaligned", prov.text[:80])
         cands += [[] for _ in range(len(section) - len(cands))]
         for i, prov in enumerate(section):
             for j, (stmt, _, raw, pair) in enumerate(cands[i]):
@@ -360,10 +396,16 @@ def _scope(prov: ecfr.Provision, i: int, section: list[ecfr.Provision], cands: l
     return "section", f"{title} CFR {prov.section}"
 
 
-def ecfr_definitions(store: Store, doc_id: str) -> list[Definition]:
+def ecfr_definitions(store: Store, doc_id: str, misses: list | None = None
+                     ) -> list[Definition]:
     """The definition statements of eCFR document `doc_id` in document order, with their
-    scope (rules in the module docstring)."""
-    return [f.definition for f in _ecfr_found(store, doc_id)]
+    scope (rules in the module docstring). What could hold a definition but is not read is
+    appended to `misses` as `{doc_id, where, reason, detail}`: `italic_run_not_found` (an
+    italic run of a paragraph its text does not hold), `paragraph_unaligned` (a paragraph
+    with a candidate term whose text is no provision's: located paragraphs only, see
+    `ecfr.provisions(.., misses)`), `provision_unaligned` (a provision left without its
+    paragraph, so its definitions are not read)."""
+    return [f.definition for f in _ecfr_found(store, doc_id, misses)]
 
 
 # -- IRM acronym tables ------------------------------------------------------------------------
@@ -394,7 +436,7 @@ def _cells(tr) -> list[str]:
     return [c.text_content() for c in tr.xpath("./td | ./th")]
 
 
-def _irm_found(store: Store, doc_id: str) -> list[_Found]:
+def _irm_found(store: Store, doc_id: str, misses: list | None = None) -> list[_Found]:
     raw = (Path(store.path) / "blobs" / doc_id[:2] / doc_id).read_bytes()
     if hashlib.sha256(raw).hexdigest() != doc_id:
         raise ValueError(f"{doc_id[:12]}: the stored bytes are not the document's bytes")
@@ -429,6 +471,8 @@ def _irm_found(store: Store, doc_id: str) -> list[_Found]:
                        + r"\s+".join(map(re.escape, expansion.split())))
             m = re.compile(pattern).search(full, cursor)
             if m is None:
+                _miss(misses, doc_id, f"{number} {title}".strip(), "row_not_found",
+                      f"{acronym} | {expansion}"[:80])
                 continue
             cursor = m.end()
             term = _term(expansion.split(": ", 1)[0])
@@ -439,10 +483,11 @@ def _irm_found(store: Store, doc_id: str) -> list[_Found]:
     return out
 
 
-def irm_acronyms(store: Store, doc_id: str) -> list[Definition]:
+def irm_acronyms(store: Store, doc_id: str, misses: list | None = None) -> list[Definition]:
     """The rows of the acronym tables of IRM document `doc_id`, in document order, as
-    definitions scoped to the chapter (rules in the module docstring)."""
-    return [f.definition for f in _irm_found(store, doc_id)]
+    definitions scoped to the chapter (rules in the module docstring). A row the text does
+    not hold is appended to `misses` (reason `row_not_found`)."""
+    return [f.definition for f in _irm_found(store, doc_id, misses)]
 
 
 # -- long-form concepts of research and bench ------------------------------------------------
@@ -492,20 +537,37 @@ def scope_contains(scope_ref: str, ref: str, *, subpart: str | None = None) -> b
 
 # -- units -----------------------------------------------------------------------------------
 
-def _found(store: Store, corpus: str) -> list[_Found]:
+def _found(store: Store, corpus: str, misses: list | None = None) -> list[_Found]:
     if corpus == "gov":
         irm = sorted(d for d in store.doc_ids() if ap.family_of(store.source(d).uri) == "irm")
-        return ([f for d in ecfr.ecfr_docs(store) for f in _ecfr_found(store, d)]
-                + [f for d in irm for f in _irm_found(store, d)])
+        return ([f for d in ecfr.ecfr_docs(store) for f in _ecfr_found(store, d, misses)]
+                + [f for d in irm for f in _irm_found(store, d, misses)])
     return [f for d in store.doc_ids() for f in _long_form_found(store, d, corpus)]
 
 
-def concepts(store: Store, corpus: str, overlay: Applicability | None) -> list[Unit]:
+def concept_census(store: Store, corpus: str) -> dict:
+    """What the concept sources of `corpus` read and what they could not: the statements
+    (definitions, acronym rows, long forms), the distinct (document, term key) pairs, every
+    miss (`ecfr_definitions`, `irm_acronyms`) sorted by (document, where, reason, detail),
+    and the misses per reason. A clean build shows `missed: []`."""
+    misses: list[dict] = []
+    found = _found(store, corpus, misses)
+    misses.sort(key=lambda m: (m["doc_id"], m["where"], m["reason"], m["detail"]))
+    reasons: dict[str, int] = {}
+    for m in misses:
+        reasons[m["reason"]] = reasons.get(m["reason"], 0) + 1
+    return {"statements": len(found),
+            "terms": len({(f.definition.doc_id, f.definition.term_key) for f in found}),
+            "missed": misses, "reasons": dict(sorted(reasons.items()))}
+
+
+def concepts(store: Store, corpus: str, overlay: Applicability | None,
+             misses: list | None = None) -> list[Unit]:
     """The concept units of `corpus` in `store`, sorted by unit id: eCFR definitions and IRM
     acronym rows for gov, long forms of every document otherwise; one unit per (term key,
-    scope, document)."""
+    scope, document). Misses of the sources are appended to `misses` (`concept_census`)."""
     groups: dict[tuple[str, str, str], list[_Found]] = {}
-    for f in _found(store, corpus):
+    for f in _found(store, corpus, misses):
         d = f.definition
         if d.term_key:
             groups.setdefault((d.doc_id, d.scope_ref, d.term_key), []).append(f)
