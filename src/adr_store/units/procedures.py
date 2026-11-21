@@ -171,8 +171,9 @@ def validate_ir(body: ProcedureBody) -> list[str]:
     """The problems of `body`'s step graph (§9.1), empty when it is valid: one start (the
     first step; any other step without a predecessor is a second start), every step
     reachable from it, a successor for every non-`end` step and none for an `end` step, no
-    `next` naming a missing step, guards only on condition steps, unique step ids, and a
-    `when_to_use` value of at most `WHEN_TO_USE_MAX` characters."""
+    `next` naming a missing step, guards only on condition steps and never empty or blank
+    (a ruling of the Task 5 review, M1), unique step ids, and a `when_to_use` value of at
+    most `WHEN_TO_USE_MAX` characters."""
     problems = []
     value = body.when_to_use.get("value")
     if isinstance(value, str) and len(value) > WHEN_TO_USE_MAX:
@@ -192,6 +193,8 @@ def validate_ir(body: ProcedureBody) -> list[str]:
                 problems.append(f"{s.id}: next {e.to} does not exist")
             if e.guard is not None and s.type != "condition":
                 problems.append(f"{s.id}: guard on a non-condition step")
+            if e.guard is not None and not e.guard.strip():
+                problems.append(f"{s.id}: empty guard")
         if s.type == "end" and s.next:
             problems.append(f"{s.id}: end step has a successor")
         if s.type != "end" and not s.next:

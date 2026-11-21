@@ -603,6 +603,16 @@ def test_validate_ir_more_problems():
                             step("s3", "end"))) == []
 
 
+def test_validate_ir_refuses_empty_guards():
+    """Fix round 1 of Task 5 (M1): a guard that is empty or only whitespace is a problem."""
+    for guard in ["", "  \n"]:
+        b = body(step("s1", "condition", nxt=[("s2", guard), ("s2", "otherwise")]),
+                 step("s2", "end"))
+        assert validate_ir(b) == ["s1: empty guard"]
+    assert validate_ir(body(step("s1", "condition", nxt=[("s2", "If"), ("s2", "otherwise")]),
+                            step("s2", "end"))) == []
+
+
 def test_branch_paths_one_per_condition_outcome():
     b = body(step("s1", nxt=[("s2", None)]),
              step("s2", "condition", nxt=[("s3", "late"), ("s4", "otherwise")]),
