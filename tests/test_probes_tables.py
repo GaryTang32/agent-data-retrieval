@@ -49,6 +49,36 @@ def public(tmp_path):
     return make(tmp_path / "public", rules=PUBLIC_RULES)
 
 
+@pytest.fixture
+def three_b(tmp_path, monkeypatch):
+    """`built` with the extraction (3B) tables too: built through the model profile "gen"
+    (a cached stub of the fixture's first-pass replies, `runner.make_client` patched for every
+    profile) and promoted. (store, the replies the stub computed: one per uncached call)."""
+    from adr_eval import runner
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+    from adr_store.tables.build import build_tables
+    from adr_store.tables.gate import gate
+    from tests.store.tables_fixtures import fixture_reply
+
+    replies: list[str] = []
+
+    def reply(system, user, repeat):
+        replies.append(user)
+        return fixture_reply(system, user, repeat)
+
+    def make_client(name, profiles, cache, max_retries=5):
+        return CachedStubClient(f"stub-{name}", Cache(tmp_path / "llm"), reply)
+
+    monkeypatch.setattr(runner, "make_client", make_client)
+    store = make(tmp_path / "store3b", tables=False)
+    tables_id = build_tables(store.path, "gov", with_extraction=True, generator_profile="gen",
+                             max_calls=100).tables_id
+    assert gate(store.path, tables_id, [], 0).promoted
+    assert replies   # the store's own build made the calls; later builds must read the cache
+    return store, replies
+
+
 def leaking_view_databases(monkeypatch):
     """`ViewDB.build` ignoring the admitted documents: every caller's database holds every
     row (a planted leak)."""
@@ -135,6 +165,91 @@ def test_a_leaking_error_is_caught(built, monkeypatch, tmp_path):
     leaking_view_databases(monkeypatch)
     results = tp.run_leaks(probes, built.path, tmp_path / "views", **kw(built, tmp_path))
     assert all(r.kinds["error_differs"] for r in results)
+
+
+# -- reference stores of a store with extraction (3B) tables ------------------------------------
+
+DRAWBRIDGE = ("drawbridge_sections", "drawbridge_bridges")
+
+
+def test_reference_stores_read_the_extraction_tables_from_the_cache(three_b, tmp_path):
+    """A reference store holds the view's documents alone, so its extraction tables come from
+    the same cached replies (the cache key covers the section text, not the store): the leak
+    probes on hidden drawbridge rows find no leak, and building the references calls nothing."""
+    from adr_store import handles
+    from adr_store.tables.overlay import load_manifest
+
+    store, replies = three_b
+    made = len(replies)
+    ctx = tp.table_context(store.path)
+    assert ctx.manifest.extraction is not None and set(DRAWBRIDGE) <= set(ctx.contracts)
+    probes = tp.leak_probes(store.path, "gov", sizes=SMALL)
+    assert {p.target["table"] for p in probes} & set(DRAWBRIDGE)   # hidden drawbridge rows
+    refs = tp.References(ctx, tmp_path / "views", generator="gen", **kw(store, tmp_path))
+    results = tp.run_leaks(probes, store.path, tmp_path / "views", refs=refs,
+                           **kw(store, tmp_path))
+    assert all(r.valid for r in results), [r.note for r in results if not r.valid]
+    assert not any(r.leak for r in results), [(r.probe_id, r.kinds) for r in results if r.leak]
+    for v in refs.views:   # every view's reference, with and without eCFR documents
+        refs.path_of(v)
+    assert len(replies) == made   # zero calls: every reference read the cache
+    ecfr = {d for d in store.doc_ids() if store.source(d).format == "xml"}
+    with_ecfr = 0
+    for info in refs.info:
+        path = tmp_path / "views" / info["path"]
+        m = load_manifest(path, handles.tables_head(path, Store.open(path).snapshot_id))
+        assert m.extraction == ctx.manifest.extraction
+        assert set(DRAWBRIDGE) <= {t.table for t in m.tables}
+        assert "extraction from the cache" in info["how"]
+        with_ecfr += bool(ecfr & set(Store.open(path).doc_ids()))
+    assert 0 < with_ecfr < len(refs.info)
+
+
+def test_equivalence_on_extraction_tables_compares_drawbridge_calls(three_b, tmp_path):
+    store, replies = three_b
+    made = len(replies)
+    rows = tp.equivalence(store.path, "gov", tmp_path / "views", gold=GOLD, generator="gen",
+                          **kw(store, tmp_path))
+    assert rows and all(r["identical"] for r in rows), [r for r in rows if not r["identical"]]
+    assert any(r["query_id"].startswith("count_by:drawbridge_") for r in rows)
+    assert len(replies) == made
+
+
+def test_a_reference_cache_miss_stops_the_run_without_a_call(three_b, tmp_path):
+    """Ruling P21 with `max_calls=0`: a reply missing from the cache (here: another profile,
+    so other cache keys) stops the reference build with BudgetExceeded and calls nothing."""
+    from adr_eval.pipeline import BudgetExceeded
+
+    store, replies = three_b
+    made = len(replies)
+    ctx = tp.table_context(store.path)
+    refs = tp.References(ctx, tmp_path / "views", generator="other", **kw(store, tmp_path))
+    ecfr = {d for d in store.doc_ids() if store.source(d).format == "xml"}
+    view = next(v for v in refs.views if ecfr <= v.docs)
+    with pytest.raises(BudgetExceeded):
+        refs.path_of(view)
+    assert len(replies) == made
+    # a view without eCFR documents needs no reply, but its tables would record another
+    # model than the store's: refused, never compared
+    other = next(v for v in refs.views if not ecfr & v.docs)
+    with pytest.raises(ValueError, match="extraction"):
+        refs.path_of(other)
+    assert len(replies) == made
+
+
+def test_reference_stores_of_a_store_without_extraction_resolve_no_generator(
+        built, tmp_path, monkeypatch):
+    from adr_eval import runner
+
+    def no_client(*a, **k):
+        raise AssertionError("a metadata-only reference must not build a model client")
+
+    monkeypatch.setattr(runner, "make_client", no_client)
+    refs = tp.References(tp.table_context(built.path), tmp_path / "views",
+                         **kw(built, tmp_path))
+    path = refs.path_of(refs.views[0])
+    assert "extraction" not in refs.info[0]["how"]
+    assert not any(t.table in DRAWBRIDGE for t in tp.table_context(path).manifest.tables)
 
 
 # -- the SQL guard -------------------------------------------------------------------------------
@@ -278,6 +393,50 @@ def test_applicability_probes_pass(built):
     assert {r["as_of"] for r in rows if r["as_of"]} <= dates
 
 
+def test_applicability_probes_on_the_drawbridge_tables(three_b):
+    """Default and `as_of` queries on the drawbridge tables return rows of the version in force
+    only: every version's first day and the day before it are among the dates, so each
+    version is selected by `as_of` and none before the first."""
+    from datetime import date, timedelta
+
+    from adr_store import applicability as ap
+
+    store, _ = three_b
+    rows = tp.applicability_probes(store.path, tables=(FR, *DRAWBRIDGE), clock=lambda: NOW)
+    assert len(rows) == 3 * 51 and all(r["pass"] for r in rows), \
+        [r for r in rows if not r["pass"]]
+    assert rows[:51] == tp.applicability_probes(store.path, clock=lambda: NOW)   # FR unchanged
+    ctx = tp.table_context(store.path)
+    overlay = ap.load_overlay(store.path, ctx.store.snapshot_id, ctx.manifest.applicability)
+    ecfr = sorted((d for d in store.doc_ids() if store.source(d).format == "xml"),
+                  key=lambda d: overlay.records[d].valid_from)
+    starts = [overlay.records[d].valid_from for d in ecfr]
+    for t in DRAWBRIDGE:
+        mine = [r for r in rows if r["table"] == t]
+        assert len(mine) == 51 and sum(r["as_of"] is None for r in mine) == 1
+        assert all(r["versions"] <= 1 for r in mine)
+        dates = {r["as_of"] for r in mine if r["as_of"]}
+        for s in starts:
+            assert s.isoformat() in dates and (s - timedelta(days=1)).isoformat() in dates
+        by_date = {r["as_of"]: r for r in mine}
+        assert by_date[(starts[0] - timedelta(days=1)).isoformat()]["rows"] == 0
+        for d, s in zip(ecfr, starts, strict=True):   # each version alone, on its first day
+            r = by_date[s.isoformat()]
+            assert r["rows"] == sum(x.doc_id == d for x in ctx.rows[t]) > 0
+        default = by_date[None]   # the version in force now: the newest
+        assert default["rows"] == sum(x.doc_id == ecfr[-1] for x in ctx.rows[t])
+        assert all(date.fromisoformat(r["as_of"]) for r in mine if r["as_of"])
+
+
+def test_applicability_probes_catch_drawbridge_rows_of_superseded_versions(three_b,
+                                                                           monkeypatch):
+    store, _ = three_b
+    leaking_view_databases(monkeypatch)
+    rows = tp.applicability_probes(store.path, tables=DRAWBRIDGE, clock=lambda: NOW)
+    assert not all(r["pass"] for r in rows)
+    assert any(r["versions"] > 1 for r in rows)
+
+
 def test_applicability_probes_catch_rows_of_documents_not_in_force(built, monkeypatch):
     leaking_view_databases(monkeypatch)
     rows = tp.applicability_probes(built.path, clock=lambda: NOW)
@@ -406,3 +565,38 @@ def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys, monkeypatc
     assert any("reused" in v["how"] for v in summary["config"]["views"])
     assert not (tmp_path / "views").exists()   # reference stores removed without --keep-views
     assert main(["probes", "tables-leak", "tools", *common]) == 2
+
+
+def test_the_cli_probes_the_drawbridge_tables_with_the_generator(three_b, tmp_path, capsys):
+    store, replies = three_b
+    made = len(replies)
+    directory, policy = config_of(store)
+    acl.sync(store.path, directory, policy)   # the real clock: the CLI's tools read it
+    out = tmp_path / "runs"
+    common = ["--store", str(store.path), "--directory", str(directory), "--policy",
+              str(policy), "--views", str(tmp_path / "views"), "--out", str(out)]
+    assert main(["probes", "tables-applicability", "gov", *common, "--tables", FR,
+                 *DRAWBRIDGE]) == 0
+    assert main(["probes", "tables-leak", "gov", *common, "--per-family", "2",
+                 "--generator", "gen"]) == 0
+    assert main(["probes", "tables-equivalence", "gov", *common, "--gold", str(GOLD),
+                 "--generator", "gen"]) == 0
+    capsys.readouterr()
+    assert len(replies) == made
+    (d,) = out.glob("probes-tables-applicability-gov-*")
+    summary = json.loads((d / "summary.json").read_text())
+    assert summary["summary"]["total"]["n"] == 153
+    assert summary["summary"]["tables"] == sorted([FR, *DRAWBRIDGE])
+    assert set(summary["summary"]["by_table"]) == {FR, *DRAWBRIDGE}
+    assert summary["logs"]["statements_checked"] == 3 and summary["logs"]["total"]["complete"]
+    for kind in ("leak", "equivalence"):
+        (d,) = out.glob(f"probes-tables-{kind}-gov-*")
+        summary = json.loads((d / "summary.json").read_text())
+        assert summary["config"]["generator"] == "gen", kind
+        assert all("extraction from the cache" in v["how"] for v in summary["config"]["views"])
+    (d,) = out.glob("probes-tables-leak-gov-*")
+    summary = json.loads((d / "summary.json").read_text())
+    assert summary["summary"]["total"]["leaks"] == 0
+    assert set(summary["summary"]["targets_by_table"]) & set(DRAWBRIDGE)
+    # an unknown table is refused before any probe runs
+    assert main(["probes", "tables-applicability", "gov", *common, "--tables", "nope"]) == 2

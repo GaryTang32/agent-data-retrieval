@@ -6,7 +6,13 @@ calls, run through `adr_store.tools.Tools` with the ACL layer, as the Phase 2 pr
 **Reference stores** (`References`). A view's reference store is the Phase 2 one
 (`equivalence.ensure_view_store`: the view's documents alone, re-ingested, its own overlays,
 index and ACL sync from the same directory and policy) with its tables built (`build_tables`)
-and promoted (`gate(..., [], 0)`), built or reused under a root directory at `<view[:12]>`. A
+and promoted (`gate(..., [], 0)`), built or reused under a root directory at `<view[:12]>`.
+When the store's tables hold the extraction (3B) tables, the reference's do too: built with
+`with_extraction=True` from the cached first-pass replies of the generator profile (default: the
+configured generator) with `max_calls=0`. The cache key covers adapter, model, prompt, section
+text and token cap, not the store, so a reference that holds a subset of the documents hits the
+same replies for the sections it has; a reply not cached stops the run (BudgetExceeded, ruling
+P21) and extraction tables recorded as coming from anything else than the store's are refused. A
 store whose corpus has no tables (bench, the tools store) gets a bare reference: the view's
 documents re-ingested and the ACL synced, nothing else (a table tool refuses on both before it
 reads anything an index or overlay would give).
@@ -78,12 +84,15 @@ show nothing of the target; "no entry" (an attribute rule mapping the target's u
 which must change that document's access alone) gives the same result as a call naming a key
 no row holds, and `describe_tables` names nothing of the target.
 
-**Applicability** (`applicability_probes`): per table, the default filters and `n` (50) `as_of`
-dates drawn by seeded hash from the `fr_documents` publication dates (cycled when there are
-fewer), as `user:auditor`. Every document returned (by the lookup and by
+**Applicability** (`applicability_probes`): per table (`fr_documents`, and the drawbridge
+tables `drawbridge_sections` and `drawbridge_bridges` once they exist), the default filters and
+`n` (50) `as_of` dates drawn by seeded hash from the `fr_documents` publication dates (cycled
+when there are fewer), as `user:auditor`; for a table with rows of versioned documents (the
+drawbridge tables: the eCFR chain) each version's first day in force and the day before it
+come first (`applicability_dates`). Every document returned (by the lookup and by
 `SELECT _doc_id, count(*) … GROUP BY _doc_id`) must be one the filters admit
-(`applicability.admits`) among the caller's view, and the counts must equal the rows of the
-admitted documents.
+(`applicability.admits`) among the caller's view, the counts must equal the rows of the
+admitted documents, and at most one version of a chain may be returned (the version in force).
 
 **Log scan** (`scan_table_log`, S3, B5 for tables): every line has `REQUIRED`; every line of a
 table tool has the key `tables`; an allowed line has a non-null `RESOLVED` and, for a table tool,
@@ -349,14 +358,17 @@ def bare_reference(src: Store, doc_ids: Iterable[str], dst: Path, *, directory: 
 class References:
     """The reference store of each view of `ctx`'s ACL snapshot, built or reused under `root`
     on first use (module docstring); `path_for(caller)` is the caller's (None outside the
-    directory). `info` records what each holds."""
+    directory). `info` records what each holds. `generator` names the model profile whose
+    cached replies give the extraction tables (None: the configured generator); a store
+    without extraction tables resolves none."""
 
     def __init__(self, ctx: TableContext, root: Path, *, directory: Path = acl.DIRECTORY_PATH,
                  policy: Path = acl.POLICY_PATH, emb_cache: Path = DEFAULT_EMB_CACHE,
-                 clock: Callable = acl.utc_now):
+                 clock: Callable = acl.utc_now, generator: str | None = None):
         self.ctx, self.root = ctx, Path(root)
         self.directory, self.policy, self.emb_cache, self.clock = \
             directory, policy, emb_cache, clock
+        self.generator = generator   # the extraction's model profile (None: the configured)
         self.views = eq.views(ctx.snap)
         self._view_of = {u: v for v in self.views for u in v.users}
         self._paths: dict[str, Path] = {}
@@ -380,16 +392,38 @@ class References:
                                               emb_cache=self.emb_cache,
                                               directory=self.directory, policy=self.policy,
                                               clock=self.clock)
-            if handles.tables_head(path, store.snapshot_id) is None:
-                tables_id = build_tables(path, self.ctx.corpus).tables_id
+            want = self.ctx.manifest.extraction
+            head = handles.tables_head(path, store.snapshot_id)
+            if head is None or load_manifest(path, head).extraction != want:
+                tables_id = self._build_tables(path, want)
                 if not gate(path, tables_id, [], 0).promoted:
                     raise ValueError(f"{path}: the reference tables were not promoted")
-                how += ", tables built"
+                how += ", tables built" + ("" if want is None
+                                           else " with extraction from the cache")
         self._paths[v.view] = path
         self.offsets[path] = log_size(log_path(path))   # where this run's log lines begin
         self.info.append({**v.summary(), "path": path.name, "how": how,
                           "tables": handles.tables_head(path, Store.open(path).snapshot_id)})
         return path
+
+    def _build_tables(self, path: Path, want: dict | None) -> str:
+        """The reference's tables id: the metadata and entity tables, and when the store's
+        tables hold extraction tables (`want`: their manifest entry) those too, from the
+        cached first-pass replies of `self.generator` with a budget of zero calls (a reply
+        not cached stops the run, BudgetExceeded, ruling P21). Extraction tables that would
+        come from anything else than the store's (another adapter, model, prompt or specs)
+        are refused (ValueError)."""
+        if want is None:
+            return build_tables(path, self.ctx.corpus).tables_id
+        tables_id = build_tables(path, self.ctx.corpus, with_extraction=True,
+                                 generator_profile=self.generator, max_calls=0).tables_id
+        got = load_manifest(path, tables_id).extraction
+        if got != want:
+            diff = sorted(k for k in {*want, *got} if want.get(k) != got.get(k))
+            raise ValueError(f"{path}: the reference's extraction tables differ from the "
+                             f"store's in {', '.join(diff)} (pass the generator profile the "
+                             f"store's extraction used)")
+        return tables_id
 
     def log_scans(self, statements: Iterable[str] = ()) -> dict:
         """`scan_table_log` of each reference store's log since it was first used here."""
@@ -625,13 +659,14 @@ def check_leak(probe: Probe, tools_for: Callable, reference_for: Callable, *,
 def run_leaks(probes: list[Probe], store_path: Path, views_root: Path, *,
               directory: Path = acl.DIRECTORY_PATH, policy: Path = acl.POLICY_PATH,
               emb_cache: Path = DEFAULT_EMB_CACHE, clock: Callable = acl.utc_now,
-              refs: References | None = None) -> list[ProbeResult]:
+              refs: References | None = None, generator: str | None = None
+              ) -> list[ProbeResult]:
     """Run the leak probes, one caller's `Tools` at a time, against the reference stores
     under `views_root` (built or reused on first use; `refs` to share them), in probe order.
     The store's ACL is re-synced when it nears its freshness limit."""
     ctx = table_context(store_path)
     refs = refs or References(ctx, views_root, directory=directory, policy=policy,
-                              emb_cache=emb_cache, clock=clock)
+                              emb_cache=emb_cache, clock=clock, generator=generator)
     out: dict[str, ProbeResult] = {}
     for caller in sorted({p.caller for p in probes}, key=str):
         ref_path = refs.path_for(caller)
@@ -924,7 +959,11 @@ CATEGORICAL = {
             ("fr_documents", "agency"), ("fr_documents", "title_state"),
             ("fr_agencies", "name"), ("fr_cfr_refs", "cfr_part"), ("fr_dockets", "docket_id"),
             ("agencies", "display_name"), ("cfr_parts", "display_name"),
-            ("dockets", "display_name"), ("waterways", "display_name")],
+            ("dockets", "display_name"), ("waterways", "display_name"),
+            # the extraction (3B) tables, in the pool only when the store's tables hold them
+            ("drawbridge_sections", "state"), ("drawbridge_sections", "seasonal"),
+            ("drawbridge_sections", "vhf_channel"), ("drawbridge_bridges", "state"),
+            ("drawbridge_bridges", "notice_hours"), ("drawbridge_bridges", "opens_on_signal")],
     "research": [("papers", "topic"), ("papers", "type"), ("papers", "status"),
                  ("papers", "relevance"), ("papers", "research"), ("papers", "year"),
                  ("papers", "venue_id"), ("papers", "license"), ("paper_authors", "et_al"),
@@ -991,12 +1030,12 @@ def equivalence(store_path: Path, corpus: str, views_root: Path, n_queries: int 
                 seed: int = SEED3, *, gold: Path | None = None,
                 directory: Path = acl.DIRECTORY_PATH, policy: Path = acl.POLICY_PATH,
                 emb_cache: Path = DEFAULT_EMB_CACHE, clock: Callable = acl.utc_now,
-                refs: References | None = None) -> list[dict]:
+                refs: References | None = None, generator: str | None = None) -> list[dict]:
     """Table equivalence (module docstring): one row per call per view, in view order, with
     `identical`, the outcome and, when they differ, where (no content)."""
     ctx = table_context(store_path)
     refs = refs or References(ctx, views_root, directory=directory, policy=policy,
-                              emb_cache=emb_cache, clock=clock)
+                              emb_cache=emb_cache, clock=clock, generator=generator)
     rows: list[dict] = []
     if corpus not in TABLE_CORPORA:
         if ctx.tables_id is not None:
@@ -1261,28 +1300,49 @@ def applicability_statement(table: str) -> str:
     return f"SELECT _doc_id, count(*) FROM {_q(table)} GROUP BY _doc_id"
 
 
-def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_documents",),
-                         n: int = 50, seed: int = SEED3, *, caller: str = "user:auditor",
-                         clock: Callable = acl.utc_now) -> list[dict]:
-    """Per table, the default filters and `n` `as_of` dates (module docstring); one row per
-    probe: the rows and documents returned, those expected, and pass. (The drawbridge tables
-    join `tables` once they exist.)"""
-    ctx = table_context(store_path)
-    if ctx.tables_id is None or ctx.manifest.applicability is None:
-        raise ValueError(f"{store_path}: no current tables with an applicability overlay")
-    overlay = ap.load_overlay(store_path, ctx.store.snapshot_id, ctx.manifest.applicability)
+def applicability_dates(ctx: TableContext, overlay, table: str, n: int,
+                        seed: int = SEED3) -> list[str]:
+    """The `n` `as_of` dates of `table`'s probes: the `fr_documents` publication dates in
+    seeded hash order (cycled when there are fewer); for a table with rows of versioned
+    documents (a chain: the drawbridge tables) first each version's first day in force and the
+    day before it, so `as_of` selects every version and none before the first."""
     dates = sorted({r.row["publication_date"] for r in ctx.rows["fr_documents"]
                     if isinstance(r.row.get("publication_date"), str)})
     if not dates:
-        raise ValueError(f"{store_path}: no Federal Register publication dates")
+        raise ValueError(f"{ctx.store_path}: no Federal Register publication dates")
     order = sorted(dates, key=lambda d: (_h(seed, "as_of", d), d))
+    starts = sorted({overlay.records[d].valid_from for d in ctx.docs_of(table)
+                     if chain_of(ctx.store.source(d)) is not None
+                     and overlay.records[d].valid_from is not None})
+    first = sorted({x.isoformat() for s in starts for x in (s - timedelta(days=1), s)})
+    rest = [d for d in order if d not in first] or order
+    return [*first, *(rest[k % len(rest)] for k in range(max(0, n - len(first))))][:n]
+
+
+def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_documents",),
+                         n: int = 50, seed: int = SEED3, *, caller: str = "user:auditor",
+                         clock: Callable = acl.utc_now) -> list[dict]:
+    """Per table, the default filters and `n` `as_of` dates (`applicability_dates`, module
+    docstring); one row per probe: the rows and documents returned, those expected, the most
+    versions of one chain returned (`versions`; at most 1: the version in force only), and
+    pass."""
+    ctx = table_context(store_path)
+    if ctx.tables_id is None or ctx.manifest.applicability is None:
+        raise ValueError(f"{store_path}: no current tables with an applicability overlay")
+    unknown = [t for t in tables if t not in ctx.contracts]
+    if unknown:
+        raise ValueError(f"{store_path}: the current tables have no table "
+                         f"{', '.join(unknown)} (they have {', '.join(sorted(ctx.contracts))})")
+    overlay = ap.load_overlay(store_path, ctx.store.snapshot_id, ctx.manifest.applicability)
     seen = ctx.visible(caller)
+    chain = {d: chain_of(ctx.store.source(d)) for d in ctx.doc_ids}
     t = Tools(store_path, acl=True, caller=caller, clock=clock)
     rows = []
     for table in tables:
         key = ctx.contracts[table].key[0]
+        dates = applicability_dates(ctx, overlay, table, n, seed)
         for k in range(n + 1):
-            as_of = None if k == 0 else order[(k - 1) % len(order)]
+            as_of = None if k == 0 else dates[k - 1]
             f = ap.Filters() if as_of is None else ap.Filters(as_of=as_of)
             filters = {} if as_of is None else {"as_of": as_of}
             admitted = {d for d in seen if ap.admits(overlay.records[d], f)}
@@ -1299,11 +1359,13 @@ def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_docume
             got = Counter({r[0]: r[1] for r in per[1].rows}) if ok else Counter()
             looked = {r["doc_id"] for r in look[1].rows} if ok else set()
             outside = sorted((set(got) | looked) - admitted)
+            versions = max(Counter(chain.get(d) for d in set(got) | looked
+                                   if chain.get(d) is not None).values(), default=0)
             passed = (ok and not outside and got == want and count[1].count == sum(want.values())
-                      and not per[1].truncated)
+                      and not per[1].truncated and versions <= 1)
             rows.append({"probe_id": f"{table}:{k:03d}", "table": table, "as_of": as_of,
                          "rows": count[1].count if ok else None, "expected": sum(want.values()),
-                         "documents": len(got), "outside": len(outside),
+                         "documents": len(got), "outside": len(outside), "versions": versions,
                          "excluded": count[1].excluded_by_filter if ok else None,
                          "pass": passed})
     return rows
@@ -1315,7 +1377,17 @@ def summarize_applicability(rows: list[dict]) -> dict:
                       "default": sum(r["as_of"] is None for r in rows),
                       "outside": sum(r["outside"] for r in rows),
                       "dates": len({r["as_of"] for r in rows if r["as_of"]})},
-            "tables": sorted({r["table"] for r in rows})}
+            "tables": sorted({r["table"] for r in rows}),
+            "by_table": {t: {"n": sum(r["table"] == t for r in rows),
+                             "passed": sum(r["pass"] for r in rows if r["table"] == t),
+                             "as_of": sum(r["as_of"] is not None for r in rows
+                                          if r["table"] == t),
+                             "as_of_with_rows": sum(bool(r["rows"]) for r in rows
+                                                    if r["table"] == t and r["as_of"]),
+                             "outside": sum(r["outside"] for r in rows if r["table"] == t),
+                             "max_versions": max((r["versions"] for r in rows
+                                                  if r["table"] == t), default=0)}
+                         for t in sorted({r["table"] for r in rows})}}
 
 
 # -- the log scan (S3) -------------------------------------------------------------------------

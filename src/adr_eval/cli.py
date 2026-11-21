@@ -1096,8 +1096,12 @@ def _probes_tables(a: argparse.Namespace) -> int:
     kw = {"directory": a.directory, "policy": a.policy, "emb_cache": emb}
     root = Path(a.views) if a.views is not None else p2 / "views-tables" / a.corpus
     ctx = tp.table_context(a.store)
-    refs = tp.References(ctx, root, **kw)
+    refs = tp.References(ctx, root, generator=a.generator, **kw)
     cfg = {**_tables_config(a, a.store, a.corpus), "kind": a.kind, "seed": tp.SEED3}
+    if a.kind in ("tables-leak", "tables-equivalence") \
+            and ctx.manifest is not None and ctx.manifest.extraction is not None:
+        # the references' extraction tables come from this profile's cached replies
+        cfg["generator"] = a.generator or config["generator"]
     store_log = tp.log_path(a.store)
     offset = tp.log_size(store_log)
     statements: list[str] = []
@@ -1111,6 +1115,8 @@ def _probes_tables(a: argparse.Namespace) -> int:
         statements = [c["args"]["statement"] for p in probes for c in p.call["calls"]
                       if c["tool"] == "sql"]
         summary = tp.summarize_leaks(results)
+        summary["targets_by_table"] = dict(sorted(Counter(p.target["table"]
+                                                          for p in probes).items()))
         cfg["sizes"] = sizes or tp.LEAK_SIZES[a.corpus]
         probe_set["leak"] = [p.to_dict() for p in probes]
         rows = [r.to_dict() for r in results]
@@ -1180,15 +1186,23 @@ def _probes_tables(a: argparse.Namespace) -> int:
                      f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
                      for n, b in summary["conditions"].items()))
     elif a.kind == "tables-applicability":
-        rows = tp.applicability_probes(a.store, n=a.n or 50)
+        try:
+            rows = tp.applicability_probes(a.store, tuple(a.tables), n=a.n or 50)
+        except ValueError as e:
+            raise runner.RunError(str(e)) from e
         statements = [tp.applicability_statement(t) for t in sorted({r["table"] for r in rows})]
         summary = tp.summarize_applicability(rows)
+        cfg["tables_probed"] = list(a.tables)
         ok = summary["total"]["passed"] == summary["total"]["n"]
         head = (f"{summary['total']['n']} probes on {', '.join(summary['tables'])} "
                 f"({summary['total']['default']} default, {summary['total']['as_of']} as_of "
                 f"over {summary['total']['dates']} dates), {summary['total']['passed']} passed, "
                 f"{summary['total']['outside']} rows of documents not in force")
-        table = ""
+        table = ("| table | probes | passed | as_of | as_of with rows | rows outside | "
+                 "most versions returned |\n|---|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['passed']} | {b['as_of']} | "
+                     f"{b['as_of_with_rows']} | {b['outside']} | {b['max_versions']} |\n"
+                     for n, b in summary["by_table"].items()))
     else:   # tables-mcp
         return _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb)
     scans = {"store": tp.scan_table_log(store_log, offset, statements),
@@ -1243,7 +1257,8 @@ def _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb) -> int:
     for label, path in stores.items():
         if label not in contexts:
             contexts[label] = tp.table_context(path)
-            references[label] = tp.References(contexts[label], root.parent / label, **kw)
+            references[label] = tp.References(contexts[label], root.parent / label,
+                                              generator=a.generator, **kw)
         cfg_stores[label] = _tables_config(a, path, label)
         universe += [(label, p) for p in tp.leak_probes(path, label)]
     selected = tp.select_mcp(universe, a.n or tp.MCP_SUBSET)
@@ -1539,8 +1554,17 @@ def _parser() -> argparse.ArgumentParser:
                    help="tables-equivalence: the golden set whose count_filter gold queries "
                         "are drawn (default golden/<corpus>/v0.1)")
     p.add_argument("--n", type=int, default=None, metavar="N",
-                   help="tables-applicability: as_of dates (default 50); tables-mcp: probes "
-                        "through MCP (default 60)")
+                   help="tables-applicability: as_of dates per table (default 50); "
+                        "tables-mcp: probes through MCP (default 60)")
+    p.add_argument("--tables", nargs="+", default=["fr_documents"], metavar="TABLE",
+                   help="tables-applicability: the tables to probe (default fr_documents; "
+                        "with the extraction tables: fr_documents drawbridge_sections "
+                        "drawbridge_bridges)")
+    p.add_argument("--generator", metavar="PROFILE", default=None,
+                   help="tables-leak, tables-equivalence, tables-mcp on a store with "
+                        "extraction tables: the model profile whose cached replies build the "
+                        "reference stores' extraction tables, with zero calls (default: config "
+                        "generator)")
     p.add_argument("--also", action="append", default=None, metavar="CORPUS=PATH",
                    help="tables-mcp: another store whose leak probes join the universe")
     p.add_argument("--timeout", type=float, default=300.0,
