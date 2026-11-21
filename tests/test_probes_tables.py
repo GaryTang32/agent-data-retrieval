@@ -521,6 +521,71 @@ def test_scan_table_log_requires_tables_on_allowed_lines(tmp_path):
     assert tp.scan_table_log(ok, statements=[stmt])["complete"]
 
 
+def test_a_missing_log_is_not_complete(tmp_path):
+    scan = tp.scan_table_log(tmp_path / "none.jsonl")
+    assert scan["lines"] == 0 and scan["logs_missing"] == 1 and not scan["complete"]
+    assert not tp.total_table_scan({"a": scan})["complete"]
+    assert tp.total_table_scan({})["complete"]       # nothing scanned: nothing missing
+
+
+def test_the_log_scan_requires_one_table_line_per_table_call(tmp_path):
+    """M4: given the table tool calls made, a log with fewer (or more) table-tool lines is
+    not complete, and a merged scan keeps the store whose count differs."""
+    log = tmp_path / "log.jsonl"
+    log.write_text("".join(json.dumps(_line()) + "\n" for _ in range(3))
+                   + json.dumps(_line(tool="search")) + "\n", encoding="utf-8")
+    assert tp.scan_table_log(log)["complete"] and tp.scan_table_log(log)["table_calls"] is None
+    same = tp.scan_table_log(log, calls=3)
+    assert same["complete"] and same["table_calls"] == 3 and same["calls_mismatch"] == 0
+    for calls in (2, 4):
+        scan = tp.scan_table_log(log, calls=calls)
+        assert scan["calls_mismatch"] == 1 and not scan["complete"], calls
+    missing = tp.scan_table_log(tmp_path / "none.jsonl", calls=0)
+    assert not missing["complete"]
+    total = tp.total_table_scan({"a": same, "b": tp.scan_table_log(log, calls=4)})
+    assert total["calls_mismatch"] == 1 and total["table_calls"] == 7 and not total["complete"]
+
+
+def test_run_table_call_counts_calls_per_log(built):
+    log = built.path / "log" / "retrieval.jsonl"
+    before = tp.table_calls(log)
+    t = tools.Tools(built.path, acl=True, caller="user:auditor", clock=lambda: NOW)
+    tp.run_table_call(t, {"tool": "describe_tables", "args": {}})
+    tp.run_table_call(t, {"tool": "query_table", "args": {"table": "nope", "op": "count"}})
+    assert tp.table_calls(log) - before == 2
+    assert tp.table_calls(built.path.parent / "other" / "log" / "retrieval.jsonl") == 0
+
+
+@pytest.mark.parametrize("kind", ["tables-applicability", "tables-sql"])
+def test_s3_fails_when_the_table_tools_stop_logging(built, tmp_path, capsys, monkeypatch, kind):
+    """M4: the non-MCP kinds compare the table-tool lines with the table calls they made, as
+    the MCP leg does; a table tool that writes no line fails S3 (exit 1)."""
+    from adr_store.tables import sqlguard
+
+    monkeypatch.setattr(sqlguard, "SQL_STEP_BUDGET", 300_000)   # the same refusals, faster
+    directory, policy = config_of(built)
+    acl.sync(built.path, directory, policy)   # the real clock: the CLI's tools read it
+    common = ["--store", str(built.path), "--directory", str(directory), "--policy",
+              str(policy), "--views", str(tmp_path / "views")]
+    assert main(["probes", kind, "gov", *common, "--out", str(tmp_path / "ok")]) == 0
+    (d,) = (tmp_path / "ok").glob("probes-*")
+    store = json.loads((d / "summary.json").read_text())["logs"]["by_store"]["store"]
+    assert store["table_calls"] == store["table_lines"] > 0 and store["complete"]
+    real = tools.Tools._append_log
+
+    def silent(self, entry):
+        if entry.get("tool") not in tp.TABLE_TOOLS:
+            real(self, entry)
+
+    monkeypatch.setattr(tools.Tools, "_append_log", silent)
+    assert main(["probes", kind, "gov", *common, "--out", str(tmp_path / "quiet")]) == 1
+    capsys.readouterr()
+    (d,) = (tmp_path / "quiet").glob("probes-*")
+    logs = json.loads((d / "summary.json").read_text())["logs"]
+    assert logs["by_store"]["store"]["table_lines"] == 0
+    assert logs["by_store"]["store"]["calls_mismatch"] == 1 and not logs["total"]["complete"]
+
+
 # -- the MCP leg (D1) ----------------------------------------------------------------------------
 
 

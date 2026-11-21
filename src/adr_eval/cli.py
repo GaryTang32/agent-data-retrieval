@@ -1126,7 +1126,7 @@ def _probes_tables(a: argparse.Namespace) -> int:
         # the references' extraction tables come from this profile's cached replies
         cfg["generator"] = a.generator or config["generator"]
     store_log = tp.log_path(a.store)
-    offset = tp.log_size(store_log)
+    offset, calls0 = tp.log_size(store_log), tp.table_calls(store_log)
     statements: list[str] = []
     extra_logs: dict = {}
     probe_set: dict = {"seed": tp.SEED3}
@@ -1229,7 +1229,9 @@ def _probes_tables(a: argparse.Namespace) -> int:
                      for n, b in summary["by_table"].items()))
     else:   # tables-mcp
         return _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb)
-    scans = {"store": tp.scan_table_log(store_log, offset, statements),
+    # each table call on a store must have its log line, as the MCP leg's `calls_match` asks
+    scans = {"store": tp.scan_table_log(store_log, offset, statements,
+                                        calls=tp.table_calls(store_log) - calls0),
              **{f"reference/{k}": v for k, v in refs.log_scans(statements).items()},
              **extra_logs}
     logs = {"total": tp.total_table_scan(scans), "by_store": scans,
@@ -1246,8 +1248,10 @@ def _probes_tables(a: argparse.Namespace) -> int:
           f"`{(cfg['tables'] or 'none')[:12]}`, ACL snapshot `{cfg['acl_snapshot'][:12]}` "
           f"sequence {cfg['acl_sequence']}). Seed {tp.SEED3}. No model calls.\n\n{head}.\n\n"
           + table + f"\n## Log fields\n\n{lt['lines']} log lines ({lt['table_lines']} of the "
-          f"table tools), {lt['complete_lines']} with caller, principals, acl_snapshot and "
-          f"acl_decision; {lt['tables_missing']} without `tables`; {lt['allowed']} allowed, "
+          f"table tools, for {lt['table_calls']} table calls; {lt['calls_mismatch']} log(s) "
+          f"whose count differs, {lt['logs_missing']} missing), {lt['complete_lines']} with "
+          f"caller, principals, acl_snapshot and acl_decision; {lt['tables_missing']} without "
+          f"`tables`; {lt['allowed']} allowed, "
           f"{lt['allowed_unresolved']} of them with a null resolved field or tables id; "
           f"{lt['sql_text_lines']} with statement text. Complete: {lt['complete']}.\n")
     d = _write_probe_run(a, a.kind, started,

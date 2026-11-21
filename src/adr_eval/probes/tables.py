@@ -98,7 +98,10 @@ admitted documents, and at most one version of a chain may be returned (the vers
 table tool has the key `tables`; an allowed line has a non-null `RESOLVED` and, for a table tool,
 a non-null `tables` unless it was refused before reading any (`NO_TABLES`, a handle refusal); a
 `sql` line has `sql_sha256` and args `statement_sha256`, `applicability` (and `handle`) only;
-and no line holds the text of a statement given (16 characters or more).
+and no line holds the text of a statement given (16 characters or more). Given the table tool
+calls made through `run_table_call` on a store since the offset (`table_calls`, counted per log
+file), the scan also requires one table-tool line per call, as the MCP leg requires one line
+per call through MCP; a log that does not exist is not complete.
 
 **MCP** (`select_mcp`, `run_mcp`, D1): the `n` (60) leak probes with the lowest SHA-256 of
 `"<seed>:<label>/<probe_id>"`, each run through an `adr mcp` server of its caller and judged
@@ -116,6 +119,7 @@ import json
 import math
 import re
 import shutil
+import threading
 from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -373,6 +377,7 @@ class References:
         self._view_of = {u: v for v in self.views for u in v.users}
         self._paths: dict[str, Path] = {}
         self.offsets: dict[Path, int] = {}
+        self.calls0: dict[Path, int] = {}
         self.info: list[dict] = []
 
     def path_for(self, caller: str | None) -> Path | None:
@@ -402,6 +407,7 @@ class References:
                                            else " with extraction from the cache")
         self._paths[v.view] = path
         self.offsets[path] = log_size(log_path(path))   # where this run's log lines begin
+        self.calls0[path] = table_calls(log_path(path))   # and the table calls made so far
         self.info.append({**v.summary(), "path": path.name, "how": how,
                           "tables": handles.tables_head(path, Store.open(path).snapshot_id)})
         return path
@@ -426,8 +432,10 @@ class References:
         return tables_id
 
     def log_scans(self, statements: Iterable[str] = ()) -> dict:
-        """`scan_table_log` of each reference store's log since it was first used here."""
-        return {p.name: scan_table_log(log_path(p), off, statements)
+        """`scan_table_log` of each reference store's log since it was first used here, with
+        the table calls made on it since then."""
+        return {p.name: scan_table_log(log_path(p), off, statements,
+                                       calls=table_calls(log_path(p)) - self.calls0[p])
                 for p, off in sorted(self.offsets.items())}
 
     def remove(self) -> list[str]:
@@ -446,11 +454,31 @@ class References:
 # -- calls and outcomes ------------------------------------------------------------------------
 
 
+_calls: Counter = Counter()      # table tool calls made through `run_table_call`, by log file
+_calls_lock = threading.Lock()
+
+
+def _log_key(path: Path) -> str:
+    return str(Path(path).resolve())
+
+
+def table_calls(log: Path) -> int:
+    """How many table tool calls `run_table_call` has made on a `Tools` whose log is `log`
+    (in this process); the S3 scans compare the difference over a run with the log lines."""
+    with _calls_lock:
+        return _calls[_log_key(log)]
+
+
 def run_table_call(t, call: dict) -> tuple:
     """("ok", result) | ("denied", code, message) | ("refused", message): one table tool call
-    `{"tool": …, "args": {…}}` on `t` (a `Tools` or an MCP client of the same shape)."""
+    `{"tool": …, "args": {…}}` on `t` (a `Tools` or an MCP client of the same shape). A call on
+    a `Tools` is counted against its log file (`table_calls`)."""
     if call["tool"] not in TABLE_TOOLS:
         raise ValueError(f"unknown table tool {call['tool']!r}")
+    log = t.log_path if isinstance(t, Tools) else None
+    if log is not None:
+        with _calls_lock:
+            _calls[_log_key(log)] += 1
     try:
         res = getattr(t, call["tool"])(**call["args"])
     except AccessDenied as e:
@@ -1222,21 +1250,26 @@ def failclosed(store_path: Path, clone_root: Path, corpus: str, seed: int = SEED
                              "visible_before": None if b is None else b["visible"],
                              **judge_table_failclosed(cond, tool, target, out, ctrl)})
 
-    def scanned(name: str, path: Path, offset: int) -> None:
+    def mark(path: Path) -> tuple[int, int]:
+        """Where the store's log ends now and the table calls made on it so far."""
+        return log_size(log_path(path)), table_calls(log_path(path))
+
+    def scanned(name: str, path: Path, since: tuple[int, int]) -> None:
+        offset, calls = since
         logs[name] = merge_table_scans(logs.get(name), scan_table_log(
-            log_path(path), offset, statements))
+            log_path(path), offset, statements, calls=table_calls(log_path(path)) - calls))
 
     plain = [(i, u, None) for i, u in enumerate(users)]
     for cond in CONDITIONS:
         if cond in ("F4", "F5"):
-            offset = log_size(log_path(store_path))
+            since = mark(store_path)
             run(store_path, cond, [(i, u, None) for i, u in enumerate(
                 F4_CALLERS if cond == "F4" else F5_CALLERS)])
-            scanned("store", store_path, offset)
+            scanned("store", store_path, since)
             continue
         clone = clone_root / f"tables-failclosed-{cond}"
         _cp(store_path, clone)
-        offset = log_size(log_path(clone))
+        since = mark(clone)
         try:
             if cond == "F1":
                 damage = _F1(clone)
@@ -1266,7 +1299,7 @@ def failclosed(store_path: Path, clone_root: Path, corpus: str, seed: int = SEED
                     raise ValueError(f"the no-entry rule changed {len(changed)} documents' "
                                      f"access, not only the target's")
                 run(clone, cond, plain)
-            scanned(f"clone-{cond}", clone, offset)
+            scanned(f"clone-{cond}", clone, since)
         finally:
             shutil.rmtree(clone, ignore_errors=True)
     if clone_root.is_dir() and not any(clone_root.iterdir()):
@@ -1413,22 +1446,33 @@ def _refused_before_tables(error: object) -> bool:
                                        or error.startswith("bad handle"))
 
 
-def scan_table_log(path: Path, offset: int = 0, statements: Iterable[str] = ()) -> dict:
+def _empty_scan(calls: int | None = None) -> dict:
+    return {"lines": 0, "complete_lines": 0, "missing": dict.fromkeys(REQUIRED, 0),
+            "table_lines": 0, "tables_missing": 0, "allowed": 0, "allowed_unresolved": 0,
+            "sql_lines": 0, "sql_text_lines": 0, "table_calls": calls, "calls_mismatch": 0,
+            "logs_missing": 0, "decisions": {}, "tools": {}}
+
+
+def scan_table_log(path: Path, offset: int = 0, statements: Iterable[str] = (), *,
+                   calls: int | None = None) -> dict:
     """The log lines written after byte `offset` (module docstring): how many, how many lack
     each of `REQUIRED`, table-tool lines without `tables`, allowed lines with a null resolved
     field (or a null `tables` on a table-tool line that read tables), `sql` lines, and lines
-    that hold a statement's text (or a `sql` line with other args or no `sql_sha256`)."""
+    that hold a statement's text (or a `sql` line with other args or no `sql_sha256`).
+    `calls`, when given, is the number of table tool calls made on the store since `offset`
+    (`table_calls`): `calls_mismatch` is 1 when the table-tool lines are not that many. A log
+    that does not exist counts in `logs_missing` and is not complete."""
     texts = sorted({x for s in statements if len(s) >= MIN_STATEMENT
                     for x in (s, json.dumps(s, ensure_ascii=False)[1:-1])})
-    out = {"lines": 0, "complete_lines": 0, "missing": dict.fromkeys(REQUIRED, 0),
-           "table_lines": 0, "tables_missing": 0, "allowed": 0, "allowed_unresolved": 0,
-           "sql_lines": 0, "sql_text_lines": 0, "decisions": {}, "tools": {}}
+    out = _empty_scan(calls)
     try:
         with open(path, "rb") as f:
             f.seek(offset)
             data = f.read()
     except FileNotFoundError:
-        return {**out, "complete": True}
+        out.update(logs_missing=1, calls_mismatch=int(bool(calls)))
+        out["complete"] = _complete(out)
+        return out
     decisions: Counter = Counter()
     tools: Counter = Counter()
     for line in data.decode("utf-8").splitlines():
@@ -1461,21 +1505,27 @@ def scan_table_log(path: Path, offset: int = 0, statements: Iterable[str] = ()) 
         tools[str(tool)] += 1
     out["decisions"] = dict(sorted(decisions.items()))
     out["tools"] = dict(sorted(tools.items()))
+    out["calls_mismatch"] = int(calls is not None and out["table_lines"] != calls)
     out["complete"] = _complete(out)
     return out
 
 
 def _complete(s: dict) -> bool:
     return (s["lines"] == s["complete_lines"] and s["tables_missing"] == 0
-            and s["allowed_unresolved"] == 0 and s["sql_text_lines"] == 0)
+            and s["allowed_unresolved"] == 0 and s["sql_text_lines"] == 0
+            and s["calls_mismatch"] == 0 and s["logs_missing"] == 0)
 
 
 def merge_table_scans(a: dict | None, b: dict) -> dict:
+    """Two scans added up; `table_calls` is None unless both counted their calls, and
+    `calls_mismatch` and `logs_missing` count the scans that failed so."""
     if a is None:
         return b
     out = {k: a[k] + b[k] for k in ("lines", "complete_lines", "table_lines", "tables_missing",
                                     "allowed", "allowed_unresolved", "sql_lines",
-                                    "sql_text_lines")}
+                                    "sql_text_lines", "calls_mismatch", "logs_missing")}
+    out["table_calls"] = None if a["table_calls"] is None or b["table_calls"] is None \
+        else a["table_calls"] + b["table_calls"]
     out["missing"] = {k: a["missing"][k] + b["missing"][k] for k in REQUIRED}
     out["decisions"] = dict(sorted((Counter(a["decisions"]) + Counter(b["decisions"])).items()))
     out["tools"] = dict(sorted((Counter(a["tools"]) + Counter(b["tools"])).items()))
@@ -1488,7 +1538,10 @@ def total_table_scan(scans: dict) -> dict:
     out = None
     for s in scans.values():
         out = merge_table_scans(out, s)
-    return out or scan_table_log(Path("/nonexistent"))
+    if out is None:                    # nothing scanned: nothing missing
+        out = _empty_scan()
+        out["complete"] = _complete(out)
+    return out
 
 
 # -- the MCP leg (D1) --------------------------------------------------------------------------
