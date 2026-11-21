@@ -224,7 +224,7 @@ Part 3A made no model call; part 3B made 1,411 of the 1,500 calls the user appro
 | Do they answer new questions about drawbridge rules? | Not well enough: 0.680 on 97 test questions, below the 0.80 bar, though far above the baseline's 0.237 (+0.443 [+0.330, +0.557]). In 26 of the 31 misses the query was right and the two model extraction passes disagree on the value; which is right is not known |
 | Is the extraction grounded in the text? | 99.1% of values overall, but two columns fall below the 95% bar: `seasonal` 94.6% and `closed_periods` 89.9% |
 | Does it agree with an independent second pass? | Yes on the four required columns (0.921–0.979); less on `owner_or_agency` (0.797) and `closed_periods` (0.707) |
-| Can a caller see rows they should not? | No leak in 700 table leak probes and in 60 more through MCP per build; the table tools equal an allowed-only store in 1,500 of 1,500 calls; 120 of 120 SQL attacks per corpus refused or bounded; every fail-closed case returned nothing |
+| Can a caller see rows they should not? | No leak in 700 table leak probes, 60 of them re-run through MCP per build; the table tools equal an allowed-only store in 1,500 of 1,500 calls; 120 of 120 SQL attacks per corpus refused or bounded; every fail-closed case returned nothing |
 | Do tables rebuild exactly? | Yes: every table rebuilt from the cache with zero calls is byte-identical, every one of 32,889 spans re-slices, and every run and probe set repeats exactly. Phase 2 retrieval is unchanged |
 
 The gold for the drawbridge questions is a model's reading that no person checked, errors both

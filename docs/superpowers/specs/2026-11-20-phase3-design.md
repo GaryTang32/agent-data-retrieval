@@ -330,8 +330,8 @@ re-extraction possible.
 
 `adr tables gate --gold <set> --max-flips N` compares a candidate table build with the current
 one on a gold set and refuses to promote the candidate (moving `tables/HEAD`) when more than N
-gold items that were right become wrong ("negative flips"). Tested on fixtures; used once in the
-3B run to promote the first build over an empty table (N = 0 flips possible).
+gold items that were right become wrong ("negative flips"). Tested on fixtures; used for every promotion (P12): gov 3A and research 3A over an empty
+table, and gov 3B over gov 3A (N = 0 flips).
 
 ## 8. Access: the semantic layer, the parameterized tool and guarded SQL
 

@@ -13,7 +13,7 @@
 - **Q2 fails on accuracy.** On the 97 test items of gov-tables v0.1, `p3-typed` scores 0.680, below the 0.80 bar. Its margin over `baseline-linear` (0.237) passes: +0.443 [+0.330, +0.557]. In 26 of its 31 misses the generated query equals the gold query: the table, built from the first extraction pass, disagrees with the second pass the gold was computed from. Which pass is right in those cases is not known.
 - **E1 fails on two columns.** 99.1% of the non-null model values are grounded overall, but `seasonal` (94.6%) and `closed_periods` (89.9%) are below the 95% bar, which applies per column. The other seven columns are at 99.9% or 100%.
 - **E2 passes.** The four required columns agree with the independent second pass at 0.921 to 0.979. Two unrequired columns agree less: `owner_or_agency` 0.797 and `closed_periods` 0.707.
-- **Access (S1–S3, D1) passes.** No leak in 700 leak probes over the three table tools (400 on the 3A tables, 300 on the 3B tables, 65 of them on hidden drawbridge rows), nor in 60 of them re-run through MCP on each build. Each table tool equals a store built from the caller's documents alone in 1,500 of 1,500 calls. 120 of 120 SQL attacks per corpus were refused or bounded, every fail-closed case returned nothing, and every log line carried its principals and the tables id.
+- **Access (S1–S3, D1) passes.** No leak in 700 leak probes over `query_table` and `sql` (400 on the 3A tables, 300 on the 3B tables, 65 of them on hidden drawbridge rows), nor in 60 of the leak probes re-run through MCP on each build. `query_table` and `sql` each equal a store built from the caller's documents alone in 1,500 of 1,500 calls. 120 of 120 SQL attacks per corpus were refused or bounded, every fail-closed case returned nothing, and every log line carried its principals and the tables id.
 - **Determinism (X1) passes.** Every Phase 3 run and probe set gave identical rows and results in two fresh processes, and the gov and research tables, entity tables included, built twice from the same snapshot, contracts and cache gave the same files and tables ids. Phase 2 retrieval is unchanged (constraint 2): one `p2-default` run per corpus is identical to its Phase 2 run.
 
 Points that need care when reading these numbers:
@@ -93,17 +93,17 @@ in the named file under [`run-summaries/`](run-summaries/).
 
 | # | Criterion | Threshold (§12) | Result | Pass | Summary files |
 |---|---|---|---|---|---|
-| T1 | Zero-call rebuild | Every table rebuilt with `--max-calls 0` from the cache in a fresh process: byte-identical table files and tables id | gov 3A and 3B and research, each built twice in fresh `cp -a` copies with the tables directory removed: 22 gov and 11 research files, all byte-identical to each other and to the promoted builds; tables ids `2678b8da9633…`, `fec2a2b12e31…`, `62604e913378…` reproduced. Task 11 also rebuilt the 3B build in place (37 of 37 files unchanged) | **Pass** | `tables-12-checks/checks.json`, `tables-11-checks/checks.json` |
+| T1 | Zero-call rebuild | Every table rebuilt with `--max-calls 0` from the cache in a fresh process: byte-identical table files and tables id | gov 3A and 3B and research, each built twice in fresh `cp -a` copies with the tables directory removed: 22 gov and 11 research files, all byte-identical to each other and to the promoted builds; tables ids `2678b8da9633…`, `fec2a2b12e31…`, `62604e913378…` reproduced. Task 11 also rebuilt the 3B build in a `cp -a` copy (37 of 37 files unchanged) | **Pass** | `tables-12-checks/checks.json`, `tables-11-checks/checks.json` |
 | T2 | Identical result sets | The 3A and 3B question suites and every probe set twice in fresh processes: identical rows and results | 5 of 5 question runs and 12 of 12 probe sets identical (see X1) | **Pass** | `tables-11-checks`, `tables-7b-checks`, `tables-12-checks` |
 | T3 | Every stored value re-slices | 100% of provenance spans re-slice to the stored quote or field text | 32,889 of 32,889 spans of all 10 tables of the 3B build, including 15,162 of 15,162 model-value quotes | **Pass** | `tables-11-checks/checks.json` |
 | T4 | Every value traces to a spec | 100% carry a `spec_id` (or structure provenance) | 60,295 of 60,295 stored values | **Pass** | `tables-11-checks/checks.json` |
 | T5 | A spec change re-extracts only affected fields | Only that group's calls run; other cache keys and values unchanged | `test_a_spec_change_reextracts_only_its_group` passes | **Pass** | `tests/store/test_tables_extract.py` |
 | T6 | The merge gate blocks regressions | Refused, and `tables/HEAD` unchanged | `test_gate_refuses_too_many_flips_and_keeps_head` passes. The real gate was used three times, each with 0 flips | **Pass** | `tests/store/test_tables_gate.py` |
-| Q1 | Typed tables answer the frozen count questions | ≥ 0.90 on each corpus, and above `baseline-linear` with McNemar p < 0.05 on gov | gov 27/27 = 1.000 against 2/27, p = 6.0 × 10⁻⁸; research 26/27 = 0.963 against 16/27, p = 0.0020. 0 model calls | **Pass** (by construction, §10.2) | `gov-p3-typed-test-20261120T200702`, `research-p3-typed-test-20261120T200924` |
+| Q1 | Typed tables answer the frozen count questions | accuracy ≥ 0.90 on each corpus, and above `baseline-linear` with McNemar p < 0.05 on gov | gov 27/27 = 1.000 against 2/27, p = 6.0 × 10⁻⁸; research 26/27 = 0.963 against 16/27, p = 0.0020. 0 model calls | **Pass** (by construction, §10.2) | `gov-p3-typed-test-20261120T200702`, `research-p3-typed-test-20261120T200924` |
 | Q2 | Typed tables answer the drawbridge questions | ≥ 0.80 accuracy, **and** the lower bound of the paired difference's 95% interval above +0.02 | Accuracy 66/97 = **0.680**. Difference against `baseline-linear` (0.237): +0.443 [+0.330, +0.557]; McNemar b = 47, c = 4, p = 2.4 × 10⁻¹⁰ | **Fail** (accuracy fails, margin passes) | `q2-gov-tables.json`, `gov-tables-*-20261120T23*` |
-| E1 | Extraction is grounded | ≥ 95% of non-null model values grounded, per column, before ungrounded values are dropped | Overall 5,401 / 5,452 = 99.1%. `seasonal` 157/166 = **94.6%** and `closed_periods` 365/406 = **89.9%**; the other seven columns 99.9–100% | **Fail** (two columns) | `tables-11-checks/checks.json` |
+| E1 | Extraction is grounded | ≥ 95% grounded (re-slicing quotes); per column as §7.3 states, before ungrounded values are dropped | Overall 5,401 / 5,452 = 99.1%. `seasonal` 157/166 = **94.6%** and `closed_periods` 365/406 = **89.9%**; the other seven columns 99.9–100% | **Fail** (two columns) | `tables-11-checks/checks.json` |
 | E2 | Extraction agrees with an independent pass | Reported for every column; ≥ 0.85 on `waterway`, `bridge`, `notice_hours`, `opens_on_signal` | `waterway` 0.979, `bridge` (draw set) 0.921, `notice_hours` 0.950, `opens_on_signal` 0.956. Unrequired: `mile` 0.998, `vhf_channel` 0.992, `seasonal` 0.972, `owner_or_agency` 0.797, `closed_periods` 0.707 | **Pass** | `tables-11-checks/checks.json` |
-| S1 | No leak through tables | 0 leaks (≥ 300 probes); 1,000 of 1,000 equivalent | Leak: 0 in 400 probes on the 3A build (300 compared with a reference store, 100 `user:ghost`) and 0 in 300 on the 3B build (all compared; 65 on hidden drawbridge rows). Equivalence: 1,000 of 1,000 on the 3A build (gov and research), and 500 of 500 gov calls again on the 3B build | **Pass** | `probes-tables-leak-*`, `probes-tables-equivalence-*` |
+| S1 | No leak through tables | 0 leaks; 1,000 of 1,000 equivalent (probe minimums from §10.4: ≥ 300 leak probes) | Leak: 0 in 400 probes on the 3A build (300 compared with a reference store, 100 `user:ghost`) and 0 in 300 on the 3B build (all compared; 65 on hidden drawbridge rows). Equivalence: 1,000 of 1,000 on the 3A build (gov and research), and 500 of 500 gov calls again on the 3B build | **Pass** | `probes-tables-leak-*`, `probes-tables-equivalence-*` |
 | S2 | SQL is read-only and bounded | 100% refused or bounded, with the fixed messages | 120 of 120 per corpus on the 3A build, and 120 of 120 on the gov 3B build; the database intact after every case | **Pass** | `probes-tables-sql-*` |
 | S3 | Fail closed and logged | No content in any case; 100% of table-tool log lines carry the Phase 2 fields plus the tables id | Fail closed 90 of 90 per corpus, on both builds, no content. Applicability 51 of 51 on the 3A build and 153 of 153 on the 3B build (102 on the drawbridge tables), only rows of documents in force. Every log scan complete | **Pass** | `probes-tables-failclosed-*`, `probes-tables-applicability-*` |
 | D1 | Over MCP with handles | MCP tests for the three new tools; a handle replay: all pass, every result carries a handle with `tables` | The MCP tests of `tests/store/test_tables_mcp.py` pass. MCP leg: 60 leak probes through `adr mcp` servers on each build, 0 leaks; every handle replay identical and naming the tables | **Pass** | `probes-tables-mcp-*` |
@@ -113,7 +113,7 @@ in the named file under [`run-summaries/`](run-summaries/).
 
 The user approved 1,500 calls (§11), split into fixed shares per command that sum to 1,485.
 Budget units count every transport attempt, retries included (Builder note 2), so real use could
-not exceed a share. Each command ran first as a 3-call check, then in full.
+not exceed a share. The two extraction passes and the golden generation each ran first as a 3-call check, then in full; the three `adr-eval run` commands ran in full directly.
 
 | Command | Profile | Share | Runs (`--max-calls`) | Units used |
 |---|---|---|---|---|
@@ -126,7 +126,7 @@ not exceed a share. Each command ran first as a 3-call check, then in full.
 | Everything after: E1, E2, T1–T6, Step 9, X1, regeneration checks, write-ups | – | 0 | `--max-calls 0` | 0 |
 | **Total** | | **1,485** | | **1,411 of 1,500** |
 
-- **No command failed or stopped early**, no transport attempt was retried, and no input was rejected, so no failure was cached (ruling P21).
+- **No full command failed or stopped early** (the four 3-call checks stopped at their cap, as intended), no transport attempt was retried, and no input was rejected, so no failure was cached (ruling P21).
 - **The 3 calls of the first check are lost to ruling P22.** That check, with prompt version 1, found the model writing `seasonal: false` with no quote, which the span check rejects. The prompts were changed (version 2: a `false` needs a quote that states it), and the check's replies are not used.
 - **The second pass's 538 units include 5 parse retries**, one for each reply that did not parse (§7.2 check 1). One parsed on the retry; the other 4 stayed unparseable, so the model columns of those 4 section texts are null `unparseable` in the facts.
 - **Each pass's served model is recorded** in its extraction report and in each run's configuration, and is the one §11 names.
@@ -228,7 +228,7 @@ E1 is the grounded share of non-null model values per column, from the first pas
 | **all** | **5,401 / 5,452** | **99.1%** | | |
 
 - A "span" failure is check 3: the quote is not in the section text. A "type" failure is check 2: the value could not be read as the column's type, so it never reached the span check. On the span check alone `closed_periods` would be 365 of 382 (95.5%); the report and this page count the type failures as not grounded.
-- No ungrounded value is stored: those become nulls with reason `ungrounded` (25 in `drawbridge_sections`, 3 in `drawbridge_bridges`). Of the stored values, 15,135 are `verified` and 27 `auto-accepted` (their number is not in the quote, check 4).
+- No ungrounded value is stored: those become nulls with reason `ungrounded` (25 in `drawbridge_sections`, 3 in `drawbridge_bridges`, in `seasonal` and `notice_hours`). The 41 failed `closed_periods` values are dropped from that list column with no `ungrounded` record. Of the stored values, 15,135 are `verified` and 27 `auto-accepted` (their number is not in the quote, check 4).
 - The second pass's own report gives 5,478 of 5,529 grounded (99.1%).
 
 ### E2, agreement with the second pass
@@ -356,7 +356,7 @@ All probes ran on the scratch stores after a fresh ACL sync, with no model call,
 | tables-equivalence bench and tools (no tables) | – | passes A and B | rerun | **Identical**; equal to Task 7's runs |
 | tables-mcp (gov 3B with research) | 3B | passes A and B, 17 gov reference stores built from the cache in each | rerun | **Identical** (differs from Task 7's 3A run, as it should: the gov leak probes changed with the build) |
 
-In all: **5 of 5 question runs and 12 of 12 probe sets identical.** The two passes' summaries differ only in the ACL snapshot and sequence of the syncs before them. Pass wall times: SQL guard 10 s (gov) and 16 s (research), fail closed 13 s and 31 s, research leak 6–7 s, bench equivalence 33–35 s, MCP leg 214–218 s, research equivalence 570–580 s.
+In all: **5 of 5 question runs and 12 of 12 probe sets identical.** The two passes' summaries differ only in the ACL snapshot and sequence of the syncs before them. Approximate pass wall times (from run start and summary file times, not recorded by the runs): SQL guard about 10 s (gov) and 16 s (research), fail closed about 13 s and 30 s, research leak 6–7 s, bench equivalence 33–36 s, MCP leg 214–219 s, research equivalence 570–580 s.
 
 The question runs and the three Task 7b sets are reused because no code on their path changed after them: the only later changes (Task 7b's) are in the probe code and the `probes` command, and the Task 7b sets ran on that code. Task 7's earlier pairs on the 3A build (all 12 sets) and Task 11's pairs of the SQL-guard and `fr_documents` applicability sets on the 3B build are superseded by the rows above, and all were identical too.
 
@@ -401,7 +401,7 @@ Spec §14 lists the rulings made without the user. P1–P17 were fixed with the 
 | P9 | gov-tables gold from the second extraction, phrased by a model, answered by code |
 | P10 | No human review step; `review-pending` reserved |
 | P11 | Entity resolution by exact normalised keys only |
-| P12 | The merge gate is built and tested, and used (the spec says once; it promoted three builds: gov 3A, research 3A, gov 3B) |
+| P12 | The merge gate is built and tested, and used for every promotion: three builds (gov 3A, research 3A, gov 3B) |
 | P13 | The margins and thresholds of §12 fixed before any result |
 | P14 | Two drawbridge tables: sections and draws |
 | P15 | The second pass is one numbered-question call per section |
@@ -409,7 +409,7 @@ Spec §14 lists the rulings made without the user. P1–P17 were fixed with the 
 | P17 | Entity display names computed per caller view |
 | **P18** | `describe_tables` is an index plus per-table detail, each at most 8 KB (Task 5) |
 | **P19** | A `sql` statement's own `ORDER BY` gets positional tie-breakers on every output column (Task 5) |
-| **P20** | `sql` bounds work per step: a per-value length limit, and string-amplifying functions charged against the step budget (Task 5). The spec's text says 64 KB; the build tightened it to 8 KB per stored value and 16 KB per row, enforced at build and at read |
+| **P20** | `sql` bounds work per step: a per-value length limit, and string-amplifying functions charged against the step budget (Task 5). Limits: 8 KB per stored value and 16 KB per row, enforced at build and at read |
 | **P21** | Only failures caused by the input are cached as `model_error`; retries exhausted, usage limits, other errors and budget stops stop the run uncached (Task 9) |
 | **P22** | A bool value needs a quote that states it, `false` included; prompts `drawbridge-extract@2` and `drawbridge-questions@2` (Task 11, after the first 3-call check) |
 
@@ -437,7 +437,7 @@ Spec §14 lists the rulings made without the user. P1–P17 were fixed with the 
 | Part | Files |
 |---|---|
 | 3A | the two Q1 runs (`gov-p3-typed-test-20261120T200702`, `research-p3-typed-test-20261120T200924`: `config.json`, `compile.json`, `report.json`, `report.md`, and `q1-<baseline>.json` in `p3-q1 --summary` form); the Task 7 probe summaries (`probes-tables-*-20261120T19*`) and `tables-7-checks/checks.json` |
-| 3B | the three gov-tables runs (`gov-tables-*-20261120T23*`); `q2-gov-tables.json` (`p3-q2 --summary`); the Task 11 SQL-guard and applicability summaries (`…T2354*`, `…T2355*`); the Task 7b summaries (`probes-tables-*-20261121T002*`) and `tables-7b-checks/checks.json`; `tables-11-checks/checks.json` (E1, E2, regex, the Q2 attribution, T1–T6) |
+| 3B | the three gov-tables runs (`gov-tables-*-20261120T23*`); `q2-gov-tables.json` (`p3-q2 --summary`); the Task 11 SQL-guard and applicability summaries (`…T235517`, `…T235528`); the Task 7b summaries (`probes-tables-*-20261121T002*`) and `tables-7b-checks/checks.json`; `tables-11-checks/checks.json` (E1, E2, regex, the Q2 attribution, T1–T6) |
 | X1 | the probe summaries of both passes of this task (`probes-tables-*-20261121T004*` and `…T005*` for pass A, `…T010*` for pass B; 9 sets each) and `tables-12-checks/checks.json` (pairs, hashes, table builds, the Phase 2 regression, cache counts) |
 
 No committed file names a golden item. Per-item rows (`results.jsonl`), the full Q1 and Q2 outputs and the probe sets stay local in `runs/`. [`golden/gov-tables/v0.1/`](../../golden/gov-tables/v0.1/) holds the gov-tables items; [`entity-samples.json`](entity-samples.json) and [`waterway-links.json`](waterway-links.json) hold the cluster samples and the link list.
