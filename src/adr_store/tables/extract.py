@@ -362,16 +362,18 @@ def check_value(column: str, ctype: str, raw: dict, section_text: str) -> Value:
 
 # -- calls ---------------------------------------------------------------------------------------
 
-def _call(client, system: str, text: str, parse: Callable[[str], dict]
-          ) -> tuple[dict | None, str, Counter]:
+def _call(client, system: str, text: str, parse: Callable[[str], dict], *,
+          max_tokens: int = MAX_TOKENS) -> tuple[dict | None, str, Counter]:
     """(parsed reply or None, outcome, call counts) of one unit's call, with one retry at
     repeat 1 for an unparseable reply. A rejected input (CachedFailure, fresh or replayed) is
     the outcome `model_error`; every other failure (retries exhausted, the usage limit, a
-    configuration error, a budget stop) propagates and stops the run (ruling P21)."""
+    configuration error, a budget stop) propagates and stops the run (ruling P21).
+    `max_tokens` (default the extractor's `MAX_TOKENS`, so Phase 3 cache keys are unchanged)
+    is in the cache key; the Phase 4 passes give their own (preflight ruling C3)."""
     counts: Counter = Counter()
     for repeat in (0, 1):
         try:
-            c = client.complete(system, text, max_tokens=MAX_TOKENS, repeat=repeat,
+            c = client.complete(system, text, max_tokens=max_tokens, repeat=repeat,
                                 cache_failures=True)
         except CachedFailure:
             counts["failed"] += 1

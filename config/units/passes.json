@@ -1,0 +1,15 @@
+{
+  "_comment": "Phase 4 model passes (spec §6.2): per pass, the prompt version, the field groups (one cached model call per unit and group) and each field's spec version, the source of the spec versions in the procedure contract (a test checks they agree). Bumping one spec recompiles only its group (§6.5, criterion T5). The procedure pass has exactly one group (preflight N7): one call per procedure.",
+  "procedure": {
+    "prompt_version": "procedure-compile@1",
+    "groups": {
+      "main": ["when_to_use", "not_for", "trigger_examples", "problem_abstractions"]
+    },
+    "specs": {
+      "when_to_use": "procedure.when_to_use@1",
+      "not_for": "procedure.not_for@1",
+      "trigger_examples": "procedure.trigger_examples@1",
+      "problem_abstractions": "procedure.problem_abstractions@1"
+    }
+  }
+}

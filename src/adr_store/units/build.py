@@ -19,10 +19,14 @@ call counts, no times: the report is write-once). The build manifest records the
 and the applicability overlay id read; its SHA-256 is the units id. A build never moves
 `units/HEAD`: it is a candidate until the units merge gate (`units/gate.py`) adopts it.
 
-`passes` names the model passes whose cached replies fill model-written fields ("procedure",
+`passes` names the model passes whose replies fill model-written fields ("procedure",
 "rules"). A model client is made only when a pass is asked for (`client`, default
 `tables.extract.metered_client(0)`: cached replies only), so a metadata build never resolves
-a model profile. No pass is built yet: asking for one is refused before anything is written.
+a model profile (preflight ruling C9). The procedure pass (`procedure_pass.apply`, its config
+`passes.json` in `contracts_dir`) fills the four descriptive fields of every procedure unit
+and its lineage before anything is written, so a budget stop or a model failure leaves no
+file; the manifest records the pass (prompt version, adapter, model, max tokens, groups,
+specs). The rules pass is not built yet: asking for it is refused before anything is written.
 """
 
 from __future__ import annotations
@@ -37,12 +41,14 @@ from adr_store import applicability as ap
 from adr_store.applicability import Applicability
 from adr_store.store import Store
 from adr_store.tables import extract as ex
+from adr_store.units import procedure_pass
 from adr_store.units.closure import closure, closure_census
 from adr_store.units.concepts import concepts, link_concepts
 from adr_store.units.contracts import UNIT_CONTRACT_DIR, load_unit_contracts
 from adr_store.units.ecfr import ecfr_docs, rule_cards
 from adr_store.units.envelope import Unit, link_versions
 from adr_store.units.faq import KCS_FIELDS, faq_units, kcs_units
+from adr_store.units.grounding import PASSES_CONFIG, load_pass_config
 from adr_store.units.overlay import (
     FORMAT_VERSION,
     UNITS_DIR,
@@ -172,11 +178,13 @@ def build_units(store_path: Path, corpus: Literal["gov", "research", "bench"], *
     for name in passes:
         if name not in PASSES:
             raise ValueError(f"unknown model pass {name!r}; one of {', '.join(PASSES)}")
-    if passes:
-        if client is None:      # made only now: a metadata build resolves no model profile
-            client = ex.metered_client(0)
-        raise NotImplementedError(f"the {passes[0]} pass is not built yet; build without "
-                                  f"model passes")
+    if "procedure" in passes and "procedure" not in CORPUS_TYPES[corpus]:
+        raise ValueError(f"the procedure pass fills procedure units; corpus {corpus!r} has "
+                         f"none")
+    if "rules" in passes:
+        raise NotImplementedError("the rules pass is not built yet; build without it")
+    if passes and client is None:   # made only now: a metadata build resolves no model profile
+        client = ex.metered_client(0)
     store = Store.open(store_path)
     snapshot = store.snapshot_id
     overlay = ap.load_overlay(store_path, snapshot)
@@ -185,8 +193,14 @@ def build_units(store_path: Path, corpus: Literal["gov", "research", "bench"], *
     built: dict[str, tuple[list[Unit], dict]] = {"concept": _concepts(store, corpus, overlay)}
     if "rule_card" in types:
         built["rule_card"] = _rule_cards(store, overlay, built["concept"][0])
+    pass_info: dict[str, dict] = {}
     if "procedure" in types:
-        built["procedure"] = procedure_units(store, corpus, overlay)
+        units, report = procedure_units(store, corpus, overlay)
+        if "procedure" in passes:
+            cfg = load_pass_config("procedure", Path(contracts_dir) / PASSES_CONFIG)
+            units, report, pass_info["procedure"] = procedure_pass.apply(
+                store, units, report, client, cfg)
+        built["procedure"] = (units, report)
     if "faq" in types:
         built["faq"] = _faq(store, overlay, corpus)
     built["table_record"] = _table_records(store, overlay, corpus)
@@ -201,7 +215,7 @@ def build_units(store_path: Path, corpus: Literal["gov", "research", "bench"], *
     manifest = UnitsManifest(
         format_version=FORMAT_VERSION, snapshot=snapshot, corpus=corpus,
         tables_id=built["table_record"][1].get("tables_id"),
-        applicability=None if overlay is None else overlay.overlay_id, passes={},
+        applicability=None if overlay is None else overlay.overlay_id, passes=pass_info,
         units=sorted(files, key=lambda f: f.type))
     units_id, path = write_units_manifest(store_path, manifest)
     return UnitsBuild(units_id, path, manifest.units, reports)

@@ -27,7 +27,14 @@ semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the 
 and `sql` tools, with the filter flags and `--as USER` of `adr search`), and the knowledge
 units (Phase 4 spec §5.2, §6.6): `adr units build` (every unit type of the store's corpus as a
 candidate build, by code; `--units-for` when the store holds documents of several corpora;
-only `--with-passes` makes a model client), `adr units show` (a build's manifest, counts per
+only `--with-passes` makes a model client, and `--with-passes procedure` reads the procedure
+pass's replies, by default from the cache only), `adr units compile --procedures` (the
+procedure pass over the procedures of one or more `--store`s with a model profile under the
+required `--max-calls`, every transport attempt counting; `--limit N` compiles the first N, the
+canary; it prints the procedures per store, writes the unhashed `procedure-pass-report.json`
+of each store and ends with the status, calls and budget units, or stops with exit 1 and
+nothing written at the cap or on a model failure that is no stored input rejection), `adr
+units show` (a build's manifest, counts per
 type and its reports), `adr units gate` (the units merge gate; without gold sets only a
 first promotion, with no `units/HEAD`, can pass; exit 1 when refused), and the four unit tools
 (Phase 4 spec §11.2, code in `adr_store.tools`): `adr units define TERM`, `adr units rules
@@ -119,6 +126,7 @@ from adr_store.tables.semantic import describe
 from adr_store.units import build as units_build
 from adr_store.units import gate as units_gate_mod
 from adr_store.units import overlay as units_overlay
+from adr_store.units import procedure_pass
 
 UNKNOWN_LICENSES = frozenset({"", "unknown"})
 PROBLEMS_SHOWN = 5
@@ -1154,7 +1162,8 @@ def _print_units(m: units_overlay.UnitsManifest) -> None:
 
 def _units_build(a: argparse.Namespace) -> int:
     """`adr units build`: a candidate units build (units/HEAD does not move). Only a build
-    with --with-passes makes a model client (and resolves a profile); none is built yet."""
+    with --with-passes makes a model client (and resolves a profile); the passes read their
+    replies under --max-calls (default 0: the cache only)."""
     from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded, stop_status
 
@@ -1190,6 +1199,57 @@ def _units_build(a: argparse.Namespace) -> int:
     if head != res.units_id:
         print(f"  not current until promoted: adr units gate --store {a.store} --candidate "
               f"{res.units_id} --max-flips 0")
+    return 0
+
+
+def _units_compile(a: argparse.Namespace) -> int:
+    """`adr units compile --procedures`: the procedure pass over the procedures of every
+    --store, under --max-calls (every transport attempt counts). A model failure other than a
+    stored input rejection, or the cap, stops it with exit 1 and nothing written; the replies
+    made are cached, so a rerun resumes."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.units.grounding import load_pass_config
+
+    stores = [Store.open(path) for path in a.store]
+    units = [procedure_pass.store_procedures(s) for s in stores]
+    for s, us in zip(stores, units, strict=True):
+        irm = sum(u.canonical_ref.startswith("IRM ") for u in us)
+        print(f"{s.path}: {len(us)} procedure(s): {irm} IRM, {len(us) - irm} bench")
+    if a.limit is not None:
+        print(f"canary: the first {a.limit} procedure(s)")
+    try:
+        meter = tables_extract.metered_client(a.max_calls, profile=a.generator)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    cfg = load_pass_config("procedure")
+    workers = a.concurrency or eval_runner.load_config().get("concurrency", 1)
+    try:
+        _, report = procedure_pass.compile_procedures(stores, meter, cfg, limit=a.limit,
+                                                      workers=workers, units=units)
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
+        return 1
+    run = {"generator": a.generator, "adapter": meter.name, "model": meter.model,
+           "max_calls": a.max_calls, "budget_units": meter.budget.calls,
+           "run_calls": report["calls"], "run_served_models": report["served_models"],
+           "served_model_mismatch": any(m != meter.model for m in report["served_models"])}
+    common = {k: v for k, v in report.items()
+              if k not in ("stores", "calls", "served_models")}
+    for s in stores:
+        out = Path(s.path) / units_overlay.UNITS_DIR / s.snapshot_id / \
+            "procedure-pass-report.json"
+        write_atomic(out, (json.dumps({**common, **run, "store": str(s.path),
+                                       **report["stores"][str(s.path)]}, indent=2,
+                                      sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8"))
+        print(f"report {out}")
+    calls = report["calls"]
+    served = ", ".join(report["served_models"]) or "none reported"
+    print(f"status: procedure pass complete; {calls['made']} model call(s) made, "
+          f"{calls['cached']} cached, {calls['failed']} failed; {meter.budget.calls} budget "
+          f"unit(s) of {a.max_calls} used; served {served}"
+          + ("; warning: a served model differs from the profile's model"
+             if run["served_model_mismatch"] else ""))
     return 0
 
 
@@ -1674,9 +1734,9 @@ def _parser() -> argparse.ArgumentParser:
                      help="the corpus whose units to build (default: the one the store's "
                           "documents are of)")
     unb.add_argument("--with-passes", default=None, metavar="PASS[,PASS]",
-                     help=f"model passes whose cached replies fill model-written fields "
-                          f"({', '.join(units_build.PASSES)}); without it the build makes no "
-                          f"model client")
+                     help=f"model passes whose replies fill model-written fields "
+                          f"({', '.join(units_build.PASSES)}; only procedure is built yet); "
+                          f"without it the build makes no model client")
     unb.add_argument("--generator", metavar="PROFILE", default=None,
                      help="model profile in config/models.json of the passes (default: config "
                           "generator)")
@@ -1684,6 +1744,26 @@ def _parser() -> argparse.ArgumentParser:
                      help="model calls the passes may make (default 0: cached replies only)")
     unb.add_argument("--json", action="store_true", help="print the result as JSON")
     unb.set_defaults(fn=_units_build)
+    unc = un_sub.add_parser("compile", help="run a model pass over the units of one or more "
+                                            "stores (cached; every transport attempt counts "
+                                            "against --max-calls)")
+    which = unc.add_mutually_exclusive_group(required=True)
+    which.add_argument("--procedures", action="store_true",
+                       help="the procedure pass: when_to_use, not_for, trigger_examples and "
+                            "problem_abstractions of every procedure")
+    unc.add_argument("--store", type=Path, action="append", required=True,
+                     help="store directory; repeatable")
+    unc.add_argument("--generator", metavar="PROFILE", required=True,
+                     help="model profile in config/models.json")
+    unc.add_argument("--max-calls", type=_non_negative, required=True,
+                     help="model calls (transport attempts, retries included) this command may "
+                          "make; 0 reads cached replies only")
+    unc.add_argument("--limit", type=_positive, default=None,
+                     help="compile only the first N procedures over the stores in order (the "
+                          "canary)")
+    unc.add_argument("--concurrency", type=_positive, default=None,
+                     help="calls in flight at once (default: config concurrency)")
+    unc.set_defaults(fn=_units_compile)
     uns = un_sub.add_parser("show", help="a build's manifest, counts per type and reports "
                                          "(default: units/HEAD)")
     uns.add_argument("--store", type=Path, required=True, help="store directory")

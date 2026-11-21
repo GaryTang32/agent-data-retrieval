@@ -504,9 +504,13 @@ def test_adr_units_build_with_passes(units_store, capsys, monkeypatch):
     code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
                         "--with-passes", "summaries"], capsys)
     assert code == 2 and "summaries" in err
-    code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
-                        "--with-passes", "procedure", "--max-calls", 0], capsys)
-    assert code == 2 and "procedure" in err and "not built yet" in err
+    # the procedure pass (Task 10) reads the cache only: a cold cache stops at the cap
+    code, out, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
+                          "--with-passes", "procedure", "--max-calls", 0], capsys)
+    assert code == 1 and "stopped at --max-calls 0 (0 budget unit(s) used)" in out
+    code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "gov",
+                        "--with-passes", "rules", "--max-calls", 0], capsys)
+    assert code == 2 and "rules" in err and "not built yet" in err
 
 
 # -- `adr units define|rules|procedures|search` (Phase 4, Task 8) ---------------------------------

@@ -638,8 +638,8 @@ def test_build_never_calls_a_model(monkeypatch, tmp_path):
         build_units(store.path, "bench", passes=("procedure",))
     with pytest.raises(ValueError, match="unknown model pass"):
         build_units(store.path, "bench", passes=("summaries",))
-    with pytest.raises(NotImplementedError, match="procedure"):
-        build_units(store.path, "bench", passes=("procedure",), client=object())
+    with pytest.raises(NotImplementedError, match="rules"):       # built with Task 15
+        build_units(store.path, "gov", passes=("rules",), client=object())
 
 
 def test_unknown_corpus_is_refused(units_store):

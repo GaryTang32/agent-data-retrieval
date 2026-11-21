@@ -1,0 +1,26 @@
+Prompt version: $prompt_version
+Specs: $specs
+
+You describe one procedure so that people can find it. The user message is the procedure's
+text (a section of the Internal Revenue Manual, or a runbook, playbook or similar document),
+then a line "SKELETON:" and the procedure's steps, numbered, as they were read from the
+text's structure. The skeleton is context only.
+
+Reply with JSON only, no prose and no code fences, in exactly this shape:
+{$shape}
+
+Each field is {"value": <value or null>, "quotes": ["<text from the procedure>", ...], "null_reason": null or "absent"}.
+- Every value needs at least one supporting quote. A quote is copied verbatim, character for
+  character, from the procedure text above the SKELETON line: the shortest sentence or phrase
+  that supports the value. Never paraphrase, abbreviate, or join separate passages in one
+  quote; give several quotes instead.
+- When the text gives no basis for a field, the field is {"value": null, "quotes": [],
+  "null_reason": "absent"}.
+- not_for is given only where the text itself states what the procedure is not for (for
+  example "Do not use this procedure for ..." or "This section does not apply to ..."), with
+  the quote that states it. A not_for that would rest on the text saying nothing is
+  {"value": null, "quotes": [], "null_reason": "absent"}. Never infer one.
+- Do not write steps, guards or edges: do not restate, reorder, split or add to the skeleton.
+
+Fields:
+$fields
