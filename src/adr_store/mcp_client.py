@@ -1,5 +1,6 @@
 """A blocking client of an `adr mcp` server process, shaped like `adr_store.tools.Tools` (the
-eight tool methods, the same result dataclasses, the same exceptions), so code written against
+tool methods of `mcp_server.TOOL_NAMES`, the same result dataclasses, the same exceptions), so
+code written against
 the Python API (the tests, the leak probes of `adr_eval.probes.acl`) can run through MCP
 unchanged.
 
@@ -40,9 +41,15 @@ def result_of(name: str, d: dict):
     if name == "search_tools":
         return tools.SearchToolsResult(**{**d, "hits": [tools.ToolHit(**h)
                                                         for h in d["hits"]]})
+    if name == "define":
+        return tools.DefineResult(**{**d, "senses": [tools.Sense(**x) for x in d["senses"]]})
+    if name == "rule_lookup":
+        return tools.RuleLookupResult(**{**d, "cards": [tools.RuleCard(**c)
+                                                        for c in d["cards"]]})
     return {"read": tools.ReadResult, "load_tool": tools.LoadToolResult,
             "describe_tables": tools.DescribeResult, "query_table": tools.QueryResult,
-            "sql": tools.SqlResult}[name](**d)
+            "sql": tools.SqlResult, "procedure_lookup": tools.ProcedureLookupResult,
+            "unit_search": tools.UnitSearchResult}[name](**d)
 
 
 def error_of(text: str) -> tools.ToolError:
@@ -67,7 +74,7 @@ def server_parameters(store: Path, caller: str | None, *, emb_cache: Path | None
 
 
 class McpTools:
-    """The eight tools of one `adr mcp` server process (module docstring). Close it (or use
+    """The tools of one `adr mcp` server process (module docstring). Close it (or use
     it as a context manager) to stop the server."""
 
     def __init__(self, store: Path, caller: str | None, *, emb_cache: Path | None = None,
@@ -146,4 +153,23 @@ class McpTools:
 
     def sql(self, statement, *, applicability=None, handle=None):
         return self._run("sql", statement=statement, applicability=applicability,
+                         handle=handle)
+
+    def define(self, term, context=None, *, as_of=None, include_superseded=None, handle=None):
+        return self._run("define", term=term, context=context, as_of=as_of,
+                         include_superseded=include_superseded, handle=handle)
+
+    def rule_lookup(self, query=None, *, rule_id=None, part=None, as_of=None,
+                    include_superseded=None, closure=None, limit=None, handle=None):
+        return self._run("rule_lookup", query=query, rule_id=rule_id, part=part, as_of=as_of,
+                         include_superseded=include_superseded, closure=closure, limit=limit,
+                         handle=handle)
+
+    def procedure_lookup(self, task=None, *, id=None, view=None, as_of=None, limit=None,
+                         handle=None):
+        return self._run("procedure_lookup", task=task, id=id, view=view, as_of=as_of,
+                         limit=limit, handle=handle)
+
+    def unit_search(self, query, types=None, *, as_of=None, limit=None, handle=None):
+        return self._run("unit_search", query=query, types=types, as_of=as_of, limit=limit,
                          handle=handle)

@@ -155,32 +155,33 @@ Log lines of the tool tools carry `tools_snapshot`, `tool_index`, `tool_view`, `
 
 Snapshot handles and cursors (Phase 2 spec §9.2, §9.3; Task 12). Every result of the tool calls
 carries `handle` (`adr_store.handles`: the content snapshot, the active index with its system
-and weight, the applicability and dedup overlays, the tool snapshot, the active tool index and
-the tables (Phase 3) the call ran on; a part the store lacks is null), and each of them takes
-`handle=`: the call then runs on exactly those parts (`handles.resolve`: a part that is gone is
-"handle no longer available: <part>", parts that do not belong together a "bad handle"; never a
-fallback to HEAD), so a replay with a result's handle gives that result again. A handle is
-resolved after the caller's access (the ACL first: a caller without access learns nothing about
-a handle) and never stands in for it (ruling R15): F1–F5 are decided against HEAD and the
-current ACL snapshot whatever the handle names, an older content snapshot's documents are
-visible only as the current ACL lists them (a document it holds that the ACL no longer lists is
-"not found", byte for byte as one that never existed; a chain the current ACL thereby splits is
-F1, whose message says to use a current handle and names snapshots only), and an older tool
-snapshot's tools likewise; the `view` logged is that of the snapshot read. A replay gives the
-result again, the dedup note of a handle without a dedup overlay included (an overlay built
-since is not used, and the note is `dedup.missing`'s, as before). Without a handle, a result's
-handle is the store as the call found it: what the call used, and the rest as it is now
-(`handles.current`, which never fails: a damaged record is a null part, so such a call behaves
-as before handles existed). A handle given is logged in `args` (as a dict); every line carries
-`handle` (the result's, or the one given when the call failed). `search` and `grep` page with
-`cursor`, the previous result's `next_cursor`: for `search` a rank offset (ranks offset+1 to
-offset+top of the same ranking, at most `CHANNEL_K` deep, `RERANK_TOP` for a reranked index;
-`next_cursor` is set when the page is full and that depth is not reached), for `grep`
-"<doc_id>:<offset>" after the last match (the continuation of the same scan: the documents after
-that id, and that document from that offset when the caller sees it; a cursor naming a document
-the caller cannot see behaves as one naming none; `next_cursor` is set when the page was cut).
-An id, query, pattern or cursor that is not a string is refused ("<argument> must be a string,
-got <type>"), the same message whatever the store holds.
+and weight, the applicability and dedup overlays, the tool snapshot, the active tool index, the
+tables (Phase 3) and the units (Phase 4) the call ran on; a part the store lacks is null), and
+each of them takes `handle=`: the call then runs on exactly those parts (`handles.resolve`: a
+part that is gone is "handle no longer available: <part>", parts that do not belong together a
+"bad handle"; never a fallback to HEAD), so a replay with a result's handle gives that result
+again. A handle is resolved after the caller's access (the ACL first: a caller without access
+learns nothing about a handle) and never stands in for it (ruling R15): F1–F5 are decided
+against HEAD and the current ACL snapshot whatever the handle names, an older content
+snapshot's documents are visible only as the current ACL lists them (a document it holds that
+the ACL no longer lists is "not found", byte for byte as one that never existed; a chain the
+current ACL thereby splits is F1, whose message says to use a current handle and names
+snapshots only), and an older tool snapshot's tools likewise; the `view` logged is that of the
+snapshot read. A replay gives the result again, the dedup note of a handle without a dedup
+overlay included (an overlay built since is not used, and the note is `dedup.missing`'s, as
+before). Without a handle, a result's handle is the store as the call found it: what the call
+used, and the rest as it is now (`handles.current`, which never fails: a damaged record is a
+null part, so such a call behaves as before handles existed). A handle given is logged in
+`args` (as a dict); every line carries `handle` (the result's, or the one given when the call
+failed). `search` and `grep` page with `cursor`, the previous result's `next_cursor`: for
+`search` a rank offset (ranks offset+1 to offset+top of the same ranking, at most `CHANNEL_K`
+deep, `RERANK_TOP` for a reranked index; `next_cursor` is set when the page is full and that
+depth is not reached), for `grep` "<doc_id>:<offset>" after the last match (the continuation of
+the same scan: the documents after that id, and that document from that offset when the caller
+sees it; a cursor naming a document the caller cannot see behaves as one naming none;
+`next_cursor` is set when the page was cut). An id, query, pattern or cursor that is not a
+string is refused ("<argument> must be a string, got <type>"), the same message whatever the
+store holds.
 
 Typed tables (Phase 3 spec §8, §9; Task 6). `describe_tables(table=None)` returns the semantic
 layer of the tables (`tables.semantic`: the index, or one table's detail), `query_table(table,
@@ -205,6 +206,45 @@ and the handle. Log lines of the three carry `tables`; `query_table` and `sql` a
 `applicability` and `applicability_filters`; `sql` logs `args` = {`statement_sha256`,
 `applicability`}, `sql_sha256` and `sql_rows` (the row count), never the statement's text or a
 row. The tables' `.report.json` files are operator reports and are never read here.
+
+Knowledge units (Phase 4 spec §7, §8.3, §9.2, §11; Task 8). `define(term, context, as_of=,
+include_superseded=)`, `rule_lookup(query | rule_id=, part=, as_of=, include_superseded=,
+closure=, limit=)`, `procedure_lookup(task | id=, view=, as_of=, limit=)` and
+`unit_search(query, types, as_of=, limit=)` run through `_call` like the tools above (the ACL
+resolved on entry, then the handle pinned) and read the build that `units/HEAD` names (moved
+only by the units merge gate, `units.gate`) when its manifest is of the call's content
+snapshot, or the build the handle names (`handles.Handle.units`; a handle without one, such as
+one saved before Phase 4, is refused with `NO_HANDLE_UNITS`); otherwise `NO_UNITS`. Never a
+fallback to HEAD. Each unit belongs to one document and inherits its access and Phase 2
+envelope (P5, P31): a call considers only the units of the documents of the caller's view that
+the filters admit (the default drops superseded documents; `as_of` and `include_superseded` as
+for `search`), and it does so before any ranking. The unit index (`units.index`, lexical-only
+under preflight ruling C8, so no call loads an embedding model; one per build, kept in a
+process LRU of `UNIT_CACHE` builds) takes the caller's view as `view`, which sets its BM25
+statistics and concept expansion, and the admitted documents as `admitted`, a mask only (P41),
+so a caller's results equal a store of the caller's documents alone (criterion S1). A hidden
+unit, sense, label or closure entry does not exist: an unknown, malformed, hidden or filtered
+rule id is `UNKNOWN_RULE`, a procedure id `UNKNOWN_PROCEDURE`, both byte for byte; the hidden
+ids a request named are logged in `not_visible`, never returned. `rule_lookup(rule_id=…)`
+normalises with `units.ecfr.normalise_rule_id` ("§117.1081(a)(2)", "33 CFR 117.1081 (a)(2)",
+"117.1081(a)(2)") and returns the cards whose provision id is it or lies under it (a section id
+gives every card of the section), newest version first, then in document order; at most
+`limit` (`UNIT_LIMIT_MAX` at most), with `truncated` when more matched. A query ranks cards;
+`part` masks to one CFR part. Each card carries its closure (one level, in `RELATIONS` order,
+each entry's text re-sliced from the document; an entry whose target the caller cannot see is
+dropped; an entry already shown under an earlier card of the result is not repeated).
+`define` matches the term's base key against preferred and alternate labels, then hidden
+labels, and ranks senses by whether the scope holds `context` (a canonical ref or unit id; the
+subpart of a bare ref comes from the visible card of its section in force), then narrowest
+scope, then unit id; an unknown term gives no sense and at most `NEAREST` visible labels by
+edit distance (ties by label), which clients show as `NO_DEFINITION`. `procedure_lookup`
+gives catalog entries (canonical ref, title, `when_to_use`) ranked for a task, or one
+procedure as its catalog entry, SKILL.md, Mermaid or IR (`units.render`; SKILL.md keeps the
+spec's own limits, and the IR is the whole body however large). `unit_search` ranks units of
+any type; a hit carries the envelope, the first span, a reader text (never aids) of at most
+`HIT_TEXT_MAX` characters with `truncated` beyond, and a table record's pointer. Results carry
+the units id, the filters applied (`applicability_filters`) and the handle; log lines carry
+`units`, `filters` and `applicability` beside the Phase 2 fields.
 """
 
 from __future__ import annotations
@@ -227,7 +267,7 @@ from itertools import chain
 from multiprocessing.connection import Connection
 from pathlib import Path
 from re import _parser as re_parser
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -253,10 +293,19 @@ from adr_store.retrieval.tool_index import ToolIndex, tool_view_id
 from adr_store.store import Store, StoreError, write_atomic
 from adr_store.tables.engine import QUERY_LIMIT, QueryError, ViewDB, contracts_of, run_query
 from adr_store.tables.overlay import Manifest
+from adr_store.tables.parse import base_key
 from adr_store.tables.semantic import UnknownTable, describe
 from adr_store.tables.sqlguard import SQL_ROW_CAP, SqlRefused, run_sql
 from adr_store.tool_catalog import ToolCatalog
 from adr_store.tool_records import definition as tool_definition
+from adr_store.units import index as units_index
+from adr_store.units.concepts import _KIND_RANK, _UNIT_ID, scope_contains
+from adr_store.units.contracts import UNIT_TYPES
+from adr_store.units.ecfr import _TITLE_OF_PART, normalise_rule_id
+from adr_store.units.envelope import Unit
+from adr_store.units.overlay import UnitsManifest, load_units
+from adr_store.units.procedures import ProcedureBody
+from adr_store.units.render import render_mermaid, render_skill
 
 GREP_MAX = 100
 GREP_TIMEOUT, GREP_TIMEOUT_MAX = 10.0, 60.0  # seconds a grep pattern may spend matching
@@ -283,6 +332,18 @@ NO_TABLES = "no tables for snapshot {}…; run `adr tables build` and `adr table
 NO_HANDLE_TABLES = "the handle names no tables; call without a handle or with a current one"
 TABLE_DB_CACHE = 8  # per-view table databases per Tools instance (LRU, see `_view_db`)
 QUERY_ROW_CAP = SQL_ROW_CAP  # ids of a `list`, groups of a `count_by` (one more: truncated)
+NO_UNITS = "no units for snapshot {}…; run `adr units build` and `adr units gate`"
+NO_HANDLE_UNITS = "the handle names no units; call without a handle or with a current one"
+UNKNOWN_RULE = "no rule card with that rule_id is in force for this caller"
+UNKNOWN_PROCEDURE = "no procedure with that id"
+NO_DEFINITION = "no definition"
+UNIT_LIMIT_MAX = 100  # most hits, cards or catalog entries one unit call returns
+NEAREST = 5  # labels `define` suggests for an unknown term
+HIT_TEXT_MAX = 1_000  # characters of reader text in a `unit_search` hit (`truncated` beyond)
+PROCEDURE_VIEWS = ("catalog", "skill", "mermaid", "ir")
+UNIT_CACHE = 4  # unit builds (units, index) kept in memory, by store and units id
+_UNIT_SETS: OrderedDict[tuple[str, str, str], _UnitSet] = OrderedDict()
+_UNIT_LOCK = threading.Lock()
 
 
 class ToolError(Exception):
@@ -527,6 +588,87 @@ class SqlResult(_Result):
     applicability: str | None
     applicability_filters: dict
     excluded_by_filter: int
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class Sense(_Result):
+    """One visible sense of a defined term: the concept unit, its scope and definition."""
+
+    unit_id: str
+    term: str  # the concept's preferred label
+    scope: dict  # {kind, ref}
+    definition: str  # the definition text (verbatim)
+    doc_id: str
+    start: int  # the definition's span in the document
+    end: int
+
+
+@dataclass(frozen=True)
+class DefineResult(_Result):
+    term: str
+    senses: list[Sense]  # ranked: scope holds the context, then narrowest, then unit id
+    nearest: list[str]  # with no sense: at most `NEAREST` visible labels by edit distance
+    snapshot: str
+    units: str
+    applicability_filters: dict
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class RuleCard(_Result):
+    """A rule card as `rule_lookup` returns it; `closure` entries are `{relation, ref,
+    unit_id, doc_id, start, end, text}`, the text re-sliced from the document."""
+
+    unit_id: str
+    rule_id: str  # the canonical ref, "33 CFR 117.1081(a)(2)"
+    rule_version: str  # text_sha12
+    doc_id: str
+    modality: str
+    text: str
+    start: int
+    end: int
+    conditions: list | None  # where extracted (enrichment), else None
+    bindings: list[dict]
+    closure: list[dict]
+
+
+@dataclass(frozen=True)
+class RuleLookupResult(_Result):
+    query: str | None
+    rule_id: str | None
+    cards: list[RuleCard]
+    snapshot: str
+    units: str
+    applicability_filters: dict
+    excluded_by_filter: int
+    truncated: bool = False  # a rule_id matched more cards than `limit`
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class ProcedureLookupResult(_Result):
+    task: str | None
+    id: str | None
+    view: str
+    catalog: list[dict] | None  # {rank, unit_id, canonical_ref, title, when_to_use, doc_id,
+    #                             score}
+    rendering: str | dict | None  # SKILL.md, Mermaid or the IR of the procedure `id`
+    snapshot: str
+    units: str
+    applicability_filters: dict
+    handle: dict | None = None
+
+
+@dataclass(frozen=True)
+class UnitSearchResult(_Result):
+    query: str
+    types: list[str]
+    hits: list[dict]  # {rank, unit_id, type, title, canonical_ref, doc_id, start, end,
+    #                   status, score, text, truncated, pointer}
+    snapshot: str
+    units: str
+    applicability_filters: dict
     handle: dict | None = None
 
 
@@ -792,6 +934,167 @@ class _GrepWorker:
         return value
 
 
+# -- knowledge units (Phase 4) ---------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _UnitSet:
+    """The units of one build and their lexical unit index (C8: `emb=None`), shared by every
+    `Tools` of the process while the build is one of the `UNIT_CACHE` last used, by (store,
+    units id, the corpus's field weights from `config/units/tuning.json`). A build is
+    immutable (its id is the SHA-256 of a manifest naming every file by its hash), so the
+    cache never changes an answer."""
+
+    units_id: str
+    corpus: str
+    types: tuple[str, ...]
+    units: dict[str, Unit]
+    by_type: dict[str, list[Unit]]  # each sorted by unit id
+    index: units_index.UnitIndex
+
+    @classmethod
+    def of(cls, store_path: Path, units_id: str, manifest: UnitsManifest) -> _UnitSet:
+        tuning = units_index.load_tuning(manifest.corpus)
+        key = (str(Path(store_path).resolve()), units_id, json.dumps(tuning, sort_keys=True))
+        with _UNIT_LOCK:
+            if key in _UNIT_SETS:
+                _UNIT_SETS.move_to_end(key)
+                return _UNIT_SETS[key]
+        units = sorted(load_units(store_path, manifest), key=lambda u: u.unit_id)
+        by_type: dict[str, list[Unit]] = {}
+        for u in units:
+            by_type.setdefault(u.type, []).append(u)
+        docs = units_index.unit_docs(units, by_type.get("concept", []))
+        index = units_index.UnitIndex.build(store_path, units_id, docs, None, tuning)
+        found = cls(units_id, manifest.corpus, tuple(f.type for f in manifest.units),
+                    {u.unit_id: u for u in units}, by_type, index)
+        with _UNIT_LOCK:
+            _UNIT_SETS[key] = found
+            _UNIT_SETS.move_to_end(key)
+            while len(_UNIT_SETS) > UNIT_CACHE:
+                _UNIT_SETS.popitem(last=False)
+        return found
+
+
+_PART = re.compile(r"^(?:(\d+)\s*C\.?\s?F\.?\s?R\.?\s*)?(?:part\s+)?(\d+)$", re.IGNORECASE)
+
+
+def _part_prefix(part: str) -> str:
+    """"<title> CFR <part>" for a part written as "33 CFR 117", "33 CFR part 117", "part 117"
+    or "117" (a bare number takes its title as `normalise_rule_id` does)."""
+    m = _PART.match(part.strip())
+    title = None if m is None else (m.group(1) or _TITLE_OF_PART.get(m.group(2)))
+    if title is None:
+        raise ToolError(f"bad part {part!r}: give a CFR part, such as '33 CFR 117' or '117'")
+    return f"{int(title)} CFR {m.group(2)}"
+
+
+def _unit_limit(limit: object) -> int:
+    if isinstance(limit, bool) or not isinstance(limit, int) or \
+            not 1 <= limit <= UNIT_LIMIT_MAX:
+        raise ToolError(f"limit must be between 1 and {UNIT_LIMIT_MAX}, got {limit!r}")
+    return limit
+
+
+def _unit_types(types: object) -> tuple[str, ...] | None:
+    """The unit types a `unit_search` masks to (sorted, distinct), None for every type."""
+    if types is None:
+        return None
+    if not isinstance(types, (list, tuple)) or not types or \
+            not all(isinstance(t, str) and t in UNIT_TYPES for t in types):
+        raise ToolError(f"types must be a non-empty list of unit types "
+                        f"({', '.join(UNIT_TYPES)}), got {_filters_arg(types)!r}")
+    return tuple(sorted(set(types)))
+
+
+def _under(ref: str, target: str) -> bool:
+    """Whether provision `ref` is `target` or lies under it ("33 CFR 117.5(p1)" is under
+    "33 CFR 117.5"; "33 CFR 117.50" is not)."""
+    return ref == target or ref.startswith(target + "(")
+
+
+def _section_of(ref: str) -> str:
+    return re.sub(r"\s*\(.*$", "", ref)
+
+
+def _subpart(unit: Unit) -> str | None:
+    return next((h.removeprefix("Subpart ") for h in unit.heading_path
+                 if h.startswith("Subpart ")), None)
+
+
+def _span(unit: Unit) -> tuple[int, int]:
+    """The unit's first source span: a card's paragraph, a concept's first definition."""
+    return unit.source_refs[0].start, unit.source_refs[0].end
+
+
+def _model_value(field: object):
+    """The value of a model-written body field when it was extracted, else None."""
+    return field.get("value") if isinstance(field, dict) and field.get("status") else None
+
+
+def _labels(concept: Unit) -> list[str]:
+    return [concept.body["pref_label"], *concept.body["alt_labels"]]
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Levenshtein distance (insert, delete, substitute; each 1)."""
+    if len(a) < len(b):
+        a, b = b, a
+    row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        prev, row[0] = row[0], i
+        for j, cb in enumerate(b, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (ca != cb))
+    return row[-1]
+
+
+def _reader_text(unit: Unit) -> str:
+    """The reader text of a unit for a search hit (§11.1: body fields, never its aids)."""
+    b = unit.body
+    if unit.type == "concept":
+        return b["definition"]["text"]
+    if unit.type == "rule_card":
+        return b["text"]
+    if unit.type == "procedure":
+        value = _model_value(b.get("when_to_use"))
+        if isinstance(value, str):
+            return value
+        return "\n".join(s["text"] for s in b["steps"] if s["text"])
+    if unit.type == "faq":
+        if b.get("question") is not None:
+            return f"Q: {b['question']['text']}\nA: {b['answer']['text']}"
+        return "\n".join(f"{f.capitalize()}: {b[f]['text']}"
+                         for f in ("issue", "environment", "cause", "resolution")
+                         if b.get(f) is not None)
+    if unit.type == "table_record":
+        return b["description"]
+    return unit.title
+
+
+def _catalog_entry(unit: Unit, rank: int, score: float | None) -> dict:
+    value = _model_value(unit.body.get("when_to_use"))
+    return {"rank": rank, "unit_id": unit.unit_id, "canonical_ref": unit.canonical_ref,
+            "title": unit.title, "when_to_use": value if isinstance(value, str) else None,
+            "doc_id": unit.doc_id, "score": score}
+
+
+def _hit(unit: Unit, rank: int, score: float) -> dict:
+    text = _reader_text(unit)
+    start, end = _span(unit)
+    return {"rank": rank, "unit_id": unit.unit_id, "type": unit.type, "title": unit.title,
+            "canonical_ref": unit.canonical_ref, "doc_id": unit.doc_id, "start": start,
+            "end": end, "status": unit.applicability.status, "score": score,
+            "text": text[:HIT_TEXT_MAX], "truncated": len(text) > HIT_TEXT_MAX,
+            "pointer": unit.body.get("pointer") if unit.type == "table_record" else None}
+
+
+def _card_order(unit: Unit) -> tuple:
+    """Cards of one rule id: the newest version first, then document order."""
+    when = unit.applicability.effective_from
+    return (when is None, -(when.toordinal() if when else 0), unit.doc_id, _span(unit)[0],
+            unit.unit_id)
+
+
 # -- the tools ------------------------------------------------------------------------------
 
 
@@ -805,7 +1108,8 @@ class Tools:
     principal. Calls on one instance run one at a time.
 
     Only the tool methods (`search`, `read`, `grep`, `search_tools`, `load_tool`,
-    `describe_tables`, `query_table`, `sql`) serve a caller; the MCP layer must call nothing
+    `describe_tables`, `query_table`, `sql`, `define`, `rule_lookup`, `procedure_lookup`,
+    `unit_search`) serve a caller; the MCP layer must call nothing
     else. `index`, `tools_index`, `active_index`, `active_system` and `active_tool_index` are
     operator calls, refused with the ACL layer (`index` and `tools_index` after resolving
     access, so they are logged with the caller's decision)."""
@@ -1040,7 +1344,7 @@ class Tools:
                     self.store_path, active["fingerprint"]) is None:
                 active = None
             known["index"] = active
-        for part in ("applicability", "dedup", "tools", "tool_index", "tables"):
+        for part in ("applicability", "dedup", "tools", "tool_index", "tables", "units"):
             if part in self._memo:
                 known[part] = self._memo[part]
         if "dedup" not in known and known["index"] is not None and self._index is not None \
@@ -2170,3 +2474,294 @@ class Tools:
         return {"applicability": None if applied.overlay is None else applied.overlay.overlay_id,
                 "applicability_filters": applied.filters.to_dict(),
                 "excluded_by_filter": applied.excluded}
+
+    # -- knowledge units (Phase 4) -----------------------------------------------------
+
+    def _units(self, fields: dict) -> _UnitSet:
+        """The unit build the call reads (logged in `fields`): the handle's, or `units/HEAD`
+        when its manifest is of the call's content snapshot (NO_UNITS otherwise: a build not
+        yet promoted, or one of an older snapshot, is never used; NO_HANDLE_UNITS for a
+        handle without units). Never a fallback to HEAD."""
+        if self._pin is not None:
+            units_id = self._pin.units
+            if units_id is None:
+                raise ToolError(NO_HANDLE_UNITS)
+        else:
+            units_id = handles_mod.units_head(self.store_path, self.snapshot)
+            if units_id is None:
+                raise ToolError(NO_UNITS.format(self.snapshot[:12]))
+        m = handles_mod.units_manifest(self.store_path, units_id)
+        if m is None or m.snapshot != self.snapshot:
+            if self._pin is not None:  # checked on entry: removed or damaged since
+                raise handles_mod.unavailable("units")
+            raise ToolError(NO_UNITS.format(self.snapshot[:12]))
+        fields["units"] = self._memo["units"] = units_id
+        return _UnitSet.of(self.store_path, units_id, m)
+
+    def _unit_scope(self, filters: dict, fields: dict
+                    ) -> tuple[_Applied, frozenset[str] | None, frozenset[str] | None,
+                               frozenset[str]]:
+        """(the filters applied, the caller's view, the documents the filters admit in it,
+        the documents whose units the call may return). The view (None without the ACL
+        layer: every document) sets the unit index's statistics; the admitted documents
+        (None: the whole view) only mask it, before any cut (P41, Phase 2 §6.2)."""
+        applied = self._apply(filters, fields)
+        view = None if self._access_now is None else frozenset(self._doc_ids())
+        admitted = applied.allowed
+        allowed = frozenset(self.store.doc_ids()) if admitted is None else admitted
+        return applied, view, admitted, allowed
+
+    def _note_hidden(self, units: list[Unit], view: frozenset[str] | None) -> None:
+        """Log (never return) the ids of units a request named that the caller cannot see."""
+        if self._not_visible is not None and view is not None:
+            self._not_visible += [u.unit_id for u in units if u.doc_id not in view]
+
+    @staticmethod
+    def _unit_fields() -> dict:
+        return {"units": None, "filters": None, "applicability": None}
+
+    def _sense_context(self, context: str | None, us: _UnitSet, allowed: frozenset[str]
+                       ) -> tuple[str | None, str | None]:
+        """(the canonical ref of `context`, the subpart holding it). A unit id gives its
+        ref; another context is normalised as a rule id when it is one. The subpart comes
+        from the context unit when the caller may see it, else from a visible rule card in
+        force (the filters applied) of the context's section."""
+        if context is None:
+            return None, None
+        c = context.strip()
+        unit = None
+        if m := _UNIT_ID.match(c):
+            ref = m.group(1)
+            u = us.units.get(c)
+            unit = u if u is not None and u.doc_id in allowed else None
+        else:
+            ref = normalise_rule_id(c) or c
+        if unit is None:
+            section = _section_of(ref)
+            unit = next((u for u in us.by_type.get("rule_card", ())
+                         if u.doc_id in allowed and _section_of(u.canonical_ref) == section),
+                        None)
+        return ref, None if unit is None else _subpart(unit)
+
+    def define(self, term: str, context: str | None = None, *, as_of=None,
+               include_superseded: bool = False,
+               handle: handles_mod.Handle | dict | None = None) -> DefineResult:
+        """Every visible sense of `term` (§7): concepts whose preferred or alternate label
+        has its base key, else whose hidden labels hold it, among the units of the
+        documents of the caller's view that the filters (`as_of`, `include_superseded`)
+        admit; ranked by whether the scope holds `context` (a canonical ref or unit id),
+        then narrowest scope, then unit id. No sense: `nearest` holds at most `NEAREST`
+        visible labels by edit distance (ties by label). `handle` pins the call."""
+        fields = self._unit_fields()
+
+        def run():
+            _must_be_str(term, "term")
+            _must_be_str(context, "context", optional=True)
+            us = self._units(fields)
+            applied, _, _, allowed = self._unit_scope(
+                {"as_of": as_of, "include_superseded": include_superseded}, fields)
+            concepts = [u for u in us.by_type.get("concept", ()) if u.doc_id in allowed]
+            key = base_key(term)
+            found = [u for u in concepts if key and key in {base_key(x) for x in _labels(u)}]
+            if not found:
+                found = [u for u in concepts if key and key in u.body["hidden_labels"]]
+            ref, sub = self._sense_context(context, us, allowed)
+
+            def rank(u: Unit) -> tuple:
+                scope = u.body["scope"]
+                inside = ref is not None and scope_contains(scope["ref"], ref, subpart=sub)
+                return (not inside, _KIND_RANK.get(scope["kind"], len(_KIND_RANK)), u.unit_id)
+
+            senses = [Sense(u.unit_id, u.body["pref_label"], dict(u.body["scope"]),
+                            u.body["definition"]["text"], u.doc_id,
+                            *u.body["definition"]["span"]) for u in sorted(found, key=rank)]
+            nearest = []
+            if not senses:
+                labels = sorted({x for u in concepts for x in _labels(u)})
+                nearest = sorted(labels, key=lambda x: (_edit_distance(key, base_key(x)), x)
+                                 )[:NEAREST]
+            res = DefineResult(term, senses, nearest, self.snapshot, us.units_id,
+                               applied.filters.to_dict(), handle=self._result_handle())
+            return res, [x.unit_id for x in senses], {}
+
+        args = {"term": _filters_arg(term), "context": _filters_arg(context),
+                "as_of": _filters_arg(as_of), "include_superseded": include_superseded}
+        return self._call("define", args, run, fields, handle=handle)
+
+    def rule_lookup(self, query: str | None = None, *, rule_id: str | None = None,
+                    part: str | None = None, as_of=None, include_superseded: bool = False,
+                    closure: bool = True, limit: int = 10,
+                    handle: handles_mod.Handle | dict | None = None) -> RuleLookupResult:
+        """Rule cards (§8, §11.2): ranked for `query` by the unit index, or every card of
+        `rule_id` (normalised: "§117.1081(a)(2)", "33 CFR 117.1081 (a)(2)", "117.1081(a)(2)";
+        a section id returns every card at or under it, newest version first, then in
+        document order), at most `limit` (`truncated` when a rule id matched more). Only
+        cards of the documents of the caller's view that the filters admit, and of `part`
+        when given, are considered, before any ranking. An unknown, malformed, hidden or
+        filtered rule id is `UNKNOWN_RULE`. With `closure`, each card carries its closure
+        (one level, in `RELATIONS` order) with the text re-sliced; an entry already shown
+        under an earlier card is not repeated. `handle` pins the call."""
+        fields = self._unit_fields()
+
+        def run():
+            _must_be_str(query, "query", optional=True)
+            _must_be_str(rule_id, "rule_id", optional=True)
+            _must_be_str(part, "part", optional=True)
+            if (query is None) == (rule_id is None):
+                raise ToolError("give a query or a rule_id, not both")
+            if not isinstance(closure, bool):
+                raise ToolError(f"closure must be true or false, got {closure!r}")
+            n = _unit_limit(limit)
+            prefix = None if part is None else _part_prefix(part)
+            us = self._units(fields)
+            applied, view, admitted, allowed = self._unit_scope(
+                {"as_of": as_of, "include_superseded": include_superseded}, fields)
+            cards = us.by_type.get("rule_card", [])
+            if prefix is not None:
+                allowed = allowed & {u.doc_id for u in cards
+                                     if u.canonical_ref.startswith(prefix + ".")}
+                admitted = allowed
+            truncated = False
+            if rule_id is not None:
+                rid = normalise_rule_id(rule_id)
+                named = [] if rid is None else [u for u in cards if _under(u.canonical_ref, rid)]
+                self._note_hidden(named, view)
+                hits = sorted((u for u in named if u.doc_id in allowed), key=_card_order)
+                if not hits:
+                    raise ToolError(UNKNOWN_RULE)
+                truncated, hits = len(hits) > n, hits[:n]
+            else:
+                hits = [us.units[i] for i, _ in us.index.search(
+                    query, types=("rule_card",), view=view, admitted=admitted, k=n)]
+            out = self._rule_cards(hits, us, allowed, closure)
+            res = RuleLookupResult(query, rule_id, out, self.snapshot, us.units_id,
+                                   applied.filters.to_dict(), applied.excluded, truncated,
+                                   handle=self._result_handle())
+            return res, [c.unit_id for c in out], {}
+
+        args = {"query": _filters_arg(query), "rule_id": _filters_arg(rule_id),
+                "part": _filters_arg(part), "as_of": _filters_arg(as_of),
+                "include_superseded": include_superseded, "closure": closure,
+                "limit": _filters_arg(limit)}
+        return self._call("rule_lookup", args, run, fields, handle=handle)
+
+    def _rule_cards(self, hits: list[Unit], us: _UnitSet, allowed: frozenset[str],
+                    closure: bool) -> list[RuleCard]:
+        texts: dict[str, str] = {}
+
+        def text(doc_id: str, start: int, end: int) -> str:
+            if doc_id not in texts:
+                texts[doc_id] = self.store.text(doc_id)
+            return texts[doc_id][start:end]
+
+        shown: set[tuple[str, int, int]] = set()
+        out = []
+        for u in hits:
+            entries = []
+            if closure:
+                mine = set()
+                for e in u.body["closure"]:
+                    target = us.units.get(e["unit_id"]) if e["unit_id"] is not None else None
+                    if e["doc_id"] not in allowed or (e["unit_id"] is not None and (
+                            target is None or target.doc_id not in allowed)):
+                        continue  # a hidden target does not exist
+                    key = (e["doc_id"], *e["span"])
+                    if key in shown:
+                        continue
+                    mine.add(key)
+                    entries.append({"relation": e["relation"], "ref": e["ref"],
+                                    "unit_id": e["unit_id"], "doc_id": e["doc_id"],
+                                    "start": key[1], "end": key[2], "text": text(*key)})
+                shown |= mine
+            b = u.body
+            out.append(RuleCard(u.unit_id, u.canonical_ref, u.version, u.doc_id, b["modality"],
+                                b["text"], *_span(u), _model_value(b.get("conditions")),
+                                [{"id": x} for x in b.get("bindings", [])], entries))
+        return out
+
+    def procedure_lookup(self, task: str | None = None, *, id: str | None = None,
+                         view: Literal["catalog", "skill", "mermaid", "ir"] = "catalog",
+                         as_of=None, limit: int = 5,
+                         handle: handles_mod.Handle | dict | None = None
+                         ) -> ProcedureLookupResult:
+        """Procedures (§9.2): catalog entries (canonical ref, title, `when_to_use`) ranked
+        for `task`, at most `limit`; or the procedure `id` (a unit id or canonical ref) as
+        its catalog entry, SKILL.md, Mermaid or IR (`view`). Only procedures of the
+        documents of the caller's view that the filters admit (`as_of`; superseded ones
+        excluded) are considered; an unknown or hidden id is `UNKNOWN_PROCEDURE`. One level
+        of disclosure. `handle` pins the call."""
+        fields = self._unit_fields()
+
+        def run():
+            _must_be_str(task, "task", optional=True)
+            _must_be_str(id, "id", optional=True)
+            if view not in PROCEDURE_VIEWS:
+                raise ToolError(f"view must be one of {', '.join(PROCEDURE_VIEWS)}, got "
+                                f"{_filters_arg(view)!r}")
+            if (task is None) == (id is None):
+                raise ToolError("give a task or an id, not both")
+            if task is not None and view != "catalog":
+                raise ToolError(f"view {view} renders one procedure: give its id (from the "
+                                f"catalog of a task)")
+            n = _unit_limit(limit)
+            us = self._units(fields)
+            applied, docs, admitted, allowed = self._unit_scope({"as_of": as_of}, fields)
+            catalog = rendering = None
+            if task is not None:
+                catalog = [_catalog_entry(us.units[i], rank, score) for rank, (i, score)
+                           in enumerate(us.index.search(task, types=("procedure",), view=docs,
+                                                        admitted=admitted, k=n), 1)]
+                shown = [e["unit_id"] for e in catalog]
+            else:
+                named = us.units.get(id)
+                named = [named] if named is not None and named.type == "procedure" else [
+                    u for u in us.by_type.get("procedure", ()) if u.canonical_ref == id]
+                self._note_hidden(named, docs)
+                unit = next((u for u in named if u.doc_id in allowed), None)
+                if unit is None:
+                    raise ToolError(UNKNOWN_PROCEDURE)
+                if view == "catalog":
+                    catalog = [_catalog_entry(unit, 1, None)]
+                elif view == "skill":
+                    rendering = render_skill(unit)
+                elif view == "mermaid":
+                    rendering = render_mermaid(ProcedureBody.model_validate(unit.body))
+                else:
+                    rendering = json.loads(json.dumps(unit.body))
+                shown = [unit.unit_id]
+            res = ProcedureLookupResult(task, id, view, catalog, rendering, self.snapshot,
+                                        us.units_id, applied.filters.to_dict(),
+                                        handle=self._result_handle())
+            return res, shown, {}
+
+        args = {"task": _filters_arg(task), "id": _filters_arg(id), "view": _filters_arg(view),
+                "as_of": _filters_arg(as_of), "limit": _filters_arg(limit)}
+        return self._call("procedure_lookup", args, run, fields, handle=handle)
+
+    def unit_search(self, query: str, types: list[str] | None = None, *, as_of=None,
+                    limit: int = 10,
+                    handle: handles_mod.Handle | dict | None = None) -> UnitSearchResult:
+        """Units of any type (or of `types`) ranked for `query` by the unit index (§11.1,
+        §11.2: no question-type routing), at most `limit`, among the units of the documents
+        of the caller's view that the filters admit (`as_of`; superseded ones excluded).
+        A hit carries the unit's envelope, its first span, its reader text (at most
+        `HIT_TEXT_MAX` characters, `truncated` beyond; never its aids) and, for a table
+        record, its pointer. `handle` pins the call."""
+        fields = self._unit_fields()
+
+        def run():
+            _must_be_str(query, "query")
+            wanted = _unit_types(types)
+            n = _unit_limit(limit)
+            us = self._units(fields)
+            applied, docs, admitted, _ = self._unit_scope({"as_of": as_of}, fields)
+            hits = [_hit(us.units[i], rank, score) for rank, (i, score) in enumerate(
+                us.index.search(query, types=wanted, view=docs, admitted=admitted, k=n), 1)]
+            res = UnitSearchResult(query, list(us.types if wanted is None else wanted), hits,
+                                   self.snapshot, us.units_id, applied.filters.to_dict(),
+                                   handle=self._result_handle())
+            return res, [h["unit_id"] for h in hits], {}
+
+        args = {"query": _filters_arg(query), "types": _filters_arg(types),
+                "as_of": _filters_arg(as_of), "limit": _filters_arg(limit)}
+        return self._call("unit_search", args, run, fields, handle=handle)

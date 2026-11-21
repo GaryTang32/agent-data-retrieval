@@ -7,7 +7,8 @@ so a later call can run on exactly the same ones.
      "dedup": <dedup overlay id> | null,
      "tools": <tool snapshot id> | null,
      "tool_index": "<tool index fingerprint>:<w>" | null,
-     "tables": <tables id> | null}
+     "tables": <tables id> | null,
+     "units": <units id> | null}
 
 Every result of the tool calls (`adr_store.tools`) carries one, and every tool call takes
 one (`handle`). A handle names the parts of the store, not the call: the handle of a `read`
@@ -23,8 +24,10 @@ Components (planner's calls, Task 12):
   reason (`w_name` is in the fingerprint), so tool search replays exactly.
 - `applicability` and `dedup` are the SHA-256 of the overlay files (their ids), `tools` the
   tool snapshot id, `tables` the tables id (the SHA-256 of a build manifest of the typed
-  tables, `adr_store.tables.overlay`; Phase 3 spec §9.3). `tables` is optional (default
-  null), so a handle saved before it existed still validates; the other parts are required.
+  tables, `adr_store.tables.overlay`; Phase 3 spec §9.3) and `units` the units id (the
+  SHA-256 of a knowledge-unit build manifest, `adr_store.units.overlay`; Phase 4 spec §11.3).
+  `tables` and `units` are optional (default null), so a handle saved before either existed
+  still validates; the other parts are required.
 - The ACL snapshot is never part of a handle (ruling R15): every call is judged against the
   current ACL, whatever its handle names (`adr_store.tools`).
 - A handle's parameters (the system label and the weights) are what the client asks for, not
@@ -39,14 +42,15 @@ Components (planner's calls, Task 12):
 `resolve(store_path, None)` is the store as it is now (`current`): HEAD, the active index when
 `index/active.json` names a saved index of that snapshot, the overlays of that snapshot (of
 that index's chunks for dedup), `tools/HEAD` and the active tool index of that tool snapshot,
-and `tables/HEAD` when its manifest is of that content snapshot and loads (every table file as
-the manifest lists it); a part that is missing or does not belong to the others is null.
+`tables/HEAD` when its manifest is of that content snapshot and loads (every table file as
+the manifest lists it), and `units/HEAD` likewise (every unit file as its manifest lists it);
+a part that is missing or does not belong to the others is null.
 `resolve(store_path, handle)` checks that every part the handle names still exists, byte for
 byte (a file that no longer hashes to its id, or a deleted index directory, is gone), and
 refuses with "handle no longer available: <component>" otherwise; parts that do not belong
 together (an index of another snapshot, a dedup overlay without an index, a tool index of
-another tool snapshot, a weight that contradicts the index, tables of another content
-snapshot) are a "bad handle". There is no fallback to HEAD. Resolving writes nothing and
+another tool snapshot, a weight that contradicts the index, tables or units of another
+content snapshot) are a "bad handle". There is no fallback to HEAD. Resolving writes nothing and
 keeps no state: caches here are keyed by file versions (`_stat_key`) or by immutable ids, so
 they never change an answer.
 """
@@ -70,13 +74,15 @@ from adr_store import dedup as dedup_mod
 from adr_store.retrieval.index import chunk_content_sha256
 from adr_store.store import Store, StoreError
 from adr_store.tables import overlay as tables_overlay
+from adr_store.units import overlay as units_overlay
 
 HEX64 = r"^[0-9a-f]{64}$"
 _HEX64 = re.compile(HEX64)
 _INDEX = re.compile(r"^([0-9a-f]{64}):([a-z0-9][a-z0-9-]*):(.+)$")
 _TOOL_INDEX = re.compile(r"^([0-9a-f]{64}):(.+)$")
 UNAVAILABLE = "handle no longer available: {}"
-COMPONENTS = ("snapshot", "index", "applicability", "dedup", "tools", "tool_index", "tables")
+COMPONENTS = ("snapshot", "index", "applicability", "dedup", "tools", "tool_index", "tables",
+              "units")
 REQUIRED = COMPONENTS[:6]  # the bad-handle message lists these, so its text is unchanged
 
 
@@ -132,8 +138,9 @@ def check_tool_index(v: str) -> str:
 
 
 class Handle(BaseModel):
-    """A snapshot handle. Every field but `tables` is required (null: the store had no such
-    part); `tables` defaults to null, so a handle saved before Phase 3 still validates."""
+    """A snapshot handle. Every field but `tables` and `units` is required (null: the store
+    had no such part); `tables` and `units` default to null, so a handle saved before Phase 3
+    or Phase 4 still validates."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, title="Handle")
 
@@ -145,6 +152,7 @@ class Handle(BaseModel):
     tools: str | None = Field(pattern=HEX64, description="tool snapshot id")
     tool_index: str | None = Field(description="'<tool index fingerprint>:<w>'")
     tables: str | None = Field(None, pattern=HEX64, description="tables id (typed tables)")
+    units: str | None = Field(None, pattern=HEX64, description="units id (knowledge units)")
 
     @field_validator("index")
     @classmethod
@@ -198,6 +206,7 @@ class Resolved:
     tools: str | None
     tool_index: dict | None  # tool_snapshot, fingerprint, w_name, lexical_only, w
     tables: str | None = None  # the tables id, its manifest checked
+    units: str | None = None  # the units id, its manifest checked
 
 
 # -- file versions and immutable parts ---------------------------------------------------------
@@ -375,6 +384,56 @@ def tables_head(store_path: Path, snapshot: str) -> str | None:
     return tables_id if m is not None and m.snapshot == snapshot else None
 
 
+_UNITS: OrderedDict[str, tuple[tuple, units_overlay.UnitsManifest]] = OrderedDict()
+
+
+def units_manifest(store_path: Path, units_id: object) -> units_overlay.UnitsManifest | None:
+    """The units build manifest whose SHA-256 is `units_id`, checked as
+    `units.overlay.load_units_manifest` checks it (every unit file there with its hash and unit
+    count), or None when it is gone or damaged. A check is reused while the manifest file and
+    every unit file it lists keep the version they had when it was made (`_stat_key`)."""
+    if not isinstance(units_id, str) or _HEX64.fullmatch(units_id) is None:
+        return None
+    store_path = Path(store_path)
+    try:
+        path = units_overlay.units_manifest_path(store_path, units_id)
+    except OSError:
+        return None
+    if path is None:
+        return None
+    key = str(path)
+    with _LOCK:
+        hit = _UNITS.get(key)
+        if hit is not None:
+            _UNITS.move_to_end(key)
+    if hit is not None:
+        state, m = hit
+        if state == _units_state(path, m):
+            return m
+    try:
+        m = units_overlay.load_units_manifest(store_path, units_id)
+    except (units_overlay.UnitsError, OSError, ValueError):
+        return None
+    state = _units_state(path, m)
+    return m if None in state else _remember(_UNITS, key, (state, m))[1]
+
+
+def _units_state(path: Path, m: units_overlay.UnitsManifest) -> tuple:
+    return (_stat_key(path), *(_stat_key(path.parent / f.file) for f in m.units))
+
+
+def units_head(store_path: Path, snapshot: str) -> str | None:
+    """The units id in `units/HEAD` when its manifest loads and is of content snapshot
+    `snapshot`, else None (units of an older snapshot are never the store's now)."""
+    try:
+        units_id = (Path(store_path) / units_overlay.UNITS_DIR / "HEAD").read_text(
+            encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    m = units_manifest(store_path, units_id)
+    return units_id if m is not None and m.snapshot == snapshot else None
+
+
 # -- the store now ---------------------------------------------------------------------------
 
 _UNSET = object()
@@ -426,7 +485,8 @@ def tool_head(store_path: Path) -> str | None:
 
 
 def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNSET,
-            dedup=_UNSET, tools=_UNSET, tool_index=_UNSET, tables=_UNSET) -> Handle:
+            dedup=_UNSET, tools=_UNSET, tool_index=_UNSET, tables=_UNSET,
+            units=_UNSET) -> Handle:
     """The handle of the store as it is now, at content snapshot `snapshot` (HEAD, as the
     caller read it). A component the caller already knows (what its call used: an active
     record, an overlay id, a tool snapshot id) is given and taken as is; the others are
@@ -450,7 +510,10 @@ def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNS
         tool_index["fingerprint"], tool_index["w"]))
     if tables is _UNSET:
         tables = tables_head(store_path, snapshot)
-    parts = {"applicability": applicability, "dedup": dedup, "tools": tools, "tables": tables}
+    if units is _UNSET:
+        units = units_head(store_path, snapshot)
+    parts = {"applicability": applicability, "dedup": dedup, "tools": tools, "tables": tables,
+             "units": units}
     parts = {k: v if isinstance(v, str) and _HEX64.fullmatch(v) else None
              for k, v in parts.items()}
     if parts["tools"] is None:
@@ -554,5 +617,11 @@ def resolve(store_path: Path, handle: Handle | dict | None) -> Resolved:
             raise unavailable("tables")
         if m.snapshot != snap:
             raise bad(f"tables {handle.tables[:12]} is for snapshot {m.snapshot[:12]}")
+    if handle.units is not None:
+        um = units_manifest(store_path, handle.units)
+        if um is None:
+            raise unavailable("units")
+        if um.snapshot != snap:
+            raise bad(f"units {handle.units[:12]} is for snapshot {um.snapshot[:12]}")
     return Resolved(handle, store, index, handle.applicability, handle.dedup, handle.tools,
-                    tool_index, handle.tables)
+                    tool_index, handle.tables, handle.units)

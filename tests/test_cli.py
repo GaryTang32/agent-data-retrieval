@@ -507,3 +507,93 @@ def test_adr_units_build_with_passes(units_store, capsys, monkeypatch):
     code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
                         "--with-passes", "procedure", "--max-calls", 0], capsys)
     assert code == 2 and "procedure" in err and "not built yet" in err
+
+
+# -- `adr units define|rules|procedures|search` (Phase 4, Task 8) ---------------------------------
+
+@pytest.fixture
+def units_built(tmp_path):
+    """The promoted gov units store of Task 8, its ACL re-synced with the real clock (the
+    command reads it)."""
+    from adr_store import acl
+    from tests.store.units_fixtures import make_units_built
+
+    s = make_units_built(tmp_path / "units-built")
+    config = s.path.parent / f"{s.path.name}-acl"
+    acl.sync(s.path, config / "directory.json", config / "policy.json", clock=acl.utc_now)
+    return s.path
+
+
+def test_adr_units_rules(units_built, capsys):
+    from adr_store import tools
+
+    code, out, err = adr(["units", "rules", "--store", units_built, "--rule-id",
+                          "§117.1081(a)(2)", "--as", "user:auditor"], capsys)
+    assert code == 0, err
+    lines = out.splitlines()
+    assert lines[0].startswith("snapshot ") and "1 rule card(s)" in lines[0]
+    assert lines[1] == "  filters default"
+    assert lines[2].startswith("33 CFR 117.1081(a)(2)  exemption  version 943c774389f8")
+    assert "need not open from 6:30 a.m." in lines[3]
+    assert any(ln.lstrip().startswith("exception_of 33 CFR 117.5(p1)") for ln in lines)
+    code, out, _ = adr(["units", "rules", "--store", units_built, "--rule-id", "117.1081",
+                        "--limit", 2, "--no-closure", "--json"], capsys)
+    got = json.loads(out)
+    assert code == 0 and [c["rule_id"] for c in got["cards"]] == ["33 CFR 117.1081(a)",
+                                                                  "33 CFR 117.1081(a)(1)"]
+    assert got["truncated"] and all(c["closure"] == [] for c in got["cards"])
+    code, out, _ = adr(["units", "rules", "--store", units_built, "drawbridge open",
+                        "--as-of", "2025-07-01", "--json"], capsys)
+    assert code == 0 and json.loads(out)["applicability_filters"]["as_of"] == "2025-07-01"
+    code, _, err = adr(["units", "rules", "--store", units_built, "--rule-id", "33 CFR 165.13",
+                        "--as", "user:acme-1"], capsys)
+    assert code == 2 and err.strip() == f"error: {tools.UNKNOWN_RULE}"
+    code, _, err = adr(["units", "rules", "--store", units_built], capsys)
+    assert code == 2 and "give a query or a rule_id" in err
+    code, _, err = adr(["units", "rules", "--store", units_built, "x", "--as", "user:ghost"],
+                       capsys)
+    assert code == 2 and "access denied (F4)" in err
+
+
+def test_adr_units_define_procedures_search(units_built, capsys):
+    from adr_store import tools
+    from adr_store.units.render import parse_skill
+
+    code, out, err = adr(["units", "define", "--store", units_built, "designated representative",
+                          "--context", "33 CFR 165.T01(b)", "--as", "user:acme-0"], capsys)
+    assert code == 0, err
+    assert "2 sense(s)" in out.splitlines()[0]
+    assert out.splitlines()[2].startswith("1. designated representative  [section 33 CFR "
+                                          "165.T01]")
+    code, out, _ = adr(["units", "define", "--store", units_built, "drawtendr"], capsys)
+    assert code == 0 and out.splitlines()[-1].startswith(f"{tools.NO_DEFINITION}; nearest "
+                                                         f"labels: Drawtender, Drawbridge")
+    code, out, _ = adr(["units", "procedures", "--store", units_built, "refund research",
+                        "--json"], capsys)
+    entries = json.loads(out)["catalog"]
+    assert code == 0 and [e["canonical_ref"] for e in entries] == ["IRM 21.4.1.3.1",
+                                                                   "IRM 21.4.1.3.2"]
+    code, out, _ = adr(["units", "procedures", "--store", units_built, "--id",
+                        entries[0]["unit_id"], "--view", "skill"], capsys)
+    assert code == 0 and parse_skill(out)[1] > 3
+    code, out, _ = adr(["units", "procedures", "--store", units_built, "--id",
+                        "IRM 21.4.1.3.2", "--view", "ir"], capsys)
+    assert code == 0 and json.loads(out)["source_kind"] == "irm"
+    code, out, _ = adr(["units", "procedures", "--store", units_built, "--id", "IRM 99"],
+                       capsys)
+    assert code == 2
+    code, out, _ = adr(["units", "search", "--store", units_built, "refund", "--type",
+                        "table_record", "--type", "concept", "--limit", 3], capsys)
+    lines = out.splitlines()
+    assert code == 0 and "3 unit(s) of concept, table_record" in lines[0]
+    assert lines[2].split()[2] in ("concept", "table_record")
+    code, out, _ = adr(["units", "search", "--store", units_built, "refund", "--json", "--as",
+                        "user:acme-1"], capsys)
+    assert code == 0 and json.loads(out)["hits"] == []         # the IRM is hidden from acme-1
+    code, _, err = adr(["units", "search", "--store", units_built, "x", "--limit", 101], capsys)
+    assert code == 2 and f"limit must be between 1 and {tools.UNIT_LIMIT_MAX}" in err
+
+
+def test_adr_units_tools_without_units_name_the_commands(units_store, capsys):
+    code, _, err = adr(["units", "search", "--store", units_store, "x"], capsys)
+    assert code == 2 and "run `adr units build` and `adr units gate`" in err

@@ -86,7 +86,7 @@ def text(res) -> str:
 
 def test_tools_list_is_the_tools_with_input_and_output_schemas(store, servers):
     listed = {t.name: t for t in servers(store).list_tools().tools}
-    assert set(listed) == set(mcp_server.TOOL_NAMES) and len(listed) == 8
+    assert set(listed) == set(mcp_server.TOOL_NAMES) and len(listed) == 12
     for name, t in listed.items():
         ins, outs = t.input_schema, t.output_schema
         assert ins["type"] == "object" and ins["additionalProperties"] is False

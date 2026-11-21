@@ -355,3 +355,52 @@ def built_units(units_store_with_tables):
 
     store = units_store_with_tables
     return store, build_units(store.path, "gov"), build_units(store.path, "bench")
+
+
+# -- a promoted gov units build with per-document access (Task 8) --------------------------------
+
+ECFR_165_URI = ecfr_url(33, "165", ECFR_NEW)
+# the first rule that matches wins: 33 CFR 165 for group acme/0 only, both 33 CFR 117 versions
+# (one chain, so one access list) and the bench documents for tenant acme, the IRM chapter for
+# tenant globex. acme-0 sees 117, 165 and bench; acme-1 117 and bench; globex-0 the IRM only;
+# the outsider nothing; the auditor everything.
+UNITS_ACL_RULES = [
+    {"match": {"uri_prefix": ECFR_165_URI}, "access": ["group:acme/0"]},
+    {"match": {"uri_prefix": "https://www.ecfr.gov/"}, "access": ["tenant:acme"]},
+    {"match": {"uri_prefix": "https://www.irs.gov/"}, "access": ["tenant:globex"]},
+    {"match": {"uri_prefix": "https://huggingface.co/"}, "access": ["tenant:acme"]},
+]
+UNITS_USERS = ["user:acme-0", "user:acme-1", "user:globex-0", "user:outsider", "user:auditor"]
+
+
+def promote_units(path: Path, corpus: str = "gov") -> str:
+    """Build the units of `corpus` and promote them as the store's first units/HEAD (the units
+    merge gate with no cases, builder note 8); the units id."""
+    from adr_store.units.build import build_units
+    from adr_store.units.gate import units_gate
+
+    def no_case(store_path, units_id, case):  # a first promotion has no cases to hit
+        raise AssertionError("no case is evaluated in a first promotion")
+
+    units_id = build_units(path, corpus).units_id
+    assert units_gate(path, units_id, [], 0, hit=no_case).promoted
+    return units_id
+
+
+def make_units_built(path: Path, docs=None, *, rules=None, corpus: str = "gov") -> Store:
+    """`make_units_store` of `docs` (default `UNITS_DOCS`) with ACL state (`rules`, default
+    `UNITS_ACL_RULES`, clock `T0`), a lexical Phase 2 index, and the `corpus` units built and
+    promoted to units/HEAD."""
+    from adr_store import tools
+
+    store = make_units_store(path, docs, rules=UNITS_ACL_RULES if rules is None else rules)
+    tools.Tools(path).index("p1-struct", lexical_only=True)
+    promote_units(path, corpus)
+    return store
+
+
+@pytest.fixture
+def units_built(tmp_path) -> Store:
+    """`make_units_built` under `tmp_path`: the gov units of `UNITS_DOCS` built and promoted,
+    with per-document access (`UNITS_ACL_RULES`)."""
+    return make_units_built(tmp_path / "units-built")

@@ -28,8 +28,11 @@ and `sql` tools, with the filter flags and `--as USER` of `adr search`), and the
 units (Phase 4 spec §5.2, §6.6): `adr units build` (every unit type of the store's corpus as a
 candidate build, by code; `--units-for` when the store holds documents of several corpora;
 only `--with-passes` makes a model client), `adr units show` (a build's manifest, counts per
-type and its reports) and `adr units gate` (the units merge gate; without gold sets only a
-first promotion, with no `units/HEAD`, can pass; exit 1 when refused). `adr`
+type and its reports), `adr units gate` (the units merge gate; without gold sets only a
+first promotion, with no `units/HEAD`, can pass; exit 1 when refused), and the four unit tools
+(Phase 4 spec §11.2, code in `adr_store.tools`): `adr units define TERM`, `adr units rules
+[QUERY] [--rule-id ID]`, `adr units procedures [TASK] [--id ID --view V]` and `adr units search
+QUERY [--type T]`, each with `--store`, `--as-of`, `--as USER` and `--json`. `adr`
 is not a security boundary (Phase 2 spec §7.1): whoever can run it
 can read the store directory.
 
@@ -1242,6 +1245,91 @@ def _units_gate(a: argparse.Namespace) -> int:
     return 0 if r.promoted else EXIT_CONFORMANCE
 
 
+def _unit_tools(a: argparse.Namespace) -> tools.Tools:
+    """The tools of a unit command: with `--as USER`, as that caller with the ACL layer."""
+    if a.as_user is None:
+        return tools.Tools(a.store)
+    return tools.Tools(a.store, acl=True, caller=a.as_user)
+
+
+def _unit_head(res, what: str) -> None:
+    print(f"snapshot {res.snapshot[:12]}  units {res.units[:12]}  {what}")
+    f = res.applicability_filters
+    shown = f"as_of {f['as_of']}" if f["as_of"] else \
+        "include_superseded" if f["include_superseded"] else "default"
+    print(f"  filters {shown}")
+
+
+def _units_define(a: argparse.Namespace) -> int:
+    res = _unit_tools(a).define(a.term, a.context, as_of=a.as_of,
+                                include_superseded=a.include_superseded)
+    if a.json:
+        _print_json(res)
+        return 0
+    _unit_head(res, f"{len(res.senses)} sense(s) of {res.term!r}")
+    for k, x in enumerate(res.senses, 1):
+        print(f"{k}. {x.term}  [{x.scope['kind']} {x.scope['ref']}]  doc {x.doc_id[:12]} "
+              f"[{x.start}:{x.end}]")
+        print(f"   {x.definition}")
+    if not res.senses:
+        print(tools.NO_DEFINITION + (f"; nearest labels: {', '.join(res.nearest)}"
+                                     if res.nearest else ""))
+    return 0
+
+
+def _units_rules(a: argparse.Namespace) -> int:
+    res = _unit_tools(a).rule_lookup(a.query, rule_id=a.rule_id, part=a.part, as_of=a.as_of,
+                                     include_superseded=a.include_superseded,
+                                     closure=not a.no_closure, limit=a.limit)
+    if a.json:
+        _print_json(res)
+        return 0
+    more = f" (truncated at --limit {a.limit})" if res.truncated else ""
+    _unit_head(res, f"{len(res.cards)} rule card(s){more}, {res.excluded_by_filter} "
+                    f"document(s) excluded by the filters")
+    for c in res.cards:
+        print(f"{c.rule_id}  {c.modality}  version {c.rule_version}  doc {c.doc_id[:12]} "
+              f"[{c.start}:{c.end}]")
+        print(f"   {c.text}")
+        for e in c.closure:
+            print(f"   {e['relation']:<12} {e['ref']}  [{e['start']}:{e['end']}]  "
+                  f"{_cut(e['text'], 80)}")
+    return 0
+
+
+def _units_procedures(a: argparse.Namespace) -> int:
+    res = _unit_tools(a).procedure_lookup(a.task, id=a.id, view=a.view, as_of=a.as_of,
+                                          limit=a.limit)
+    if a.json:
+        _print_json(res)
+        return 0
+    if res.catalog is None:
+        print(res.rendering if isinstance(res.rendering, str) else
+              json.dumps(res.rendering, indent=2, ensure_ascii=False), end="")
+        if not isinstance(res.rendering, str):
+            print()
+        return 0
+    _unit_head(res, f"{len(res.catalog)} procedure(s)")
+    for e in res.catalog:
+        print(f"{e['rank']}. {e['canonical_ref']}  {e['title']}  ({e['unit_id']})")
+        if e["when_to_use"]:
+            print(f"   {_cut(e['when_to_use'], 200)}")
+    return 0
+
+
+def _units_search(a: argparse.Namespace) -> int:
+    res = _unit_tools(a).unit_search(a.query, a.types, as_of=a.as_of, limit=a.limit)
+    if a.json:
+        _print_json(res)
+        return 0
+    _unit_head(res, f"{len(res.hits)} unit(s) of {', '.join(res.types)}")
+    for h in res.hits:
+        print(f"{h['rank']:>3}. {h['score']:.4f}  {h['type']:<12} {h['canonical_ref']}  doc "
+              f"{h['doc_id'][:12]} [{h['start']}:{h['end']}]")
+        print(f"     {_cut(h['text'], 100)}")
+    return 0
+
+
 def _query_filters(a: argparse.Namespace) -> dict | None:
     if a.query_filters is None:
         return None
@@ -1614,6 +1702,55 @@ def _parser() -> argparse.ArgumentParser:
                      help="cases HEAD hits that the candidate may miss")
     ung.add_argument("--json", action="store_true", help="print the result as JSON")
     ung.set_defaults(fn=_units_gate)
+
+    def unit_tool(name: str, help: str, fn) -> argparse.ArgumentParser:
+        p = un_sub.add_parser(name, help=help, description=f"{help}. {NOT_A_BOUNDARY}")
+        p.add_argument("--store", type=Path, required=True, help="store directory")
+        p.add_argument("--as-of", default=None, metavar="YYYY-MM-DD",
+                       help="only units of documents in force on this date (default: "
+                            "superseded documents excluded)")
+        p.add_argument("--as", dest="as_user", default=None, metavar="USER",
+                       help=AS_HELP + NOT_A_BOUNDARY)
+        p.add_argument("--json", action="store_true", help="print the result as JSON")
+        p.set_defaults(fn=fn)
+        return p
+
+    def unit_limit(p: argparse.ArgumentParser, default: int) -> None:
+        p.add_argument("--limit", type=_positive, default=default,
+                       help=f"at most this many (default {default}, at most "
+                            f"{tools.UNIT_LIMIT_MAX})")
+
+    und = unit_tool("define", "every visible definition of a term (the define tool)",
+                    _units_define)
+    und.add_argument("term")
+    und.add_argument("--context", default=None, metavar="REF",
+                     help="a canonical ref or unit id: senses whose scope holds it rank first")
+    und.add_argument("--include-superseded", action="store_true",
+                     help="keep senses of superseded documents")
+    unr = unit_tool("rules", "rule cards for a query, or the cards of a rule id (the "
+                             "rule_lookup tool)", _units_rules)
+    unr.add_argument("query", nargs="?", default=None)
+    unr.add_argument("--rule-id", default=None, metavar="ID",
+                     help="'33 CFR 117.1081(a)(2)', '§117.1081(a)(2)' or a section "
+                          "('117.1081')")
+    unr.add_argument("--part", default=None, help="only this CFR part ('33 CFR 117')")
+    unr.add_argument("--include-superseded", action="store_true",
+                     help="keep cards of superseded documents")
+    unr.add_argument("--no-closure", action="store_true", help="leave out each card's closure")
+    unit_limit(unr, 10)
+    unp = unit_tool("procedures", "procedure catalog entries for a task, or one procedure "
+                                  "rendered (the procedure_lookup tool)", _units_procedures)
+    unp.add_argument("task", nargs="?", default=None)
+    unp.add_argument("--id", default=None, help="a procedure's unit id or canonical ref")
+    unp.add_argument("--view", choices=tools.PROCEDURE_VIEWS, default="catalog",
+                     help="catalog (default), or for --id: skill, mermaid or ir")
+    unit_limit(unp, 5)
+    unq = unit_tool("search", "units of any type for a query (the unit_search tool)",
+                    _units_search)
+    unq.add_argument("query")
+    unq.add_argument("--type", dest="types", action="append", default=None,
+                     choices=tools.UNIT_TYPES, help="only this unit type (repeatable)")
+    unit_limit(unq, 10)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "

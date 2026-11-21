@@ -419,9 +419,10 @@ def test_a_handle_keeps_its_tables_when_head_moves(built):
 def test_a_phase2_handle_without_tables(built):
     current = as_(built).search("drawbridge").handle
     assert current["tables"] == read_head(built.path)
-    old = {k: v for k, v in current.items() if k != "tables"}
+    old = {k: v for k, v in current.items() if k not in ("tables", "units")}
     assert as_(built).search("drawbridge", handle=old).hits
-    assert as_(built).search("drawbridge", handle=old).handle == {**old, "tables": None}
+    assert as_(built).search("drawbridge", handle=old).handle == {**old, "tables": None,
+                                                                  "units": None}
     for call in (lambda t: t.query_table(FR, handle=old), lambda t: t.sql("SELECT 1", handle=old),
                  lambda t: t.describe_tables(handle=old)):
         with pytest.raises(ToolError, match=re.escape(NO_HANDLE_TABLES)):

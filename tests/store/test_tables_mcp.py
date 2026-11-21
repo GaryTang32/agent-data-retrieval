@@ -57,7 +57,7 @@ def text(res) -> str:
 
 def test_tools_list_has_the_three_table_tools_with_handles(store, servers):
     listed = {t.name: t for t in servers(store).list_tools().tools}
-    assert set(TABLE_TOOLS) <= set(listed) and len(listed) == 8
+    assert set(TABLE_TOOLS) <= set(listed) and len(listed) == len(mcp_server.TOOL_NAMES)
     for name in TABLE_TOOLS:
         t = listed[name]
         ins, outs = t.input_schema, t.output_schema
@@ -171,8 +171,8 @@ def test_a_handle_replay_through_mcp_is_identical(store, servers):
     d = m.describe_tables(handle=first.handle)
     assert d == py(store).describe_tables(handle=first.handle)
     # a Phase 2 handle (no tables part) validates and is refused by the table tools only
-    old = {k: v for k, v in first.handle.items() if k != "tables"}
-    assert m.search("drawbridge", handle=old).handle == {**old, "tables": None}
+    old = {k: v for k, v in first.handle.items() if k not in ("tables", "units")}
+    assert m.search("drawbridge", handle=old).handle == {**old, "tables": None, "units": None}
     with pytest.raises(tools.ToolError) as e:
         m.query_table(FR, handle=old)
     assert str(e.value) == tools.NO_HANDLE_TABLES

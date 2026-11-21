@@ -87,8 +87,10 @@ def test_every_result_carries_the_handle_of_the_store_now(store, acl_on):
     t = as_(store) if acl_on else tools.Tools(store.path)
     now = handles.resolve(store.path, None).handle.model_dump()
     assert set(now) == set(handles.COMPONENTS)
-    # the fixture has every Phase 2 part (no typed tables: `tables` is null)
+    # the fixture has every Phase 2 part (no typed tables or units: `tables` and `units` are
+    # null)
     assert all(now[k] is not None for k in handles.REQUIRED) and now["tables"] is None
+    assert now["units"] is None
     assert now["snapshot"] == store.snapshot_id
     for name, d in every_call(t, store).items():
         assert d["handle"] == now, name
