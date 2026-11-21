@@ -67,7 +67,10 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     `adr-eval tools-fetch` writes, go there too, and so does the default output root of
     `adr-eval tools-retrieval`.
     The gov-tables golden directory (`golden.tables.GOLDEN_DIR`, which `adr-eval golden tables
-    --gen` writes and gov-tables runs read) is a fresh empty directory per test.
+    --gen` writes and gov-tables runs read) is a fresh empty directory per test, and so are the
+    gov-rules, gov-procedures and bench-procedures directories (`golden.units.RULES_DIR`,
+    `GOV_PROCEDURES_DIR`, `BENCH_PROCEDURES_DIR`, which `adr-eval golden rules --gen` and
+    `adr-eval golden procedures --gen` write).
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -112,6 +115,12 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
 
     monkeypatch.setattr(golden_tables, "GOLDEN_DIR",
                         tmp_path_factory.mktemp("golden-gov-tables") / "v0.1")
+    from adr_eval.golden import units as golden_units
+
+    for name, d in (("RULES_DIR", "gov-rules"), ("GOV_PROCEDURES_DIR", "gov-procedures"),
+                    ("BENCH_PROCEDURES_DIR", "bench-procedures")):
+        monkeypatch.setattr(golden_units, name, tmp_path_factory.mktemp(f"golden-{d}") / d
+                            / "v0.1")
 
 
 @pytest.fixture

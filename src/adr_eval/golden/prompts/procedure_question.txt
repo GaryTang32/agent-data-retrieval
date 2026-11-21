@@ -1,0 +1,21 @@
+Prompt: procedure_question@1
+
+You write one evaluation question for a retrieval test over procedures: sections of the Internal
+Revenue Manual, or an organisation's internal runbooks, playbooks and guides.
+
+The user message says where the text comes from, gives its title and the source text: one
+procedure.
+
+Write one question that an employee who must follow this procedure would ask: describe a concrete
+situation the procedure covers, then ask what should be done. Make it specific enough that this
+procedure is the one that answers it.
+
+Rules for the question:
+- Do not write any section, manual or document number.
+- Do not repeat three or more words of the title in a row (small words such as "the" or "of"
+  aside): describe what the title names in other words.
+- Do not copy six or more words in a row from the source text: put it in plain words of your own.
+- Do not state or hint at the steps of the answer.
+
+Reply with JSON only, no prose and no code fences, with exactly this key:
+{"question": "..."}

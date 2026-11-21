@@ -375,6 +375,8 @@ def _exclusions(corpus: str) -> dict[str, str]:
 def _golden_gen(a: argparse.Namespace) -> int:
     if a.corpus == TABLES_GOLDEN:
         return _golden_tables_gen(a)
+    if a.corpus in UNITS_GOLDEN:
+        return _golden_units_gen(a)
     items = runner.golden_dir(a.corpus) / "items.jsonl"
     if items.exists() and not a.overwrite:  # checked before any client is made or call sent
         print(f"error: {items} exists and is frozen (golden sets are data, not regenerated "
@@ -434,6 +436,9 @@ def _golden_gen_logged(a: argparse.Namespace) -> int:
 
 
 TABLES_GOLDEN = "tables"   # `adr-eval golden tables`: the gov-tables v0.1 set (Phase 3 §10.3)
+# `adr-eval golden rules` (gov-rules v0.1) and `golden procedures` (gov- and bench-procedures
+# v0.1): the Phase 4 sets (§14)
+UNITS_GOLDEN = ("rules", "procedures")
 
 
 def _golden_tables_gen(a: argparse.Namespace) -> int:
@@ -458,7 +463,7 @@ def _golden_tables_gen(a: argparse.Namespace) -> int:
     except runner.ProfileError as e:
         raise runner.RunError(str(e)) from e
     try:
-        res = tables.generate_all(a.store, a.facts, meter, n=tables.N_ITEMS)
+        res = tables.generate_all(a.store[0], a.facts, meter, n=tables.N_ITEMS)
     except TablesError as e:
         raise runner.RunError(str(e)) from e
     except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
@@ -478,6 +483,83 @@ def _golden_tables_gen(a: argparse.Namespace) -> int:
           f"used; served {', '.join(sorted(meter.served_models)) or 'none reported'}")
     if len(res.items) < tables.N_ITEMS:
         print(f"  short of {tables.N_ITEMS} items: the draws ran out (reported, not padded)")
+    return 0
+
+
+def _golden_units_plan(kind: str, report: dict) -> None:
+    """Print what `golden rules` or `golden procedures` draws from, before any item."""
+    if "universe" not in report:
+        return
+    if kind == "rules":
+        for part, u in report["universe"].items():
+            per = ", ".join(f"{label} {n}" for label, n in u["versions"]) or "no version"
+            draw = report["draw"].get(part)
+            print(f"{part}: eligible per version {per}"
+                  + (" (newest)" if u["versions"] else "")
+                  + f"; {u['older']} older provision(s) differ from the newest; draw "
+                  + (f"{draw['newest']} newest + {draw['older']} older" if draw else "none"))
+        return
+    for corpus, n in report["universe"].items():
+        print(f"{corpus}: {n} candidate(s) in {report['stores'][corpus]}; draw "
+              f"{report['draw'][corpus]}")
+
+
+def _golden_units_gen(a: argparse.Namespace) -> int:
+    """`adr-eval golden rules --gen --store GOV ...` and `adr-eval golden procedures --gen
+    --store GOV --store BENCH ...` (`--generator P --max-calls N [--limit N]`): the gov-rules,
+    or the gov-procedures and bench-procedures, v0.1 items phrased by profile `P` under `N`
+    budget units (every transport attempt counts). The universe and the draw are printed
+    first. A stop at the cap or on a model failure that is no input rejection exits 1 and
+    writes nothing; a rerun reads the completed calls from the cache."""
+    from adr_eval.golden import units as gu
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.tables.extract import metered_client
+
+    rules = a.corpus == "rules"
+    outs = {"gov-rules": gu.RULES_DIR} if rules else {
+        c: gu.procedures_dir(c) for c in gu.PROCEDURE_CORPORA}
+    frozen = [str(d / "items.jsonl") for d in outs.values() if (d / "items.jsonl").exists()]
+    if frozen and not a.overwrite:  # before any client or call
+        print(f"error: {', '.join(frozen)} exists and is frozen (a regenerated set is a new "
+              f"version); pass --overwrite to replace it", file=sys.stderr)
+        return 2
+    try:
+        meter = metered_client(a.max_calls, profile=a.generator)
+    except runner.ProfileError as e:
+        raise runner.RunError(str(e)) from e
+    report: dict = {}
+    try:
+        if rules:
+            res = {"gov-rules": gu.generate_rules(a.store[0], meter, limit=a.limit,
+                                                  report=report)}
+        else:
+            res = gu.generate_procedures(a.store, meter, limit=a.limit, report=report)
+    except gu.GoldenError as e:
+        raise runner.RunError(str(e)) from e
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        _golden_units_plan(a.corpus, report)
+        print(stop_status(meter.budget, e))
+        return 1
+    _golden_units_plan(a.corpus, report)
+    for corpus, (items, rejected) in res.items():
+        gu.write_items(outs[corpus], items, rejected)
+        dev = sum(i.split == "dev" for i in items)
+        reasons = Counter(r["reason"] for r in rejected)
+        print(f"{outs[corpus]}: {len(items)} items ({dev} dev, {len(items) - dev} test); "
+              f"{len(rejected)} failed phrasing(s) {dict(sorted(reasons.items()))}"
+              + (f"; {sum(i.as_of is not None for i in items)} from older versions"
+                 if rules else ""))
+    if report["short"]:
+        print(f"  short of the draw: {json.dumps(report['short'], sort_keys=True)} (the pools "
+              f"ran out; reported, not padded)")
+    calls = report["calls"]
+    served = sorted(meter.served_models)
+    print(f"status: complete; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {', '.join(served) or 'none reported'}"
+          + ("; warning: a served model differs from the profile's model"
+             if any(m != meter.model for m in served) else ""))
     return 0
 
 
@@ -1738,17 +1820,26 @@ def _parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=_tools_fetch)
 
     p = sub.add_parser("golden", help="generate or verify the golden set; `golden tables --gen` "
-                                      "generates gov-tables v0.1 (3B drawbridge questions)")
-    p.add_argument("corpus", choices=(*NAMES, TABLES_GOLDEN),
+                                      "generates gov-tables v0.1 (3B drawbridge questions), "
+                                      "`golden rules --gen` gov-rules v0.1 and `golden "
+                                      "procedures --gen` gov- and bench-procedures v0.1")
+    p.add_argument("corpus", choices=(*NAMES, TABLES_GOLDEN, *UNITS_GOLDEN),
                    help=f"a corpus, or {TABLES_GOLDEN!r} for gov-tables v0.1 (--gen only, with "
-                        f"--store, --facts, --generator and --max-calls)")
+                        f"--store, --facts, --generator and --max-calls), 'rules' for gov-rules "
+                        f"v0.1 (--gen only, with --store GOV, --generator and --max-calls), "
+                        f"'procedures' for gov- and bench-procedures v0.1 (--gen only, with "
+                        f"--store GOV --store BENCH, --generator and --max-calls)")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--gen", action="store_const", const=_golden_gen, dest="fn")
     mode.add_argument("--verify", action="store_const", const=_golden_verify, dest="fn")
     p.add_argument("--overwrite", action="store_true",
                    help="with --gen: replace an existing (frozen) items.jsonl")
-    p.add_argument("--store", type=Path, default=None,
-                   help="golden tables: the store holding the second-pass facts")
+    p.add_argument("--store", type=Path, action="append", default=None,
+                   help="golden tables: the store holding the second-pass facts; golden rules: "
+                        "the gov store; golden procedures: the gov store and the bench store "
+                        "(repeat --store)")
+    p.add_argument("--limit", type=int, default=None, metavar="N",
+                   help="golden rules and procedures: stop after N items per set")
     p.add_argument("--facts", default=None, metavar="ID",
                    help="golden tables: the second-pass facts id (`adr tables extract "
                         "--second-pass` prints it)")
@@ -2031,12 +2122,36 @@ def main(argv: list[str] | None = None) -> int:
                    if v is None]
         if missing:
             ap.error(f"golden tables --gen needs {', '.join(missing)}")
+        if len(a.store) != 1:
+            ap.error("golden tables takes one --store")
         if a.judge is not None:
             ap.error("golden tables makes no judge call; remove --judge")
+        if a.limit is not None:
+            ap.error("--limit is an option of `golden rules` and `golden procedures` only")
         if a.max_calls < 0:
             ap.error("--max-calls must not be negative")
-    elif a.command == "golden" and (a.store is not None or a.facts is not None):
-        ap.error("--store and --facts are options of `golden tables` only")
+    elif a.command == "golden" and a.corpus in UNITS_GOLDEN:
+        if a.fn is not _golden_gen:
+            ap.error(f"golden {a.corpus} takes --gen only")
+        # --max-calls is required in code: `_profile_args` gives it no default (N5)
+        missing = [f for f, v in (("--store", a.store), ("--generator", a.generator),
+                                  ("--max-calls", a.max_calls)) if v is None]
+        if missing:
+            ap.error(f"golden {a.corpus} --gen needs {', '.join(missing)}")
+        if a.corpus == "rules" and len(a.store) != 1:
+            ap.error("golden rules takes one --store (the gov store)")
+        if a.facts is not None:
+            ap.error(f"--facts is an option of `golden tables` only, not golden {a.corpus}")
+        if a.judge is not None:
+            ap.error(f"golden {a.corpus} makes no judge call; remove --judge")
+        if a.max_calls < 0:
+            ap.error("--max-calls must not be negative")
+        if a.limit is not None and a.limit < 1:
+            ap.error("--limit must be at least 1")
+    elif a.command == "golden" and (a.store is not None or a.facts is not None
+                                    or a.limit is not None):
+        ap.error("--store and --facts are options of `golden tables`, `golden rules` and "
+                 "`golden procedures` only, and --limit of the last two")
     if a.command == "golden" and a.fn is _golden_verify:
         given = [f for f, v in (("--generator", a.generator), ("--judge", a.judge),
                                 ("--max-calls", a.max_calls),

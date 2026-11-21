@@ -16,6 +16,8 @@ __pycache__/
 # Benchmark-derived golden items stay local (upstream canary: keep benchmark data out of training corpora)
 golden/bench/*/items.jsonl
 golden/bench/*/rejected.jsonl
+golden/bench-procedures/*/items.jsonl
+golden/bench-procedures/*/rejected.jsonl
 # Research golden items stay local: their evidence quotes are verbatim excerpts from research PDFs
 golden/research/*/items.jsonl
 golden/research/*/rejected.jsonl

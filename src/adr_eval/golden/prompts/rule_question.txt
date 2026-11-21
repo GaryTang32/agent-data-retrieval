@@ -1,0 +1,22 @@
+Prompt: rule_question@1
+
+You write one evaluation question for a retrieval test over United States federal regulations
+(the Code of Federal Regulations).
+
+The user message gives the part of the regulations, the heading of a section without its number,
+and the source text: one paragraph of that section, which states a rule.
+
+Write one question that a regulated party (for example a vessel operator, a bridge owner or a
+broadcast licensee) would ask about what may, must or need not be done, whose answer is what this
+paragraph says. Make it specific enough that this paragraph is the one that answers it: say in
+your own words which place, vessel, station, period or circumstance it is about.
+
+Rules for the question:
+- Do not write any section or paragraph number or citation.
+- Do not repeat three or more words of the heading in a row (small words such as "the" or "of"
+  aside): describe what the heading names in other words.
+- Do not copy six or more words in a row from the source text: put it in plain words of your own.
+- Do not state or hint at the answer.
+
+Reply with JSON only, no prose and no code fences, with exactly this key:
+{"question": "..."}
