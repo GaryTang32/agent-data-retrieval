@@ -1117,3 +1117,24 @@ def test_dense_below_w1_and_lexical_at_w1(units_built, tmp_path, monkeypatch):
     assert emb.model().passage.calls[embedded:] == [[RANKING_QUERY]]  # its query, no document
     assert ids(dense) == _oracle(units_built, _gov(0.5), fake_cache(tmp_path / "emb2"))
     assert dense.handle["unit_index"] == ui.tuning_id(_gov(0.5))
+
+
+def test_a_failed_vector_build_leaves_no_pin(units_built, monkeypatch):
+    """Re-review minor: the dense vectors are stored before the pin, so an embedding failure
+    cannot leave a pinned tuning whose unit calls would refuse."""
+    from adr_store.units import index as ui
+    from adr_store.units.tools_units import pin_build
+
+    def boom(*a, **k):
+        raise RuntimeError("embedding failed")
+
+    monkeypatch.setattr(ui.UnitIndex, "build", boom)
+    head = units_overlay.read_units_head(units_built.path)
+    entry = {**_gov(body=2), "w": 0.5}
+    before = _tree(units_built)
+    with pytest.raises(RuntimeError, match="embedding failed"):
+        pin_build(units_built.path, head, entry, emb=object())
+    assert not (units_built.path / "units-index" / head
+                / f"tuning-{ui.tuning_id(ui.check_tuning(entry, ui.CORPUS_TYPES['gov']))}.json"
+                ).exists()
+    assert _tree(units_built) == before

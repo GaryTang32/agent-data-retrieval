@@ -91,15 +91,15 @@ def pin_build(store_path: Path, units_id: str, entry: dict | None = None, emb=No
     entry = units_index.check_tuning(units_index.load_tuning(m.corpus) if entry is None
                                      else entry, corpus_types)
     tid = units_index.tuning_id(entry)
-    if tid != units_index.tuning_id(units_index.default_tuning(m.corpus)):
-        units_index.pin_tuning(store_path, units_id, entry)
-    if entry["w"] < 1:
+    if entry["w"] < 1:                    # vectors first, pin last: no pin without vectors
         if emb is None:
             raise ValueError(f"w {entry['w']} needs the embedding cache to store the dense "
                              f"vectors")
         units = sorted(load_units(store_path, m), key=lambda u: u.unit_id)
         docs = units_index.unit_docs(units, [u for u in units if u.type == "concept"])
         units_index.UnitIndex.build(store_path, units_id, docs, emb, entry)
+    if tid != units_index.tuning_id(units_index.default_tuning(m.corpus)):
+        units_index.pin_tuning(store_path, units_id, entry)
     return tid
 
 
