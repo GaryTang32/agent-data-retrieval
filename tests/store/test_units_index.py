@@ -96,12 +96,12 @@ def test_ranking_equals_an_index_of_the_view_alone(units_store, tmp_path, dense)
     emb = fake_cache(tmp_path / "emb") if dense else None
     full = index_of(units_store, emb)
     view = index_of(view_store(units_store, VIEW_DOCS, tmp_path), emb)
-    assert {u for u, _ in full.search("drawbridge", types=None, admitted=None, k=1000)} > \
-        {u for u, _ in view.search("drawbridge", types=None, admitted=None, k=1000)}
+    assert {u for u, _ in full.search("drawbridge", types=None, view=None, k=1000)} > \
+        {u for u, _ in view.search("drawbridge", types=None, view=None, k=1000)}
     for q in QUERIES:
         for k in (10, 1000):
-            got = full.search(q, types=None, admitted=VIEW_DOCS, k=k)
-            assert got == view.search(q, types=None, admitted=None, k=k), q
+            got = full.search(q, types=None, view=VIEW_DOCS, k=k)
+            assert got == view.search(q, types=None, view=None, k=k), q
             assert all(u.split("/")[-1] in {d[:16] for d in VIEW_DOCS} for u, _ in got)
     # a hidden concept expands nothing: "RNA" names the 165 concept, which the view cannot see
     assert full.lexical_query("RNA vessel area", VIEW_DOCS) == "RNA vessel area"
@@ -111,10 +111,10 @@ def test_ranking_equals_an_index_of_the_view_alone(units_store, tmp_path, dense)
 
 def test_alternate_labels_expand_the_query(units_store):
     idx = index_of(units_store)
-    hits = idx.search("RNA anchoring", types=("rule_card",), admitted=None)
+    hits = idx.search("RNA anchoring", types=("rule_card",), view=None)
     assert hits[0][0] == RNA_CARD      # card text says "regulated navigation area", never "RNA"
     assert hits[1][0] == ANCHOR_CARD
-    assert idx.search("RNA anchor", types=("rule_card",), admitted=None)[0][0] == ANCHOR_CARD
+    assert idx.search("RNA anchor", types=("rule_card",), view=None)[0][0] == ANCHOR_CARD
     _, units = gov_build(units_store)
     for card_id, labels in ((RNA_CARD, ["Regulated navigation area", "RNA"]),
                             (ANCHOR_CARD, ["Regulated navigation area", "RNA",
@@ -129,12 +129,20 @@ def test_alternate_labels_expand_the_query(units_store):
     assert labels["rna"] == ("Regulated navigation area",)
     assert labels["regulated navigation area"] == ("RNA",)
     assert idx.lexical_query("RNA anchoring", None) == "RNA anchoring Regulated navigation area"
-    # without the labels field and the expansion, no 165.13 card matches the query at all
-    bare = [UnitDoc(d.unit_id, d.type, d.doc_id, {**d.fields, "labels": ""}, d.dense_text,
-                    d.aids) for d in docs_of(units)]
-    plain = UnitIndex.build(units_store.path, "0" * 64, bare, None, load_tuning("gov"))
-    assert not [u for u, _ in plain.search("RNA anchoring", types=("rule_card",),
-                                           admitted=None) if "165.13" in u]
+    # each mechanism alone finds both 165.13 cards; with neither, no 165.13 card matches
+    def ablated(blank) -> list[str]:
+        docs = [UnitDoc(d.unit_id, d.type, d.doc_id,
+                        {**d.fields, "labels": ""} if d.type in blank else d.fields,
+                        d.dense_text, d.aids) for d in docs_of(units)]
+        idx = UnitIndex.build(units_store.path, "0" * 64, docs, None, load_tuning("gov"))
+        return [u for u, _ in idx.search("RNA anchoring", types=("rule_card",), view=None)
+                if "165.13" in u]
+
+    # expansion alone: the cards' labels field is blank, the concepts (the label map) stay
+    assert ablated({"rule_card"}) == [RNA_CARD, ANCHOR_CARD]
+    # the labels field alone: the concepts are blank, so the label map is empty
+    assert sorted(ablated({"concept"})) == sorted([RNA_CARD, ANCHOR_CARD])
+    assert ablated({"rule_card", "concept"}) == []
 
 
 def test_aids_are_indexed_but_not_in_reader_text(gov, tmp_path):
@@ -155,21 +163,23 @@ def test_aids_are_indexed_but_not_in_reader_text(gov, tmp_path):
         assert "zebrafish" not in doc.fields[name] and "capybara" not in doc.fields[name]
     assert "zebrafish" not in doc.dense_text and "capybara" not in doc.dense_text
     lex = UnitIndex.build(tmp_path / "s-lex", units_id, docs, None, load_tuning("gov"))
-    assert [u for u, _ in lex.search("zebrafish quokka", types=None, admitted=None)] == \
+    assert [u for u, _ in lex.search("zebrafish quokka", types=None, view=None)] == \
         [proc.unit_id]
-    assert [u for u, _ in lex.search("capybara", types=None, admitted=None)] == [proc.unit_id]
-    # dense: one vector per aid, mapped to its parent at the parent's best score
+    assert [u for u, _ in lex.search("capybara", types=None, view=None)] == [proc.unit_id]
+    # dense, at the default w: one vector per aid, mapped to its parent at its best score
     idx = UnitIndex.build(tmp_path / "s-dense", units_id, docs, fake_cache(tmp_path / "e2"),
-                          {**load_tuning("gov"), "w": 0.5})
-    hits = idx.search(aid, types=None, admitted=None, k=10_000)
-    assert hits[0][0] == proc.unit_id and len({u for u, _ in hits}) == len(hits) == len(docs)
-    assert {u for u, _ in hits} == {d.unit_id for d in docs}     # never an aid row
+                          load_tuning("gov"))
+    for q in ("zebrafish quokka", "capybara", aid):
+        hits = idx.search(q, types=None, view=None, k=10_000)
+        assert hits[0][0] == proc.unit_id
+        assert len({u for u, _ in hits}) == len(hits) == len(docs)
+        assert {u for u, _ in hits} == {d.unit_id for d in docs}     # never an aid row
     rows = [json.loads(line) for line in
             (idx.directory / "rows.jsonl").read_text("utf-8").splitlines()]
     assert len(rows) == len(docs) + 2
     assert [r["unit_id"] for r in rows if r["aid"] is not None] == [proc.unit_id] * 2
     q = "zebrafish quokka reconciliation"     # the aid text itself: cosine 1 on its own row
-    dense = dict(idx.dense_scores(q, admitted=None, types=None))
+    dense = dict(idx.dense_scores(q, view=None, types=None))
     assert dense[proc.unit_id] == 1.0
     assert max(dense.values()) == 1.0
 
@@ -179,19 +189,19 @@ def test_type_filter_and_total_order(gov, tmp_path):
     idx = UnitIndex.build(store.path, units_id, docs_of(units), fake_cache(tmp_path / "emb"),
                           {**load_tuning("gov"), "w": 0.5})
     types = {u.unit_id: u.type for u in units}
-    every = idx.search("drawbridge open notice", types=None, admitted=None, k=10_000)
+    every = idx.search("drawbridge open notice", types=None, view=None, k=10_000)
     assert len(every) == len(units)                 # dense reaches every unit: the full tail
     for t in ("concept", "rule_card", "procedure", "table_record"):
-        hits = idx.search("drawbridge open notice", types=(t,), admitted=None, k=10_000)
+        hits = idx.search("drawbridge open notice", types=(t,), view=None, k=10_000)
         assert hits and {types[u] for u, _ in hits} == {t}
         assert hits == sorted(hits, key=lambda h: (-h[1], h[0]))
         assert len(hits) == sum(v == t for v in types.values())
     assert every == sorted(every, key=lambda h: (-h[1], h[0]))
-    assert idx.search("drawbridge open notice", types=None, admitted=None, k=7) == every[:7]
-    assert idx.search("drawbridge open notice", types=None, admitted=None, k=0) == []
+    assert idx.search("drawbridge open notice", types=None, view=None, k=7) == every[:7]
+    assert idx.search("drawbridge open notice", types=None, view=None, k=0) == []
     # § 117.821(a) is the same text in both versions: equal scores, broken by unit id
     lex = UnitIndex.build(store.path, units_id, docs_of(units), None, load_tuning("gov"))
-    hits = lex.search("117.821 drawbridge open signal", types=("rule_card",), admitted=None,
+    hits = lex.search("117.821 drawbridge open signal", types=("rule_card",), view=None,
                       k=100)
     twins = [h for h in hits if h[0].startswith("rule_card/33 CFR 117.821(a)/")]
     assert len(twins) == 2 and twins[0][1] == twins[1][1] and twins[0][0] < twins[1][0]
@@ -200,13 +210,15 @@ def test_type_filter_and_total_order(gov, tmp_path):
     # the lexical-only ranking is BM25's: only positive scores, every one of them
     assert all(s > 0 for _, s in hits)
     with pytest.raises(ValueError, match="unknown unit type"):
-        idx.search("x", types=("rule",), admitted=None)
+        idx.search("x", types=("rule",), view=None)
     with pytest.raises(ValueError, match="non-empty"):
-        idx.search("x", types=(), admitted=None)
+        idx.search("x", types=(), view=None)
     with pytest.raises(ValueError, match="k must be"):
-        idx.search("x", types=None, admitted=None, k=-1)
-    with pytest.raises(ValueError, match="admitted"):
-        idx.search("x", types=None, admitted=[DOC_IRM])
+        idx.search("x", types=None, view=None, k=-1)
+    with pytest.raises(ValueError, match="view must be"):
+        idx.search("x", types=None, view=[DOC_IRM])
+    with pytest.raises(ValueError, match="admitted must be"):
+        idx.search("x", types=None, view=None, admitted=[DOC_IRM])
 
 
 def test_index_build_is_byte_stable(units_store, tmp_path):
@@ -236,8 +248,8 @@ def test_index_build_is_byte_stable(units_store, tmp_path):
     assert len(emb.model().passage.calls) == calls == 0
     assert tree_bytes(units_store.path / INDEX_DIR) == trees[0]
     for q in QUERIES:
-        assert first.search(q, types=None, admitted=None) == \
-            again.search(q, types=None, admitted=None)
+        assert first.search(q, types=None, view=None) == \
+            again.search(q, types=None, view=None)
 
 
 # -- C8: lexical-only needs no embedding model ---------------------------------------------------
@@ -257,14 +269,14 @@ def test_lexical_only_build_and_search_load_no_model(units_store, monkeypatch):
     monkeypatch.setattr(fastembed, "TextEmbedding", refuse)
     idx = index_of(units_store)
     assert idx.lexical_only
-    hits = idx.search("drawbridge notice", types=None, admitted=None)
+    hits = idx.search("drawbridge notice", types=None, view=None)
     assert hits and hits == sorted(hits, key=lambda h: (-h[1], h[0]))
-    assert idx.search("RNA anchoring", types=("rule_card",), admitted=None)[0][0] == RNA_CARD
+    assert idx.search("RNA anchoring", types=("rule_card",), view=None)[0][0] == RNA_CARD
     meta = json.loads((idx.directory / "index.json").read_text("utf-8"))
     assert meta["lexical_only"] is True and sorted(p.name for p in idx.directory.iterdir()) \
         == ["index.json"]
     with pytest.raises(ValueError, match="lexical-only"):
-        idx.dense_scores("drawbridge", admitted=None, types=None)
+        idx.dense_scores("drawbridge", view=None, types=None)
 
 
 # -- fields, BM25F, expansion, tuning ------------------------------------------------------------
@@ -319,8 +331,8 @@ def test_bm25f_is_field_repetition(gov, tmp_path):
     a = UnitIndex.build(store.path, units_id, docs, None, base)
     b = UnitIndex.build(store.path, units_id, docs, None, heavy)
     assert a.fingerprint != b.fingerprint
-    qa = a.search("Coast Channel", types=("rule_card",), admitted=None)
-    qb = b.search("Coast Channel", types=("rule_card",), admitted=None)
+    qa = a.search("Coast Channel", types=("rule_card",), view=None)
+    qb = b.search("Coast Channel", types=("rule_card",), view=None)
     assert {u for u, _ in qa} == {u for u, _ in qb} and qa != qb   # same matches, new scores
 
 
@@ -387,7 +399,7 @@ def test_a_50_kb_unit_is_indexed_whole(gov, tmp_path):
     for emb in (None, fake_cache(tmp_path / "emb")):
         idx = UnitIndex.build(tmp_path / f"s-{emb is None}", units_id, docs2, emb,
                               load_tuning("gov"))
-        assert idx.search("platypus", types=None, admitted=None)[0][0] == big.unit_id
+        assert idx.search("platypus", types=None, view=None)[0][0] == big.unit_id
     emb = fake_cache(tmp_path / "emb2")
     UnitIndex.build(tmp_path / "s3", units_id, docs2, emb, load_tuning("gov"))
     assert any(huge.dense_text in batch for batch in emb.model().passage.calls)
@@ -406,23 +418,135 @@ def test_view_lexical_indexes_are_cached_per_view(gov, monkeypatch):
 
     monkeypatch.setattr(ui._ViewLexical, "__init__", counting)
     for _ in range(3):
-        idx.search("drawbridge", types=None, admitted=VIEW_DOCS)
-        idx.search("drawbridge", types=None, admitted=VIEW_DOCS | {"f" * 64})  # no units there
+        idx.search("drawbridge", types=None, view=VIEW_DOCS)
+        idx.search("drawbridge", types=None, view=VIEW_DOCS | {"f" * 64})  # no units there
     assert len(built) == 1
     every = frozenset(u.doc_id for u in units)
-    assert idx.search("drawbridge", types=None, admitted=every) == \
-        idx.search("drawbridge", types=None, admitted=None)
+    assert idx.search("drawbridge", types=None, view=every) == \
+        idx.search("drawbridge", types=None, view=None)
     # the LRU keeps VIEW_CACHE views (here 2) and drops the least recently used
     monkeypatch.setattr(ui, "VIEW_CACHE", 2)
     views = [frozenset({DOC_IRM, DOC_117_OLD}), frozenset({DOC_IRM, DOC_165}),
              frozenset({DOC_165, DOC_117_NEW})]
     built.clear()
     for v in views:
-        idx.search("drawbridge", types=None, admitted=v)
+        idx.search("drawbridge", types=None, view=v)
     assert len(built) == 3 and len(ui._VIEW_LEXICAL) == 2
-    idx.search("drawbridge", types=None, admitted=views[2])        # still cached
-    idx.search("drawbridge", types=None, admitted=views[0])        # evicted: built again
+    idx.search("drawbridge", types=None, view=views[2])        # still cached
+    idx.search("drawbridge", types=None, view=views[0])        # evicted: built again
     assert len(built) == 4 and len(ui._VIEW_LEXICAL) == 2
-    assert idx.search("drawbridge", types=None, admitted=frozenset()) == []
-    refund = idx.search("refund", types=None, admitted=frozenset({DOC_IRM}), k=100)
+    assert idx.search("drawbridge", types=None, view=frozenset()) == []
+    refund = idx.search("refund", types=None, view=frozenset({DOC_IRM}), k=100)
     assert refund and {u.split("/")[-1] for u, _ in refund} == {DOC_IRM[:16]}
+
+
+# -- fix round 1: the index's own fusion (I1, P41) -----------------------------------------------
+
+def test_dense_at_w_1_ranks_as_lexical_only(gov, tmp_path):
+    store, units_id, units = gov
+    docs = docs_of(units)
+    lex = UnitIndex.build(store.path, units_id, docs, None, load_tuning("gov"))
+    dense = UnitIndex.build(store.path, units_id, docs, fake_cache(tmp_path / "emb"),
+                            load_tuning("gov"))          # the default w is 1.0
+    assert dense.tuning["w"] == 1.0
+    for q in QUERIES + ["anchor", "117.821 drawbridge open signal"]:
+        for types in (None, ("rule_card",), ("procedure",)):
+            want = lex.search(q, types=types, view=None, k=10_000)
+            got = dense.search(q, types=types, view=None, k=10_000)
+            assert [u for u, _ in got[:len(want)]] == [u for u, _ in want], (q, types)
+            assert all(s == 0 for _, s in got[len(want):])
+            if want:
+                assert got[0][1] == 1.0
+
+
+@pytest.mark.parametrize("w", [0.5, 0.7, 1.0])
+def test_a_single_lexical_hit_ranks_first_at_every_w(gov, tmp_path, w):
+    store, units_id, units = gov
+    docs = docs_of(units)
+    lex = UnitIndex.build(store.path, units_id, docs, None, load_tuning("gov"))
+    assert [u for u, _ in lex.search("anchor", types=("rule_card",), view=None)] == \
+        [ANCHOR_CARD]                                     # exactly one BM25 match
+    idx = UnitIndex.build(store.path, units_id, docs, fake_cache(tmp_path / "emb"),
+                          {**load_tuning("gov"), "w": w})
+    for types in (("rule_card",), None):
+        hits = idx.search("anchor", types=types, view=None, k=5)
+        assert hits[0][0] == ANCHOR_CARD, (w, types)
+        assert hits[0][1] > hits[1][1]
+
+
+def test_w_outside_the_grid_is_refused(gov):
+    store, units_id, units = gov
+    for w in (0.3, 0.45, 1.05):            # the spec's grid is 0.50..1.00 in steps of 0.05
+        with pytest.raises(ValueError, match="w must be"):
+            UnitIndex.build(store.path, units_id, docs_of(units), None,
+                            {**load_tuning("gov"), "w": w})
+
+
+def test_fuse_scaling():
+    lex = [("a", 4.0), ("b", 2.0)]
+    dense = [("a", 0.2), ("b", 0.6), ("c", 1.0), ("d", 0.2)]
+    got = dict(ui.fuse(lex, dense, 0.5))
+    assert got == {"a": 0.5, "b": 0.5 * 0.5 + 0.5 * 0.5, "c": 0.5, "d": 0.0}
+    assert ui.fuse(lex, dense, 0.5) == [("a", 0.5), ("b", 0.5), ("c", 0.5), ("d", 0.0)]
+    assert ui.fuse([("a", 3.0)], [("a", 0.1), ("b", 0.9)], 1.0) == [("a", 1.0), ("b", 0.0)]
+    assert ui.fuse([], [("x", 0.5), ("y", 0.5)], 0.7) == [("x", 0.0), ("y", 0.0)]
+    assert ui.fuse([], [], 0.7) == []
+
+
+# -- fix round 1: statistics from the view, filters as masks (I2) ---------------------------------
+
+def test_filters_mask_within_the_view_statistics(gov, monkeypatch):
+    store, units_id, units = gov
+    monkeypatch.setattr(ui, "_VIEW_LEXICAL", type(ui._VIEW_LEXICAL)())
+    idx = UnitIndex.build(store.path, units_id, docs_of(units), None, load_tuning("gov"))
+    built = []
+    real = ui._ViewLexical.__init__
+
+    def counting(self, *a, **k):
+        built.append(1)
+        real(self, *a, **k)
+
+    monkeypatch.setattr(ui._ViewLexical, "__init__", counting)
+    view = frozenset({DOC_117_OLD, DOC_117_NEW, DOC_IRM})
+    whole = idx.search("drawbridge open notice signal", types=None, view=view, k=1000)
+    for admitted in (frozenset({DOC_117_NEW}), frozenset({DOC_117_OLD, DOC_IRM})):
+        got = idx.search("drawbridge open notice signal", types=None, view=view,
+                         admitted=admitted, k=1000)
+        keep = {d[:16] for d in admitted}
+        # the same BM25 scores as the unfiltered view search, only masked
+        assert got == [h for h in whole if h[0].split("/")[-1] in keep]
+        assert got
+    assert len(built) == 1                       # one view, one BM25 index for every filter
+    # a filter outside the view admits nothing more than the view
+    assert idx.search("drawbridge", types=None, view=frozenset({DOC_IRM}),
+                      admitted=frozenset({DOC_117_NEW})) == []
+
+
+@pytest.mark.parametrize("dense", [False, True], ids=["lexical-only", "dense"])
+def test_a_filtered_search_equals_the_view_index_with_the_same_mask(units_store, tmp_path,
+                                                                     dense):
+    emb = fake_cache(tmp_path / "emb") if dense else None
+    full = index_of(units_store, emb)
+    view = index_of(view_store(units_store, VIEW_DOCS, tmp_path), emb)
+    for admitted in (frozenset({DOC_117_NEW}), frozenset({DOC_IRM, DOC_165})):
+        for q in QUERIES:
+            assert full.search(q, types=None, view=VIEW_DOCS, admitted=admitted, k=1000) == \
+                view.search(q, types=None, view=None, admitted=admitted, k=1000), q
+
+
+# -- fix round 1: expansion through hidden labels (M3) --------------------------------------------
+
+def test_hidden_labels_expand_the_query(gov):
+    store, units_id, units = gov
+    idx = UnitIndex.build(store.path, units_id, docs_of(units), None, load_tuning("gov"))
+    labels = idx.label_map(None)
+    assert labels["rnas"] == ("Regulated navigation area",)
+    assert labels["regulated navigation areas"] == ("RNA",)
+    assert idx.lexical_query("RNAs near the bridge", None) == \
+        "RNAs near the bridge Regulated navigation area"
+    assert idx.lexical_query("regulated-navigation-areas", None) == \
+        "regulated-navigation-areas RNA"
+    # nothing is added when the query already holds a variant of the label
+    assert idx.lexical_query("RNA regulated navigation areas", None) == \
+        "RNA regulated navigation areas"
+    assert ui.label_variants("Draw-bridge") >= {"draw bridge", "drawbridge", "drawbridges"}

@@ -36,13 +36,24 @@ repeated by its type's weight from the tuning (`indexed_text`). It is indexed by
 baseline's `BM25Index` (the same tokenizer, `k1` and `b` as `FieldBM25`, which does the same
 for the Phase 1 breadcrumb). Statistics come from the units of the view alone. There is one
 index per (index fingerprint, view id) in an LRU of `VIEW_CACHE`, as `Tools._view_lexical`
-keeps them, so a hidden unit moves no score. The view is the set of documents in `admitted`
-that hold units of the index; the full index serves `admitted=None` and any view that holds
-every document.
+keeps them, so a hidden unit moves no score.
+
+**View and filters (Phase 2 §6.1, §6.2).** `search(query, *, types, view, admitted=None, k)`
+takes two document sets:
+- `view` is the caller's ACL-visible documents. It alone chooses the BM25 statistics, the LRU
+  key and the label map. The key uses the documents of `view` that hold units of the index;
+  the full index serves `view=None` and any view that holds every document.
+- `admitted` is what the applicability filters admit, and None means the whole view. With
+  `types`, it masks both channels to `view ∩ admitted` before any cut, as
+  `StoreIndex.retrieve(allowed_docs=…)` does with Phase 2's per-view BM25. A filter therefore
+  changes no statistic and never starves the result, and two filters in one view share one
+  BM25 index.
 
 **Concept expansion (BM25 only).** The lexical query gains, after the caller's words, the
-other labels of every view concept label it contains as whole words (`expand_query`). The
-label map is built from the view's concepts only, so a hidden concept expands nothing.
+other labels of every view concept label it contains as whole words (`expand_query`). A label
+matches under its own key or the key of any of its hidden labels (`concepts.hidden_labels`),
+so "RNAs" expands as "RNA" does. The label map is built from the view's concepts only, so a
+hidden concept expands nothing.
 
 **Dense.** Each unit's `dense_text` gets one vector, and each aid gets one vector more. These
 come from the `EmbeddingCache` once, over every unit, and are stored under
@@ -53,7 +64,8 @@ come from the `EmbeddingCache` once, over every unit, and are stored under
 - `vectors.npy`.
 
 A unit's dense score is its best cosine over its own row and its aid rows (`row_scores`, a
-function of the row and the query alone). Scoring masks the rows to `admitted` and `types`. A
+function of the row and the query alone). Scoring masks the rows to `view ∩ admitted` and
+`types`. A
 later build with the same docs and model reuses the stored vectors and computes no
 embedding.
 
@@ -62,13 +74,21 @@ embedding model. It records `lexical_only` in `<store>/units-index/<units id>/le
 index.json`, and `search` is BM25's ranking: every unit with a positive score. The MCP and
 environment subprocesses, fixture stores and tests use it.
 
-**Fusion and order.** With vectors, the ranking is `linear(lex[:CHANNEL_K], dense[:CHANNEL_K],
-w)` and then the tail of every other admitted unit, as `retrieval.index._full_ranking` does.
-That whole ranking is then sorted by (score descending, unit id), so ties break the same way
-on both sides of the fused head. `search(k=…)` cuts it at `k`. A caller that fills a token
-budget (P20, builder note 11) can ask for as many hits as it needs; the index returns ids and
-scores, never text. `types` and `admitted` are hard filters: the channels mask their rows
-before any cut, so a filter never starves the result.
+**Fusion and order (spec P41).** With vectors, `fuse` scores every unit the masks keep as
+`w * l + (1 - w) * d`.
+- `l` is the BM25 score divided by the best BM25 score of the masked pool. A unit with no BM25
+  score gets 0, so the lowest or only lexical hit stays above every non-match.
+- `d` is the dense score min-max scaled over the whole masked pool.
+
+The scaling covers the complete pools, so there is no separate head and tail: a deeper cut
+never reorders the top. At `w = 1.0` the order is the lexical-only order, followed by the
+non-matching units at 0. Phase 1's `fusion.linear` and `retrieval.index._full_ranking`, which
+scale min-max over each channel's top `CHANNEL_K` and so give the lowest BM25 hit 0, are left
+untouched (constraint 2).
+
+Every ranking is sorted by (score descending, unit id). `search(k=…)` cuts it at `k`. A caller
+that fills a token budget (P20, builder note 11) can ask for as many hits as it needs. The
+index returns ids and scores, never text.
 
 **Tuning (C13).** `config/units/tuning.json` is keyed by corpus:
 `{corpus: {"weights": {type: {field: weight}}, "w": float}}`. Weights come from `WEIGHT_GRID`
@@ -100,10 +120,9 @@ from adr_store import acl
 from adr_store.chunking import BREADCRUMB_SEP
 from adr_store.embedding import EmbeddingCache
 from adr_store.retrieval.dense import row_scores
-from adr_store.retrieval.index import _full_ranking
 from adr_store.retrieval.lexical import masked_hits
 from adr_store.units.build import CORPUS_TYPES
-from adr_store.units.concepts import _Labels, _subpart_of, scope_contains
+from adr_store.units.concepts import _Labels, _subpart_of, hidden_labels, scope_contains
 from adr_store.units.contracts import UNIT_CONTRACT_DIR, UNIT_TYPES
 from adr_store.units.envelope import Unit
 
@@ -214,13 +233,14 @@ def unit_docs(units: list[Unit], concept_units: list[Unit]) -> list[UnitDoc]:
     index = _Labels(concept_units)
     docs = []
     for u in sorted(units, key=lambda u: u.unit_id):
+        body = _body(u, by_id)
         if u.type == "concept":
             labels = _concept_labels(u)
         elif u.type == "rule_card":
             labels = [lab for cid in u.body.get("defined_terms", []) if cid in concepts
                       for lab in _concept_labels(concepts[cid])]
         elif u.type == "procedure":
-            text = "\n".join([u.title, _body(u, by_id)])
+            text = "\n".join([u.title, body])
             sub = _subpart_of(u)
             found = index.mentions(u.doc_id, text)
             hits = sorted(cid for cid in found if scope_contains(
@@ -229,7 +249,6 @@ def unit_docs(units: list[Unit], concept_units: list[Unit]) -> list[UnitDoc]:
         else:
             labels = []
         aids = _aids(u)
-        body = _body(u, by_id)
         fields = {"title": "\n".join(_dedup([u.title, *u.heading_path])), "ref": _ref(u),
                   "labels": "\n".join(_dedup([*labels, *u.aids.labels])), "body": body,
                   "aids": "\n".join(aids)}
@@ -257,10 +276,17 @@ def label_key(label: str) -> str:
     return " ".join(_words(label))
 
 
+def label_variants(label: str) -> frozenset[str]:
+    """The keys a label matches under: its own key and the keys of its hidden labels
+    (`concepts.hidden_labels`: case-folded, hyphen and space variants, joined, plural "s")."""
+    return frozenset({label_key(label)} | {label_key(h) for h in hidden_labels(label)}) - {""}
+
+
 def expand_query(query: str, label_map: dict[str, tuple[str, ...]]) -> str:
     """`query` followed by the alternate labels (`label_map[key]`) of every label key it holds
     as whole words, in the order the keys start in the query (longer first at one start),
-    leaving out labels whose key the query or an earlier addition already has. BM25 only."""
+    leaving out a label when the query or an earlier addition already holds one of its
+    variants (`label_variants`). BM25 only."""
     words = _words(query)
     if not words or not label_map:
         return query
@@ -271,25 +297,29 @@ def expand_query(query: str, label_map: dict[str, tuple[str, ...]]) -> str:
     added: list[str] = []
     for key in (g for at in grams for g in at):
         for alt in label_map.get(key, ()):
-            if label_key(alt) not in seen:
-                seen.add(label_key(alt))
+            variants = label_variants(alt)
+            if not variants & seen:
+                seen |= variants
                 added.append(alt)
     return query if not added else query + " " + " ".join(added)
 
 
 def _label_map(docs: list[UnitDoc]) -> dict[str, tuple[str, ...]]:
-    """{label key: the other labels of every concept that has that label}, from the concept
-    docs given (the labels field, one label per line)."""
+    """{label variant key: the other labels of every concept that has a label with that
+    variant}, from the concept docs given (the labels field, one label per line; the
+    variants are each label's key and its hidden labels' keys, M3)."""
     out: dict[str, list[str]] = {}
     for d in docs:
         if d.type != "concept":
             continue
         labels = [lab for lab in d.fields["labels"].split("\n") if label_key(lab)]
+        variants = {lab: label_variants(lab) for lab in labels}
         for lab in labels:
-            alts = out.setdefault(label_key(lab), [])
-            for other in labels:
-                if label_key(other) != label_key(lab) and other not in alts:
-                    alts.append(other)
+            for key in sorted(variants[lab]):
+                alts = out.setdefault(key, [])
+                for other in labels:
+                    if key not in variants[other] and other not in alts:
+                        alts.append(other)
     return {k: tuple(v) for k, v in sorted(out.items()) if v}
 
 
@@ -342,17 +372,23 @@ class _ViewLexical:
     def __init__(self, docs: list[UnitDoc], weights: dict[str, dict[str, int]]):
         self.ids = [d.unit_id for d in docs]
         self.types = np.array([d.type for d in docs], dtype=str)
+        self.doc_ids = np.array([d.doc_id for d in docs], dtype=str)
         self.bm25 = BM25Index()
         self.bm25.build([Chunk(d.unit_id, d.doc_id, 0, 1, indexed_text(d, weights[d.type]))
                          for d in docs])
         self.label_map = _label_map(docs)
 
-    def hits(self, query: str, types: tuple[str, ...] | None) -> Hits:
+    def hits(self, query: str, types: tuple[str, ...] | None,
+             allowed: frozenset[str] | None) -> Hits:
         """Every unit of the view with a positive BM25 score for `query` (the expanded
-        query), masked to `types`, sorted by (-score, unit id)."""
+        query), masked to `types` and to the documents `allowed` (None: all), sorted by
+        (-score, unit id). The mask changes no statistic."""
         scores = self.bm25.scores(query)
-        mask = np.ones(len(self.ids), dtype=bool) if types is None else \
-            np.isin(self.types, np.array(types, dtype=str))
+        mask = np.ones(len(self.ids), dtype=bool)
+        if types is not None:
+            mask &= np.isin(self.types, np.array(types, dtype=str))
+        if allowed is not None:
+            mask &= np.isin(self.doc_ids, np.array(sorted(allowed), dtype=str))
         return masked_hits(self.ids, scores, mask, len(self.ids), positive=True)
 
 
@@ -368,13 +404,13 @@ def _check_types(types) -> tuple[str, ...] | None:
     return tuple(sorted(set(types)))
 
 
-def _check_admitted(admitted) -> frozenset[str] | None:
-    if admitted is None:
+def _check_docs(name: str, docs) -> frozenset[str] | None:
+    if docs is None:
         return None
-    if not isinstance(admitted, (frozenset, set)):
-        raise ValueError(f"admitted must be None or a set of document ids, got "
-                         f"{type(admitted).__name__}")
-    return frozenset(admitted)
+    if not isinstance(docs, (frozenset, set)):
+        raise ValueError(f"{name} must be None or a set of document ids, got "
+                         f"{type(docs).__name__}")
+    return frozenset(docs)
 
 
 def _sha256_json(value) -> str:
@@ -449,6 +485,28 @@ def _npy_bytes(vectors: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
+# -- fusion (P41) ------------------------------------------------------------------------------
+
+def fuse(lex: Hits, dense: Hits, w: float) -> Hits:
+    """The unit index's linear fusion (spec P41): every candidate unit (`dense` holds every
+    unit the masks keep, `lex` those with a positive BM25 score) scored
+    `w * l + (1 - w) * d`, where `l` is its BM25 score divided by the pool's best (0 without
+    a BM25 score, so the lowest or only hit stays above every non-match) and `d` its dense
+    score min-max scaled over the whole masked pool (0 when the pool's range is 0). Rounded to
+    6 decimals and sorted by (-score, unit id). The scaling is over the complete pools, so
+    the ranking has no separate head and tail: a deeper cut never reorders the top."""
+    best = max((s for _, s in lex), default=0.0)
+    bm25 = dict(lex)
+    lo = min((s for _, s in dense), default=0.0)
+    span = max((s for _, s in dense), default=0.0) - lo
+    dn = {u: (s - lo) / span if span > 0 else 0.0 for u, s in dense}
+    scores = {u: w * (bm25.get(u, 0.0) / best if best > 0 else 0.0)
+              + (1.0 - w) * dn.get(u, 0.0) for u in bm25.keys() | dn.keys()}
+    hits = [(u, round(float(s), 6)) for u, s in scores.items()]
+    hits.sort(key=lambda h: (-h[1], h[0]))
+    return hits
+
+
 # -- the index ---------------------------------------------------------------------------------
 
 class UnitIndex:
@@ -478,6 +536,7 @@ class UnitIndex:
             self._aid_parent = np.array([pos[u] for u, aid, _ in rows if aid is not None],
                                         dtype=np.int64)
         self._full: _ViewLexical | None = None
+        self._full_lock = threading.Lock()
 
     @classmethod
     def build(cls, store_path: Path, units_id: str, docs: list[UnitDoc],
@@ -519,14 +578,16 @@ class UnitIndex:
 
     # -- views -----------------------------------------------------------------------------
 
-    def _view(self, admitted: frozenset[str] | None) -> _ViewLexical | None:
-        """The lexical index of the view (module docstring); None for a view with no unit."""
-        docs = self.doc_ids if admitted is None else admitted & self.doc_ids
+    def _view(self, view: frozenset[str] | None) -> _ViewLexical | None:
+        """The lexical index of the caller's view (module docstring); None for a view with no
+        unit. Only `view` chooses it: filters never do (Phase 2 §6.2)."""
+        docs = self.doc_ids if view is None else view & self.doc_ids
         if not docs:
             return None
         if docs == self.doc_ids:
-            if self._full is None:
-                self._full = _ViewLexical(self.docs, self.tuning["weights"])
+            with self._full_lock:
+                if self._full is None:
+                    self._full = _ViewLexical(self.docs, self.tuning["weights"])
             return self._full
         key = (self.fingerprint, acl.view_id(docs))
         with _VIEW_LOCK:
@@ -541,35 +602,33 @@ class UnitIndex:
                 _VIEW_LEXICAL.popitem(last=False)
         return lex
 
-    def label_map(self, admitted: frozenset[str] | None) -> dict[str, tuple[str, ...]]:
+    def label_map(self, view: frozenset[str] | None) -> dict[str, tuple[str, ...]]:
         """The label map of the view's concepts (what `expand_query` reads)."""
-        view = self._view(_check_admitted(admitted))
-        return {} if view is None else view.label_map
+        lex = self._view(_check_docs("view", view))
+        return {} if lex is None else lex.label_map
 
-    def lexical_query(self, query: str, admitted: frozenset[str] | None) -> str:
+    def lexical_query(self, query: str, view: frozenset[str] | None) -> str:
         """`query` expanded by the view's concept labels: what BM25 searches."""
-        return expand_query(query, self.label_map(admitted))
+        return expand_query(query, self.label_map(view))
+
+    @staticmethod
+    def _allowed(view: frozenset[str] | None, admitted: frozenset[str] | None
+                 ) -> frozenset[str] | None:
+        """The documents both channels keep: `view ∩ admitted` (None: no restriction)."""
+        if view is None:
+            return admitted
+        return view if admitted is None else view & admitted
 
     # -- channels --------------------------------------------------------------------------
 
-    def _mask(self, admitted: frozenset[str] | None, types: tuple[str, ...] | None
-              ) -> np.ndarray:
+    def _dense(self, query: str, allowed: frozenset[str] | None,
+               types: tuple[str, ...] | None) -> Hits:
         mask = np.ones(len(self._ids), dtype=bool)
-        if admitted is not None:
-            mask &= np.isin(self._doc_of, np.array(sorted(admitted), dtype=str))
+        if allowed is not None:
+            mask &= np.isin(self._doc_of, np.array(sorted(allowed), dtype=str))
         if types is not None:
             mask &= np.isin(self._type_of, np.array(types, dtype=str))
-        return mask
-
-    def dense_scores(self, query: str, *, admitted: frozenset[str] | None,
-                     types: tuple[str, ...] | None) -> Hits:
-        """Every admitted unit of `types` with its dense score (best cosine of its own row
-        and its aid rows), sorted by (-score, unit id)."""
-        if self.lexical_only:
-            raise ValueError("this unit index is lexical-only (built with emb=None)")
-        admitted, types = _check_admitted(admitted), _check_types(types)
-        mask = self._mask(admitted, types)
-        if not mask.any() or not self._ids:
+        if not mask.any():
             return []
         q = _unit(next(iter(self.emb.model().query_embed([query]))))
         scores = row_scores(self._vectors, q)
@@ -577,21 +636,34 @@ class UnitIndex:
         np.maximum.at(best, self._aid_parent, scores[len(self._ids):])
         return masked_hits(self._ids, best, mask, len(self._ids), positive=False)
 
+    def dense_scores(self, query: str, *, types: tuple[str, ...] | None,
+                     view: frozenset[str] | None, admitted: frozenset[str] | None = None
+                     ) -> Hits:
+        """Every unit of `types` in `view ∩ admitted` with its dense score (best cosine of its
+        own row and its aid rows), sorted by (-score, unit id)."""
+        if self.lexical_only:
+            raise ValueError("this unit index is lexical-only (built with emb=None)")
+        view, admitted = _check_docs("view", view), _check_docs("admitted", admitted)
+        return self._dense(query, self._allowed(view, admitted), _check_types(types))
+
     def search(self, query: str, *, types: tuple[str, ...] | None,
-               admitted: frozenset[str] | None, k: int = 10) -> Hits:
-        """The top `k` units for `query` among the units of the documents in `admitted`
-        (None: every unit) of `types` (None: every type), as (unit id, score) sorted by
-        (-score, unit id) (module docstring)."""
+               view: frozenset[str] | None, admitted: frozenset[str] | None = None,
+               k: int = 10) -> Hits:
+        """The top `k` units for `query` as (unit id, score), sorted by (-score, unit id).
+
+        `view` (the caller's ACL-visible documents; None: every document) sets the BM25
+        statistics, the cache key and the label map. `admitted` (the documents the filters
+        admit; None: the whole view) and `types` (None: every type) mask both channels to
+        `view ∩ admitted` before any cut, as `StoreIndex.retrieve(allowed_docs=...)` does."""
         if isinstance(k, bool) or not isinstance(k, int) or k < 0:
             raise ValueError(f"k must be an integer >= 0, got {k!r}")
-        admitted, types = _check_admitted(admitted), _check_types(types)
-        view = self._view(admitted)
-        if view is None or k == 0:
+        view, admitted = _check_docs("view", view), _check_docs("admitted", admitted)
+        types = _check_types(types)
+        lexv = self._view(view)
+        if lexv is None or k == 0:
             return []
-        lex = view.hits(expand_query(query, view.label_map), types)
+        allowed = self._allowed(view, admitted)
+        lex = lexv.hits(expand_query(query, lexv.label_map), types, allowed)
         if self.lexical_only:
             return lex[:k]
-        dense = self.dense_scores(query, admitted=admitted, types=types)
-        ranked = sorted(_full_ranking(lex, dense, self.tuning["w"]),
-                        key=lambda h: (-h[1], h[0]))
-        return ranked[:k]
+        return fuse(lex, self._dense(query, allowed, types), self.tuning["w"])[:k]
