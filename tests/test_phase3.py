@@ -545,6 +545,31 @@ def test_q1_compare_refuses_runs_that_are_not_comparable(tmp_path):
         q1_compare(unfinished, base_dir)
 
 
+def test_the_shared_run_refusals_name_the_comparison_that_refuses(tmp_path):
+    """`_run` serves Q1 and Q2: each refusal names the caller's comparison, never the other."""
+    from adr_eval.phase3 import q2_compare
+
+    tables_cfg = {"golden_set": "gov-tables", "golden_sha256": "0" * 64}
+    linear = run_dir_of(tmp_path, "linear", "baseline-linear", [q1_row("a", "correct")],
+                        **tables_cfg)
+    stopped = run_dir_of(tmp_path, "stopped", "p3-typed", [q1_row("a", "correct")],
+                         status="stopped_calls", **tables_cfg)
+    repeats = run_dir_of(tmp_path, "repeats", "p3-typed",
+                         [q1_row("a", "correct"), q1_row("a", "correct", repeat=1)],
+                         **tables_cfg)
+    for run, what in ((stopped, "Q2 compares complete runs"),
+                      (repeats, "Q2 compares repeat 0 of single-repeat runs")):
+        with pytest.raises(RunError, match=what) as e:
+            q2_compare(run, linear)
+        assert "Q1" not in str(e.value)
+    base = run_dir_of(tmp_path, "base", "baseline-linear", [q1_row("a", "correct")])
+    for run, what in ((stopped, "Q1 compares complete runs"),
+                      (repeats, "Q1 compares repeat 0 of single-repeat runs")):
+        with pytest.raises(RunError, match=what) as e:
+            q1_compare(run, base)
+        assert "Q2" not in str(e.value)
+
+
 def _keys_and_strings(x, keys, strings):
     if isinstance(x, dict):
         for k, v in x.items():

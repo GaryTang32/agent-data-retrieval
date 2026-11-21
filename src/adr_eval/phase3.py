@@ -92,9 +92,10 @@ def cache_inputs_unchanged(corpus: str) -> list[str]:
 
 # -- Q1 ----------------------------------------------------------------------------------------
 
-def _run(run_dir: Path) -> tuple[dict, dict[str, dict]]:
+def _run(run_dir: Path, comparison: str) -> tuple[dict, dict[str, dict]]:
     """(config, repeat-0 count_filter rows by item id) of a run; a run that did not complete,
-    or has other repeats, is refused (Q1 compares one reply per item of a whole run)."""
+    or has other repeats, is refused (`comparison`, "Q1" or "Q2", compares one reply per item
+    of a whole run, and its refusals say so)."""
     run_dir = Path(run_dir)
     try:
         cfg = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
@@ -102,11 +103,12 @@ def _run(run_dir: Path) -> tuple[dict, dict[str, dict]]:
     except OSError as e:
         raise RunError(f"{run_dir}: not a run directory (config.json, results.jsonl)") from e
     if cfg.get("status") != "complete":
-        raise RunError(f"{run_dir}: status {cfg.get('status')!r}; Q1 compares complete runs")
+        raise RunError(f"{run_dir}: status {cfg.get('status')!r}; {comparison} compares "
+                       f"complete runs")
     rows = [json.loads(x) for x in lines if x.strip()]
     if any(r["repeat"] != 0 for r in rows):
-        raise RunError(f"{run_dir}: holds repeats other than repeat 0; Q1 compares repeat 0 "
-                       f"of single-repeat runs")
+        raise RunError(f"{run_dir}: holds repeats other than repeat 0; {comparison} compares "
+                       f"repeat 0 of single-repeat runs")
     return cfg, {r["item_id"]: r for r in rows if r["qtype"] == "count_filter"}
 
 
@@ -147,8 +149,8 @@ def q1_compare(typed_run: Path, baseline_run: Path) -> dict:
     baseline wrong, `c` the reverse; `mcnemar_p` is the exact two-sided test on them. Each
     typed miss carries its generated query and cause, each baseline miss its outcome and
     cause."""
-    tcfg, typed = _run(typed_run)
-    bcfg, base = _run(baseline_run)
+    tcfg, typed = _run(typed_run, "Q1")
+    bcfg, base = _run(baseline_run, "Q1")
     for path, cfg in ((typed_run, tcfg), (baseline_run, bcfg)):
         if cfg.get("golden_set", "v0.1") != "v0.1":
             raise RunError(f"{path}: a {cfg['golden_set']} run; Q1 compares v0.1 count_filter "
@@ -319,8 +321,8 @@ def q2_compare(typed_run: Path, baseline_run: Path) -> dict:
     10,000 resamples); Q2 passes when the typed accuracy is at least 0.80 and the lower bound is
     above +0.02. `b` counts items only the typed system gets right, `c` the reverse, and
     `mcnemar_p` is the exact test on them. Each miss carries its cause."""
-    tcfg, typed = _run(typed_run)
-    bcfg, base = _run(baseline_run)
+    tcfg, typed = _run(typed_run, "Q2")
+    bcfg, base = _run(baseline_run, "Q2")
     for path, cfg, system in ((typed_run, tcfg, TYPED_SYSTEM),
                               (baseline_run, bcfg, BASELINE_SYSTEM)):
         if cfg.get("golden_set") != GOV_TABLES:
