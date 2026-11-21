@@ -18,7 +18,8 @@ spec ids, so the cache key covers both and a spec bump recompiles only its group
 every field of the group, else the retry, else every field of the group is null `unparseable`.
 (2) Type and limits: `when_to_use` and `not_for` are non-empty strings, `when_to_use` at most
 `LIMITS["when_to_use"]` characters; `trigger_examples` and `problem_abstractions` are lists of
-non-empty strings, at most `LIMITS[field]` of them; `quotes` is a list of strings (a missing or
+non-empty strings, at least `MIN_ITEMS[field]` (two trigger examples, §6.2) and at most
+`LIMITS[field]` of them; `quotes` is a list of strings (a missing or
 null list is no quote, a single string one). A value that fails is null `unparseable`. A
 null value (or an empty one) keeps the model's reason when it is `absent` or
 `not_applicable`, else `absent`. (3) `not_for` without a quote is null `absent`
@@ -26,8 +27,11 @@ null value (or an empty one) keeps the model's reason when it is `absent` or
 the section text (`grounding.ground`); the field is kept when at least one quote is found, with
 every found quote (distinct spans, in the order given) stored as the located slice and its
 offsets in the document's canonical text (the section's start added), so each re-slices from
-the document; else the field is null `ungrounded`. Descriptive fields state no numbers or
-times, so there is no value-in-quote check and a kept value is `verified`.
+the document; else the field is null `ungrounded`. (5) Value in quote (§6.3 check 4): every
+clock time the value states (`grounding.clock_times`) must be stated by at least one of its
+grounded quotes (`time_in_quote`), and every other number it states, in digits or in words,
+too (`tables.extract.number_in_quote`, the same reading of numbers on both sides); for a list,
+each item. A kept value is `verified` when it passes, else `auto-accepted` (kept, not nulled).
 
 `quotes_given` and `quotes_grounded` count the quotes of every value that passed the type
 check, before ungrounded values are dropped (criterion E1).
@@ -38,7 +42,8 @@ both built by code exactly as the units build does, so the build sends the same 
 reads the same cache entries); `--limit` takes the first procedures over the stores in order
 (the canary). `apply` fills a build's procedure units from the cache: the four body fields in
 the contract shape `{value, quotes[{text, span}], status, null_reason}` and the lineage
-(prompt version, the served model when the provider reports it, the cache key of the call).
+(prompt version, the served model when the provider reports it, the cache key of the call:
+the reply's, or for an input rejection the failure entry it is stored under).
 """
 
 from __future__ import annotations
@@ -56,14 +61,16 @@ from adr_eval.llm import Completion, ModelOutputError, parse_json_recovering
 from adr_store import applicability as ap
 from adr_store.store import Store
 from adr_store.tables import extract as ex
+from adr_store.tables.provenance import Status
 from adr_store.units.envelope import COMPILER_VERSION, Lineage, Unit, UnitNullReason, meta_sha256
-from adr_store.units.grounding import PassConfig, ground
+from adr_store.units.grounding import PassConfig, clock_times, ground, time_in_quote
 from adr_store.units.procedures import WHEN_TO_USE_MAX, procedure_units
 
 PROMPT_VERSION = "procedure-compile@1"
 MAX_TOKENS = 1500   # four fields, each a short value and a few quotes
 FIELDS = ("when_to_use", "not_for", "trigger_examples", "problem_abstractions")
 LIMITS = {"when_to_use": WHEN_TO_USE_MAX, "trigger_examples": 3, "problem_abstractions": 5}
+MIN_ITEMS = {"trigger_examples": 2, "problem_abstractions": 1}
 _LISTS = ("trigger_examples", "problem_abstractions")
 _MODEL_NULLS = ("absent", "not_applicable")
 _FIELD_LINES = {
@@ -84,6 +91,7 @@ class FieldValue:
     null_reason: UnitNullReason | None
     quotes_given: int
     quotes_grounded: int
+    status: Status | None = None                  # verified or auto-accepted when kept
 
 
 @dataclass(frozen=True)
@@ -138,13 +146,15 @@ def _null(reason: UnitNullReason, given: int = 0) -> FieldValue:
 
 def _coerce(field: str, raw: Any) -> Any:
     """Check 2: the value of `field` (a stripped string, or a tuple of them), or None when
-    it has the wrong type or is over its limit."""
+    it has the wrong type or too few or too many items, or is too long."""
     if field in _LISTS:
         items = [raw] if isinstance(raw, str) else raw
         if not isinstance(items, list) or not all(isinstance(x, str) and x.strip()
                                                   for x in items):
             return None
-        return tuple(x.strip() for x in items) if len(items) <= LIMITS[field] else None
+        if not MIN_ITEMS[field] <= len(items) <= LIMITS[field]:
+            return None
+        return tuple(x.strip() for x in items)
     if not isinstance(raw, str) or not raw.strip():
         return None
     value = raw.strip()
@@ -172,7 +182,26 @@ def check_field(field: str, cell: Any, section: str, offset: int) -> FieldValue:
     if not found:
         return _null("ungrounded", len(quotes))
     stored = tuple((section[s:e], s + offset, e + offset) for s, e in dict.fromkeys(found))
-    return FieldValue(value, stored, None, len(quotes), len(found))
+    status: Status = "verified" if value_in_quotes(value, [q for q, _, _ in stored]) \
+        else "auto-accepted"
+    return FieldValue(value, stored, None, len(quotes), len(found), status)
+
+
+def value_in_quotes(value: str | tuple[str, ...], quotes: list[str]) -> bool:
+    """Check 4: each clock time and each other number a value (or each item of a list value)
+    states is stated by at least one of `quotes` (module docstring)."""
+    for text in [value] if isinstance(value, str) else value:
+        times = clock_times(text)
+        if not all(any(time_in_quote(m, q) for m in minutes for q in quotes)
+                   for _, _, minutes in times):
+            return False
+        rest = list(text)
+        for start, end, _ in times:          # a clock time's digits are checked as a time
+            rest[start:end] = " " * (end - start)
+        if not all(any(ex.number_in_quote(n, q) for q in quotes)
+                   for n in ex._numbers("".join(rest))):
+            return False
+    return True
 
 
 def _parser(fields: list[str]):
@@ -215,8 +244,10 @@ def _compile(unit: Unit, text: str, client, cfg: PassConfig) -> _Compiled:
         reply, outcome, c = ex._call(rec, system, user, _parser(names), max_tokens=MAX_TOKENS)
         counts += c
         outcomes[group] = outcome
-        keys[group] = Cache.key(client.name, getattr(client, "model", client.name), system,
-                                user, MAX_TOKENS, rec.repeat)
+        key = Cache.key(client.name, getattr(client, "model", client.name), system, user,
+                        MAX_TOKENS, rec.repeat)
+        # an input rejection is stored under its failure key (`_CachedClient._failure_key`)
+        keys[group] = Cache.key("failure", key) if outcome == "model_error" else key
         served.update(x.served_model for x in rec.completions if x.served_model)
         for f in names:
             if reply is None:
@@ -255,9 +286,10 @@ def store_procedures(store: Store) -> list[Unit]:
 
 def _summary(done: list[_Compiled]) -> dict:
     """What is the same on every rebuild from the same cache: per field the quotes given and
-    grounded (E1), values kept and nulls by reason; per group the call outcomes."""
-    fields = {f: {"quotes_given": 0, "quotes_grounded": 0, "values": 0, "nulls": Counter()}
-              for f in FIELDS}
+    grounded (E1), values kept (verified and auto-accepted) and nulls by reason; per group
+    the call outcomes."""
+    fields = {f: {"quotes_given": 0, "quotes_grounded": 0, "values": 0, "verified": 0,
+                  "auto-accepted": 0, "nulls": Counter()} for f in FIELDS}
     outcomes: dict[str, Counter] = {}
     for r in done:
         for f, v in r.fields.items():
@@ -267,6 +299,7 @@ def _summary(done: list[_Compiled]) -> dict:
                 fields[f]["nulls"][v.null_reason] += 1
             else:
                 fields[f]["values"] += 1
+                fields[f][v.status] += 1
         for g, o in r.outcomes.items():
             outcomes.setdefault(g, Counter())[o] += 1
     for v in fields.values():
@@ -318,7 +351,7 @@ def compile_procedures(stores: list[Store], client, cfg: PassConfig, *, limit: i
 def _body_field(v: FieldValue) -> dict:
     return {"value": list(v.value) if isinstance(v.value, tuple) else v.value,
             "quotes": [{"text": t, "span": [s, e]} for t, s, e in v.quotes],
-            "status": None if v.value is None else "verified", "null_reason": v.null_reason}
+            "status": v.status, "null_reason": v.null_reason}
 
 
 def _cache_key(keys: dict[str, str]) -> str:

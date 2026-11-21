@@ -24,17 +24,25 @@ from adr_store.units.procedure_pass import (
     FIELDS,
     MAX_TOKENS,
     PROMPT_VERSION,
+    check_field,
     compile_procedure,
     compile_procedures,
     pass_prompt,
     store_procedures,
 )
-from tests.store.units_fixtures import DOC_IRM, make_units_store, units_store  # noqa: F401
+from tests.store.units_fixtures import (  # noqa: F401
+    DOC_IRM,
+    UNITS_DOCS,
+    make_units_store,
+    units_store,
+)
 
 CFG = load_pass_config("procedure")
 SPECS = dict(CFG.specs)
 IRM_REF = "IRM 21.4.1.3.1"
 REAL_QUOTE = "Research the account with Command Code IMFOLT to find the refund transaction."
+NUMBER_QUOTE = "Request the refund trace with Command Code REQ77 when no TC 846 has posted after " \
+    "21 days."
 
 
 def n_procedures(store: Store) -> int:
@@ -185,7 +193,8 @@ def test_one_call_per_procedure_and_a_rebuild_makes_none(units_store, tmp_path):
     assert again_report["stores"][str(units_store.path)]["calls"] == {
         "made": 0, "cached": 3, "failed": 0}
     assert mine["fields"]["when_to_use"] == {"quotes_given": 3, "quotes_grounded": 3,
-                                             "values": 3, "nulls": {}}
+                                             "values": 3, "verified": 3, "auto-accepted": 0,
+                                             "nulls": {}}
     assert mine["fields"]["not_for"]["nulls"] == {"absent": 3}
     assert report["max_tokens"] == MAX_TOKENS == 1500
 
@@ -275,7 +284,7 @@ def test_a_quote_is_located_across_whitespace_and_stored_as_the_slice(units_stor
 
 
 def test_an_ungrounded_field_is_null_ungrounded(one_field):
-    v = one_field(reply(trigger_examples={"value": ["Where is my refund?"],
+    v = one_field(reply(trigger_examples={"value": ["Where is my refund?", "Refund late"],
                                           "quotes": ["a quote the text never says"],
                                           "null_reason": None}), "trigger_examples")
     assert (v.value, v.quotes, v.null_reason) == (None, (), "ungrounded")
@@ -333,6 +342,100 @@ def test_values_of_the_wrong_type_or_over_their_limit_are_unparseable(one_field)
     assert one_field(reply(when_to_use="not an object")).null_reason == "unparseable"
 
 
+def test_list_items_that_are_not_strings_or_are_blank_are_unparseable(one_field):     # M3
+    for items in ([1, "Where is my refund?"], ["", "Where is my refund?"],
+                  ["  ", "Where is my refund?"], [None, "x"], [["nested"], "x"]):
+        assert one_field(reply(trigger_examples={"value": items, "quotes": [REAL_QUOTE]}),
+                         "trigger_examples").null_reason == "unparseable", items
+    assert one_field(reply(problem_abstractions={"value": ["missing refund", 7],
+                                                 "quotes": [REAL_QUOTE]}),
+                     "problem_abstractions").null_reason == "unparseable"
+
+
+def test_fewer_than_two_trigger_examples_are_unparseable(one_field):                # M5a, §6.2
+    for one in (["Where is my refund?"], "Where is my refund?"):
+        assert one_field(reply(trigger_examples={"value": one, "quotes": [REAL_QUOTE]}),
+                         "trigger_examples").null_reason == "unparseable"
+    two = one_field(reply(trigger_examples={"value": ["Where is my refund?", "Refund late"],
+                                            "quotes": [REAL_QUOTE]}), "trigger_examples")
+    assert two.value == ("Where is my refund?", "Refund late") and two.status == "verified"
+    one_abstraction = one_field(reply(problem_abstractions={"value": ["missing refund"],
+                                                            "quotes": [REAL_QUOTE]}),
+                                "problem_abstractions")
+    assert one_abstraction.value == ("missing refund",)        # "up to five": one is enough
+
+
+# -- value in quote (§6.3 check 4) -----------------------------------------------------------------
+
+def test_a_number_missing_from_every_quote_is_auto_accepted(one_field):               # I1
+    v = one_field(reply(when_to_use={"value": "Use when no refund has posted after 30 days",
+                                     "quotes": [REAL_QUOTE, NUMBER_QUOTE]}))
+    assert (v.value, v.status, v.null_reason) == (
+        "Use when no refund has posted after 30 days", "auto-accepted", None)
+    v = one_field(reply(trigger_examples={"value": ["Where is my refund?",
+                                                    "No refund after 45 days"],
+                                          "quotes": [NUMBER_QUOTE]}), "trigger_examples")
+    assert v.status == "auto-accepted"                  # each list item is checked
+    v = one_field(reply(when_to_use={"value": "Use when no TC 846 after 21 days",
+                                     "quotes": [REAL_QUOTE, "a quote the text never says"]}))
+    assert v.status == "auto-accepted"                  # only grounded quotes count
+
+
+def test_a_number_in_a_grounded_quote_is_verified(one_field):                        # I1
+    v = one_field(reply(when_to_use={"value": "Use when no TC 846 has posted after 21 days",
+                                     "quotes": [REAL_QUOTE, NUMBER_QUOTE]}))
+    assert (v.status, v.null_reason) == ("verified", None)
+    v = one_field(reply(when_to_use={"value": "Use when twenty-one days pass with no TC 846",
+                                     "quotes": [NUMBER_QUOTE]}))
+    assert v.status == "verified"                       # a number word reads as its number
+
+
+def test_a_value_without_numbers_is_verified(one_field):                             # I1
+    v = one_field(reply())
+    assert (v.value, v.status) == ("Use when a refund is missing.", "verified")
+
+
+DRAW = "The draw need not open from 7:30 a.m. to 9 a.m. and from noon to 1 p.m. daily."
+
+
+@pytest.mark.parametrize(("value", "status"), [
+    ("Closed 7:30 a.m. to 9 a.m.", "verified"),
+    ("Closed from 12 p.m. to 1 p.m.", "verified"),        # 12 p.m. is the quote's noon
+    ("Closed from noon", "verified"),
+    ("Closed 7:30 a.m. to 10 a.m.", "auto-accepted"),
+    ("Closed 7:30 p.m. to 9 p.m.", "auto-accepted"),
+    ("Closed for 2 hours from 7:30 a.m.", "auto-accepted"),   # 2 is in no quote
+])
+def test_clock_times_must_be_in_a_grounded_quote(value, status):                    # I1
+    section = "Header.\n" + DRAW
+    v = check_field("when_to_use", {"value": value, "quotes": [DRAW]}, section, 100)
+    assert v.status == status
+    assert v.quotes == ((DRAW, 108, 108 + len(DRAW)),)
+
+
+def test_an_auto_accepted_value_is_stored_and_counted_so(units_store, tmp_path):  # noqa: F811
+    def far(system, user, repeat):
+        out = json.loads(replies(system, user, repeat))
+        out["when_to_use"]["value"] += " within 99 days"
+        return json.dumps(out)
+
+    client = stub(tmp_path, far)
+    _, report = compile_procedures([units_store], client, CFG)
+    w = report["stores"][str(units_store.path)]["fields"]["when_to_use"]
+    assert (w["values"], w["verified"], w["auto-accepted"]) == (3, 0, 3)
+    res = build_units(units_store.path, "bench", passes=("procedure",),
+                      client=metered_client(0, client=client))
+    m = load_units_manifest(units_store.path, res.units_id)
+    proc = next(f for f in m.units if f.type == "procedure")
+    path = units_store.path / UNITS_DIR / m.snapshot / proc.file
+    unit, = map(json.loads, path.read_text().splitlines())
+    assert unit["body"]["when_to_use"]["status"] == "auto-accepted"
+    assert unit["body"]["not_for"]["status"] is None              # a null has no status
+    report = unit_reports(units_store.path, res.units_id)["procedure"]
+    assert report["grounding"]["when_to_use"] == {"auto-accepted": 1, "verified": 0}
+    assert report["procedure_pass"]["fields"]["when_to_use"]["auto-accepted"] == 1
+
+
 def test_unparseable_is_retried_once_at_repeat_1(units_store, tmp_path):  # noqa: F811
     unit = irm_unit(units_store)
     text = units_store.text(unit.doc_id)
@@ -377,6 +480,16 @@ def test_input_rejection_is_cached_as_model_error_other_failures_stop(units_stor
     meter = metered_client(0, client=client)
     again, _ = compile_procedures([units_store], meter, CFG)
     assert again == done and meter.budget.calls == 0
+    # M4: the lineage of the rejected unit names the failure entry the cache holds
+    res = build_units(units_store.path, "gov", passes=("procedure",),
+                      client=metered_client(0, client=client))
+    m = load_units_manifest(units_store.path, res.units_id)
+    proc = next(f for f in m.units if f.type == "procedure")
+    path = units_store.path / UNITS_DIR / m.snapshot / proc.file
+    lineage = {u["unit_id"]: u["lineage"] for u in map(json.loads, path.read_text().splitlines())}
+    failed = client.cache.get(lineage[unit.unit_id]["cache_key_sha256"])
+    assert failed is not None and "prompt is too long" in failed["error"]
+    assert all(client.cache.get(x["cache_key_sha256"]) is not None for x in lineage.values())
 
     for error in (llm.ModelError("HTTP 401: authentication"),
                   llm.RateLimitedError("usage limit: resets at 5pm")):
@@ -544,6 +657,7 @@ def test_adr_units_compile_stops_at_the_cap_then_compiles(tmp_path, capsys, monk
     assert data["procedures"] == 3 and data["generator"] == "claude_code_sonnet"
     assert data["model"] == "stub-claude_code_sonnet" and data["budget_units"] == 2
     assert data["fields"]["when_to_use"]["quotes_grounded"] == 3
+    assert data["served_model_mismatch"] is False and "warning" not in out     # M2
     # the build reads the same replies with no call (--max-calls 0 by default)
     code, out, err = adr(["units", "build", "--store", store.path, "--units-for", "gov",
                           "--with-passes", "procedure", "--generator", "claude_code_sonnet"],
@@ -551,3 +665,65 @@ def test_adr_units_compile_stops_at_the_cap_then_compiles(tmp_path, capsys, monk
     assert code == 0, err
     m = load_units_manifest(store.path, out.splitlines()[0])
     assert "procedure" in m.passes
+
+
+def _stub_profiles(monkeypatch, tmp_path, cls=CachedStubClient):
+    from adr_eval import runner
+
+    made = []
+
+    def make_client(name, profiles, cache, max_retries=5):
+        made.append(name)
+        return cls(f"stub-{name}", Cache(tmp_path / "llm"), replies)
+
+    monkeypatch.setattr(runner, "make_client", make_client)
+    return made
+
+
+def test_the_canary_limit_counts_across_stores_and_each_store_gets_a_report(
+        tmp_path, capsys, monkeypatch):                                              # M1
+    _stub_profiles(monkeypatch, tmp_path)
+    first = make_units_store(tmp_path / "first")
+    second = make_units_store(tmp_path / "second", docs=[UNITS_DOCS[3]])   # the IRM chapter
+    reports = [s.path / UNITS_DIR / s.snapshot_id / "procedure-pass-report.json"
+               for s in (first, second)]
+    base = ["units", "compile", "--procedures", "--store", first.path, "--store", second.path,
+            "--generator", "claude_code_sonnet", "--max-calls", 10]
+    code, out, err = adr([*base, "--limit", 3], capsys)
+    assert code == 0, err
+    assert "3 model call(s) made, 0 cached, 0 failed; 3 budget unit(s)" in out
+    a, b = (json.loads(r.read_text()) for r in reports)
+    assert (a["available"], a["procedures"]) == (3, 3)
+    assert (b["available"], b["procedures"]) == (2, 0)
+    assert a["limit"] == b["limit"] == 3 and a["run_calls"] == b["run_calls"] == {
+        "made": 3, "cached": 0, "failed": 0}
+    code, out, err = adr([*base, "--limit", 4], capsys)
+    assert code == 0, err
+    b = json.loads(reports[1].read_text())
+    assert (b["available"], b["procedures"]) == (2, 1)
+    # the second store's IRM section is the first's (same document): its reply is cached
+    assert "0 model call(s) made, 4 cached" in out
+
+
+def test_a_served_model_other_than_the_profile_is_flagged_only(tmp_path, capsys,
+                                                               monkeypatch):         # M2
+    _stub_profiles(monkeypatch, tmp_path, ServedStub)
+    store = make_units_store(tmp_path / "s")
+    code, out, err = adr(["units", "compile", "--procedures", "--store", store.path,
+                          "--generator", "claude_code_sonnet", "--max-calls", 3], capsys)
+    assert code == 0, err                              # flag only: the run completes
+    assert "served served-sonnet; warning: a served model differs from the profile's model" \
+        in out
+    data = json.loads((store.path / UNITS_DIR / store.snapshot_id /
+                       "procedure-pass-report.json").read_text())
+    assert data["served_model_mismatch"] is True and data["served_models"] == ["served-sonnet"]
+
+
+def test_the_procedure_pass_on_research_is_a_usage_error(tmp_path, capsys, monkeypatch):  # M5b
+    made = _stub_profiles(monkeypatch, tmp_path)
+    store = make_units_store(tmp_path / "s")
+    code, out, err = adr(["units", "build", "--store", store.path, "--units-for", "research",
+                          "--with-passes", "procedure"], capsys)
+    assert code == 2 and "unexpected" not in err
+    assert err.startswith("error: --with-passes procedure:") and "'research'" in err
+    assert made == []                                   # refused before a profile is resolved

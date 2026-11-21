@@ -1169,6 +1169,9 @@ def _units_build(a: argparse.Namespace) -> int:
 
     corpus = _units_corpus(a)
     passes = _passes(a.with_passes)
+    if "procedure" in passes and "procedure" not in units_build.CORPUS_TYPES[corpus]:
+        raise _UsageError(f"--with-passes procedure: the procedure pass fills procedure units "
+                          f"and corpus {corpus!r} has none")
     meter = None
     try:
         if passes:

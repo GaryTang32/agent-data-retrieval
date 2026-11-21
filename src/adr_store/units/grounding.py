@@ -5,7 +5,7 @@
 normalisation, `golden.verify.find_quote`) and gives its offsets in that text; the caller
 stores the located slice, so the stored quote always re-slices. `time_in_quote` is check 4 for
 clock times: the quote states the minute of the day in a clock form ("7:30 a.m.", "7 a.m.",
-"noon", "midnight").
+"noon", "midnight"); `clock_times` finds the clock times a value states.
 
 `config/units/passes.json` holds one `PassConfig` per model pass ("procedure" now; "rules",
 the enrichment pass, is added with it): the prompt version and the field groups, one cached
@@ -40,19 +40,26 @@ def ground(text: str, quote: str) -> tuple[int, int] | None:
     return find_quote(text, quote)
 
 
-def _clock_minutes(quote: str) -> set[int]:
-    """The minutes of the day the quote states as clock times: "7:30 a.m.", "7 a.m.",
-    "7:30 PM" (hours 1 to 12; 12 a.m. is 0, 12 p.m. 720), "noon" (720) and "midnight" (0, or
-    1440 at the end of a day)."""
-    found: set[int] = set()
-    for m in _CLOCK.finditer(quote):
+def clock_times(text: str) -> list[tuple[int, int, frozenset[int]]]:
+    """(start, end, the minutes of the day it may mean) of every clock time `text` states, in
+    text order: "7:30 a.m.", "7 a.m.", "7:30 PM" (hours 1 to 12; 12 a.m. is 0, 12 p.m. 720),
+    "noon" (720) and "midnight" (0, or 1440 at the end of a day)."""
+    found = []
+    for m in _CLOCK.finditer(text):
         hour, minute = int(m.group(1)), int(m.group(2) or 0)
         if 1 <= hour <= 12:
-            found.add((hour % 12 + (12 if m.group(3).lower() == "p" else 0)) * 60 + minute)
+            pm = m.group(3).lower() == "p"
+            found.append((m.start(), m.end(),
+                          frozenset({(hour % 12 + (12 if pm else 0)) * 60 + minute})))
     for word, minutes in _WORDS.items():
-        if re.search(rf"\b{word}\b", quote, re.IGNORECASE):
-            found.update(minutes)
-    return found
+        found += [(m.start(), m.end(), frozenset(minutes))
+                  for m in re.finditer(rf"\b{word}\b", text, re.IGNORECASE)]
+    return sorted(found, key=lambda t: (t[0], t[1]))
+
+
+def _clock_minutes(quote: str) -> set[int]:
+    """Every minute of the day `quote` states as a clock time (`clock_times`)."""
+    return {m for _, _, minutes in clock_times(quote) for m in minutes}
 
 
 def time_in_quote(minutes: int, quote: str) -> bool:
