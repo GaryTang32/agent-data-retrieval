@@ -191,6 +191,13 @@ SAMPLE_BODIES: dict[str, dict] = {
 }
 
 
+def rule_body(doc_id: str = D1, **changes) -> dict:
+    """The sample rule card body with its closure entries on `doc_id` (closure stays in the
+    card's document, P5/P31) and `changes` applied."""
+    body = SAMPLE_BODIES["rule_card"]
+    return {**body, "closure": [{**e, "doc_id": doc_id} for e in body["closure"]], **changes}
+
+
 def sample_unit(type_: str = "rule_card", *, ref: str = "33 CFR 117.821(a)",
                 text: str = "The draw need not open.", doc_id: str = D1,
                 body: dict | None = None) -> Unit:
@@ -209,7 +216,8 @@ def sample_unit(type_: str = "rule_card", *, ref: str = "33 CFR 117.821(a)",
                                         effective_to=None, supersedes=None,
                                         superseded_by=None, chain=None, jurisdiction=None),
         governance=Governance(owner=None, verifier=None, authority_tier=None),
-        aids=Aids(), body=SAMPLE_BODIES[type_] if body is None else body)
+        aids=Aids(), body=(rule_body(doc_id) if type_ == "rule_card" else SAMPLE_BODIES[type_])
+        if body is None else body)
     draft = Unit(**fields, hashes={"text": "", "meta": ""})
     return draft.model_copy(update={"hashes": {
         "text": text_sha256(text), "meta": meta_sha256(draft)}})

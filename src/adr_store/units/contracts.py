@@ -21,8 +21,9 @@ reason; a null value needs a null reason and no status.
 `validate_unit` checks a unit's envelope (one document, every source span on it, the contract
 named `<type>@<version>`, the id and hashes consistent, no self-reference) and its body
 against the contract, reporting problems with dotted and indexed paths
-(`body.steps[0].type: missing`). A unit that fails is rejected and counted when its file is
-written, never stored silently.
+(`body.steps[0].type: missing`); a rule card's closure entries must all name the card's own
+document (closure stays in one document, P5 and P31). A unit that fails is rejected and
+counted when its file is written, never stored silently.
 """
 
 from __future__ import annotations
@@ -270,4 +271,18 @@ def validate_unit(c: UnitContract, unit: Unit) -> list[str]:
     (see the module docstring) and that the body has exactly the contract's fields, each of
     its type, recursively, with nulls only where allowed and text values among the allowed
     ones."""
-    return _envelope_problems(c, unit) + _fields_problems(c.fields, unit.body, "body")
+    return (_envelope_problems(c, unit) + _fields_problems(c.fields, unit.body, "body")
+            + _closure_problems(unit))
+
+
+def _closure_problems(unit: Unit) -> list[str]:
+    """Closure stays in the card's document (P5, P31): every `body.closure` entry names the
+    unit's own `doc_id`."""
+    entries = unit.body.get("closure") if unit.type == "rule_card" else None
+    if not isinstance(entries, list):
+        return []
+    return [f"body.closure[{i}].doc_id: {e['doc_id'][:12]}… is not the unit's document "
+            f"{unit.doc_id[:12]}…"
+            for i, e in enumerate(entries)
+            if isinstance(e, dict) and isinstance(e.get("doc_id"), str)
+            and e["doc_id"] != unit.doc_id]

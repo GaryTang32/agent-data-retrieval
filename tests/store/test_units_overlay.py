@@ -104,8 +104,7 @@ def same_paragraph_units(store):
             heading_path=["33 CFR part 117", "Subpart B", "§ 117.821 Smith River."],
             canonical_ref="33 CFR 117.821(a)", text=PARA_A, doc_id=doc,
             spans=[(start, start + len(PARA_A), "rule_card.text@1")],
-            body={**SAMPLE_BODIES["rule_card"], "provision_id": "33 CFR 117.821(a)",
-                  "text": PARA_A},
+            body=uf.rule_body(doc, provision_id="33 CFR 117.821(a)", text=PARA_A),
             store=store, overlay=overlay_of(store), corpus="gov"))
     return out
 
