@@ -1101,8 +1101,10 @@ def _tables_gate(a: argparse.Namespace) -> int:
     return 0 if r.promoted else EXIT_CONFORMANCE
 
 
-BENCH_URI = json.loads((REPO_ROOT / "corpora" / "bench" / "config.json").read_text(
-    encoding="utf-8"))["documents"]["url"]
+def _bench_uri() -> str:
+    """The URI prefix of bench documents (read when needed, not at import)."""
+    return json.loads((REPO_ROOT / "corpora" / "bench" / "config.json").read_text(
+        encoding="utf-8"))["documents"]["url"]
 
 
 def _units_corpus(a: argparse.Namespace) -> str:
@@ -1112,6 +1114,7 @@ def _units_corpus(a: argparse.Namespace) -> str:
     if a.units_for is not None:
         return a.units_for
     store = Store.open(a.store)
+    bench_uri = _bench_uri()
     found = set()
     for doc_id in store.doc_ids():
         uri = store.source(doc_id).uri
@@ -1119,7 +1122,7 @@ def _units_corpus(a: argparse.Namespace) -> str:
             found.add("gov")
         elif uri == PAPERS_URI:
             found.add("research")
-        elif uri.startswith(BENCH_URI):
+        elif uri.startswith(bench_uri):
             found.add("bench")
     if len(found) != 1:
         what = f"documents of {' and '.join(sorted(found))}" if found else \

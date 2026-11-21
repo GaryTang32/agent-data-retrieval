@@ -8,7 +8,8 @@ step is the start. Step types: `instruction`, `condition`, `tool_call`, `subproc
 `handoff`, `wait`, `end`. A condition step's edges carry guards (the last one "otherwise"); no
 other step's do. `validate_ir` checks one start, reachability, a successor for every non-`end`
 step, no dangling `next` and guards on condition steps only; `branch_paths` gives one path per
-condition outcome (a body without conditions: its one path start to end). Every `risk` is
+condition outcome, `{condition, edge, steps}` (a body without conditions: its one path start to
+end, condition and edge null). Every `risk` is
 `unknown`: neither source marks it (P22).
 
 **IRM sections** (`irm_sections`). The canonical text keeps no body headings, so section
@@ -100,8 +101,8 @@ from adr_store.structure import markdown as md
 from adr_store.units.envelope import Unit, link_versions, make_unit
 
 __all__ = ["BENCH_CAP", "BENCH_KINDS", "MIN_STEPS", "SEED4", "STEP_TYPES", "WHEN_TO_USE_MAX",
-           "Edge", "IrmSection", "ProcedureBody", "Step", "bench_candidates", "bench_skeleton",
-           "branch_paths", "irm_sections", "irm_skeleton", "is_procedure_like",
+           "BranchPath", "Edge", "IrmSection", "ProcedureBody", "Step", "bench_candidates",
+           "bench_skeleton", "branch_paths", "irm_sections", "irm_skeleton", "is_procedure_like",
            "not_extracted", "procedure_units", "validate_ir"]
 
 STEP_TYPES = ("instruction", "condition", "tool_call", "subprocedure", "handoff", "wait", "end")
@@ -147,6 +148,18 @@ class Step(BaseModel):
     preconditions: list[dict] = []  # binding-language expressions (Task 21)
 
 
+class BranchPath(BaseModel):
+    """One test of a procedure (§9.1): the path of step ids that takes `edge` (an index into
+    the `next` of condition step `condition`); a body without condition steps has one path,
+    start to end, with both null (the Task 6 review ruling, I1)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    condition: str | None
+    edge: int | None = Field(ge=0)
+    steps: list[str]
+
+
 class ProcedureBody(BaseModel):
     """A procedure unit's body (§5.3). The four model fields are `{value, quotes, status,
     null_reason}` objects, the not-extracted form until the procedure pass (Task 10)."""
@@ -162,7 +175,7 @@ class ProcedureBody(BaseModel):
     steps: list[Step]
     escalation: str | None = None
     success_criteria: str | None = None
-    tests: list[list[str]] = []
+    tests: list[BranchPath] = []
     ambiguity_flags: list[str] = []
     source_kind: Literal["irm", "bench", "authored"]
 
@@ -234,12 +247,13 @@ def _edges(path: list[str]) -> set[tuple[str, str]]:
     return set(zip(path, path[1:], strict=False))
 
 
-def branch_paths(body: ProcedureBody) -> list[list[str]]:
-    """One path of step ids per condition outcome, in step and edge order: the shortest path
-    from the start to the condition step, its edge, then the shortest way on to an `end`
-    step that uses no edge already on the path (each edge at most once, so a loop is
-    followed once and the path stops where it cannot go on). A body without condition steps
-    has its one shortest path from the start to an `end` step."""
+def branch_paths(body: ProcedureBody) -> list[BranchPath]:
+    """One `BranchPath` per condition outcome, in step and edge order: the condition step,
+    the index of its edge, and the steps: the shortest path from the start to the condition
+    step, its edge, then the shortest way on to an `end` step that uses no edge already on
+    the path (each edge at most once, so a loop is followed once and the path stops where it
+    cannot go on). A body without condition steps has its one shortest path from the start
+    to an `end` step, with condition and edge null."""
     if not body.steps:
         return []
     by = {s.id: s for s in body.steps}
@@ -247,16 +261,17 @@ def branch_paths(body: ProcedureBody) -> list[list[str]]:
     ends = {s.id for s in body.steps if s.type == "end"}
     conditions = [s for s in body.steps if s.type == "condition"]
     if not conditions:
-        return [_shortest(by, start, ends.__contains__, set()) or [start]]
+        return [BranchPath(condition=None, edge=None,
+                           steps=_shortest(by, start, ends.__contains__, set()) or [start])]
     paths = []
     for c in conditions:
         prefix = _shortest(by, start, c.id.__eq__, set())
         if prefix is None:
             continue
-        for e in c.next:
+        for k, e in enumerate(c.next):
             used = _edges(prefix) | {(c.id, e.to)}
             suffix = (_shortest(by, e.to, ends.__contains__, used) if e.to in by else None)
-            paths.append(prefix + (suffix or [e.to]))
+            paths.append(BranchPath(condition=c.id, edge=k, steps=prefix + (suffix or [e.to])))
     return paths
 
 

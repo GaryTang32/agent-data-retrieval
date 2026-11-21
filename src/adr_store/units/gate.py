@@ -12,7 +12,7 @@ candidate misses; the candidate becomes HEAD only when it has at most `max_flips
 - With a HEAD, an empty case list is refused (`UnitsError`, HEAD unchanged): it cannot show
   that the candidate keeps HEAD's hits.
 - A HEAD file that names a build that does not load is refused too, rather than read as no
-  HEAD; so is a candidate that does not load.
+  HEAD; so is a candidate that does not load, and one of another corpus than HEAD's.
 """
 
 from __future__ import annotations
@@ -64,12 +64,16 @@ def units_gate(store_path: Path, candidate: str, cases: list[UnitCase], max_flip
     ids = [c.case_id for c in cases]
     if len(set(ids)) != len(ids):
         raise ValueError("gold cases must have distinct ids")
-    load_units_manifest(store_path, candidate)          # a candidate that does not load: refused
+    cand = load_units_manifest(store_path, candidate)   # a candidate that does not load: refused
     current = read_units_head(store_path)
     named = _head_file(store_path)
     if current is None and named is not None:
         raise UnitsError(f"units/HEAD names {named[:12]}, a build that does not load; HEAD is "
                          f"unchanged")
+    if current is not None and (corpus := load_units_manifest(store_path, current).corpus) \
+            != cand.corpus:
+        raise UnitsError(f"units/HEAD is a build of {corpus}, the candidate one of "
+                         f"{cand.corpus}; HEAD is unchanged")
     if current is not None and not cases:
         raise UnitsError(f"units/HEAD is {current[:12]}: an empty case list cannot show that "
                          f"the candidate keeps HEAD's hits; give gold cases (HEAD is unchanged)")

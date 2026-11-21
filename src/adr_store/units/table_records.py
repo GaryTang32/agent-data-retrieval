@@ -12,15 +12,22 @@ description and stored columns), the description is `DESCRIPTION` with the contr
 description (no final period) and the source document's name ("33 CFR 117 as of
 2026-06-26", "Federal Register document 2024-00001", else its URI). The unit's source span
 runs from the first to the last provenance span of the group's values (the whole document
-when none has a span); `canonical_ref` is `tables:<table>[:<column>=<value>,…]`.
+when none has a span). `canonical_ref` is `tables:<table>`, followed for a grouped table by
+`:` and the canonical JSON of the group's filters without the eCFR `version`
+(`tables:drawbridge_bridges:{"section":"117.821"}`): the ref names the section independently
+of version (§5.4), so `link_versions` links a superseded version's record to its successor's,
+while `version` stays in `pointer.filters`.
 
 **In-document tables** (`document_tables`), each with a span pointer `{kind: "span", doc_id,
 start, end}` (the other fields null), headers from the table's first row and `row_count` the
 rows after it; the description is `DOC_DESCRIPTION`:
 - eCFR (gov, every version): each `TABLE` of a `DIV8` section; its extracted text is found in
-  the section's text by `find` from the end of the previous table, as sections are located.
+  the section's text by `find` from the end of the previous table, as sections are located
   (as whole lines). Caption: the `CAPTION` element, else the section heading. `canonical_ref`
-  `<title> CFR <section> table <k>`, k counting the section's tables.
+  `<title> CFR <section> table <k>`, k counting the section's tables. A table outside every
+  section (an appendix, such as the alphabetical index of 47 CFR 73) is found as whole lines
+  after the last section, named by its enclosing division (`47 CFR 73, Alphabetical Index
+  table 1`), its caption that division's heading or its own caption.
 - IRM (gov): each `table` of a located IRM section (with the sections merged into it,
   `procedures.irm_sections`). Its rows are placed in the section's text by the joint anchor
   placement of the procedure skeletons (each row's cells read in order, whitespace, pipes and
@@ -30,6 +37,10 @@ rows after it; the description is `DOC_DESCRIPTION`:
 - Markdown (research, bench): each pipe table (a `table` element of the document's structure)
   whose second line is a delimiter row (`|---|---|`). Caption: the nearest heading above it.
   `canonical_ref` `<corpus>:<doc id> table <k>`.
+
+The ordinal k of an in-document table is its position among its container's tables, so a
+table inserted into a later version shifts the ordinals after it, and `link_versions` then
+pairs those tables by position, not by content (accepted: the Task 6 review, M3).
 
 `report`, when given, is filled with deterministic counts: records per Phase 3 table, and per
 family the tables found, located and the unlocated ones with their reason.
@@ -61,6 +72,7 @@ TABLE_GROUPS: dict[str, str | tuple[str, ...] | None] = {
     "fr_documents": "id", "fr_cfr_refs": "id", "fr_agencies": "id", "fr_dockets": "id",
     "drawbridge_sections": ("section", "version"), "drawbridge_bridges": ("section", "version"),
     "papers": None, "paper_authors": None}       # None: one record for the manifest
+VERSION_COLUMNS = ("version",)    # filters that name a version, kept out of canonical_ref
 SPEC_ID = "table_record.pointer@1"
 _DELIMITER = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
 
@@ -141,8 +153,9 @@ def _phase3_unit(store: Store, overlay: Applicability | None, corpus: str, table
                  c: Contract, cols: tuple[str, ...], values: tuple, rows: list[RowRecord],
                  doc_id: str, text: str) -> Unit:
     filters = dict(zip(cols, values, strict=True))
-    ref = f"tables:{c.table}" + (":" + ",".join(f"{k}={v}" for k, v in filters.items())
-                                 if filters else "")
+    named = {k: v for k, v in filters.items() if k not in VERSION_COLUMNS}
+    ref = f"tables:{c.table}" + (":" + json.dumps(named, sort_keys=True, separators=(",", ":"),
+                                                  ensure_ascii=False) if named else "")
     source = source_name(store, doc_id)
     start, end = _row_span(rows, len(text))
     body = {"caption": c.description, "headers": [col.name for col in c.stored_columns],

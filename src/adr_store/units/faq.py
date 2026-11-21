@@ -15,7 +15,8 @@
   "1." and a trailing colon removed, emphasis stripped, case-folded) starts with one of the
   field words, as a whole word not followed by a hyphen: `issue` (symptom, symptoms, issue),
   `environment`, `cause` (cause, causes, root cause, root causes) and `resolution`
-  (resolution, workaround, workarounds). A field is the text under the first heading that
+  (resolution, workaround, workarounds); the document's title (a rank-1 heading with nothing
+  before it) is never a field heading. A field is the text under the first heading that
   names it, up to the next heading of the same or an outer level, outer whitespace
   trimmed; a field with no heading (or no text under it) is null (`absent`). A document is
   a KCS article when at least one field other than `environment` has text; one unit per
@@ -136,6 +137,8 @@ def kcs_fields(text: str) -> dict[str, tuple[int, int] | None]:
     out: dict[str, tuple[int, int] | None] = {f: None for f in KCS_FIELDS}
     named: set[str] = set()
     for i, h in enumerate(headings):
+        if h.rank == 1 and not text[:h.start].strip():
+            continue        # the document's title ("# Workaround: …") names no field
         field = _field_of(h.title)
         if field is None or field in named:
             continue

@@ -416,10 +416,33 @@
     },
     {
       "name": "tests",
-      "type": "json",
+      "type": "object[]",
       "nullable": false,
-      "description": "Branch paths: lists of step ids",
-      "spec_id": "procedure.tests@1"
+      "description": "Branch paths, one per condition outcome",
+      "spec_id": "procedure.tests@1",
+      "fields": [
+        {
+          "name": "condition",
+          "type": "text",
+          "nullable": true,
+          "description": "The condition step whose outcome the path takes (null: no condition)",
+          "spec_id": "procedure.tests@1"
+        },
+        {
+          "name": "edge",
+          "type": "int",
+          "nullable": true,
+          "description": "The index of the outcome in the condition step's next",
+          "spec_id": "procedure.tests@1"
+        },
+        {
+          "name": "steps",
+          "type": "text[]",
+          "nullable": false,
+          "description": "The step ids of the path, start first",
+          "spec_id": "procedure.tests@1"
+        }
+      ]
     },
     {
       "name": "ambiguity_flags",

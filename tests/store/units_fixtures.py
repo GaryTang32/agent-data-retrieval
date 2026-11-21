@@ -177,7 +177,8 @@ SAMPLE_BODIES: dict[str, dict] = {
                    "subprocedure_ref": None, "args_schema": None, "condition": None,
                    "next": [], "risk": "unknown",
                    "requires_approval": False, "preconditions": []}],
-        "escalation": None, "success_criteria": None, "tests": [["s1", "s2"]],
+        "escalation": None, "success_criteria": None,
+        "tests": [{"condition": None, "edge": None, "steps": ["s1", "s2"]}],
         "ambiguity_flags": ["coarse"], "source_kind": "irm"},
     "faq": {
         "question": {"text": "Who approves?", "span": [0, 13]},

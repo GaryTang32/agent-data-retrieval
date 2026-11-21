@@ -620,7 +620,11 @@ def test_branch_paths_one_per_condition_outcome():
              step("s4", "condition", nxt=[("s5", "lost"), ("s6", "otherwise")]),
              step("s5", nxt=[("s6", None)]),
              step("s6", "end"))
-    paths = branch_paths(b)
+    tests = branch_paths(b)
+    # one object per condition outcome: the condition step, the index of its edge, the path
+    assert [(t.condition, t.edge) for t in tests] == [("s2", 0), ("s2", 1), ("s4", 0),
+                                                      ("s4", 1)]
+    paths = [t.steps for t in tests]
     assert paths == [["s1", "s2", "s3", "s6"], ["s1", "s2", "s4", "s6"],
                      ["s1", "s2", "s4", "s5", "s6"], ["s1", "s2", "s4", "s6"]]
     outcomes = [(s.id, e.to) for s in b.steps if s.type == "condition" for e in s.next]
@@ -639,15 +643,24 @@ def test_branch_paths_follow_loops_once_and_cover_linear_bodies():
     loop = body(step("s1", nxt=[("s2", None)]),
                 step("s2", "condition", nxt=[("s1", "again"), ("s3", "otherwise")]),
                 step("s3", "end"))
-    assert branch_paths(loop) == [["s1", "s2", "s1"], ["s1", "s2", "s3"]]
+    assert [(t.condition, t.edge, t.steps) for t in branch_paths(loop)] == [
+        ("s2", 0, ["s1", "s2", "s1"]), ("s2", 1, ["s1", "s2", "s3"])]
     # without a condition the one path start to end is the body's test (Task 1 sample body)
-    assert branch_paths(body(step("s1", nxt=[("s2", None)]), step("s2", "end"))) == [
-        ["s1", "s2"]]
+    assert [t.model_dump() for t in branch_paths(
+        body(step("s1", nxt=[("s2", None)]), step("s2", "end")))] == [
+        {"condition": None, "edge": None, "steps": ["s1", "s2"]}]
+
+
+def test_two_outcomes_to_the_same_step_are_told_apart():
+    b = body(step("s1", "condition", nxt=[("s2", "If late"), ("s2", "otherwise")]),
+             step("s2", "end"))
+    assert [(t.condition, t.edge, t.steps) for t in branch_paths(b)] == [
+        ("s1", 0, ["s1", "s2"]), ("s1", 1, ["s1", "s2"])]
 
 
 def test_branch_paths_of_the_fixture_skeleton(units_store):
     b = irm_skeleton(proc_section(units_store), units_store.text(DOC_IRM))
-    assert branch_paths(b) == [
+    assert [t.steps for t in branch_paths(b)] == [
         ["s1", "s2", "s3", "s4", "s5", "s8", "s9"], ["s1", "s2", "s3", "s4", "s6", "s8", "s9"],
         ["s1", "s2", "s3", "s4", "s6", "s7", "s8", "s9"],
         ["s1", "s2", "s3", "s4", "s6", "s8", "s9"]]

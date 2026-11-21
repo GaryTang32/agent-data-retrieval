@@ -482,11 +482,15 @@ def test_adr_units_build_show_gate(units_store, capsys, monkeypatch):
     assert set(shown["reports"]) == {"concept", "procedure", "rule_card", "table_record"}
     assert shown["reports"]["procedure"]["procedures"] == 2
     # with a HEAD, a gate without cases is refused
+    code, out, err = adr(["units", "gate", "--store", units_store, "--candidate", cand,
+                          "--max-flips", 0, "--json"], capsys)
+    assert code == 2 and "empty" in err and read_units_head(units_store) == cand
+    # and so is a candidate of another corpus
     code, out, _ = adr(["units", "build", "--store", units_store, "--units-for", "bench"], capsys)
     other = out.splitlines()[0]
     code, out, err = adr(["units", "gate", "--store", units_store, "--candidate", other,
-                          "--max-flips", 0, "--json"], capsys)
-    assert code == 2 and "empty" in err and read_units_head(units_store) == cand
+                          "--max-flips", 0], capsys)
+    assert code == 2 and "bench" in err and read_units_head(units_store) == cand
 
 
 def test_adr_units_build_with_passes(units_store, capsys, monkeypatch):

@@ -166,6 +166,15 @@ Retry with a smaller schema.
 Not a KCS field.
 """
 
+TITLE_ONLY = """# Workaround: private installer upgrade stuck at migrations
+
+Source: confluence
+
+## Steps
+
+1. Restart the migration job.
+"""
+
 NOT_KCS = """# Runbook: private upgrade
 
 Source: confluence
@@ -182,9 +191,11 @@ Helm 3.
 
 def test_kcs_heading_rules(tmp_path):
     kcs_doc, other = bench_md("kcs_forms", KCS_FORMS, 91), bench_md("not_kcs", NOT_KCS, 92)
-    store = make_units_store(tmp_path / "s", [kcs_doc, other])
+    title = bench_md("title_only", TITLE_ONLY, 94)
+    store = make_units_store(tmp_path / "s", [kcs_doc, other, title])
     units = kcs_units(store, overlay_of(store))
-    assert [u.doc_id for u in units] == [kcs_doc[0].doc_id]      # environment alone is no KCS
+    # environment alone is no KCS article, and the title heading names no field (review M1)
+    assert [u.doc_id for u in units] == [kcs_doc[0].doc_id]
     b = units[0].body
     assert b["issue"]["text"] == "Requests time out after 60 seconds."
     assert b["environment"] is None      # "Customer environment" does not start with the word
@@ -212,7 +223,8 @@ def test_phase3_table_records_point_to_query_table_filters(units_store_with_tabl
     assert as_auditor(store).query_table(p["table"], p["filters"], "count").count == \
         rec.body["row_count"] == 2
     assert rec.doc_id == DOC_117_NEW and rec.tables_id == read_head(store.path)
-    assert rec.canonical_ref == "tables:drawbridge_bridges:section=117.821,version=2026-06-26"
+    # the ref names the section independently of version (§5.4); the version is a filter
+    assert rec.canonical_ref == 'tables:drawbridge_bridges:{"section":"117.821"}'
     assert validate_unit(CONTRACTS["table_record"], rec) == []
 
 
@@ -242,6 +254,10 @@ def test_phase3_records_one_per_table_and_document_group(units_store_with_tables
             assert rec.body["headers"] == [c.name for c in load_contracts(
                 corpus="gov")[table].stored_columns]
     assert len(by_table["fr_documents"]) == 3                    # one per FR document
+    # refs carry the filters as canonical JSON (the Task 6 review, M3)
+    fr = by_table["fr_documents"][0]
+    assert fr.canonical_ref == "tables:fr_documents:" + json.dumps(
+        fr.body["pointer"]["filters"], sort_keys=True, separators=(",", ":"))
     # the newest 117 version: 7 sections, 3 of them with draws
     newest = [r for r in by_table["drawbridge_sections"] if r.doc_id == DOC_117_NEW]
     assert len(newest) == 7
@@ -260,8 +276,8 @@ def test_table_record_descriptions_are_the_template(units_store_with_tables):
             table=p["table"], description=contracts[p["table"]].description.rstrip("."),
             n=r.body["row_count"], source=source)
         assert r.body["caption"] == contracts[p["table"]].description
-    bridges = next(r for r in recs if r.canonical_ref ==
-                   "tables:drawbridge_bridges:section=117.821,version=2026-06-26")
+    bridges = next(r for r in recs if r.doc_id == DOC_117_NEW and r.canonical_ref ==
+                   'tables:drawbridge_bridges:{"section":"117.821"}')
     assert bridges.body["description"] == (
         "Rows of drawbridge_bridges: 33 CFR 117 draws: one row per section, eCFR version and "
         "draw, 2 rows from 33 CFR 117 as of 2026-06-26")
@@ -488,6 +504,22 @@ def test_rule_cards_carry_closure_defined_terms_and_versions(built_units):
     assert report["cards"] == len(cards) and "unresolved" in report
 
 
+def test_drawbridge_records_link_versions(built_units):
+    """An old 117 version's drawbridge record is superseded by the newest version's record of
+    the same section (the Task 6 review, I3)."""
+    store, gov, _ = built_units
+    m = load_units_manifest(store.path, gov.units_id)
+    recs = {(u.doc_id, u.canonical_ref): u for u in load_units(store.path, m, "table_record")}
+    for table in ("drawbridge_sections", "drawbridge_bridges"):
+        ref = f'tables:{table}:{{"section":"117.821"}}'
+        old, new = recs[(DOC_117_OLD, ref)], recs[(DOC_117_NEW, ref)]
+        assert old.applicability.status == "superseded"
+        assert old.applicability.superseded_by == new.unit_id
+        assert new.applicability.supersedes == old.unit_id
+        assert old.body["pointer"]["filters"] == {"section": "117.821", "version": "2025-06-27"}
+        assert new.body["pointer"]["filters"]["version"] == "2026-06-26"
+
+
 def test_build_records_the_tables_id_and_table_records(built_units):
     store, gov, bench = built_units
     m = load_units_manifest(store.path, gov.units_id)
@@ -668,9 +700,19 @@ def test_gate_with_head_refuses_an_empty_case_list(tmp_path):
     store = make_units_store(tmp_path / "s")
     first = build_units(store.path, "gov").units_id
     assert units_gate(store.path, first, [], 0, hit=fixture_hit).promoted
-    other = build_units(store.path, "bench").units_id
+    other = derived(store.path, first, "33 CFR 117.821(a)")
     with pytest.raises(UnitsError, match="empty"):
         units_gate(store.path, other, [], 5, hit=fixture_hit)
+    assert read_units_head(store.path) == first
+
+
+def test_gate_refuses_a_candidate_of_another_corpus(tmp_path):            # review M6
+    store = make_units_store(tmp_path / "s")
+    first = build_units(store.path, "gov").units_id
+    assert units_gate(store.path, first, [], 0, hit=fixture_hit).promoted
+    bench = build_units(store.path, "bench").units_id
+    with pytest.raises(UnitsError, match="corpus|of gov"):
+        units_gate(store.path, bench, CASES, 5, hit=lambda *a: True)
     assert read_units_head(store.path) == first
 
 
