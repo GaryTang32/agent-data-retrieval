@@ -5,6 +5,7 @@
 import json
 
 import pytest
+from lxml import etree
 
 from adr_eval.corpora.gov import ecfr_url
 from adr_store.units import ecfr
@@ -219,6 +220,29 @@ def test_plain_subject_headings_before_a_marker():                        # fix 
         == ("e", "1")
 
 
+def test_later_paragraphs_settle_a_letter_or_roman_marker():                # fix round 1c
+    # 47 CFR 73.623: "(i)" after (h)(2), then "(A)-(C) [Reserved]", "(D)", "(ii)", "(3)"
+    later = ["(A)-(C) [Reserved]", "(D) By later-filed TV applications; and",
+             "(ii) Must demonstrate", "(3) TV applicants"]
+    assert marker_path(("h", "2"), "(i) Shall be afforded", following=later) == ("h", "2", "i")
+    # the parent's next sibling alone settles it too
+    assert marker_path(("h", "2"), "(i) X", following=["(A) Y", "(B) Z", "(3) W"]) == (
+        "h", "2", "i")
+    # the next letter, or a "(1)" (a letter's first child), says letter
+    assert marker_path(("h", "2"), "(i) X", following=["(A) Y", "(j) Z", "(ii) W"]) == ("i",)
+    assert marker_path(("h", "2"), "(i) X", following=["(1) Y", "(2) Z", "(i) A",
+                                                        "(ii) B"]) == ("i",)
+    assert marker_path(("h", "2"), "(i) X", following=["(A) Y"]) == ("i",)
+
+
+def test_an_aside_after_an_italic_heading_keeps_the_inline_markers():       # fix round 1c
+    shape = (b'<P>(2) <I>Directional AM stations without an FCC-approved antenna sampling '
+             b'system</I> (See &#xA7; 73.68). (i) An entry at the beginning of operations.</P>')
+    assert ecfr._element_markers(etree.fromstring(shape)) == (["2", "i"], (False, False))
+    plain = b"<P>(2) <I>Heading</I> (Approved by OMB). The station keeps logs.</P>"
+    assert ecfr._element_markers(etree.fromstring(plain)) == (["2"], (False,))
+
+
 def test_a_top_level_roman_list_gives_siblings():                          # review M5
     assert run_markers(["(i) a", "(ii) b", "(iii) c"]) == [("i",), ("ii",), ("iii",)]
     assert run_markers(["intro", "(i) a", "(ii) b"]) == [("p1",), ("i",), ("ii",)]
@@ -271,6 +295,28 @@ Instead, the station shall notify the Commission of:</P>
 <P>(f) Technical criteria. (1) Class D stations shall protect Class A stations.</P>
 <P>(2) Class D stations are required to protect foreign stations.</P>
 </DIV8>
+<DIV8 N="73.623" TYPE="SECTION">
+<HEAD>&#xA7; 73.623 TV applications.</HEAD>
+<P>(h) <I>TV application processing priorities are as follows:</I></P>
+<P>(1) [Reserved]</P>
+<P>(2) TV applications for a construction permit:</P>
+<P>(i) Shall be afforded the interference protection set forth in &#xA7; 73.620:</P>
+<P>(A)-(C) [Reserved]</P>
+<P>(D) By later-filed TV applications; and</P>
+<P>(ii) Must demonstrate the requisite interference protection to:</P>
+<P>(A) TV licensed stations;</P>
+<P>(3) TV applicants that are mutually exclusive will be notified.</P>
+</DIV8>
+<DIV8 N="73.1820" TYPE="SECTION">
+<HEAD>&#xA7; 73.1820 Station log.</HEAD>
+<P>(a) Entries must be made in the station log.</P>
+<P>(1) <I>All stations.</I> (i) Entries required by &#xA7; 17.49 of this chapter.</P>
+<P>(ii) Any entries not specifically required in this section.</P>
+<P>(2) <I>Directional AM stations without an FCC-approved antenna sampling system</I>
+(See &#xA7; 73.68). (i) An entry at the beginning of operations in each mode:</P>
+<P>(A) Common point current.</P>
+<P>(B) Antenna monitor phase indications.</P>
+</DIV8>
 </DIV5>
 """
 
@@ -293,7 +339,14 @@ def test_provision_ids_follow_italic_markers_and_roman_lookahead(tmp_path):
         "47 CFR 73.3802(b)(1)", "47 CFR 73.3802(b)(2)",   # 33 CFR 165.562's italic run
         # fix round 1b: a plain capitalised heading before "(1)"; "criteria" is not
         "47 CFR 73.99(e)(1)", "47 CFR 73.99(e)(1)(i)", "47 CFR 73.99(e)(1)(ii)",
-        "47 CFR 73.99(e)(2)", "47 CFR 73.99(f)", "47 CFR 73.99(f)(2)"]
+        "47 CFR 73.99(e)(2)", "47 CFR 73.99(f)", "47 CFR 73.99(f)(2)",
+        # fix round 1c: a later sibling settles "(i)" after (h)(2) as roman; an aside after
+        # an italic heading does not stop the inline markers
+        "47 CFR 73.623(h)", "47 CFR 73.623(h)(1)", "47 CFR 73.623(h)(2)",
+        "47 CFR 73.623(h)(2)(i)", "47 CFR 73.623(h)(2)(i)(A)", "47 CFR 73.623(h)(2)(i)(D)",
+        "47 CFR 73.623(h)(2)(ii)", "47 CFR 73.623(h)(2)(ii)(A)", "47 CFR 73.623(h)(3)",
+        "47 CFR 73.1820(a)", "47 CFR 73.1820(a)(1)(i)", "47 CFR 73.1820(a)(1)(ii)",
+        "47 CFR 73.1820(a)(2)(i)", "47 CFR 73.1820(a)(2)(i)(A)", "47 CFR 73.1820(a)(2)(i)(B)"]
     assert not any(skips_a_level(p.path) for p in provisions(store, d)
                    if p.section == "73.3801")
     assert skips_a_level(("d", "iv")) and skips_a_level(("1",))

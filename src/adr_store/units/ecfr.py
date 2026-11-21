@@ -19,12 +19,13 @@ A **provision** is one `P` element of a `DIV8` section of an eCFR part (33 CFR 1
   after "(i)", at any level); else it is roman when the current path is at level 2 or deeper,
   unless it is the letter right after the path's level-1 letter; at level 1 a single letter
   is a letter, and a longer one is roman unless it is the next letter. A marker read as a
-  letter is roman when the next paragraph starts with its roman successor ("(i)" after
-  "(h)(1)", then "(ii)"). A paragraph without a marker takes the last marked path plus `p<n>`,
-  n counting the unmarked paragraphs under that path from 1. The provision id is
-  `"<title> CFR <section>"` followed by `(<marker>)` per level: § 117.5 is one unmarked
-  paragraph, so its id is `33 CFR 117.5(p1)`. Repeated markers in the source can give two
-  provisions one id; `closure.duplicate_provision_ids` lists them.
+  letter is roman when later paragraphs of the section settle it so: its roman successor
+  ("(i)" after "(h)(1)", then "(ii)") or the next sibling of the path's deepest number ("(3)"
+  after (h)(2)) comes before the next letter or a "(1)". A paragraph without a marker takes
+  the last marked path plus `p<n>`, n counting the unmarked paragraphs under that path from
+  1. The provision id is `"<title> CFR <section>"` followed by `(<marker>)` per level:
+  § 117.5 is one unmarked paragraph, so its id is `33 CFR 117.5(p1)`. Repeated markers in
+  the source can give two provisions one id; `closure.duplicate_provision_ids` lists them.
 - **Modality** (§8.1). The leftmost match of a lexicon phrase (case-insensitive, word-bounded),
   the longest at equal start, gives the class; `modal_spans` hold every match, scanned left to
   right without overlap. Provision `modal_spans` are document offsets. A paragraph with no
@@ -53,6 +54,7 @@ later. Versions are linked by the build
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -185,10 +187,33 @@ def _candidates(tok: str, italic: bool) -> tuple[int, ...]:
     return (1, 3, 6) if roman and letter else (3, 6) if roman else (1,)
 
 
+Following = Sequence[tuple[str, bool] | None]   # first marker (and italics) of later paragraphs
+
+
+def _roman_by_lookahead(tok: str, path: tuple[str, ...], following: Following) -> bool:
+    """Whether `tok`, which reads as a letter, is roman instead, settled by the first later
+    paragraph that decides it: its roman successor ("(ii)") or the next sibling of the path's
+    deepest number ("(3)" after (h)(2)) says roman; the next letter ("(j)") or a "(1)" (the
+    first child of a letter) says letter. Italic markers and other markers are passed over;
+    no decision reads as a letter."""
+    succ, letter = _roman_successor(tok), _next_letter(tok)
+    digits = [m for m in path if m.isdigit()]
+    parent_next = str(int(digits[-1]) + 1) if digits else None
+    for item in following:
+        if item is None or item[1]:
+            continue
+        t = item[0]
+        if t == succ or t == parent_next:
+            return True
+        if t in (letter, "1"):
+            return False
+    return False
+
+
 def _level(tok: str, path: tuple[str, ...], italic: bool = False,
-           following: str | None = None) -> int:
+           following: Following = ()) -> int:
     """The level of the first marker of a paragraph, `tok`, read after the marked path
-    `path`; `following` is the first marker of the next paragraph, if any."""
+    `path`; `following` holds the first markers of the later paragraphs of the section."""
     cands = _candidates(tok, italic)
     if len(cands) == 1 or cands == (2, 5):
         return cands[0]
@@ -204,7 +229,7 @@ def _level(tok: str, path: tuple[str, ...], italic: bool = False,
         return 3
     else:
         lv = 1 if len(tok) == 1 else 3
-    if lv == 1 and following == _roman_successor(tok):
+    if lv == 1 and _roman_by_lookahead(tok, path, following):
         return 3
     return lv
 
@@ -252,7 +277,7 @@ def _leading_markers(text: str) -> list[str]:
 
 
 def _path_of(prev: tuple[str, ...], toks: list[str], italic: tuple[bool, ...],
-             following: str | None) -> tuple[str, ...]:
+             following: Following) -> tuple[str, ...]:
     base = prev[:-1] if prev and _UNMARKED.match(prev[-1]) else prev
     if not toks:
         n = int(prev[-1][1:]) + 1 if prev and _UNMARKED.match(prev[-1]) else 1
@@ -261,7 +286,7 @@ def _path_of(prev: tuple[str, ...], toks: list[str], italic: tuple[bool, ...],
     for k, tok in enumerate(toks):
         it = k < len(italic) and italic[k]
         if k == 0:
-            lv = _level(tok, tuple(path), it, following if len(toks) == 1 else None)
+            lv = _level(tok, tuple(path), it, following if len(toks) == 1 else ())
         else:   # each later marker of the paragraph sits deeper than the one before it
             deeper = [c for c in _candidates(tok, it) if c > levels[-1]]
             lv = deeper[0] if deeper else _level(tok, tuple(path), it)
@@ -272,23 +297,27 @@ def _path_of(prev: tuple[str, ...], toks: list[str], italic: tuple[bool, ...],
 
 
 def marker_path(prev: tuple[str, ...], text: str, *, italic: tuple[bool, ...] = (),
-                following: str | None = None) -> tuple[str, ...]:
+                following: str | Sequence[str] | None = None) -> tuple[str, ...]:
     """The marker path of paragraph `text` read after a paragraph whose path is `prev`.
     `italic`: per leading marker, whether it is set in italics (eCFR levels 5 and 6).
-    `following`: the next paragraph's text; a marker read as a letter is roman instead when
-    the next paragraph starts with its roman successor ("(i)" then "(ii)")."""
-    nxt = _leading_markers(following.lstrip()) if following is not None else []
-    return _path_of(prev, _leading_markers(text.lstrip()), italic, nxt[0] if nxt else None)
+    `following`: the text of the next paragraph, or of the later paragraphs in order; a
+    marker read as a letter is roman instead when they settle it so (`_roman_by_lookahead`:
+    "(i)" then "(ii)", or "(i)" under (h)(2) then "(3)")."""
+    texts = [following] if isinstance(following, str) else list(following or ())
+    later = [(m[0], False) if (m := _leading_markers(t.lstrip())) else None for t in texts]
+    return _path_of(prev, _leading_markers(text.lstrip()), italic, later)
 
 
 _HEADING_GAP = re.compile(r"[\s.:—–-]*")
+_ASIDE = re.compile(r"\([^()]*\s[^()]*\)")   # a parenthetical of words, never a marker
 
 
 def _element_markers(p: etree._Element) -> tuple[list[str], tuple[bool, ...]]:
     """The leading markers of paragraph element `p` and whether each is italic. A marker may
     be italic ("(<I>1</I>)"), and an italic subject heading after a marker may be followed by
     more markers ("(d) <I>Regulations</I>—(1) <I>Positive control.</I> (i) Except"): the
-    paragraph then starts with all of them. So may a plain heading
+    paragraph then starts with all of them, also past a parenthetical aside after the heading
+    ("(2) <I>Directional AM stations</I> (See § 73.68). (i) An entry"). So may a plain heading
     (`_plain_heading_end`: "(e) Procedural Matters. (1) Applications …")."""
     text, mask = "", []
     for seg, it in _segments_until_other(p):
@@ -319,6 +348,8 @@ def _element_markers(p: etree._Element) -> tuple[list[str], tuple[bool, ...]]:
         while k < len(text) and mask[k]:
             k += 1
         k = _HEADING_GAP.match(text, k).end()
+        if aside := _ASIDE.match(text, k):        # "(See § 73.68)." after the heading
+            k = _HEADING_GAP.match(text, aside.end()).end()
         nxt = _TOKEN.match(text, k)
         if not (nxt and _token_ok(nxt.group(1))):
             break
@@ -371,9 +402,9 @@ def _read(store: Store, doc_id: str, misses: list | None = None
         inner = at + len(heading)
         paras = [(t, *_element_markers(p)) for p in div.iter("P")
                  if (t := extract_text(etree.tostring(p, with_tail=False), "xml"))]
+        firsts = [(t[0], it[0]) if t else None for _, t, it in paras]
         for i, (ptext, toks, italic) in enumerate(paras):
-            following = paras[i + 1][1][0] if i + 1 < len(paras) and paras[i + 1][1] else None
-            path = _path_of(path, toks, italic, following)
+            path = _path_of(path, toks, italic, firsts[i + 1:])
             pid = f"{title} CFR {number}" + "".join(f"({m})" for m in path)
             found = _locate_line(full, ptext, inner, end)
             if found is None:
