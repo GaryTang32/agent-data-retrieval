@@ -658,7 +658,7 @@ def test_adr_units_compile_stops_at_the_cap_then_compiles(tmp_path, capsys, monk
     assert data["procedures"] == 3 and data["generator"] == "claude_code_sonnet"
     assert data["model"] == "stub-claude_code_sonnet" and data["budget_units"] == 2
     assert data["fields"]["when_to_use"]["quotes_grounded"] == 3
-    assert data["served_model_mismatch"] is False and "warning" not in out     # M2
+    assert data["served_model_mismatch"] is False and "served model mismatch" not in out     # M2
     # the build reads the same replies with no call (--max-calls 0 by default)
     code, out, err = adr(["units", "build", "--store", store.path, "--units-for", "gov",
                           "--with-passes", "procedure", "--generator", "claude_code_sonnet"],
@@ -706,15 +706,16 @@ def test_the_canary_limit_counts_across_stores_and_each_store_gets_a_report(
     assert "0 model call(s) made, 4 cached" in out
 
 
-def test_a_served_model_other_than_the_profile_is_flagged_only(tmp_path, capsys,
-                                                               monkeypatch):         # M2
+def test_a_served_model_other_than_the_profile_fails_the_run(tmp_path, capsys,
+                                                             monkeypatch):           # M2
     _stub_profiles(monkeypatch, tmp_path, ServedStub)
     store = make_units_store(tmp_path / "s")
     code, out, err = adr(["units", "compile", "--procedures", "--store", store.path,
                           "--generator", "claude_code_sonnet", "--max-calls", 3], capsys)
-    assert code == 0, err                              # flag only: the run completes
-    assert "served served-sonnet; warning: a served model differs from the profile's model" \
-        in out
+    assert code == 1, err             # the report is written, the run counts as failed
+    assert "status: served model mismatch: served-sonnet != stub-claude_code_sonnet; " \
+        "3 model call(s) made" in out
+    assert "procedure pass complete" not in out
     data = json.loads((store.path / UNITS_DIR / store.snapshot_id /
                        "procedure-pass-report.json").read_text())
     assert data["served_model_mismatch"] is True and data["served_models"] == ["served-sonnet"]

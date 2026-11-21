@@ -493,3 +493,186 @@ def test_load_items_read_what_the_generators_wrote(units_store, monkeypatch, tmp
     gu.write_items(gu.GOV_PROCEDURES_DIR, *procs["gov-procedures"])
     assert load_procedure_items("gov-procedures") == procs["gov-procedures"][0]
     assert all(isinstance(i, ProcedureItem) for i in procs["gov-procedures"][0])
+
+
+# -- fix round 1: rules the review found unpinned ------------------------------------------------
+
+
+@pytest.mark.parametrize("q,heading,numbers,why", [
+    # stop words: "bridge smith river" is a heading 3-gram only once "of the" / "at" are dropped
+    ("Must the bridge at Smith River open?", "Bridge of the Smith River", [], "heading 3-gram"),
+    # case folding: the number, the heading and the source in another case
+    ("What does 165.t09-0082 say?", "", ["165.T09-0082"], "number"),
+    ("What does 165.T09-0082 say?", "", ["165.t09-0082"], "number"),
+    ("When must the MAIN STREET DRAWBRIDGE open?", "Main Street drawbridge, Smith River", [],
+     "heading 3-gram"),
+    ("Is it so that THE DRAW SHALL OPEN ON SIGNAL today?", "", [], "source 6-gram"),
+    # the 6-gram threshold: exactly six shared words leak, five do not
+    ("Must it be that the draw shall open on signal today?", "", [], "source 6-gram"),
+    ("Must it be that the draw shall open on Sunday?", "", [], None),
+    # the left number boundary
+    ("What does 1117.821 require?", "", ["117.821"], None),
+])
+def test_leak_reason_stop_words_case_and_bounds(q, heading, numbers, why):
+    assert leak_reason(q, SOURCE, heading, numbers) == why
+
+
+def ecfr_117(day: str, *edits: tuple[bytes, bytes]):
+    """The 33 CFR 117 fixture as of `day` with byte edits applied (each anchor once)."""
+    from adr_eval.corpora.gov import ecfr_url
+
+    raw = ECFR_117_UNITS
+    for old, new in edits:
+        assert raw.count(old) == 1, old
+        raw = raw.replace(old, new)
+    return _doc(raw, "xml", day, ecfr_url(33, "117", day))
+
+
+V1, V2 = "2024-06-27", "2025-06-27"
+TWO_HOURS = (b"four hours notice", b"two hours notice")
+SUNSET = (b"at Bristol, shall open on signal.</P>",
+          b"at Bristol, shall open on signal from sunrise to sunset.</P>")
+RELETTER = [(b"<P>(b) Vessels approaching", b"<P>(c) Vessels approaching"),
+            (b"<P>(c) The owner of the Coast Channel Bridge",
+             b"<P>(b) The owner of the Coast Channel Bridge")]
+REMOVED = (b"required by &#xA7; 117.999.</P>",
+           b"required by &#xA7; 117.999.</P>\n<P>(d) The owner of the Coast Channel Bridge "
+           b"shall keep a log of every opening of the draw.</P>")
+
+
+def test_the_older_pool_over_three_versions(tmp_path):
+    """v1 (2024) changes § 117.821(b) ("two hours") and § 117.901(a); v2 (2025) has the same
+    § 117.821(b), re-letters § 117.1081(b)/(c) and adds a § 117.1081(d) the newest lacks; v3 is
+    the newest. The older pool: § 117.821(b) once, from v2 (the later version holding it), and
+    § 117.901(a) from v1; not the removed (d), not the re-lettered (b) and (c) (P43)."""
+    docs = [ecfr_117(V1, TWO_HOURS, SUNSET), ecfr_117(V2, TWO_HOURS, *RELETTER, REMOVED),
+            ecfr_117(ECFR_NEW)]
+    store = make_units_store(tmp_path / "three", docs)
+    v1, v2, _ = (d.doc_id for d, _ in docs)
+    older = gu._rule_pools(store, SEED4)["33 CFR 117"]["older"]
+    assert sorted((p.provision_id, p.doc_id, a) for p, a in older) == [
+        ("33 CFR 117.821(b)", v2, valid_from(store, v2)),
+        ("33 CFR 117.901(a)", v1, valid_from(store, v1))]
+    assert valid_from(store, v1) == date(2024, 6, 27) and valid_from(store, v2) == date(2025, 6, 27)
+    v2_ids = {p.provision_id for p in rule_universe(store)["33 CFR 117"] if p.doc_id == v2}
+    assert {"33 CFR 117.1081(b)", "33 CFR 117.1081(c)", "33 CFR 117.1081(d)"} <= v2_ids
+
+
+CITES = (b"on signs visible to approaching vessels.</P>",
+         b"on signs visible to approaching vessels.</P>\n<P>(d) The drawtender of the Harbor "
+         b"Avenue Bridge shall act as &#xA7; 117.31 requires, shall heed &#xA7; 117.31(b) and "
+         b"&#xA7; 117.31 again, and shall keep to paragraph (d) of this section.</P>")
+SHORT = (b"required by &#xA7; 117.999.</P>",
+         b"required by &#xA7; 117.999.</P>\n"
+         b"<P>(e) The owner shall post the notice on each bridge at once now.</P>\n"
+         b"<P>(f) The owner shall post this notice on each bridge at once now.</P>")
+
+
+def test_closure_spans_cover_every_provision_once_and_never_only_the_item(
+        tmp_path, monkeypatch):
+    store = make_units_store(tmp_path / "cites", [ecfr_117(ECFR_NEW, CITES)])
+    counts(monkeypatch, {"33 CFR 117": 20}, 0.0)
+    items, _ = generate_rules(store.path, stub(tmp_path))
+    (item,) = [i for i in items if i.gold_rules == ["33 CFR 117.901(d)"]]
+    # § 117.31 twice is one rule; paragraph (d) of this section reaches only the item itself
+    assert item.closure_rules == ["33 CFR 117.31", "33 CFR 117.31(b)"]
+    doc = item.evidence[0].doc_id
+    provs = {p.provision_id: p for p in provisions(store, doc)}
+    whole, b = item.closure_evidence
+    assert (whole.char_start, whole.char_end) == (provs["33 CFR 117.31(a)"].start,
+                                                 provs["33 CFR 117.31(b)(4)"].end)
+    assert (b.char_start, b.char_end) == (provs["33 CFR 117.31(b)"].start,
+                                         provs["33 CFR 117.31(b)(4)"].end)
+    full = store.text(doc)
+    assert whole.quote == full[whole.char_start:whole.char_end]
+    assert whole.quote.startswith(provs["33 CFR 117.31(a)"].text)
+    assert whole.quote.endswith(provs["33 CFR 117.31(b)(4)"].text)
+
+
+def test_min_chars_measures_the_provisions_own_text(tmp_path):
+    """(e) says 59 characters after its marker and (f) 60: (e) is short, (f) is not, though
+    both pass 60 with the marker."""
+    store = make_units_store(tmp_path / "short", [ecfr_117(ECFR_NEW, SHORT)])
+    texts = {p.provision_id: p.text for p in provisions(store, store.doc_ids()[0])}
+    assert len(texts["33 CFR 117.1081(e)"]) == 63 and len(texts["33 CFR 117.1081(f)"]) == 64
+    ids = {p.provision_id for p in rule_universe(store)["33 CFR 117"]}
+    assert "33 CFR 117.1081(f)" in ids and "33 CFR 117.1081(e)" not in ids
+
+
+def test_the_seed_ranks_the_pools(units_store, monkeypatch):
+    store = units_store
+    counts(monkeypatch, {"33 CFR 117": 5}, 0.0)
+
+    def order(seed: int) -> list[str]:
+        return [p.provision_id for p, _ in gu._rule_pools(store, seed)["33 CFR 117"]["newest"]]
+
+    assert sorted(order(1)) == sorted(order(SEED4)) and order(1) != order(SEED4)
+    assert draw_rules(store, 1) != draw_rules(store, SEED4)
+
+
+def test_a_question_naming_a_merged_irm_section_is_redrawn(units_store, monkeypatch, tmp_path):
+    store = units_store                 # § 21.4.1.3.3 is merged into § 21.4.1.3.2
+    monkeypatch.setattr(gu, "N_PROCEDURES", 2)
+
+    def fn(system, user, repeat):
+        if "Direct Deposit Rejects" in user and repeat == 0:
+            return json.dumps({"question": "What does IRM 21.4.1.3.3 say to do now?"})
+        return clean_reply(system, user, repeat)
+
+    _, rejected = generate_procedures([store.path], stub(tmp_path, fn))["gov-procedures"]
+    assert [(r["source"], r["reason"]) for r in rejected] == [("IRM 21.4.1.3.2", "number")]
+
+
+def test_the_plan_comes_before_the_first_call(units_store, monkeypatch, tmp_path, capsys):
+    store = units_store
+    counts(monkeypatch, {"33 CFR 165": 1}, 0.0)
+    monkeypatch.setattr(gu, "N_PROCEDURES", 1)
+    events: list[str] = []
+
+    def fn(system, user, repeat):
+        events.append("call")
+        return clean_reply(system, user, repeat)
+
+    generate_rules(store.path, stub(tmp_path, fn), on_plan=lambda plan: events.append("plan"))
+    generate_procedures([store.path], stub(tmp_path / "p", fn),
+                        on_plan=lambda plan: events.append("plan"))
+    assert events == ["plan", "call", "plan", "call", "call"]
+    # the command prints the census before its first call
+    seen: list[str] = []
+
+    def peek(system, user, repeat):
+        seen.append(capsys.readouterr().out)
+        return clean_reply(system, user, repeat)
+
+    _stub_profiles(monkeypatch, tmp_path / "cli", peek)
+    code, _, err = golden(capsys, "rules", "--gen", "--store", store.path, "--generator",
+                          "claude_code_sonnet", "--max-calls", 1)
+    assert code == 0, err
+    assert "33 CFR 165: eligible per version 2026-06-26 3 (newest)" in seen[0]
+
+
+class ServedStub(CachedStubClient):
+    """A cached stub whose provider reports a model other than the profile's."""
+
+    def _attempt(self, system, user, max_tokens, repeat):
+        from dataclasses import replace
+
+        return replace(super()._attempt(system, user, max_tokens, repeat),
+                       served_model="served-sonnet")
+
+
+def test_a_served_model_other_than_the_profile_fails_the_run(units_store, monkeypatch,
+                                                            tmp_path, capsys):
+    store = units_store
+    counts(monkeypatch, {"33 CFR 165": 2}, 0.0)
+
+    def make_client(name, profiles, cache, max_retries=5):
+        return ServedStub(f"stub-{name}", Cache(tmp_path / "llm"), clean_reply)
+
+    monkeypatch.setattr(runner, "make_client", make_client)
+    code, out, err = golden(capsys, "rules", "--gen", "--store", store.path, "--generator",
+                            "claude_code_sonnet", "--max-calls", 2)
+    assert code == 1, err             # the items are written, the run counts as failed
+    assert "status: served model mismatch: served-sonnet != stub-claude_code_sonnet; " \
+        "2 model call(s) made" in out
+    assert len(load_rule_items(gu.RULES_DIR / "items.jsonl")) == 2

@@ -7,21 +7,25 @@ Gold comes from the source structure, never from the system under test (P22): pr
 unit is built, indexed or looked up here, and no item holds a unit id.
 
 - **The rule universe** (`rule_universe`): per eCFR part, in every stored version, the modal
-  provisions (the rule-card lexicon, §8.1) of at least `MIN_CHARS` characters (whitespace
-  collapsed) whose span re-slices, less boilerplate: a provision whose normalised text (leading
-  markers off, whitespace collapsed, case-folded) is the normalised text of a provision of
-  another section of the same version. (This normalisation reproduces the survey's counts of
-  §4.1: 1,136, 823 and 1,239 modal paragraphs of the newest versions occur in one section.)
+  provisions (the rule-card lexicon, §8.1) whose own text is at least `MIN_CHARS` characters
+  (the leading markers "(a)(1)" off and whitespace collapsed: the length of what the paragraph
+  says, not of its citation) and whose span re-slices, less boilerplate: a provision whose
+  normalised text (leading markers off, whitespace collapsed, case-folded) is the normalised
+  text of a provision of another section of the same version. (This normalisation reproduces
+  the survey's counts of §4.1: 1,136, 823 and 1,239 modal paragraphs of the newest versions
+  occur in one section.)
 - **The draw** (`draw_rules`). Per part of `RULE_COUNTS`, `OLDER_SHARE` of the count (rounded
   half up) comes from the older versions and the rest from the newest. The older pool holds the
   eligible provisions of an older version whose provision id the newest version holds with
   another normalised text (a provision the newest version no longer has is not drawn: its text
-  cannot "differ from the newest"); a (provision id, text) found in two older versions is kept
-  once, from the later of them. An older-version draw has `as_of` = that version's `valid_from`
-  (the Phase 2 applicability overlay), a newest-version draw `as_of` None. Each pool is ranked by
-  the SHA-256 of "<seed>:<doc id>:<start>:<end>"; the draw is the head of each pool, and a
-  provision whose phrasing fails is replaced by the next one of its pool. A pool shorter than
-  its share is drawn whole and the shortfall reported, not padded.
+  cannot "differ from the newest") and whose normalised text no provision of the newest version
+  of the part has under any id (P43: a re-lettered paragraph, the 2025 § 117.261(n) that is the
+  2026 § 117.261(d), is not a changed rule); a (provision id, text) found in two older versions
+  is kept once, from the later of them. An older-version draw has `as_of` = that version's
+  `valid_from` (the Phase 2 applicability overlay), a newest-version draw `as_of` None. Each pool
+  is ranked by the SHA-256 of "<seed>:<doc id>:<start>:<end>"; the draw is the head of each
+  pool, and a provision whose phrasing fails is replaced by the next one of its pool. A pool
+  shorter than its share is drawn whole and the shortfall reported, not padded.
 - **Closure** (N23): `closure_rules` are the in-part `cites` targets of the drawn provision, in
   text order, once each: its resolved cross-references in its own part, whole-part references
   aside, and a target reaching only the drawn provision itself aside. `closure_evidence[k]` is
@@ -33,16 +37,20 @@ unit is built, indexed or looked up here, and no item holds a unit id.
   per set, ranked as above by "<seed>:<doc id>:<start>:<end>".
 - **Phrasing**: one cached call per draw (`client.complete(prompt, message, max_tokens=MAX_TOKENS,
   repeat=r, cache_failures=True)`) with the source text, never a unit. `leak_reason` rejects a
-  question holding the section or IRM number, a 3-gram of the heading's words after stop words,
+  question holding the section or IRM number (for an IRM section, also those of the sections
+  merged into it), a 3-gram of the heading's words after stop words,
   or a 6-gram of the source; a rejected or malformed phrasing is redrawn once at repeat 1, then
   the draw is replaced. A call the provider rejected for its input (stored, ruling P21) replaces
   the draw at once (the same input would be rejected again). Any other model failure and a
   budget stop propagate: nothing is returned and the completed calls stay cached.
 - **Items**: ids `gov-rules-001`..., `gov-procedures-001`..., `bench-procedures-001`... in draw
   order (rules: part by part in `RULE_COUNTS` order, newest draws before older ones), splits by
-  `assign_split(id)`, `created` the newest ISO date among the source versions of the documents
-  drawn from (the Unix epoch when none is a date, as for bench). With `limit`, generation stops
-  after that many items per set, so a limited run gives the first items of the full one.
+  `assign_split(id)`, `created` the newest ISO date among the source versions of the pool's
+  documents (rules: the newest version of each part; procedures: every candidate document of
+  the set), not of the items drawn, so a limited run gets the same value (the Unix epoch when
+  none is a date, as for bench). With `limit`, generation stops after that many items per set,
+  so a limited run gives the first items of the full one. `on_plan`, when given, receives the
+  universe and the draw before the first call.
 
 gov items are written under `golden/gov-rules/v0.1/` and `golden/gov-procedures/v0.1/` (US
 government works, committed); bench items under `golden/bench-procedures/v0.1/` stay local
@@ -56,6 +64,7 @@ import json
 import math
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from importlib import resources
@@ -231,7 +240,7 @@ def _eligible(full: str, provs: list[Provision]) -> list[Provision]:
     for p in provs:
         sections.setdefault(normalised(p.text), set()).add(p.section)
     return [p for p in provs if p.modality is not None
-            and len(" ".join(p.text.split())) >= MIN_CHARS
+            and len(" ".join(_LEADING_MARKERS.sub("", p.text).split())) >= MIN_CHARS
             and len(sections[normalised(p.text)]) == 1 and full[p.start:p.end] == p.text]
 
 
@@ -248,7 +257,7 @@ def _versions(store: Store) -> dict[str, list[tuple[str, list[Provision], list[P
 
 
 def rule_universe(store: Store) -> dict[str, list[Provision]]:
-    """{part: its eligible provisions (modal, at least `MIN_CHARS` characters, not
+    """{part: its eligible provisions (modal, at least `MIN_CHARS` characters of own text, not
     boilerplate), every version, oldest version first, each in document order}."""
     return {part: [p for _, _, elig in rows for p in elig]
             for part, rows in _versions(store).items()}
@@ -287,12 +296,13 @@ def _rule_pools(store: Store, seed: int = SEED4) -> dict[str, dict]:
         newest_texts: dict[str, set[str]] = {}
         for p in newest_provs:
             newest_texts.setdefault(p.provision_id, set()).add(normalised(p.text))
+        anywhere = {t for texts in newest_texts.values() for t in texts}     # P43
         older, seen = [], set()
         for d, _, elig in reversed(rows[:-1]):          # the later older version first
             for p in elig:
                 key = (p.provision_id, normalised(p.text))
                 texts = newest_texts.get(p.provision_id)
-                if texts is None or key[1] in texts or key in seen:
+                if texts is None or key[1] in anywhere or key in seen:
                     continue
                 seen.add(key)
                 older.append((p, _valid_from(overlay, d)))
@@ -408,12 +418,14 @@ def _full(items: list, limit: int | None) -> bool:
 
 
 def generate_rules(store_path: Path, client, seed: int = SEED4, limit: int | None = None, *,
-                   report: dict | None = None) -> tuple[list[RuleItem], list[dict]]:
+                   report: dict | None = None, on_plan: Callable[[dict], None] | None = None
+                   ) -> tuple[list[RuleItem], list[dict]]:
     """(the gov-rules items of the store, the failed phrasings). `client` is a cached client (or
     a `MeteredClient` over one). `report`, when given, receives the universe and the draw
     before the first call (`universe`: per part, the eligible provisions per version and the
     older pool; `draw`: per part, newest and older) and, on return, `calls` (made, cached,
-    failed) and `short` (per part and stratum, the draws the pools could not fill)."""
+    failed) and `short` (per part and stratum, the draws the pools could not fill); `on_plan`,
+    when given, is called with `{universe, draw}` before the first call (the CLI prints it)."""
     store = Store.open(store_path)
     pools = _rule_pools(store, seed)
     plan = {part: {"versions": [(label, n) for _, label, n in pools[part]["versions"]],
@@ -421,6 +433,8 @@ def generate_rules(store_path: Path, client, seed: int = SEED4, limit: int | Non
     draw = {part: dict(_wants(n)) for part, n in RULE_COUNTS.items()}
     if report is not None:
         report.update(universe=plan, draw=draw)
+    if on_plan is not None:
+        on_plan({"universe": plan, "draw": draw})
     system, phash = load_prompt("rules"), prompt_hash("rules")
     created = _created(store, [rows["versions"][-1][0] for rows in pools.values()
                                if rows["versions"]])
@@ -494,7 +508,8 @@ def _candidates(store: Store) -> dict[str, list[_Candidate]]:
         if ap.family_of(store.source(d).uri) != "irm":
             continue
         secs, _ = irm_sections(store, d)
-        gov += [_Candidate(store, f"IRM {s.number}", d, s.start, s.end, s.title, (s.number,))
+        gov += [_Candidate(store, f"IRM {s.number}", d, s.start, s.end, s.title,
+                           (s.number, *s.merged))
                 for s in secs if is_procedure_like(s)]
     bench = []
     for d in bench_candidates(store):
@@ -504,13 +519,15 @@ def _candidates(store: Store) -> dict[str, list[_Candidate]]:
 
 
 def generate_procedures(store_paths: list[Path], client, seed: int = SEED4,
-                        limit: int | None = None, *, report: dict | None = None
+                        limit: int | None = None, *, report: dict | None = None,
+                        on_plan: Callable[[dict], None] | None = None
                         ) -> dict[str, tuple[list[ProcedureItem], list[dict]]]:
     """{set: (its items, its failed phrasings)} for gov-procedures (from the store holding IRM
     documents) and bench-procedures (from the store holding bench procedure documents);
     GoldenError when a set is found in no store or in more than one. `report`, when given,
     receives `universe` and `draw` (per set) before the first call and `calls` and `short`
-    (per set) on return. `limit` caps each set."""
+    (per set) on return; `on_plan`, when given, is called with `{universe, draw, stores}`
+    before the first call. `limit` caps each set."""
     found: dict[str, tuple[Path, list[_Candidate]]] = {}
     for path in store_paths:
         for corpus, cands in _candidates(Store.open(path)).items():
@@ -526,10 +543,13 @@ def generate_procedures(store_paths: list[Path], client, seed: int = SEED4,
                           f"store (IRM sections) and the bench store (procedure documents)")
     pools = {c: sorted(found[c][1], key=lambda x: _rank(seed, x.doc_id, x.start, x.end))
              for c in PROCEDURE_CORPORA}
+    plan = {"universe": {c: len(pools[c]) for c in PROCEDURE_CORPORA},
+            "draw": {c: min(N_PROCEDURES, len(pools[c])) for c in PROCEDURE_CORPORA},
+            "stores": {c: str(found[c][0]) for c in PROCEDURE_CORPORA}}
     if report is not None:
-        report.update(universe={c: len(pools[c]) for c in PROCEDURE_CORPORA},
-                      draw={c: min(N_PROCEDURES, len(pools[c])) for c in PROCEDURE_CORPORA},
-                      stores={c: str(found[c][0]) for c in PROCEDURE_CORPORA})
+        report.update(plan)
+    if on_plan is not None:
+        on_plan(plan)
     system, phash = load_prompt("procedures"), prompt_hash("procedures")
     calls = Counter(made=0, cached=0, failed=0)
     out: dict[str, tuple[list[ProcedureItem], list[dict]]] = {}

@@ -1248,12 +1248,15 @@ def _units_compile(a: argparse.Namespace) -> int:
         print(f"report {out}")
     calls = report["calls"]
     served = ", ".join(report["served_models"]) or "none reported"
-    print(f"status: procedure pass complete; {calls['made']} model call(s) made, "
+    # the run checks the served model equals the profile's (global constraint): a mismatch
+    # keeps the report and the cached replies but fails the run
+    other = [m for m in report["served_models"] if m != meter.model]
+    head = (f"served model mismatch: {', '.join(other)} != {meter.model}" if other
+            else "procedure pass complete")
+    print(f"status: {head}; {calls['made']} model call(s) made, "
           f"{calls['cached']} cached, {calls['failed']} failed; {meter.budget.calls} budget "
-          f"unit(s) of {a.max_calls} used; served {served}"
-          + ("; warning: a served model differs from the profile's model"
-             if run["served_model_mismatch"] else ""))
-    return 0
+          f"unit(s) of {a.max_calls} used; served {served}")
+    return 1 if other else 0
 
 
 def _units_show(a: argparse.Namespace) -> int:

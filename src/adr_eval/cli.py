@@ -487,9 +487,8 @@ def _golden_tables_gen(a: argparse.Namespace) -> int:
 
 
 def _golden_units_plan(kind: str, report: dict) -> None:
-    """Print what `golden rules` or `golden procedures` draws from, before any item."""
-    if "universe" not in report:
-        return
+    """Print what `golden rules` or `golden procedures` draws from (called by the generator
+    before its first model call)."""
     if kind == "rules":
         for part, u in report["universe"].items():
             per = ", ".join(f"{label} {n}" for label, n in u["versions"]) or "no version"
@@ -509,8 +508,9 @@ def _golden_units_gen(a: argparse.Namespace) -> int:
     --store GOV --store BENCH ...` (`--generator P --max-calls N [--limit N]`): the gov-rules,
     or the gov-procedures and bench-procedures, v0.1 items phrased by profile `P` under `N`
     budget units (every transport attempt counts). The universe and the draw are printed
-    first. A stop at the cap or on a model failure that is no input rejection exits 1 and
-    writes nothing; a rerun reads the completed calls from the cache."""
+    before the first call. A stop at the cap or on a model failure that is no input rejection
+    exits 1 and writes nothing; a rerun reads the completed calls from the cache. A served
+    model other than the profile's writes the items and exits 1."""
     from adr_eval.golden import units as gu
     from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded, stop_status
@@ -529,19 +529,23 @@ def _golden_units_gen(a: argparse.Namespace) -> int:
     except runner.ProfileError as e:
         raise runner.RunError(str(e)) from e
     report: dict = {}
+
+    def on_plan(plan: dict) -> None:
+        _golden_units_plan(a.corpus, plan)
+        sys.stdout.flush()
+
     try:
         if rules:
             res = {"gov-rules": gu.generate_rules(a.store[0], meter, limit=a.limit,
-                                                  report=report)}
+                                                  report=report, on_plan=on_plan)}
         else:
-            res = gu.generate_procedures(a.store, meter, limit=a.limit, report=report)
+            res = gu.generate_procedures(a.store, meter, limit=a.limit, report=report,
+                                         on_plan=on_plan)
     except gu.GoldenError as e:
         raise runner.RunError(str(e)) from e
     except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
-        _golden_units_plan(a.corpus, report)
         print(stop_status(meter.budget, e))
         return 1
-    _golden_units_plan(a.corpus, report)
     for corpus, (items, rejected) in res.items():
         gu.write_items(outs[corpus], items, rejected)
         dev = sum(i.split == "dev" for i in items)
@@ -555,12 +559,14 @@ def _golden_units_gen(a: argparse.Namespace) -> int:
               f"ran out; reported, not padded)")
     calls = report["calls"]
     served = sorted(meter.served_models)
-    print(f"status: complete; {calls['made']} model call(s) made, {calls['cached']} cached, "
+    # the run checks the served model equals the profile's (global constraint): a mismatch
+    # keeps the written items and the cached replies but fails the run
+    other = [m for m in served if m != meter.model]
+    head = f"served model mismatch: {', '.join(other)} != {meter.model}" if other else "complete"
+    print(f"status: {head}; {calls['made']} model call(s) made, {calls['cached']} cached, "
           f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
-          f"used; served {', '.join(served) or 'none reported'}"
-          + ("; warning: a served model differs from the profile's model"
-             if any(m != meter.model for m in served) else ""))
-    return 0
+          f"used; served {', '.join(served) or 'none reported'}")
+    return 1 if other else 0
 
 
 def _golden_verify(a: argparse.Namespace) -> int:
