@@ -230,7 +230,7 @@ Google Drive 123, GitHub 89, HubSpot 81, Fireflies 58. Classified by title (firs
 
 - 93 documents hold four or more numbered-step lines (about the dot-style "N." count over all 2,000 documents, which reproduces as 91–92, titles ignored; only 24 of them are procedure candidates). The candidate population under §6.1 is 70 documents, all drawn: enough for bench-procedures v0.1's 50 items, so the cap of 110 never binds. (Amended after the Task 4 review.)
 - 31 explicit question/answer pairs ("Q:" lines) in 9 documents; 23 documents with KCS-style
-  headings (symptoms, cause, resolution, workaround); 88 markdown tables in 62 documents.
+  headings (symptoms, cause, resolution, workaround); 88 markdown tables in 62 documents. The Task 6 build finds 39 Q/A pairs in 10 documents (one real "Security FAQ for prospects" section holds 10 bulleted pairs), KCS articles after skipping the title heading, and 90 markdown tables in 63 documents by the delimiter-row rule; the survey's counts used narrower patterns. (Amended after the Task 6 review.)
 - The bench documents are benchmark data under a canary request (`corpora/bench/README.md`): units
   built from them and questions about them stay local.
 
