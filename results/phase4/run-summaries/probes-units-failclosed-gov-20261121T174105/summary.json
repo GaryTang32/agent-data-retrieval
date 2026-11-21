@@ -212,18 +212,26 @@
     "by_tool": {
       "define": {
         "n": 30,
+        "no_entry": 5,
+        "no_entry_visible_before": 5,
         "passed": 30
       },
       "procedure_lookup": {
         "n": 30,
+        "no_entry": 5,
+        "no_entry_visible_before": 5,
         "passed": 30
       },
       "rule_lookup": {
         "n": 30,
+        "no_entry": 5,
+        "no_entry_visible_before": 3,
         "passed": 30
       },
       "unit_search": {
         "n": 30,
+        "no_entry": 5,
+        "no_entry_visible_before": 5,
         "passed": 30
       }
     },

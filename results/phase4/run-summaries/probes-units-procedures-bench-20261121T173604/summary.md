@@ -14,4 +14,4 @@ Store `.cache/store-p2/bench` (snapshot `7d8d1f8adda6`, units `d50f23029eed`). S
 
 ## Log fields
 
-0 log lines (0 of the unit tools, for 0 unit calls; 0 log(s) whose count differs, 0 missing), 0 with caller, principals, acl_snapshot and acl_decision; 0 without `units`; 0 allowed, 0 of them with a null resolved field or units id; 0 with statement text. Complete: True.
+0 log lines (0 of the unit tools, for 0 unit calls; 0 log(s) whose count differs, 0 missing), 0 with caller, principals, acl_snapshot and acl_decision; 0 without `units`; 0 allowed, 0 of them with a null resolved field or units id. SQL statement text: not applicable (the unit tools take no SQL). Complete: True.

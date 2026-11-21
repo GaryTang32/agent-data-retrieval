@@ -2,6 +2,7 @@
   "config": {
     "kind": "units-mcp",
     "n": 60,
+    "per_family": null,
     "seed": 20261121,
     "selected": {
       "bench/by-closure": 5,

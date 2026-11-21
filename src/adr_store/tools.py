@@ -2390,27 +2390,30 @@ class Tools:
         return {"units": None, "filters": None, "applicability": None}
 
     def _sense_context(self, context: str | None, us: tu.UnitSet, allowed: frozenset[str]
-                       ) -> tuple[str | None, str | None]:
-        """(the canonical ref of `context`, the subpart holding it). A unit id gives its
-        ref; another context is normalised as a rule id when it is one. The subpart comes
-        from the context unit when the caller may see it, else from a visible rule card in
-        force (the filters applied) of the context's section."""
+                       ) -> tuple[str | None, str | None, str | None]:
+        """(the ref `context` stands for, the subpart holding it, the document of a context
+        unit). A unit id the caller may see stands for where the unit sits
+        (`tools_units.context_ref`: a card's provision, a concept's scope, another unit's
+        section, chapter or document scope) and its document, with the unit's own subpart; a
+        unit id the caller may not see is read as the ref it names, as an absent one is.
+        Another context is normalised as a rule id when it is one. Without a visible context
+        unit, the subpart comes from a visible rule card in force (the filters applied) of the
+        context's section."""
         if context is None:
-            return None, None
+            return None, None, None
         c = context.strip()
-        unit = None
         if m := _UNIT_ID.match(c):
-            ref = m.group(1)
             u = us.units.get(c)
-            unit = u if u is not None and u.doc_id in allowed else None
+            if u is not None and u.doc_id in allowed:
+                return tu.context_ref(u, us.corpus), tu.subpart(u), u.doc_id
+            ref = m.group(1)
         else:
             ref = normalise_rule_id(c) or c
-        if unit is None:
-            section = tu.section_of(ref)
-            unit = next((u for u in us.by_type.get("rule_card", ())
-                         if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section),
-                        None)
-        return ref, None if unit is None else tu.subpart(unit)
+        section = tu.section_of(ref)
+        unit = next((u for u in us.by_type.get("rule_card", ())
+                     if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section),
+                    None)
+        return ref, None if unit is None else tu.subpart(unit), None
 
     def define(self, term: str, context: str | None = None, *, as_of=None,
                include_superseded: bool = False,
@@ -2418,7 +2421,8 @@ class Tools:
         """Every visible sense of `term` (§7): concepts whose preferred or alternate label
         has its base key, else whose hidden labels hold it, among the units of the
         documents of the caller's view that the filters (`as_of`, `include_superseded`)
-        admit; ranked by whether the scope holds `context` (a canonical ref or unit id),
+        admit; ranked by whether the scope holds `context` (a canonical ref, or a unit id
+        standing for where the unit sits: `_sense_context`),
         then narrowest scope, then unit id. No sense: `nearest` holds at most `NEAREST`
         visible labels by edit distance (ties by label). `handle` pins the call."""
         fields = self._unit_fields()
@@ -2434,11 +2438,13 @@ class Tools:
             found = [u for u in concepts if key and key in {base_key(x) for x in tu.labels(u)}]
             if not found:
                 found = [u for u in concepts if key and key in u.body["hidden_labels"]]
-            ref, sub = self._sense_context(context, us, allowed)
+            ref, sub, doc = self._sense_context(context, us, allowed)
 
             def rank(u: Unit) -> tuple:
                 scope = u.body["scope"]
-                inside = ref is not None and scope_contains(scope["ref"], ref, subpart=sub)
+                # a document scope holds every unit of its document
+                inside = (doc is not None and scope["kind"] == "document" and u.doc_id == doc) \
+                    or (ref is not None and scope_contains(scope["ref"], ref, subpart=sub))
                 return (not inside, _KIND_RANK.get(scope["kind"], len(_KIND_RANK)), u.unit_id)
 
             senses = [Sense(u.unit_id, u.body["pref_label"], dict(u.body["scope"]),

@@ -1451,9 +1451,12 @@ def _probes_units(a: argparse.Namespace) -> int:
         cfg["target_types"] = pu.failclosed_identity(rows)
         t = summary["total"]
         ok = t["passed"] == t["n"]
+        seen = ", ".join(f"{n} {b['no_entry_visible_before']} of {b['no_entry']}"
+                         for n, b in summary["by_tool"].items())
         head = (f"{t['n']} probes ({len(summary['conditions'])} conditions × "
                 f"{len(summary['by_tool'])} tools × 5 callers), {t['passed']} passed, "
-                f"{t['content']} with content")
+                f"{t['content']} with content; \"no entry\" callers who saw the tool's target "
+                f"before the change: {seen}")
         table = ("| condition | probes | passed | with content | outcomes |\n"
                  "|---|---|---|---|---|\n" + "".join(
                      f"| {n} | {b['n']} | {b['passed']} | {b['content']} | "
@@ -1528,6 +1531,8 @@ def _probes_units(a: argparse.Namespace) -> int:
     logs = {"total": pu.total_unit_scan(scans), "by_store": scans}
     ok = ok and logs["total"]["complete"]
     if kind in ("leak", "equivalence"):
+        # every reference's units must equal the store's units of its view (tables id aside)
+        ok = ok and all(v["units_equal"] == v["units_of_view"] for v in refs.info)
         cfg["views"] = refs.info
         prov["views"] = refs.provenance()
         prov["views_removed"] = [] if a.keep_views else [
@@ -1541,8 +1546,8 @@ def _probes_units(a: argparse.Namespace) -> int:
           f"count differs, {lt['logs_missing']} missing), {lt['complete_lines']} with caller, "
           f"principals, acl_snapshot and acl_decision; {lt['units_missing']} without `units`; "
           f"{lt['allowed']} allowed, {lt['allowed_unresolved']} of them with a null resolved "
-          f"field or units id; {lt['text_lines']} with statement text. Complete: "
-          f"{lt['complete']}.\n")
+          f"field or units id. SQL statement text: not applicable (the unit tools take no "
+          f"SQL). Complete: {lt['complete']}.\n")
     d = _write_probe_run(a, a.kind, started,
                          {"probes.json": probe_set, "results.json": {"results": rows},
                           "summary.json": {"config": cfg, "summary": summary, "logs": logs},
@@ -1585,7 +1590,9 @@ def _probes_units_mcp(a, pu, ctx, refs, root, cfg, prov, gov_config, started, t0
                                                   generator=a.generator,
                                                   gov_config=gov_config, **kw)
         cfg_stores[label], prov_stores[label] = _units_config(path, label)
-        universe += [(label, p) for p in pu.leak_probes(path, label)]
+        sizes = None if a.per_family is None else dict.fromkeys(pu.LEAK_SIZES[label],
+                                                                a.per_family)
+        universe += [(label, p) for p in pu.leak_probes(path, label, sizes=sizes)]
     n = a.n or pu.MCP_SUBSET
     selected = pu.select_mcp(universe, n)
     logs_of = {label: pu.log_path(path) for label, path in stores.items()}
@@ -1625,6 +1632,7 @@ def _probes_units_mcp(a, pu, ctx, refs, root, cfg, prov, gov_config, started, t0
                                                       for r in references.values()
                                                       for p in r.remove()]}
     cfg = {"kind": a.kind, "seed": pu.SEED4, "n": n, "universe": len(universe),
+           "per_family": a.per_family,
            "tools": cfg["tools"], "stores": cfg_stores,
            "selected": dict(sorted(Counter(f"{lb}/{p.family}" for lb, p in selected).items())),
            "server_env": {"HF_HUB_OFFLINE": "1"},
@@ -1634,7 +1642,9 @@ def _probes_units_mcp(a, pu, ctx, refs, root, cfg, prov, gov_config, started, t0
     t = summary["total"]
     rp = summary["replays"]
     ok = (t["leaks"] == 0 and t["invalid"] == 0 and rp["identical"] == rp["n"]
-          and rp["handle_units"] == rp["n"] and logs["total"]["complete"] and calls_match)
+          and rp["handle_units"] == rp["n"] and logs["total"]["complete"] and calls_match
+          and all(v["units_equal"] == v["units_of_view"]
+                  for r in references.values() for v in r.info))
     md = (f"# Unit probes through MCP (D1)\n\nThe {n} of {len(universe)} unit leak probes with "
           f"the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed {pu.SEED4}), each through "
           f"an `adr mcp` server of its caller. No model calls.\n\n{t['n']} probes, "
@@ -1852,29 +1862,34 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--store", type=Path, required=True,
                    help="the store to probe (its active index and overlays)")
     p.add_argument("--views", type=Path, default=None, metavar="DIR",
-                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: where "
-                        "the reference stores are built or reused (default "
-                        "<p2_store_dir>/views/<corpus>; tables-*: views-tables/<corpus>)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp, "
+                        "units-leak, units-equivalence, units-mcp: where the reference stores "
+                        "are built or reused (default <p2_store_dir>/views/<corpus>; tables-*: "
+                        "views-tables/<corpus>; units-*: views/units-<corpus>)")
     p.add_argument("--keep-views", action="store_true",
-                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: keep "
-                        "the reference stores (default: removed)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp, "
+                        "units-leak, units-equivalence, units-mcp: keep the reference stores "
+                        "(default: removed)")
     p.add_argument("--clones", type=Path, default=None, metavar="DIR",
-                   help="acl, tables-failclosed: where the fail-closed clones go (default "
-                        "<p2_store_dir>/clones/<corpus>; removed)")
+                   help="acl, tables-failclosed, units-failclosed: where the fail-closed "
+                        "clones go (default <p2_store_dir>/clones/<corpus>; units-failclosed: "
+                        "clones/units-<corpus>; removed)")
     acl_config = runner.REPO_ROOT / "config" / "acl"
     p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
-                   help="acl, equivalence and the tables-* kinds: the directory the reference "
-                        "stores and clones sync from (default config/acl/directory.json)")
+                   help="acl, equivalence and the tables-* and units-* kinds: the directory "
+                        "the reference stores and clones sync from (default "
+                        "config/acl/directory.json)")
     p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
-                   help="acl, equivalence and the tables-* kinds: the policy (default "
-                        "config/acl/policy.json)")
+                   help="acl, equivalence and the tables-* and units-* kinds: the policy "
+                        "(default config/acl/policy.json)")
     p.add_argument("--questions", type=int, default=50, metavar="N",
                    help="equivalence: golden questions per view (default 50)")
     p.add_argument("--per-family", type=int, default=None, metavar="N",
-                   help="acl, tables-leak: N leak probes per family instead of the spec's "
-                        "counts (a quick check; recorded in the output)")
+                   help="acl, tables-leak, units-leak, units-mcp: N leak probes per family "
+                        "instead of the spec's counts (a quick check; recorded in the output)")
     p.add_argument("--as", dest="as_user", default=None, metavar="USER",
-                   help="search as this caller (needs the ACL layer of Phase 2B)")
+                   help="search as this caller (needs the ACL layer of Phase 2B); "
+                        "units-applicability: the caller (default user:auditor)")
     p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
                    help="collapse copies in search (default on)")
     p.add_argument("--allow-other-index", action="store_true",
@@ -1882,24 +1897,25 @@ def _parser() -> argparse.ArgumentParser:
                         "Phase 1 fingerprint (recorded in the output)")
     p.add_argument("--queries", type=int, default=25, metavar="N",
                    help="tables-equivalence: calls per view (default 25: 15 query_table, "
-                        "10 sql)")
+                        "10 sql); units-equivalence: calls per view (default 25)")
     p.add_argument("--gold", type=Path, default=None, metavar="PATH",
                    help="tables-equivalence: the golden set whose count_filter gold queries "
                         "are drawn (default golden/<corpus>/v0.1)")
     p.add_argument("--n", type=int, default=None, metavar="N",
-                   help="tables-applicability: as_of dates per table (default 50); "
-                        "tables-mcp: probes through MCP (default 60)")
+                   help="tables-applicability, units-applicability: as_of dates (per table; "
+                        "default 50); tables-mcp, units-mcp: probes through MCP (default 60)")
     p.add_argument("--tables", nargs="+", default=None, metavar="TABLE",
                    help="tables-applicability: the tables to probe (default fr_documents and "
                         "whichever of drawbridge_sections and drawbridge_bridges the store's "
                         "current tables hold)")
     p.add_argument("--generator", metavar="PROFILE", default=None,
-                   help="tables-leak, tables-equivalence, tables-mcp on a store with "
-                        "extraction tables: the model profile whose cached replies build the "
-                        "reference stores' extraction tables, with zero calls (default: config "
-                        "generator)")
+                   help="tables-leak, tables-equivalence, tables-mcp, units-leak, "
+                        "units-equivalence, units-mcp on a store with extraction tables: the "
+                        "model profile whose cached replies build the reference stores' "
+                        "extraction tables, with zero calls (default: config generator)")
     p.add_argument("--also", action="append", default=None, metavar="CORPUS=PATH",
-                   help="tables-mcp: another store whose leak probes join the universe")
+                   help="tables-mcp, units-mcp: another store whose leak probes join the "
+                        "universe")
     p.add_argument("--timeout", type=float, default=300.0,
                    help="tables-mcp, units-mcp: seconds to wait for a server's reply")
     p.add_argument("--absent", type=int, default=50, metavar="N",

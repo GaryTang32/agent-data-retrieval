@@ -9,7 +9,7 @@ tools of `adr_store.tools.Tools` use (`define`, `rule_lookup`, `procedure_lookup
   in a process LRU of `UNIT_CACHE` builds by (store, units id, the corpus's field weights). A
   build is immutable (its id is the SHA-256 of a manifest naming every file by its hash), so
   the cache never changes an answer.
-- `part_prefix`, `under`, `section_of`, `subpart`, `span`, `model_value`, `labels`,
+- `part_prefix`, `under`, `section_of`, `subpart`, `context_ref`, `span`, `model_value`, `labels`,
   `edit_distance`, `reader_text`, `catalog_entry`, `hit` and `card_order`: what their
   docstrings say.
 """
@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from adr_store.units import index as units_index
-from adr_store.units.ecfr import _TITLE_OF_PART
+from adr_store.units.ecfr import _TITLE_OF_PART, normalise_rule_id
 from adr_store.units.envelope import Unit
 from adr_store.units.overlay import UnitsManifest, load_units
 
@@ -93,6 +93,29 @@ def section_of(ref: str) -> str:
 def subpart(unit: Unit) -> str | None:
     return next((h.removeprefix("Subpart ") for h in unit.heading_path
                  if h.startswith("Subpart ")), None)
+
+
+_TABLE_SUFFIX = re.compile(r" table \d+$")
+_SECTION_FILTER = re.compile(r'^tables:drawbridge_\w+:\{"section":"([^"]+)"')
+
+
+def context_ref(unit: Unit, corpus: str) -> str | None:
+    """Where `unit` sits, as a ref a concept scope can hold (§7, a unit id as `define`'s
+    context): a rule card's provision; a concept's scope; an eCFR or IRM table's section
+    ("33 CFR 117.313 table 1" sits in "33 CFR 117.313"); a Phase 3 drawbridge record's
+    section; an IRM procedure's own number; else the unit's document scope
+    "<corpus>:<doc_id>" (bench and research units, Federal Register records, IRM
+    exhibits). A document scope also holds every unit of its document (`Tools.define`)."""
+    if unit.type == "rule_card":
+        return unit.canonical_ref
+    if unit.type == "concept":
+        return unit.body["scope"]["ref"]
+    ref = _TABLE_SUFFIX.sub("", unit.canonical_ref)
+    if m := _SECTION_FILTER.match(ref):
+        return normalise_rule_id(m.group(1))
+    if normalise_rule_id(ref) is not None or re.match(r"^IRM \d+(\.\d+)*$", ref):
+        return normalise_rule_id(ref) or ref
+    return f"{corpus}:{unit.doc_id}"
 
 
 def span(unit: Unit) -> tuple[int, int]:

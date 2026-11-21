@@ -14,4 +14,4 @@ Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). See
 
 ## Log fields
 
-1364 log lines (1364 of the unit tools, for 1364 unit calls; 0 log(s) whose count differs, 0 missing), 1364 with caller, principals, acl_snapshot and acl_decision; 0 without `units`; 1364 allowed, 0 of them with a null resolved field or units id; 0 with statement text. Complete: True.
+1364 log lines (1364 of the unit tools, for 1364 unit calls; 0 log(s) whose count differs, 0 missing), 1364 with caller, principals, acl_snapshot and acl_decision; 0 without `units`; 1364 allowed, 0 of them with a null resolved field or units id. SQL statement text: not applicable (the unit tools take no SQL). Complete: True.

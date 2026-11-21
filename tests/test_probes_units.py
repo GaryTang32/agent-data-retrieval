@@ -130,8 +130,17 @@ def test_leak_families_name_the_hidden_unit(store):
         elif p.family == "by-error":
             assert len(p.call["calls"]) == 3
         elif p.family == "by-closure":
-            assert u.unit_id in given or any(
-                c["tool"] == "rule_lookup" for c in p.call["calls"])
+            calls = p.call["calls"]
+            if p.target["variant"] == "closure":   # the closure target's ref, then the words
+                assert u.type == "rule_card" and u.body["closure"]
+                rids = {e["ref"] for e in u.body["closure"]} | {
+                    u.canonical_ref.split("(")[0]}
+                assert [c["tool"] for c in calls] == ["rule_lookup", "rule_lookup"]
+                assert calls[0]["args"]["rule_id"] in rids
+                assert calls[1]["args"]["query"] == pu.query_of(u)
+            else:                                    # the hidden unit as define's context
+                assert [c["tool"] for c in calls] == ["define", "define"]
+                assert [c["args"]["context"] for c in calls] == [u.unit_id, u.canonical_ref]
 
 
 def test_a_planted_leak_is_caught(store, refs_root, monkeypatch):
@@ -305,6 +314,10 @@ def test_failclosed_six_conditions_by_tools_by_five_callers(store, tmp_path):
     assert all(r["not_found_equal"] for r in entry if r["tool"] in ("rule_lookup",
                                                                     "procedure_lookup"))
     assert not any((tmp_path / "c").glob("*/HEAD"))   # clones removed
+    by_tool = pu.summarize_failclosed(rows)["by_tool"]
+    assert all(b["no_entry"] == 5 for b in by_tool.values())
+    assert {t: b["no_entry_visible_before"] for t, b in by_tool.items()} == {
+        t: sum(bool(r["visible_before"]) for r in entry if r["tool"] == t) for t in present}
     total = pu.total_unit_scan(logs)
     assert total["complete"] and total["lines"] >= len(rows)
     assert rows == pu.failclosed(store.path, tmp_path / "c", "gov", **kw(store))
@@ -369,7 +382,10 @@ def test_applicability_probes_catch_a_superseded_version(store, monkeypatch):
 def test_define_probes_cover_labels_hidden_labels_absent_and_context(store):
     rows = pu.define_probes(store.path, n_absent=10, clock=lambda: NOW)
     kinds = Counter(r["kind"] for r in rows)
-    assert {"label", "hidden", "absent", "context", "no_context"} <= set(kinds)
+    assert {"label", "hidden", "absent", "context", "no_context", "unit_context"} <= set(kinds)
+    unit_rows = [r for r in rows if r["kind"] == "unit_context"]
+    assert {r["context_type"] for r in unit_rows} >= {"concept", "rule_card"}
+    assert all(r["context_visible"] and r["senses"] for r in unit_rows)
     assert kinds["absent"] == 10
     ctx = pu.unit_context(store.path)
     terms = {t for c in ctx.by_type["concept"]
@@ -383,6 +399,48 @@ def test_define_probes_cover_labels_hidden_labels_absent_and_context(store):
     assert summary["total"]["correct"] == summary["total"]["n"] == len(rows)
     assert summary["total"]["hidden_senses"] == 0
     assert rows == pu.define_probes(store.path, n_absent=10, clock=lambda: NOW)
+
+
+def test_the_unit_context_oracle_reads_section_7_on_its_own(store):
+    """`place_of` and `holds`: the part-165 sense holds its own unit and every 165 card; the
+    § 165.T01 sense holds its own unit and the cards under it only; the IRM chapter sense
+    holds every unit of its document."""
+    ctx = pu.unit_context(store.path)
+    by_ref = {u.body["scope"]["ref"]: u for u in ctx.by_type["concept"]
+              if u.body["pref_label"].lower() == "designated representative"}
+    part, section = by_ref["33 CFR part 165"], by_ref["33 CFR 165.T01"]
+    assert pu.holds(part, pu.place_of(part)) and not pu.holds(section, pu.place_of(part))
+    assert pu.holds(section, pu.place_of(section)) and pu.holds(part, pu.place_of(section))
+    cards = [u for u in ctx.by_type["rule_card"] if u.doc_id == DOC_165]
+    assert cards and all(pu.holds(part, pu.place_of(c)) for c in cards)
+    assert {pu.holds(section, pu.place_of(c)) for c in cards} == {True, False}
+    assert all(pu.holds(section, pu.place_of(c)) == c.canonical_ref.startswith(
+        "33 CFR 165.T01(") for c in cards)
+    irm = next(u for u in ctx.by_type["concept"] if u.doc_id == DOC_IRM)
+    assert all(pu.holds(irm, pu.place_of(u)) for u in ctx.units.values()
+               if u.doc_id == DOC_IRM)
+    assert not any(pu.holds(irm, pu.place_of(u)) for u in cards)
+    # the drawbridge 117 senses (part scope) do not hold a 165 place
+    drawbridge = next(u for u in ctx.by_type["concept"] if u.body["pref_label"] == "Drawbridge")
+    assert not pu.holds(drawbridge, pu.place_of(section))
+
+
+def test_define_probes_catch_a_unit_context_read_as_its_ref(store, monkeypatch):
+    """The Task 8 reading before fix round 1 (a unit id stands for its canonical ref only) is
+    caught by the unit-id context probes."""
+    from adr_store.units.concepts import _UNIT_ID
+
+    real = tools.Tools._sense_context
+
+    def as_ref(self, context, us, allowed):
+        if context is not None and (m := _UNIT_ID.match(context.strip())):
+            return real(self, m.group(1), us, allowed)
+        return real(self, context, us, allowed)
+
+    monkeypatch.setattr(tools.Tools, "_sense_context", as_ref)
+    rows = pu.define_probes(store.path, n_absent=5, clock=lambda: NOW)
+    bad = [r for r in rows if not r["correct"]]
+    assert bad and {r["kind"] for r in bad} == {"unit_context"}
 
 
 def test_define_probes_catch_a_hidden_sense(store, monkeypatch):
@@ -477,6 +535,19 @@ def test_scan_unit_log_requires_units_on_allowed_lines(tmp_path):
     assert pu.scan_unit_log(log, calls=2)["complete"]
     assert not pu.scan_unit_log(log, calls=3)["complete"]
     assert not pu.scan_unit_log(tmp_path / "missing.jsonl", calls=1)["complete"]
+
+
+def test_only_the_pointer_tables_id_is_set_aside():
+    """M1: the comparison excuses the tables id of a hit's table-record pointer, nothing
+    else named `tables_id`."""
+    a = {"hits": [{"pointer": {"table": "t", "tables_id": "a" * 64}}], "tables_id": "a" * 64}
+    b = {"hits": [{"pointer": {"table": "t", "tables_id": "b" * 64}}], "tables_id": "a" * 64}
+    assert pu._canonical(a) == pu._canonical(b)
+    assert pu._canonical({**a, "tables_id": "c" * 64}) != pu._canonical(a)
+    c = {"hits": [{"pointer": {"table": "u", "tables_id": "b" * 64}}], "tables_id": "a" * 64}
+    assert pu._canonical(c) != pu._canonical(a)   # the rest of the pointer is compared
+    d = {"cards": [{"tables_id": "a" * 64}]}
+    assert pu._canonical(d) != pu._canonical({"cards": [{"tables_id": "b" * 64}]})
 
 
 def test_the_log_scan_finds_statement_text(tmp_path):
@@ -586,3 +657,59 @@ def test_the_cli_runs_the_unit_probe_kinds(tmp_path, capsys):
     assert (tmp_path / "views").exists()   # kept
     assert main(["probes", "units-equivalence", "gov", *common, "--queries", "3"]) == 0
     assert not (tmp_path / "views").exists()   # removed without --keep-views
+
+
+class _StubMcp:
+    """An `adr mcp` client stand-in: the unit tools of the caller in this process."""
+
+    closed = 0
+
+    def __init__(self, store, caller, **kw):
+        self.t = tools.Tools(store, acl=True, caller=caller)
+
+    def __getattr__(self, name):
+        return getattr(self.t, name)
+
+    def close(self):
+        _StubMcp.closed += 1
+
+
+def test_the_cli_runs_units_mcp_with_also(tmp_path, capsys, monkeypatch):
+    """M4: `units-mcp` with a second store (`--also`): every selected probe runs through a
+    server of its caller (stubbed here), the log lines equal the calls, the replays name the
+    units, and the summaries are byte-identical twice; `--also` is checked; M6: a reference
+    whose units differ from the store's fails the run."""
+    from adr_store import mcp_client
+
+    monkeypatch.setattr(mcp_client, "McpTools", _StubMcp)
+    gov = make_units_built(tmp_path / "gov")
+    bench = make_units_built(tmp_path / "bench", corpus="bench")
+    for st in (gov, bench):
+        acl.sync(st.path, *config_of(st))   # the real clock: the CLI's tools read it
+    directory, policy = config_of(gov)
+    gov_config = tmp_path / "gov-config.json"
+    gov_config.write_text(json.dumps(uf.UNITS_GOV_CONFIG), encoding="utf-8")
+    out = tmp_path / "runs"
+    common = ["probes", "units-mcp", "gov", "--store", str(gov.path), "--also",
+              f"bench={bench.path}", "--directory", str(directory), "--policy", str(policy),
+              "--views", str(tmp_path / "views" / "units-gov"), "--out", str(out),
+              "--gov-config", str(gov_config), "--n", "8", "--per-family", "2"]
+    assert main(common) == 0 and main(common) == 0
+    a, b = _summaries(out, "mcp")
+    for name in ("probes.json", "results.json", "summary.json", "summary.md"):
+        assert (a / name).read_bytes() == (b / name).read_bytes(), name
+    summary = json.loads((a / "summary.json").read_text())
+    assert summary["summary"]["total"]["n"] == 8 and summary["summary"]["total"]["leaks"] == 0
+    assert set(summary["summary"]["stores"]) == {"gov", "bench"}
+    rp = summary["summary"]["replays"]
+    assert rp["n"] and rp["identical"] == rp["handle_units"] == rp["n"]
+    assert summary["logs"]["total"]["complete"]
+    assert summary["logs"]["mcp"]["total"]["unit_lines"] == sum(
+        sum(c.values()) for c in summary["logs"]["mcp"]["calls"].values())
+    assert _StubMcp.closed > 0
+    assert not (tmp_path / "views").exists() or not any((tmp_path / "views").iterdir())
+    assert main([*common[:5], "--also", "research=x", *common[7:]]) == 2
+    capsys.readouterr()
+    # M6: a reference whose units would not equal the store's fails the run
+    monkeypatch.setattr(pu, "comparable", lambda u: {"x": id(u)})
+    assert main(common) == 1

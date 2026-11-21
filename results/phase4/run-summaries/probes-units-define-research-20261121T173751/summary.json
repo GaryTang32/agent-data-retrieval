@@ -1,34 +1,34 @@
 {
   "config": {
     "absent": 50,
-    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
-    "corpus": "gov",
+    "acl_entries_sha256": "7f8fb0e62d37989484cb47d7d89a60dbb205a2995fe2175ef0eae24d2d80f09f",
+    "corpus": "research",
     "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
     "kind": "units-define",
     "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
     "seed": 20261121,
-    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
-    "store": ".cache/store-p2/gov",
+    "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "store": ".cache/store-p2/research",
     "tools": [
       "define",
       "rule_lookup",
       "procedure_lookup",
       "unit_search"
     ],
-    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+    "units": "a2e70511c9c567e4b7e9c89da1af10d16d0211b0508add5a0ae6e43942eb3acd"
   },
   "logs": {
     "by_store": {
       "store": {
-        "allowed": 3382,
+        "allowed": 6945,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 3382,
+        "complete_lines": 6945,
         "decisions": {
-          "allowed": 3382
+          "allowed": 6945
         },
-        "lines": 3382,
+        "lines": 6945,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -38,23 +38,23 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 3382
+          "define": 6945
         },
-        "unit_calls": 3382,
-        "unit_lines": 3382,
+        "unit_calls": 6945,
+        "unit_lines": 6945,
         "units_missing": 0
       }
     },
     "total": {
-      "allowed": 3382,
+      "allowed": 6945,
       "allowed_unresolved": 0,
       "calls_mismatch": 0,
       "complete": true,
-      "complete_lines": 3382,
+      "complete_lines": 6945,
       "decisions": {
-        "allowed": 3382
+        "allowed": 6945
       },
-      "lines": 3382,
+      "lines": 6945,
       "logs_missing": 0,
       "missing": {
         "acl_decision": 0,
@@ -64,10 +64,10 @@
       },
       "text_lines": 0,
       "tools": {
-        "define": 3382
+        "define": 6945
       },
-      "unit_calls": 3382,
-      "unit_lines": 3382,
+      "unit_calls": 6945,
+      "unit_lines": 6945,
       "units_missing": 0
     }
   },
@@ -80,42 +80,52 @@
         "with_senses": 0
       },
       "alt": {
-        "correct": 226,
+        "correct": 625,
         "hidden_senses": 0,
-        "n": 226,
-        "with_senses": 149
+        "n": 625,
+        "with_senses": 325
       },
       "context": {
-        "correct": 422,
+        "correct": 702,
         "hidden_senses": 0,
-        "n": 422,
-        "with_senses": 422
+        "n": 702,
+        "with_senses": 702
       },
       "hidden": {
-        "correct": 2111,
+        "correct": 3920,
         "hidden_senses": 0,
-        "n": 2111,
-        "with_senses": 1193
+        "n": 3920,
+        "with_senses": 2111
       },
       "label": {
-        "correct": 472,
+        "correct": 769,
         "hidden_senses": 0,
-        "n": 472,
-        "with_senses": 240
+        "n": 769,
+        "with_senses": 424
       },
       "no_context": {
-        "correct": 101,
+        "correct": 146,
         "hidden_senses": 0,
-        "n": 101,
-        "with_senses": 101
+        "n": 146,
+        "with_senses": 146
+      },
+      "unit_context": {
+        "correct": 733,
+        "hidden_senses": 0,
+        "n": 733,
+        "with_senses": 733
       }
     },
     "total": {
       "callers": 20,
-      "correct": 3382,
+      "correct": 6945,
       "hidden_senses": 0,
-      "n": 3382,
-      "owner_hidden": 1519
+      "n": 6945,
+      "owner_hidden": 2891
+    },
+    "unit_context_types": {
+      "concept": 702,
+      "table_record": 31
     }
   }
 }

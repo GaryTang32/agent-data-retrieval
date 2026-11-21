@@ -1,21 +1,91 @@
 {
- "note": "Task 9 (unit probes): no model calls. Every probe set ran twice, each command in a fresh process (pass A, pass B), after fresh `adr acl sync` runs; pass B rebuilt every unit reference store afresh. probes.json, results.json, summary.json and summary.md compared byte for byte (per-item files not committed: runs/phase4-task9/). Only provenance.json (ACL snapshot ids and sequences, how each reference came about) differs. The committed summaries are pass A's.",
- "llm_cache_files": {"before": 12010, "after": 12010},
- "model_cli_invocations": 0,
- "read_only_stores_sha256": {"before": "923ca5f71744", "after": "923ca5f71744", "of": "sorted path, size and mtime of every file under .cache/store and .cache/index"},
- "heads_unchanged": {"gov units": "a405942225cb", "bench units": "d50f23029eed", "research units": "a2e70511c9c5", "gov tables": "fec2a2b12e31"},
- "determinism": {
-  "probe_sets": 13,
-  "identical": 13,
-  "sets": ["units-procedures gov", "units-procedures bench", "units-closure gov", "units-define gov", "units-define bench", "units-define research", "units-applicability gov", "units-failclosed gov", "units-leak gov", "units-leak bench", "units-equivalence gov", "units-equivalence bench", "units-mcp gov (with bench)"]
- },
  "criteria": {
-  "S1": {"leaks": "0 of 400 (gov 300, bench 100)", "equivalence": "1,000 of 1,000 (gov 500, bench 500; 20 views each)", "mcp_leg": "0 leaks of 60 (gov 46, bench 14)"},
-  "S2": {"failclosed": "120 of 120 on the four read tools (check_rules: Task 22)", "log_scan": "100% complete in every set"},
-  "U1": {"define_probes": "10,562 correct of 10,562 (gov 3,382, bench 968, research 6,212)", "hidden_senses": 0},
-  "U2": {"newest": "1,123 of 1,138 (98.68%)", "all_versions": "3,337 of 3,386 (98.55%)", "threshold": 0.99, "verdict": "fail", "unresolved_listed": "every one, with its reason, in results.json"},
-  "U3": {"procedures": "171 of 171 (gov 101, bench 70)", "names_unique_across_corpora": true},
-  "applicability": "255 of 255 (5 default, 250 as_of over 50 dates)",
-  "D1_replays": "66 of 66 identical, each handle naming the units"
+  "D1_replays": "66 of 66 identical, each handle naming the units",
+  "S1": {
+   "equivalence": "1,000 of 1,000 (gov 500, bench 500; 20 views each)",
+   "leaks": "0 of 400 (gov 300, bench 100)",
+   "mcp_leg": "0 leaks of 60 (gov 46, bench 14)"
+  },
+  "S2": {
+   "failclosed": "120 of 120 on the four read tools (check_rules: Task 22)",
+   "failclosed_no_entry_visible_before": {
+    "define": "5 of 5",
+    "procedure_lookup": "5 of 5",
+    "rule_lookup": "3 of 5",
+    "unit_search": "5 of 5"
+   },
+   "log_scan": "100% complete in every set"
+  },
+  "U1": {
+   "define_probes": "12,242 correct of 12,242 (gov 4,226, bench 1,071, research 6,945)",
+   "hidden_senses": 0,
+   "oracle": "unit-id contexts judged by an independent reading of spec section 7 (place_of, holds, BREADTH)",
+   "unit_id_context_probes": {
+    "by_context_type": {
+     "concept": 1205,
+     "faq": 3,
+     "procedure": 30,
+     "rule_card": 325,
+     "table_record": 117
+    },
+    "by_corpus": {
+     "bench": 103,
+     "gov": 844,
+     "research": 733
+    },
+    "correct": 1680,
+    "n": 1680,
+    "order_differs_from_no_context": 1077,
+    "would_fail_the_pre_fix_reading": 816
+   }
+  },
+  "U2": {
+   "all_versions": "3,337 of 3,386 (98.55%)",
+   "newest": "1,123 of 1,138 (98.68%)",
+   "threshold": 0.99,
+   "unresolved_listed": "every one, with its reason, in results.json",
+   "verdict": "fail"
+  },
+  "U3": {
+   "names_unique_across_corpora": true,
+   "procedures": "171 of 171 (gov 101, bench 70)"
+  },
+  "applicability": "255 of 255 (5 default, 250 as_of over 50 dates)"
+ },
+ "determinism": {
+  "identical": 13,
+  "probe_sets": 13,
+  "sets": [
+   "units-procedures gov",
+   "units-procedures bench",
+   "units-closure gov",
+   "units-define gov",
+   "units-define bench",
+   "units-define research",
+   "units-applicability gov",
+   "units-failclosed gov",
+   "units-leak gov",
+   "units-leak bench",
+   "units-equivalence gov",
+   "units-equivalence bench",
+   "units-mcp gov (with bench)"
+  ]
+ },
+ "heads_unchanged": {
+  "bench units": "d50f23029eed",
+  "gov tables": "fec2a2b12e31",
+  "gov units": "a405942225cb",
+  "research units": "a2e70511c9c5"
+ },
+ "llm_cache_files": {
+  "after": 12010,
+  "before": 12010
+ },
+ "model_cli_invocations": 0,
+ "note": "Task 9 with fix round 1 (unit-id contexts in define, review minors): no model calls. Every probe set ran twice, each command in a fresh process (passes A2 and B2), after fresh `adr acl sync` runs; each pass rebuilt every unit reference store afresh. probes.json, results.json, summary.json and summary.md compared byte for byte (per-item files not committed: runs/phase4-task9/). Only provenance.json (ACL snapshot ids and sequences, how each reference came about) differs. The committed summaries are pass A2's.",
+ "read_only_stores_sha256": {
+  "after": "923ca5f71744",
+  "before": "923ca5f71744",
+  "of": "sorted path, size and mtime of every file under .cache/store and .cache/index"
  }
 }

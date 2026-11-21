@@ -20,15 +20,15 @@
   "logs": {
     "by_store": {
       "store": {
-        "allowed": 968,
+        "allowed": 1071,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 968,
+        "complete_lines": 1071,
         "decisions": {
-          "allowed": 968
+          "allowed": 1071
         },
-        "lines": 968,
+        "lines": 1071,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -38,23 +38,23 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 968
+          "define": 1071
         },
-        "unit_calls": 968,
-        "unit_lines": 968,
+        "unit_calls": 1071,
+        "unit_lines": 1071,
         "units_missing": 0
       }
     },
     "total": {
-      "allowed": 968,
+      "allowed": 1071,
       "allowed_unresolved": 0,
       "calls_mismatch": 0,
       "complete": true,
-      "complete_lines": 968,
+      "complete_lines": 1071,
       "decisions": {
-        "allowed": 968
+        "allowed": 1071
       },
-      "lines": 968,
+      "lines": 1071,
       "logs_missing": 0,
       "missing": {
         "acl_decision": 0,
@@ -64,10 +64,10 @@
       },
       "text_lines": 0,
       "tools": {
-        "define": 968
+        "define": 1071
       },
-      "unit_calls": 968,
-      "unit_lines": 968,
+      "unit_calls": 1071,
+      "unit_lines": 1071,
       "units_missing": 0
     }
   },
@@ -108,14 +108,26 @@
         "hidden_senses": 0,
         "n": 22,
         "with_senses": 22
+      },
+      "unit_context": {
+        "correct": 103,
+        "hidden_senses": 0,
+        "n": 103,
+        "with_senses": 103
       }
     },
     "total": {
       "callers": 20,
-      "correct": 968,
+      "correct": 1071,
       "hidden_senses": 0,
-      "n": 968,
+      "n": 1071,
       "owner_hidden": 433
+    },
+    "unit_context_types": {
+      "concept": 81,
+      "faq": 3,
+      "procedure": 15,
+      "table_record": 4
     }
   }
 }

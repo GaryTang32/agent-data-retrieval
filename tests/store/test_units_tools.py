@@ -408,6 +408,50 @@ def test_define_ranks_by_context_then_narrowest(store):
     assert text[s.start:s.end] == s.definition and r.nearest == []
 
 
+def test_define_reads_a_unit_id_context_of_every_type(store, tmp_path):
+    """§7: a unit id as context stands for where that unit sits: a rule card its provision, a
+    concept its scope, any other unit its document (and its eCFR section, IRM chapter or
+    Phase 3 table section where it has one); a sense whose scope holds it ranks first."""
+    t = as_(store)
+    part, section = (f"concept/concept:33 CFR part 165:designated representative/"
+                     f"0240f9d8899e/{D165}",
+                     f"concept/concept:33 CFR 165.T01:designated representative/"
+                     f"438ce2d7ef91/{D165}")
+    refs = [s.scope["ref"] for s in t.define("designated representative", context=part).senses]
+    assert refs == ["33 CFR part 165", "33 CFR 165.T01"]   # the part sense holds its own unit
+    refs = [s.scope["ref"] for s in t.define("designated representative",
+                                             context=section).senses]
+    assert refs == ["33 CFR 165.T01", "33 CFR part 165"]
+    # an IRM procedure and table record sit in the chapter the IRM senses are scoped to
+    for unit in (PROC_1, f"table_record/IRM 21.4.1.3 table 1/d26298dd2b40/{IRM16}"):
+        assert t.define("RIU", context=unit).senses[0].scope["ref"] == "IRM 21.4.1"
+    # bench: two documents define "regulated navigation area"; a unit of either document as
+    # context puts that document's sense first
+    from tests.store.tables_fixtures import _doc
+    from tests.store.units_fixtures import BENCH_CONFIG, FIXTURES, UNITS_DOCS
+
+    raw = (FIXTURES / "bench_runbook.md").read_bytes() + (
+        b"\nDo not drain a gateway inside a Regulated Navigation Area (RNA) window.\n")
+    uri = f"{BENCH_CONFIG['documents']['url']}#row=1&doc_id=dsid_fixture_runbook"
+    runbook = _doc(raw, "md", BENCH_CONFIG["revision"], uri)
+    docs = [runbook if d.uri == uri else (d, r) for d, r in UNITS_DOCS]
+    bench = make_units_built(tmp_path / "bench", docs, corpus="bench")
+    b = as_(bench)
+    senses = b.define("RNA").senses
+    assert sorted(s.doc_id for s in senses) == sorted([runbook[0].doc_id, DOC_165])
+    us = {u.unit_id: u for u in units_overlay.load_units(
+        bench.path, units_overlay.load_units_manifest(
+            bench.path, units_overlay.read_units_head(bench.path)))}
+    proc = next(i for i, u in us.items() if u.type == "procedure"
+                and u.doc_id == runbook[0].doc_id)
+    assert b.define("RNA", context=proc).senses[0].doc_id == runbook[0].doc_id
+    other = next(i for i, u in us.items() if u.type == "concept" and u.doc_id == DOC_165)
+    assert b.define("RNA", context=other).senses[0].doc_id == DOC_165
+    faq = next(i for i, u in us.items() if u.type == "faq")   # a third document: no sense
+    assert [s.unit_id for s in b.define("RNA", context=faq).senses] == sorted(
+        s.unit_id for s in senses)
+
+
 def test_define_matches_labels_then_hidden_labels(store):
     t = as_(store)
     assert [s.term for s in t.define("RNA").senses] == ["Regulated navigation area"]

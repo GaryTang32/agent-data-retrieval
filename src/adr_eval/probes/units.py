@@ -51,8 +51,8 @@ caller cannot see, the caller's own arguments left out; unit ids carry 16), `hid
 probe's secret, the hidden unit's reader text, where the reference shows none), `count_differs`
 (senses, nearest labels, cards, closure entries, catalog entries, hits, `excluded_by_filter`,
 `truncated`), `rows_differ` (the results without store-specific fields: snapshot, units id,
-handle, and the tables id inside a table record's pointer) and `error_differs`. A directory
-user denied any call makes the probe invalid.
+handle, and the tables id of a `unit_search` hit's table-record pointer) and
+`error_differs`. A directory user denied any call makes the probe invalid.
 
 **Equivalence** (`equivalence`, S1): for each view, `n_calls` (25) calls as the view's caller on
 the store and on its reference store; call `i` uses the tool of slot `i` (the four in turn,
@@ -89,7 +89,13 @@ return exactly the units the filters admit.
 every concept, each as a caller drawn by seeded hash (the auditor included) with the default
 filters or `include_superseded`; `n_absent` (50) terms no concept holds; every term defined in
 more than one scope, with each of its scopes as context and once without, each as a caller
-who sees a sense of that scope (drawn by seeded hash). The expected senses
+who sees a sense of that scope (drawn by seeded hash); and for each such scope, a unit id as
+context (`unit_context`): the sense's own concept and another unit of its document (a rule
+card, procedure, FAQ or table record, by seeded hash), as a caller who sees that unit. A
+unit-id context is judged by an independent reading of §7 (`place_of`, `holds`, `BREADTH`):
+where the unit sits is read from its own fields (a concept's scope, a card's provision, a
+table's section, its subpart, its document) and containment from the sense's scope kind and
+ref, sharing no code with the tool's context resolution or ranking. The expected senses
 are worked out from the units and the ACL snapshot (labels first, hidden labels only when no
 label matches; ranked by scope holding the context, then narrowest scope, then unit id; the
 nearest labels by edit distance when none): `correct` when the senses (and nearest labels) are
@@ -170,7 +176,7 @@ from adr_store.tools import (
 from adr_store.units import closure as closure_mod
 from adr_store.units import tools_units as tu
 from adr_store.units.build import build_units, unit_reports
-from adr_store.units.concepts import _KIND_RANK, _UNIT_ID, scope_contains
+from adr_store.units.concepts import _KIND_RANK, scope_contains
 from adr_store.units.ecfr import ecfr_docs, normalise_rule_id, rule_cards
 from adr_store.units.envelope import Unit
 from adr_store.units.gate import units_gate
@@ -209,7 +215,6 @@ QUERY_WORDS = 8
 FRESH_EVERY = 200        # calls between ACL freshness checks in the long probe sets
 U2_THRESHOLD = 0.99
 _HEX = re.compile(r"[0-9a-f]{12,}")
-_TABLES_ID = re.compile(r'("tables_id": )"[0-9a-f]{64}"')
 _WORD = re.compile(r"[A-Za-z0-9]{3,}")
 _NODE_LABEL = re.compile(r'^\s+s\d+(?:\["([^"]*)"\]|\{"([^"]*)"\})')
 
@@ -537,11 +542,18 @@ def _stripped(res) -> dict:
     return {k: v for k, v in res.to_dict().items() if k not in STORE_SPECIFIC}
 
 
-def _canonical(data: object) -> str:
-    """`data` as canonical JSON with the tables id inside table-record pointers replaced: it
-    names the store's Phase 3 tables build (a hash over every row, as the snapshot id is over
-    every document), which differs between a store and its reference like the snapshot."""
-    return _TABLES_ID.sub(r'\1"<tables id>"', _json(data))
+def _canonical(data: dict) -> str:
+    """`data` as canonical JSON with the tables id of each hit's table-record pointer (that
+    path only) replaced: it names the store's Phase 3 tables build (a hash over every row, as
+    the snapshot id is over every document), which differs between a store and its reference
+    like the snapshot."""
+    hits = data.get("hits")
+    if isinstance(hits, list):
+        data = {**data, "hits": [
+            {**h, "pointer": {**h["pointer"], "tables_id": "<tables id>"}}
+            if isinstance(h, dict) and isinstance(h.get("pointer"), dict)
+            and "tables_id" in h["pointer"] else h for h in hits]}
+    return _json(data)
 
 
 def comparable(u: Unit) -> dict:
@@ -1201,9 +1213,15 @@ def failclosed_identity(rows: list[dict]) -> dict:
 
 
 def summarize_failclosed(rows: list[dict]) -> dict:
+    """Counts per condition and per tool; per tool, how many "no entry" callers saw its
+    target before the change (`visible_before`; the rest prove only that nothing appears)."""
+    entry = [r for r in rows if r["family"] == "no_entry"]
     return tp.summarize_failclosed(rows) | {
         "by_tool": {t: {"n": sum(r["tool"] == t for r in rows),
-                        "passed": sum(r["pass"] for r in rows if r["tool"] == t)}
+                        "passed": sum(r["pass"] for r in rows if r["tool"] == t),
+                        "no_entry": sum(r["tool"] == t for r in entry),
+                        "no_entry_visible_before": sum(bool(r["visible_before"])
+                                                       for r in entry if r["tool"] == t)}
                     for t in sorted({r["tool"] for r in rows})}}
 
 
@@ -1329,24 +1347,77 @@ def summarize_applicability(rows: list[dict]) -> dict:
 
 def _oracle_context(ctx: UnitContext, context: str | None, allowed: frozenset[str]
                     ) -> tuple[str | None, str | None]:
-    """(the canonical ref of `context`, the subpart holding it), as §7 reads a context: a unit
-    id gives its ref (and its subpart when visible); else the subpart of a visible card in
-    force of its section."""
+    """(the canonical ref of a ref `context`, the subpart holding it): the subpart of a
+    visible card in force of its section. Unit-id contexts are judged by `place_of` and
+    `holds` instead."""
     if context is None:
         return None, None
-    c = context.strip()
-    unit = None
-    if m := _UNIT_ID.match(c):
-        ref = m.group(1)
-        u = ctx.units.get(c)
-        unit = u if u is not None and u.doc_id in allowed else None
-    else:
-        ref = normalise_rule_id(c) or c
-    if unit is None:
-        section = tu.section_of(ref)
-        unit = next((u for u in ctx.by_type.get("rule_card", ())
-                     if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section), None)
+    ref = normalise_rule_id(context.strip()) or context.strip()
+    section = tu.section_of(ref)
+    unit = next((u for u in ctx.by_type.get("rule_card", ())
+                 if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section), None)
     return ref, None if unit is None else tu.subpart(unit)
+
+
+# An independent reading of §7 for unit-id contexts: where a unit sits is read from its own
+# fields, and whether a sense's scope holds it from the sense's scope kind and ref. It shares
+# no code with the tool's context resolution or ranking (`_sense_context`, `context_ref`,
+# `scope_contains`, `_KIND_RANK`).
+BREADTH = ("paragraph", "section", "subpart", "part", "document")   # §7: narrowest first
+_O_PART = re.compile(r"^(\d+) CFR part (\w+)(?:, subpart (\w+))?$")
+_O_PROV = re.compile(r"^(\d+) CFR (\w+)\.([\w-]+)((?:\([^()]*\))*)")
+_O_DRAW = re.compile(r'^tables:drawbridge_\w+:\{"section":"(\w+)\.([\w-]+)"')
+_O_MARK = re.compile(r"\(([^()]*)\)")
+_O_TITLE = {"117": "33", "165": "33", "73": "47"}   # the eCFR parts of the gov corpus
+
+
+@dataclass(frozen=True)
+class Place:
+    """Where a unit sits: its document and, where it has one, its eCFR title, part, section
+    ("117.313"), paragraph marks and subpart."""
+
+    doc: str
+    title: str | None = None
+    part: str | None = None
+    section: str | None = None
+    marks: tuple[str, ...] = ()
+    subpart: str | None = None
+
+
+def place_of(u: Unit) -> Place:
+    """A unit's place from its own fields: a concept's scope, a rule card's provision, a
+    table's section ("33 CFR 117.313 table 1"), a drawbridge record's section filter; the
+    subpart from its heading path; for everything else its document alone."""
+    sub = next((h[len("Subpart "):] for h in u.heading_path if h.startswith("Subpart ")), None)
+    ref = u.body["scope"]["ref"] if u.type == "concept" else u.canonical_ref
+    if m := _O_PART.match(ref):
+        return Place(u.doc_id, m.group(1), m.group(2), subpart=m.group(3))
+    ref = re.sub(r" table \d+$", "", ref)
+    if m := _O_DRAW.match(ref):
+        return Place(u.doc_id, _O_TITLE.get(m.group(1)), m.group(1),
+                     f"{m.group(1)}.{m.group(2)}", subpart=sub)
+    if m := _O_PROV.match(ref):
+        return Place(u.doc_id, m.group(1), m.group(2), f"{m.group(2)}.{m.group(3)}",
+                     tuple(_O_MARK.findall(m.group(4))), sub)
+    return Place(u.doc_id)
+
+
+def holds(sense: Unit, place: Place) -> bool:
+    """Whether concept `sense`'s scope holds `place`: a document scope every unit of its
+    document; a part every place in that part; a subpart the places in it; a section its
+    paragraphs; a paragraph those under it."""
+    kind, ref = sense.body["scope"]["kind"], sense.body["scope"]["ref"]
+    if kind == "document":
+        return place.doc == sense.doc_id
+    if m := _O_PART.match(ref):
+        same = (place.title, place.part) == (m.group(1), m.group(2))
+        return same and (kind == "part" or place.subpart == m.group(3))
+    if m := _O_PROV.match(ref):
+        marks = tuple(_O_MARK.findall(m.group(4)))
+        return ((place.title, place.part, place.section)
+                == (m.group(1), m.group(2), f"{m.group(2)}.{m.group(3)}")
+                and place.marks[:len(marks)] == marks)
+    return False
 
 
 def _expected_senses(ctx: UnitContext, term: str, context: str | None,
@@ -1356,6 +1427,11 @@ def _expected_senses(ctx: UnitContext, term: str, context: str | None,
     found = [u for u in concepts if key and key in {base_key(x) for x in _labels(u)}]
     if not found:
         found = [u for u in concepts if key and key in u.body["hidden_labels"]]
+    unit = ctx.units.get(context.strip()) if context is not None else None
+    if unit is not None and unit.doc_id in allowed:   # a unit-id context (independent oracle)
+        place = place_of(unit)
+        return sorted(found, key=lambda u: (not holds(u, place),
+                                            BREADTH.index(u.body["scope"]["kind"]), u.unit_id))
     ref, sub = _oracle_context(ctx, context, allowed)
 
     def rank(u: Unit) -> tuple:
@@ -1424,6 +1500,24 @@ def define_terms(ctx: UnitContext, n_absent: int = 50, seed: int = SEED4) -> lis
             probes.append({"kind": "context" if ref else "no_context", "term": term, "of": None,
                            "caller": eligible[h % len(eligible)], "context": ref,
                            "filters": dict(WIDE)})
+    by_doc: dict[str, list[Unit]] = {}
+    for u in ctx.units.values():
+        by_doc.setdefault(u.doc_id, []).append(u)
+    for key in sorted(k for k, s in scopes.items() if len(s) > 1):
+        term = first[key]
+        for ref in sorted(scopes[key]):
+            sense = next(c for c in concepts if base_key(c.body["pref_label"]) == key
+                         and c.body["scope"]["ref"] == ref)
+            others = [u for u in by_doc[sense.doc_id] if u.type != "concept"]
+            contexts = [sense]
+            if others:
+                contexts.append(others[_h(seed, "unit-context", key, ref) % len(others)])
+            for unit in contexts:
+                eligible = [u for u in callers if unit.doc_id in ctx.visible(u)] or callers
+                h = _h(seed, "unit-context", key, ref, unit.unit_id)
+                probes.append({"kind": "unit_context", "term": term, "of": None,
+                               "caller": eligible[h % len(eligible)], "context": unit.unit_id,
+                               "filters": dict(WIDE), "context_type": unit.type})
     return probes
 
 
@@ -1450,7 +1544,9 @@ def define_probes(store_path: Path, n_absent: int = 50, seed: int = SEED4, *,
         want = _expected_ids(ctx, p["term"], p["context"], allowed)
         senses = out[1].senses if out[0] == "ok" else []
         got = [s.unit_id for s in senses]
-        correct = out[0] == "ok" and got == want
+        ctx_unit = ctx.units[p["context"]] if p.get("context_type") else None
+        correct = out[0] == "ok" and got == want and (ctx_unit is None
+                                                      or ctx_unit.doc_id in allowed)
         if correct and not want:
             correct = out[1].nearest == _expected_nearest(ctx, p["term"], allowed)
         own = p["of"]
@@ -1458,6 +1554,9 @@ def define_probes(store_path: Path, n_absent: int = 50, seed: int = SEED4, *,
                      "caller": p["caller"], "context": p["context"] is not None,
                      "include_superseded": bool(p["filters"]),
                      "own_visible": None if own is None else ctx.units[own].doc_id in allowed,
+                     "context_type": p.get("context_type"),
+                     "context_visible": None if ctx_unit is None
+                     else ctx_unit.doc_id in allowed,
                      "senses": len(got), "expected": len(want), "outcome": out[0],
                      "hidden_senses": sum(s.doc_id not in seen for s in senses),
                      "correct": correct})
@@ -1475,7 +1574,9 @@ def summarize_define(rows: list[dict]) -> dict:
                             "with_senses": sum(bool(r["senses"]) for r in rows
                                                if r["kind"] == k),
                             "hidden_senses": sum(r["hidden_senses"] for r in rows
-                                                 if r["kind"] == k)} for k in kinds}}
+                                                 if r["kind"] == k)} for k in kinds},
+            "unit_context_types": dict(sorted(Counter(
+                r["context_type"] for r in rows if r["kind"] == "unit_context").items()))}
 
 
 # -- censuses (U2, U3) -------------------------------------------------------------------------
