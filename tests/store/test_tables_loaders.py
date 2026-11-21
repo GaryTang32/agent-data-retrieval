@@ -458,6 +458,10 @@ def test_an_extraction_build_without_cached_replies_stops_at_the_call_cap(tmp_pa
         raise AssertionError("the model CLI must never run in a test")
 
     monkeypatch.setattr(llm, "_run_subprocess", no_cli)     # whatever the budget does
+    # the client must build where the model CLI is not installed (CI): its binary check
+    # is stubbed; the subprocess itself is refused above
+    from adr_eval import runner as _runner
+    monkeypatch.setattr(_runner, "profile_status", lambda profile: None)
     store = make_tables_store(tmp_path / "s", [*FR_DOCS, ecfr_doc(ECFR_NEW)])
     with pytest.raises(BudgetExceeded):     # default --max-calls 0: cached replies only
         build_tables(store.path, "gov", with_extraction=True)

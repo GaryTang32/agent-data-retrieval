@@ -230,6 +230,10 @@ def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
         raise AssertionError("the model CLI must never run in a test")
 
     monkeypatch.setattr(llm, "_run_subprocess", no_cli)     # whatever the budget does
+    # the client must build where the model CLI is not installed (CI): its binary check
+    # is stubbed; the subprocess itself is refused above
+    from adr_eval import runner as _runner
+    monkeypatch.setattr(_runner, "profile_status", lambda profile: None)
     seen = []
     real = tables_build.build_tables
 
