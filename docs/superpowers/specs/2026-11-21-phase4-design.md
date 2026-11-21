@@ -3,7 +3,8 @@
 Date: 2026-11-21
 Status: written by the assistant from the user's decisions (section 1). Every other choice is
 listed in section 19 as a ruling made without the user, with its reason and what it costs if it
-is wrong. Nothing here is built yet. The model-call budget in section 16 needs the user's approval
+is wrong. Rulings P31–P36 were made after the builder check of this spec (2026-11-21) and are
+reflected in every section they touch. Nothing here is built yet. The model-call budget in section 16 needs the user's approval
 before any call is made; everything else in part 4A and the code of part 4B makes no model calls
 and can be built first.
 Sources: `reports/Agent data retrieval research summary.md` (the Phase 4 row of the roadmap, the
@@ -142,8 +143,8 @@ and a write-up in `results/phase4/`.
    (Phase 3 P22).
 6. **Grounding is checked by code.** A model-written value is stored only if its quote occurs
    verbatim in the stored text at the recorded offsets.
-7. **Access and applicability on every unit.** A unit is visible only to callers who can see
-   every document it was built from (P5); every new tool applies the Phase 2 filters (`as_of`,
+7. **Access and applicability on every unit.** Each unit belongs to exactly one source document
+   and is visible only to callers who can see that document (P5, P31); every new tool applies the Phase 2 filters (`as_of`,
    status, `include_superseded`) and returns a snapshot handle. Hidden equals nonexistent for the
    new read tools.
 8. **MCP.** Every new read tool is served by `adr mcp` like the existing eight.
@@ -310,11 +311,11 @@ only partly or not at all, the table says so.
 
 | Group | Fields | Phase 4 |
 |---|---|---|
-| Identity | `unit_id`, `type`, `title`, `heading_path` (breadcrumb), `canonical_ref`, `version`, `contract` (type and contract version) | All filled (§5.4) |
+| Identity | `unit_id`, `type`, `title`, `heading_path` (breadcrumb), `canonical_ref`, `version` (the text hash), `doc_id`, `contract` (type and contract version) | All filled (§5.4) |
 | Provenance | `source_refs[]` (`doc_id`, `start`, `end`, `spec_id`), `lineage` (compiler version, prompt version, served model, cache key SHA-256), `tables_id` where a unit reads Phase 3 rows | All filled; `lineage` model fields null for code-built units |
 | Applicability | `status`, `effective_from`, `effective_to`, `supersedes`, `superseded_by`, `chain`, `jurisdiction`, `audience` | Status and validity from the source document's Phase 2 envelope; `jurisdiction` "US federal" for gov and the fictional company for bench; `audience` null |
 | Governance | `owner`, `verifier`, `authority_tier`, `review_due`, `last_verified_at` | `owner` from source metadata (agency, IRS, bench source system); `authority_tier` 1 for regulations and the IRM, 2 for bench Confluence and Drive documents, 3 for the repository's reports and notes, 4 for PDFs, chat, mail and tickets; `verifier` set only on bindings (`model-review:<profile>`); `review_due` and `last_verified_at` null (no reviewer) |
-| Access | `access_docs[]` (every source document id); principals are resolved per call from the current ACL snapshot, never stored in the unit | P5 |
+| Access | `doc_id`, the one source document; principals are resolved per call from the current ACL snapshot, never stored in the unit | P5, P31 |
 | Change detection | `hashes{text, meta}` | The ACL hash lives in the ACL snapshot (Phase 2 §5.3) |
 | Retrieval aids (index only) | `labels[]`, `keywords[]`, `problem_abstractions[]`, `trigger_examples[]` | Indexed, never returned in reader text (§11.1) |
 | Usage | involved, resolved and cited counts | Derived from the retrieval log, not stored: units are write-once (§5.2) |
@@ -352,16 +353,28 @@ bindings only, `proposed`, `tested`, `analysed`, `signed_off`, `rejected` (§12)
 Bindings are separate records linked from rule cards (§12.1). Topic and entity pages, the sixth
 type of the roadmap, are Phase 5.
 
-### 5.4 Identifiers and versions
+### 5.4 Identifiers and versions (P31)
 
+- **One unit per (document, source element).** Each unit is built from exactly one source
+  document and inherits that document's ACL and Phase 2 applicability, as Phase 3 rows do. The
+  same paragraph in three eCFR versions gives three units, so hidden looks the same as
+  nonexistent: a caller who cannot see one version sees no trace of its units.
 - `canonical_ref` names the provision or section independently of version, like a Work in Akoma
   Ntoso: "33 CFR 117.1081(a)(2)", "IRM 21.4.1.3.2", "bench:<doc id>", "concept:<scope ref>:<term
   key>".
-- `version` is the first 12 hex digits of the SHA-256 of the unit's normalised source text (an
-  Expression). `unit_id` is `<type>/<canonical_ref>/<version>`. The **rule ID** is the rule card's
-  `unit_id`; the **rule version** is its `version`. Bindings and gate log lines carry both (P7).
+- `text_sha12` is the first 12 hex digits of the SHA-256 of the unit's normalised source text (an
+  Expression); it is stored as `version`.
+- `unit_id = <type>/<canonical_ref>/<text_sha12>/<doc_id16>`, where `doc_id16` is the first 16
+  hex digits of the source document id. Identical text in two versions gives two units that share
+  `text_sha12` but differ in `unit_id`.
+- **The rule identity used downstream is split in two:** `rule_id = canonical_ref` (for example
+  "33 CFR 117.1081(a)(2)") and `rule_version = text_sha12`. Bindings, gate log lines, `gold_rules`
+  and the citation check of the simulation (V3) carry these; the gate log also records the
+  `doc_id` of the unit whose binding was evaluated.
 - A unit whose source document is superseded in its Phase 2 chain is `superseded`, and
   `superseded_by` names the unit with the same `canonical_ref` in the successor document, if any.
+  It never names itself: the successor document gives a different `unit_id`, even when the text
+  is identical.
 
 ## 6. Compilation
 
@@ -369,7 +382,7 @@ type of the roadmap, are Phase 5.
 
 | Unit | Source and rule |
 |---|---|
-| Rule cards | Every modal paragraph of every `DIV8` section of the three eCFR parts in every version. The provision id comes from the section number and the paragraph's marker path ((a) → (1) → (i), tracked as the paragraphs are read in order); a paragraph without a marker inherits the last marker path plus an ordinal. Spans are located in the canonical text as `ecfr_sections` locates sections (find from the end of the previous paragraph). Modality from the lexicon (§8.1). Cross-references by regular expressions (§8.3). Defined terms by matching concept labels in scope |
+| Rule cards | Every modal paragraph of every `DIV8` section of the three eCFR parts in every version, one unit per (document, paragraph) (P31). The provision id comes from the section number and the paragraph's marker path ((a) → (1) → (i), tracked as the paragraphs are read in order); a paragraph without a marker inherits the last marker path plus an ordinal. Spans are located in the canonical text as `ecfr_sections` locates sections (find from the end of the previous paragraph). Modality from the lexicon (§8.1). Cross-references by regular expressions (§8.3). Defined terms by matching concept labels in scope |
 | Provisions without a modal word | Not rule cards. They are kept as closure targets: a rule card's closure reaches the non-modal paragraphs of its own section that name the same bridge, zone or station (§8.3) |
 | Concepts | §7 |
 | Procedure skeletons | IRM: each of the 101 procedure-like sections (§4.2) segmented from the raw HTML; steps from numbered paragraphs and lettered items, condition steps from If/Then table rows (If → guard, Then → action), tools from command and transaction codes. Bench: documents titled runbook, playbook, SOP, procedure, process, guide or checklist with at least three numbered-step lines or headed steps, at most 110 by a seeded sample; steps from numbered lists and headings (§9.1) |
@@ -391,8 +404,10 @@ asks, per rule card, for `subject`, `conditions`, `thresholds` and `exceptions`,
 the binding parameters: the opening basis (on signal, advance notice, closed to navigation), the
 notice threshold in hours, each window with its effect (need not open, on signal, notice
 required), start and end times, weekdays, the federal-holiday exception, and the date range, each
-with the quote that states it. Rule cards outside the scope keep these fields null with reason
-`not_extracted`.
+with the quote that states it. Rule cards outside the scope, including the cards of older
+versions of the same paragraphs, keep these fields null with reason `not_extracted`; bindings are
+compiled only from the newest version's cards, and the gate uses them only when that version is
+in force on `as_of` (§12.6).
 
 **Procedure compilation** (`procedure-compile@1`, Sonnet, one call per procedure). The prompt
 gives the section or document text and the code-built step skeleton, and asks only for
@@ -459,7 +474,7 @@ every promotion with N = 0 (P6); the first promotion per store is against an emp
 
 **SKOS.** `pref_label` is the term as written; `alt_labels` hold acronyms and expansions;
 `hidden_labels` are generated by code (case-folded, hyphen and space variants, plural "s"). One
-concept unit per (term key, scope). `broader` and `narrower` are filled only from scope nesting of
+concept unit per (term key, scope, document) (P31). `broader` and `narrower` are filled only from scope nesting of
 the same term (a part-level sense is broader than a section-level redefinition of that term);
 `related` stays empty.
 
@@ -501,7 +516,7 @@ Each rule card's `closure` lists, with a relation, the units an agent needs to a
 
 | Relation | How it is found |
 |---|---|
-| `cites` | Regular expressions over the paragraph: "§ N.N", "§§ N.N and N.N", "paragraph (x)(y) of this section", "N CFR part N" and "N CFR N.N". In-part targets resolve to the rule card or provision of that `canonical_ref` in the same version; other parts are `external` (kept as text); a target missing in that version is `dangling` (the survey found 14 such section targets) |
+| `cites` | Regular expressions over the paragraph: "§ N.N", "§§ N.N and N.N", "paragraph (x)(y) of this section", "N CFR part N" and "N CFR N.N". In-part targets resolve to the rule card or provision of that `canonical_ref` in the same document (version); other parts are `external` (kept as text); a target missing in that version is `dangling` (the survey found 14 such section targets) |
 | `defines` | The concepts whose labels occur in the paragraph and whose scope contains it |
 | `exception_of` | One committed structural rule (`config/units/closure.json`): every rule card of 33 CFR 117 subpart B is an exception of § 117.5, and § 117.31(b) overrides the operating schedule of every subpart B card (P8) |
 | `context` | The non-modal paragraphs of the same section that share the card's draw or zone key (the bridge name and mile, the zone heading) |
@@ -605,7 +620,7 @@ Five new tools in `adr_store.tools.Tools`, served over MCP, next to the eight ex
 | Tool | Returns | Notes |
 |---|---|---|
 | `define(term, context?, as_of?)` | Every visible sense of the term with scope, definition, span, handle | §7 |
-| `rule_lookup(query? \| rule_id?, part?, as_of?, include_superseded?, closure=true, limit=10)` | Rule cards ranked for the query, or the card of a rule id, each with modality, provision id, text, span, conditions where extracted, bindings (id, version, status) and closure | Hard filters before ranking; version in force by default |
+| `rule_lookup(query? \| rule_id?, part?, as_of?, include_superseded?, closure=true, limit=10)` | Rule cards ranked for the query, or the visible cards of a `rule_id` (canonical ref) in force, each with modality, provision id, text, span, conditions where extracted, bindings (id, version, status) and closure | Hard filters before ranking; version in force by default |
 | `procedure_lookup(task? \| id?, view=catalog, as_of?, limit=5)` | Catalog entries, or one procedure as SKILL.md, Mermaid or IR | §9.2 |
 | `unit_search(query, types[], as_of?, limit=10)` | Ranked units of any type, including FAQ, KCS and table records | The general entry point; no question-type routing |
 | `check_rules(intent{tool, args}, facts{})` | What the gate would decide for these facts: the outcome, the deciding rule ids and versions, rule text, missing facts | Advisory and read-only; the same evaluator as the gate (§12.7) |
@@ -614,20 +629,21 @@ Thirteen tools in all (P29). The roadmap's separate `get_procedure` is the `view
 
 ### 11.3 Access, applicability, handles, logs
 
-- **Access (P5):** a unit is visible to a caller only if the caller can see every document in its
-  `access_docs`. Concepts and rule cards come from one document each; a closure entry pointing to a
-  hidden unit is dropped from the result as if it did not exist; a table record over Phase 3 rows
-  follows Phase 3's row rule.
-- **Applicability:** units inherit their source document's Phase 2 envelope; the default filter
-  drops superseded units, `as_of` selects units of documents in force on that date,
+- **Access (P5, P31):** a unit is visible to a caller only if the caller can see its one source
+  document (`doc_id`), exactly as a Phase 3 row is. A closure entry pointing to a hidden unit is
+  dropped from the result as if it did not exist; a table record over Phase 3 rows follows Phase
+  3's row rule. Because units never span documents, every result and count over units equals the
+  same call on a store built from the caller's documents alone (criterion S1).
+- **Applicability:** each unit inherits its one source document's Phase 2 envelope; the default
+  filter drops superseded units, `as_of` selects units of documents in force on that date,
   `include_superseded` exposes all.
 - **Handles:** the Phase 2 handle gains an optional `units` part (the units id, default null), so
   older handles still validate; `check_rules` results also carry the bindings id. A handle naming a
   units id that no longer exists fails explicitly ("handle no longer available: units").
 - **Logs:** every call goes through `acl.resolve` and writes the Phase 2 log line plus the units
   id; `check_rules` logs the SHA-256 of its facts, not the facts.
-- **Errors** are fixed messages per class; an unknown rule id or procedure id returns the same
-  message whether it is hidden or absent.
+- **Errors** are fixed messages per class; an unknown `rule_id`, unit id or procedure id returns
+  the same message whether it is hidden or absent.
 
 ## 12. Bindings and the gate
 
@@ -636,7 +652,8 @@ Thirteen tools in all (P29). The roadmap's separate `get_procedure` is the `view
 A binding is canonical JSON, language `adr-dsl@1`:
 
 ```json
-{"binding_id": "...", "binding_version": "...", "rule_id": "...", "rule_version": "...",
+{"binding_id": "...", "binding_version": "...",
+ "rule_id": "33 CFR 117.1081(b)", "rule_version": "<text_sha12>", "doc_id": "...",
  "target": {"tool": "schedule_opening", "selector": {"section": "117.1081", "draw": 2}},
  "effect": "forbid",
  "when": {"in_window": {"fact": "open_at"},
@@ -649,9 +666,12 @@ A binding is canonical JSON, language `adr-dsl@1`:
 - **Expressions:** `and`, `or`, `not`, comparisons on integers, `eq` and `in` on enums,
   `in_window` (minute-of-day windows that may cross midnight, a weekday set, a federal-holiday
   exception, an optional month-day range that may wrap the year end), `known(fact)`.
-- **Effects:** `forbid` (the action must not run when `when` is true), `basis` (the action is
-  required or allowed when `when` is true, e.g. § 117.5 and "opens on signal"), `exception` (true
-  `when` discards the `forbid`s it `overrides`, e.g. § 117.31(b)).
+- **Effects:** `forbid` (the action must not run when `when` is true) and `basis` (the action is
+  required or allowed when `when` is true, e.g. § 117.5 and "opens on signal"). A `basis` may
+  carry `overrides[]`, the binding ids of the `forbid`s it sets aside when its `when` is True: an
+  **overriding basis** (P32). § 117.31(b) and any other emergency or priority exception compile to
+  an overriding basis, so a True exception both discards the schedule's `forbid`s and supplies the
+  basis, and the gate allows.
 - **Three-valued evaluation (Kleene):** a missing fact makes a comparison Unknown; `and`, `or`
   and `not` follow the strong Kleene tables.
 - **Facts** are computed by the gate's fact module from typed inputs: `open_at` (a datetime) gives
@@ -672,7 +692,7 @@ Bindings are compiled by code from the enrichment pass's typed parameters, one s
 | need not open / closed in a window | `forbid` when `in_window(window)` (P14: the desk does not schedule an opening the rule does not require) |
 | opens on signal if at least N hours notice (in a period) | `basis` when `in_window(period) and notice_minutes >= 60N`; `forbid` when `in_window(period) and notice_minutes < 60N` (the complement, written out: implicit negation is the main error in policy-to-code, Winston et al.) |
 | § 117.5 | `basis` for every draw with no specific rule covering the time (the general duty) |
-| § 117.31(b) | `exception` when `vessel_class in {public_safety, distress, rescue_salvage, severe_weather_shelter} and not local_procedure_conflict`, overriding every `forbid` of the draw |
+| § 117.31(b) | overriding `basis` when `vessel_class in {public_safety, distress, rescue_salvage, severe_weather_shelter} and not local_procedure_conflict`, with `overrides` listing every `forbid` of the draw (P32) |
 
 A draw whose parameters failed checks 1–3, or whose window quote the window grammar cannot read,
 gets no bindings: the gate escalates its calls for lack of a binding (§12.6). Each binding records
@@ -686,7 +706,10 @@ Tests come from a source independent of the binding's parameters (P12):
   draws of a simple shape: on-signal operation, one notice threshold that applies at all times or
   none, closed windows that the window grammar reads, and §§ 117.5 and 117.31(b). It reads the
   *Phase 3 second-pass facts* (notice hours, signal, and the closed-period quotes through the
-  window grammar), not the DSL and not the enrichment. The Phase 3 facts cannot express a notice
+  window grammar), not the DSL and not the enrichment. It returns allow, deny or escalate, and for
+  a deny the set of denying sections at section level ("117.1081"), which is the granularity of
+  the citation rule (§13.6, P34); a § 117.31(b) vessel class with no conflicting local procedure
+  allows, as the gate's overriding basis does (P32). The Phase 3 facts cannot express a notice
   rule that holds only in some periods (§4.5), so the reference evaluator covers simple shapes
   only.
 - **The agreement set** is the draws whose enrichment parameters have this simple shape and equal
@@ -706,9 +729,12 @@ Tests come from a source independent of the binding's parameters (P12):
 
 Per draw, the loaded bindings are compiled to Z3 over minute of day (0–1439), weekday, holiday,
 month-day, notice minutes (≥ 0), vessel class and the conflict flag:
-- **Conflict:** an `exception` and a `forbid` both satisfiable together without an `overrides`
-  relation, or two `basis` bindings of different rules with contradictory requirements on the same
-  facts. Must be 0 (criterion B2).
+- **Conflict:** an overriding basis and a `forbid` of the same draw that its `overrides` does not
+  list, both satisfiable together (an emergency would still be denied), an `overrides` entry that
+  names no `forbid` of the draw, or a cycle of overrides. An overriding basis together with a
+  `forbid` it lists is a declared override, not a conflict (P32); a plain `basis` and a `forbid`
+  that are True together are resolved by the decision rule (the `forbid` wins) and are not a
+  conflict either. Must be 0 (criterion B2).
 - **Vacuity:** a `forbid` or `basis` that can never fire, or a `forbid` that always fires (the
   draw never opens). Must be 0; a vacuous binding is rejected.
 - **Redundancy:** a binding implied by the others; reported, kept.
@@ -734,23 +760,47 @@ nothing else (criterion B3).
 **Process and protocol.** `adr gate serve --store S --bindings <id> --log <dir>` runs as its own
 OS process and reads one JSON request per line on a local socket. The environment (§13), not the
 agent, is its only client. A request holds the call (`tool`, `args`), the session and caller, the
-simulated `as_of` time and the facts the environment holds, each with its source (P13: facts come
-from the environment's records and the binding parameters, never from the agent's arguments,
-except for what the call itself requests, such as `open_at`).
+simulated `as_of` time and the facts of the request record, each with its source: `record`
+(present when the request was filed) or `user` (written by the environment from a scripted user's
+answer, §13.2). Facts come only from the record and the binding parameters (P13, P33). The agent
+cannot write facts, and an agent's tool arguments are never facts: the arguments of the call (the
+draw and `open_at` of `schedule_opening`) define the action being judged, not the world it is
+judged in.
 
-**Decision, for the bindings selected by the call's target at the version in force on `as_of`:**
-1. Evaluate every binding.
-2. Discard each `forbid` overridden by an `exception` that is True.
-3. A remaining `forbid` that is True and that no Unknown `exception` overrides → **deny**, with
-   the rule ids and versions, the verbatim rule text, the facts that made it true, and
-   `next_allowed`: the earliest time after the requested one, scanned minute by minute over seven
-   days, at which no `forbid` is True and a `basis` is (verifier-tax evidence: agents recover
+**Selection.** For each call the gate selects the bindings whose target matches and whose `doc_id`
+is the document version of 33 CFR 117 in force on `as_of` (P31); bindings of other versions are
+never evaluated.
+
+**Decision for `schedule_opening`:**
+1. Evaluate every selected binding.
+2. Discard each `forbid` listed in the `overrides` of an overriding basis that is True.
+3. A remaining `forbid` that is True and that no Unknown overriding basis lists → **deny**, with
+   the rule ids and versions, the verbatim rule text, the facts that made it true, the
+   `deciding_sections` (the section-level refs, "117.1081", of the rule ids of those `forbid`s),
+   and `next_allowed`: the earliest time after the requested one, scanned minute by minute over
+   seven days, at which no `forbid` is True and a `basis` is (verifier-tax evidence: agents recover
    poorly from bare denials).
-4. Else a remaining `forbid` that is Unknown, or True but overridable by an Unknown `exception`
+4. Else a remaining `forbid` that is Unknown, or True but listed by an Unknown overriding basis
    → **escalate**, with the missing facts (the facts whose value would change the outcome).
-5. Else a `basis` that is True → **allow**.
+5. Else a `basis` that is True (an overriding basis included) → **allow**. A True § 117.31(b)
+   basis therefore allows an opening inside a closed window (P32).
 6. Else a `basis` that is Unknown → **escalate** with the missing facts; with no `basis` at all →
    **escalate** ("no rule binding covers this call"): no basis is not permission (P15).
+
+**Decision for the other side-effecting tools:**
+- `deny_request(request, rule_id, reason)`: the gate evaluates an opening of the request's draw at
+  the time recorded in the request, as above. It allows the deny only if that evaluation is a deny
+  **and** the citation regex of §13.6 finds, in `rule_id` and `reason`, at least one section in
+  the returned `deciding_sections` (P34). Otherwise it denies, returning the evaluation's outcome
+  and the `deciding_sections` when there are any; denying an opening the rules require is thereby
+  itself denied under § 117.5.
+- `escalate_request` and `cancel_opening`: always allowed and logged, under the desk-policy system
+  rules `adr.desk.escalate@1` and `adr.desk.cancel@1`, so these decisions too carry a rule id and
+  version.
+
+**Gate outcomes record nothing (P35).** A deny or escalate of `schedule_opening` is a reply to
+the environment, which passes it to the agent; it writes nothing to the denial log or the
+escalation queue. Only an executed `deny_request` or `escalate_request` does.
 
 **Fails closed (P15).** A gate that is not running, times out, receives a malformed request, an
 unknown tool or target, a bindings manifest that does not verify, a binding without sign-off, or a
@@ -762,10 +812,11 @@ the environment and never by the agent loop; a token is single-use (P23).
 
 **The decision log.** Written only by the gate, append-only, one line per decision: sequence
 number, SHA-256 of the previous line, session, caller, tool, canonical arguments, facts with
-sources, units id and bindings id, every binding evaluated (`rule_id`, `rule_version`,
-`binding_id`, `binding_version`, value T/F/U), the decision, the deciding rule ids, missing facts,
-and the SHA-256 of the message. Every decision carries at least one rule id and version, the
-fail-closed rule included (criterion G1). Replaying a line's facts against its bindings id gives
+sources, units id and bindings id, every binding evaluated (`rule_id`, `rule_version`, `doc_id`,
+`binding_id`, `binding_version`, value T/F/U), the decision, the deciding rule ids and
+`deciding_sections`, missing facts, and the SHA-256 of the message. Every decision carries at
+least one rule id and version, the fail-closed and desk-policy system rules included
+(criterion G1). Replaying a line's facts against its bindings id gives
 the same decision (criterion G3).
 
 **Visibility.** Enforcement ignores what the caller may read: a rule binds whether or not its
@@ -784,28 +835,34 @@ it executes nothing, issues no token and is logged as a read. In the simulation 
 ### 13.1 The world
 
 A drawbridge operations desk for the bridges of 33 CFR 117 in the version in force on the
-scenario date (all scenarios fall after 2026-06-26). The environment process holds: the requests
-(vessel, claimed class, bridge section and draw, requested time, notice receipt time if recorded),
-an opening schedule, a denial log, an escalation queue, a registry of approved local emergency
-procedures, and a simulated clock fixed per task.
+scenario date (all scenarios fall after 2026-06-26). The environment process holds: the request
+records (vessel, bridge section and draw, requested time, and the facts known so far, each with
+its source `record` or `user`), an opening schedule (every opening ever made, with status `active`
+or `cancelled`), a denial log, an escalation queue, a registry of approved local emergency
+procedures, and a simulated clock fixed per task. The denial log and the escalation queue are
+written only by executed `deny_request` and `escalate_request` calls (P35).
 
 ### 13.2 Tools, users and the desk procedure
 
 | Tool | Kind | Gated |
 |---|---|---|
-| `get_request(id)`, `ask_user(field)` | read | no |
+| `get_request(id)` | read: the request record with every fact and its source | no |
+| `ask_user(field)` | read for the agent; the environment writes the answer to the request record as a fact with `source: "user"` (P33) | no |
 | `rule_lookup`, `define`, `check_rules`, `procedure_lookup`, `query_table` (drawbridge tables) | read (the store's tools) | no |
 | `schedule_opening(request, section, draw, open_at)` | side effect | yes |
-| `deny_request(request, rule_id, reason)` | side effect | yes (allowed only when the gate would deny the requested opening; denying an opening the rules require is itself denied under § 117.5) |
+| `deny_request(request, rule_id, reason)` | side effect | yes (allowed only when the gate would deny an opening at the requested time and the call cites a deciding section, §12.6, P34) |
 | `escalate_request(request, missing[], reason)` | side effect | yes (always allowed; logged) |
 | `cancel_opening(opening_id)` | side effect | yes (always allowed; logged) |
 
 - **The user is scripted (P16).** The first message states the request in a fixed template filled
-  from the scenario; `ask_user(field)` answers from the scenario's facts (requested time, when
-  notice was given, vessel class, whether the user accepts another time) and says "I don't know"
-  for facts the scenario withholds.
+  from the scenario's initial record. `ask_user(field)` answers from what the scenario says the user
+  knows (when notice was given, vessel class, whether the user accepts another time). The
+  environment, not the agent, writes each answer to the request record as a fact with
+  `source: "user"` and the sequence number of the question; the gate reads it from there (P33).
+  For a fact the user does not know, the answer is "I don't know": it is logged and the fact stays
+  missing. The agent has no tool that writes a fact.
 - **The desk policy** (identical in every arm, about 200 words): decide each request by the
-  regulations; schedule only openings the rules require or allow; cite the rule id when denying;
+  regulations; schedule only openings the rules require or allow; cite the deciding section when denying;
   escalate when a needed fact is missing; offer the earliest allowed time when the requested time
   is not allowed; end with a reply stating scheduled, denied or escalated.
 - **The desk procedure** `desk-request@1`, authored by the assistant as part of the environment
@@ -818,7 +875,8 @@ procedures, and a simulated clock fixed per task.
 
 - One model, Sonnet (P16). Each agent call receives the system prompt (desk policy, tool list,
   and in the prompt arm the rule text), the transcript so far, and returns JSON: up to three tool
-  calls, executed in order until one is refused, and optionally the final `reply{status, text}`.
+  calls, executed in order until one is refused, and optionally the final `reply{status, text,
+  facts?}` (the optional `facts` object is what V2 checks, §13.6).
 - At most three agent calls per trial; a trial that ends without a reply fails.
 - k = 4 trials per task and arm; the trial index is part of the cache key, so the four trials are
   four calls, and a replay is exact.
@@ -827,21 +885,49 @@ procedures, and a simulated clock fixed per task.
 
 ### 13.4 Tasks: `sim-drawbridge v0.1`
 
-18 tasks, six classes of three, generated by code with a fixed seed:
+18 tasks, six classes of three, generated by code with a fixed seed. Each task states which
+facts are in the initial record and which only the user knows (P33):
 
-| Class | Scenario | Expected end state |
-|---|---|---|
-| allow | Request in an open period with enough notice | Opening scheduled at the requested time |
-| reschedule | Request inside a closed window; the user accepts another time | Opening at the earliest allowed time |
-| deny-closed | Request inside a closed window; the user cannot change it | Denial recorded |
-| deny-notice | Notice short of the threshold; the user cannot wait | Denial recorded |
-| escalate | A needed fact is unknown (notice time not recorded and unknown to the user, or no approved-procedure record for an emergency claim) | Escalation recorded |
-| emergency | A public-safety vessel inside a closed window, no conflicting local procedure | Opening at the requested time (§ 117.31(b)) |
+| Class | Scenario | Initial record | Known only to the user | Expected end state |
+|---|---|---|---|---|
+| allow | Request in an open period with enough notice | requested time; notice in 2 tasks | notice in 1 task (the agent must ask) | one active opening at the requested time |
+| reschedule | Request inside a closed window; the user accepts another time | requested time, notice, vessel class | that another time is acceptable | one active opening at the earliest allowed time |
+| deny-closed | Request inside a closed window; the user cannot change it | requested time, notice, vessel class | that no other time is acceptable | one denial |
+| deny-notice | Notice short of the threshold; the user cannot wait | requested time | notice (the agent must ask to learn it is short) | one denial |
+| escalate | Notice-required draw; nobody knows when notice was given | requested time | nothing: notice is unknown to the user as well | one escalation |
+| emergency | A public-safety vessel inside a closed window; the registry holds an approved local procedure that does not conflict | requested time, registry record | vessel class (the agent must ask) | one active opening at the requested time (§ 117.31(b), P32) |
 
 Tasks are drawn only from agreement-set draws (§12.3) whose bindings are signed off, so two
-independent extractions agree on every fact a task uses (P16); a draw may serve several classes. Expected end
-states are computed by the reference evaluator (§12.3), never by the gate. The task file is
-committed (gov data); transcripts are not.
+independent extractions agree on every fact a task uses (P16); a draw may serve several classes.
+Expected end states are computed by the reference evaluator (§12.3), never by the gate. The task
+file is committed (gov data); transcripts are not.
+
+**Expected-state format (`golden/sim-drawbridge/v0.1/tasks.jsonl`, P35).** One line per task:
+
+```json
+{"task_id": "sim-allow-01", "class": "allow", "as_of": "2026-08-14T05:30:00",
+ "request": {"id": "r1", "vessel": "...", "section": "117.1081", "draw": 2,
+             "requested_open_at": "2026-08-14T09:30:00"},
+ "record": {"notice_received_at": {"value": "2026-08-13T18:00:00", "source": "record"}},
+ "user_knows": {"accepts_alternative": false},
+ "registry": [],
+ "expected_state": {
+   "openings":    [{"request": "r1", "section": "117.1081", "draw": 2,
+                    "open_at": "2026-08-14T09:30:00", "status": "active"}],
+   "denials":     [],
+   "escalations": []},
+ "reference": {"outcome": "allow", "denying_sections": [], "missing_facts": []}}
+```
+
+- `openings` lists every opening the schedule should hold, cancelled ones included, each as
+  (request, section, draw, `open_at`, status); `denials` and `escalations` list the request id of
+  each record in the denial log and the escalation queue.
+- **Outcome success is a whole-state comparison:** the environment's end state, reduced to the
+  same three lists and compared as multisets, must equal `expected_state` exactly. An extra,
+  missing or duplicate opening, denial or escalation fails, and so does a cancelled opening, which
+  stays in the schedule with status `cancelled` (schedule-then-cancel is an extra record).
+  Citations, reasons and missing-fact lists are not part of the state; they are checked as process
+  (V3).
 
 ### 13.5 Arms
 
@@ -854,19 +940,36 @@ committed (gov data); transcripts are not.
 
 ### 13.6 Scoring
 
-- **Outcome success** of a trial: the environment's end state equals the expected one (the right
-  opening, or a denial, or an escalation, for the right request), as τ-bench scores by end state.
+- **Outcome success** of a trial: the whole-state comparison of §13.4 holds (P35), as τ-bench
+  scores by end state. A gate's deny or escalate of `schedule_opening` records nothing, so a trial
+  in which the agent stops after a gate refusal, without an explicit `deny_request` or
+  `escalate_request`, fails.
 - **pass^k** per task with the unbiased estimator C(c, k) / C(n, k) over n = 4 trials, for k = 1…4;
   pass^1 is task success; reported per arm as the mean over tasks.
 - **Process violations,** found by a trace monitor that uses the reference evaluator (not the
   gate), so binding errors count:
   - **V1** a side effect executed that the reference evaluator forbids at that moment, even if
     later cancelled;
-  - **V2** a side-effect argument with a fact value that no tool result or user message in the
-    trace supplied (a fabricated fact);
-  - **V3** a denial, or a reply with status denied, that does not cite a rule id the reference
-    evaluator names as denying;
+  - **V2** the agent asserting a fact, in the `facts` of a `check_rules` call or in the optional
+    `facts` object of its reply, whose value appears neither in the request record nor in any
+    user answer (a fabricated fact) (P33);
+  - **V3** an executed `deny_request`, or a reply with status denied, that does not cite at least
+    one section in the reference evaluator's denying sections, by the citation rule below (P34);
   - **V4** a reply whose `status` contradicts the end state.
+- **The citation rule (P34).** A citation counts when it names a deciding section at section
+  level, with any paragraph and any version, in any of the forms "33 CFR 117.1081", "§ 117.1081",
+  "117.1081" or "117.1081(a)". The text checked (`rule_id` and `reason` of `deny_request`, or the
+  reply text) is NFKC-normalised with whitespace collapsed, and every match of one regular
+  expression (Python, case-insensitive) is read as a section key `117.<group 1>`:
+
+  ```
+  (?<!mile )(?<![\w.])(?:33\s*c\.?\s*f\.?\s*r\.?\s*(?:§+\s*)?|§+\s*)?117\.(\d{1,4})(?:\([a-z0-9]{1,4}\))*(?!\.?\d)
+  ```
+
+  The citation counts when any section key found is in the set required: the gate's
+  `deciding_sections` for the gate's check of `deny_request`, the reference evaluator's denying
+  sections for V3. The look-behind for "mile " keeps a waterway mile such as "mile 117.5" from
+  reading as § 117.5; a bare number such as "117.1081" in other prose can still read as a citation.
 - **Process false pass:** an outcome success with any violation. The false-pass rate is false
   passes divided by outcome successes, per arm.
 - In the gate arms V1 can occur only when the gate allows what the reference evaluator forbids, so
@@ -878,13 +981,14 @@ committed (gov data); transcripts are not.
 
 | Set | Items | Gold | Committed |
 |---|---|---|---|
-| `gov-rules v0.1` | 100: 40 from 33 CFR 117, 30 from 165, 30 from 73 | The provision id the question was drawn from (`gold_rules`), its span as evidence; `closure_rules` (explicit in-part cross-reference targets) as a secondary field | Yes (US government works) |
+| `gov-rules v0.1` | 100: 40 from 33 CFR 117, 30 from 165, 30 from 73 | The `rule_id` (canonical ref) of the provision the question was drawn from (`gold_rules`), with the drawn document's id and the provision's span as evidence; `closure_rules` (explicit in-part cross-reference targets) as a secondary field | Yes (US government works) |
 | `gov-procedures v0.1` | 50 from the 101 IRM procedure-like sections | The section's `canonical_ref` and span | Yes |
 | `bench-procedures v0.1` | 50 from the bench procedure documents | The document id | No (local) |
 
 - **Drawing (code).** A provision is sampled by seed from the modal paragraphs of a version (80%
   the newest; 20% an older version in which that paragraph's text differs from the newest, with
-  `as_of` set to a date in that version's period). Provisions whose normalised text occurs in
+  `as_of` set to a date in that version's period). An item's `as_of` is passed to every system
+  compared, `p2-default` and `p4-units` alike, not only on `policy_asof` items (P36). Provisions whose normalised text occurs in
   another section of the same version are excluded (boilerplate), and so are paragraphs under 60
   characters. A procedure is sampled from the candidate sections or documents.
 - **Phrasing (model).** Sonnet receives the source text, not any unit, and writes one question a
@@ -920,7 +1024,9 @@ All retrieval runs make no model call.
 
 - **Rule-ID recall (R1).** A returned item retrieves every provision whose span it overlaps
   (the Phase 0 `touches` rule, so chunks and units are scored alike); each question's ranked list
-  is cut at a budget of **2,000 tokens** of returned text, closure text included (P20). Recall is
+  is cut at a budget of **2,000 tokens** of returned text, closure text included (P20). Every
+  system runs each item with the item's `as_of` (P36), so an older-version item is scored against
+  the units and chunks of the version in force on that date. Recall is
   the share of `gold_rules` retrieved. Also reported: Recall@10 items, MRR, tokens at 10, closure
   recall on `closure_rules`, and the secondary rule-ID recall on the 164 gov v0.1 test items with
   eCFR evidence (gold provisions = those their evidence spans overlap).
@@ -997,7 +1103,7 @@ comparison is paired, as in Phases 2 and 3.
 | T1 | Zero-call rebuild | Rebuild every units build, binding set, unit index and task file with `--max-calls 0` in a fresh process | Byte-identical files; same units, bindings and task-file ids |
 | T2 | Identical results | Every retrieval run, probe set and simulation replay (from the cache, `--max-calls 0`) twice in fresh processes | Identical rows, results, transcripts and gate logs |
 | T3 | Every stored span re-slices | Every span of every unit and binding | 100% |
-| T4 | Every unit carries its envelope and lineage | Every unit | 100% with `access_docs`, applicability fields, `status`, contract and compiler or spec version |
+| T4 | Every unit carries its envelope and lineage | Every unit | 100% with exactly one `doc_id`, applicability fields, `status`, contract and compiler or spec version |
 | T5 | A spec change recompiles only affected units | Fixture: change one field group's spec | Only that group's calls run; other units byte-identical |
 | T6 | The units merge gate blocks regressions | Fixture: a candidate with flips above the threshold | Refused; `units/HEAD` unchanged |
 | U1 | `define` resolves terms | `define` probes (§15.4) | 100% correct; 0 senses from hidden documents |
@@ -1008,10 +1114,10 @@ comparison is paired, as in Phases 2 and 3.
 | R1 | Rule-ID recall beats Phase 1 | `p4-units` against `p2-default` on the gov-rules test items, rule-ID recall at 2,000 tokens | Lower bound of the paired 95% interval above +0.02 |
 | R2 | Procedure top-5 beats Phase 1 | `p4-units` against `p2-default`, Hit@5, gov-procedures and bench-procedures test items pooled | Lower bound of the paired 95% interval above +0.02, and the point difference ≥ 0 on each corpus |
 | B1 | Bindings behave as tested | Every loaded binding: positive, negative and complement tests; every agreement-set draw: grid equivalence with the reference evaluator | 100% |
-| B2 | Solver analysis is clean | Z3 over every draw's loaded bindings | 0 undeclared conflicts, 0 vacuous bindings; redundancies and gaps reported |
+| B2 | Solver analysis is clean | Z3 over every draw's loaded bindings | 0 conflicts as defined in §12.4 (declared overrides are not conflicts), 0 vacuous bindings; redundancies and gaps reported |
 | B3 | Sign-off is recorded | Every loaded binding | 100% carry an approving review record labelled `model-review`; no rejected binding is loaded |
-| G1 | Every gate decision is logged with rule ID and version | Every line of every gate log from the simulation and the probes | 100%; the hash chain verifies end to end |
-| G2 | The gate fails closed with complete mediation | Gate fail-closed probes; every side effect in every environment log | 0 allows in the probes; 100% of executed side effects match a single-use allow token |
+| G1 | Every gate decision is logged with rule ID and version | Every line of every gate log from the simulation and the probes | 100% carry `rule_id` and `rule_version` (and `doc_id` for every evaluated binding); the hash chain verifies end to end |
+| G2 | The gate fails closed with complete mediation | Gate fail-closed probes; every side effect in every environment log; every denial and escalation record | 0 allows in the probes; 100% of executed side effects match a single-use allow token; 0 denial or escalation records without an executed `deny_request` or `escalate_request` |
 | G3 | Gate decisions replay | Every logged decision re-evaluated from its logged facts and bindings id | 100% identical |
 | A1 | pass^k improves | pass^4 over the 18 tasks, gate arm against no-gate and against prompt | gate − no-gate ≥ +0.10, and gate ≥ prompt |
 | A2 | The process false-pass rate falls | False passes / outcome successes, gate against no-gate | gate ≤ half of no-gate, and the upper bound of the paired 95% interval of the difference below 0 |
@@ -1061,15 +1167,15 @@ are not moved.
 | P2 | Rule cards are built by code for all three eCFR parts; the model enriches only the 53 sections whose rules feed bindings | The budget goes to the simulation; the retrieval levers the research names are structural | Most cards have no conditions or exceptions; whether enrichment helps retrieval is not measured |
 | P3 | The rule unit is the eCFR paragraph, id "N CFR N.N(a)(1)" | Stable citation and span from structure; 33 CFR 117 states one rule per draw or period per paragraph | A paragraph with two rules is one card |
 | P4 | Rule eligibility, and the gold universe, is a modal lexicon | Deterministic and auditable | Rules without a modal word are not cards and not measured |
-| P5 | A unit is visible only to callers who can see all its source documents; enforcement ignores visibility, explanations follow it | A unit is never more visible than its sources; a rule must bind whether or not it can be read | A blocked caller learns that a rule id exists |
+| P5 | A unit is visible only to callers who can see its source document (one per unit, P31); enforcement ignores visibility, explanations follow it | A unit is never more visible than its source; a rule must bind whether or not it can be read | A blocked caller learns that a rule id exists |
 | P6 | Units are a write-once overlay with a units id; `units/HEAD` moves only through the units merge gate with 0 flips | The Phase 3 pattern and invariant | The gate's threshold is untested on a real regression |
-| P7 | Rule id = type, canonical ref and text-hash version; bindings and gate logs carry id and version | Work/Expression identity; a rule's text change is a new version | A whitespace-only change in the source makes a new version |
+| P7 | (Replaced by P31.) Rule identity from canonical ref and text-hash version; bindings and gate logs carry both | Work/Expression identity; a rule's text change is a new version | A whitespace-only change in the source makes a new version |
 | P8 | Closure from explicit references plus one committed structural rule (subpart B is an exception of § 117.5; § 117.31(b) overrides schedules) | No model-inferred links; the structural link is how the part works | Implicit references elsewhere are missed |
 | P9 | Concepts only from explicit definition statements, IRM acronym tables and "Long Form (ABBR)"; `broader`/`narrower` only from scope nesting; `related` empty | Automatic definition extraction scores poorly (best 0.397 set-level in SciDef); verbatim definitions are the source | A thin SKOS graph; research's 209 prose definitions are not concepts |
 | P10 | Procedure steps and guards from explicit structure; the model writes only `when_to_use`, `not_for`, triggers and abstractions, each with quotes; IRM boundaries from the raw HTML, located by first own line, the 4 unlocated merged | Models extract gateways poorly; the IRM marks structure | Prose-only flows give coarse graphs |
 | P11 | Bindings in a typed DSL with Kleene evaluation in Python; Z3 5.3.3.0 as an optional build-time extra; no Cedar, Rego or DMN | Three outcomes need Unknown; no native runtime dependency; analysis on the same AST (§18) | Not a standard; an exporter is needed for interoperability |
 | P12 | Binding parameters from the enrichment pass; behavioural tests from an independent reference evaluator over the Phase 3 second pass, on the draws of simple shape where both agree; sign-off by a recorded Opus review labelled `model-review` | No human reviewer; tests must not share the binding's source | Errors shared by both extractions and the reviewer go unseen; bindings of conditional draws are checked for encoding only |
-| P13 | The gate takes facts from the environment's records and binding parameters, never from the agent's arguments, except the action requested | Separates fact extraction from rule evaluation; agents fabricate facts (verifier-tax study) | A deployment needs a system of record per fact |
+| P13 | The gate takes facts from the environment's records and binding parameters, never from the agent's arguments; the call's arguments define only the action judged (made precise by P33) | Separates fact extraction from rule evaluation; agents fabricate facts (verifier-tax study) | A deployment needs a system of record per fact |
 | P14 | Bindings encode the desk's action policy derived from each rule ("need not open" → do not schedule), with the derivation recorded | The CFR releases a duty; the desk needs an action rule | The policy is the assistant's reading of the rule |
 | P15 | Every failure on the enforcement path denies under `adr.gate.fail-closed@1`; no applicable binding escalates | Fail closed; no basis is not permission | Coverage gaps block allowed work in the simulation |
 | P16 | Simulation: one domain, a scripted user, one agent model (Sonnet), 18 tasks in six classes, k = 4, at most 3 calls per trial with at most 3 tool calls each; tasks only on draws where two extractions agree | Fits the budget; agreed facts make the ground truth less contested | Small; wide intervals on pass^4; no adversarial users; fidelity to the CFR beyond agreed facts is not tested by the simulation |
@@ -1087,6 +1193,12 @@ are not moved.
 | P28 | Simulation shares sized for the worst case; trials run in rounds by trial index | A budget stop leaves comparable partial data | About 300 calls of the cap are expected to stay unused |
 | P29 | Five new tools: `define`, `rule_lookup`, `procedure_lookup`, `unit_search`, `check_rules` | Each serves a distinct access pattern of the blueprint | Thirteen tools in all, above the "five consolidated tools" evidence |
 | P30 | Bench units, bench golden items and every simulation transcript stay local; committed summaries hold totals only | Canary data and the standing rule | Others cannot inspect bench items or transcripts |
+| P31 | (Made after the builder check.) One unit per (document, source element): `unit_id = <type>/<canonical_ref>/<text_sha12>/<doc_id16>`; each unit inherits its one document's ACL and applicability, as Phase 3 rows do; downstream the rule identity is split into `rule_id = canonical_ref` and `rule_version = text_sha12`, with the `doc_id` in the gate log; `superseded_by` points to the successor document's unit, never to itself; the gate selects the bindings of the version in force on `as_of` | A unit drawn from several documents would need all of them visible and would make hidden distinguishable from nonexistent; a text-only id made identical paragraphs of two versions one unit, so `superseded_by` could point to itself | Three versions of an unchanged paragraph are three units (more index rows, duplicate hits under `include_superseded`); citations at `rule_id` level do not distinguish versions without `rule_version` |
+| P32 | (Made after the builder check.) § 117.31(b), and any other emergency or priority exception, compiles to a `basis` that also overrides the `forbid`s it lists; when True the gate allows, the reference evaluator agrees, and Z3 treats the listed override as declared, not as a conflict; the emergency class expects the opening at the requested time | An `exception` that only discarded `forbid`s left no basis on some draws, so the gate could escalate where the reference evaluator allows, and B1 could not be met | An override list must name every `forbid` of the draw; a missing entry is reported as a conflict and blocks the binding set |
+| P33 | (Made after the builder check.) Facts from the user reach the gate only through the environment: on `ask_user` the environment writes the scripted answer to the request record with `source: "user"`; the agent cannot write facts; agent tool arguments are never facts; every task states which facts are missing from the initial record (some known to the user, so the agent must ask; in `escalate`, unknown to the user as well); V2 is a fact the agent asserts that appears in neither the record nor any user answer | Without it the gate would either miss facts the user gave or have to trust the agent's arguments, which is the fabrication channel the verifier-tax study measured | A deployment needs a trusted channel that records what the user said; agents that do not ask fail tasks that a fact-trusting gate would have passed |
+| P34 | (Made after the builder check.) A citation counts when it names a deciding section at section level ("33 CFR 117.1081", "§ 117.1081", "117.1081", "117.1081(a)"; any paragraph, any version), matched by the one normalising regex of §13.6; `deny_request` passes the gate only if it cites a section among the gate's `deciding_sections`; V3 uses the same rule against the reference evaluator's section-level denials | Paragraph-level or version-level matching would fail correct citations for wording, and the reference evaluator decides at section level | A citation of the right section for the wrong paragraph passes; a bare number in prose can read as a citation |
+| P35 | (Made after the builder check.) Gate outcomes record nothing: a gate deny or escalate of `schedule_opening` writes nothing to the denial log or escalation queue, only an executed `deny_request` or `escalate_request` does; outcome success is a whole-state comparison of openings (cancelled ones included), denials and escalations against the task's `expected_state`, in the format written into §13.4 | If gate refusals were recorded, the gate arm would pass deny tasks without any agent action, inflating A1 by construction; partial state checks would pass extra or cancelled openings | Strict: a duplicate denial or a schedule-then-cancel fails the outcome, not only the process check |
+| P36 | (Made after the builder check; the builder's call, accepted.) Every rule-question item drawn from an older version passes its `as_of` to every system compared, `p2-default` and `p4-units` alike, not only `policy_asof` items | Otherwise the default filter would hide the gold version from one system and not the other, and R1 would compare different evidence | Older-version items test the applicability filter of both systems as much as their ranking |
 
 ## 20. Build order
 
