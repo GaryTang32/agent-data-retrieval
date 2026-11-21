@@ -1,0 +1,597 @@
+"""The unit index: BM25F and dense retrieval over the knowledge units of one build, per caller
+view (Phase 4 spec §11.1, P25; preflight rulings C8, C13, N24).
+
+It is separate from the Phase 1 chunk index, which it never reads or writes: Phase 2 `search`
+is unchanged.
+
+**Documents.** `unit_docs` makes one `UnitDoc` per unit, sorted by unit id, with five fields
+(`FIELDS`):
+- `title`: the unit's title, then its heading path (deduplicated, in order);
+- `ref`: the canonical ref, then the provision id of a rule card or the Phase 3 table of a
+  table record;
+- `labels`: one label per line. A concept holds its preferred label, then its alternate
+  labels. A rule card holds the labels of the concepts it defines (`defined_terms`, which
+  Task 3 linked by scope and mention). A procedure holds the labels of the concepts of its own
+  document whose scope contains it and whose hidden label it mentions (§7 "Concepts in
+  retrieval"). Each holds its envelope `aids.labels` too.
+- `body`, which differs by type:
+  - concept: the definition and scope note;
+  - rule card: the rule text, then its closure headings. A heading is the deepest heading of a
+    closure target other than its own title, or the entry's ref for a non-modal provision.
+    `defines` targets are left out, because their labels are in `labels`.
+  - procedure: `when_to_use`, inputs, preconditions, the step texts, escalation and success
+    criteria. `not_for` is left out, so a query about what a procedure is not for does not
+    find it.
+  - FAQ: the question and answer, or the KCS fields;
+  - table record: the caption, headers and description.
+- `aids`: one aid per line, index only (§5.1, §11.1). These are the envelope's keywords,
+  problem abstractions and trigger examples, then a procedure's model-written problem
+  abstractions and trigger examples. `UnitDoc.aids` holds the same texts. No other field and
+  no dense text contains them, and a search returns unit ids only.
+
+`dense_text` is the heading path joined by " > ", a newline, and the body field.
+
+**Lexical (BM25F as field repetition, builder note 10).** A unit's indexed text is each field
+repeated by its type's weight from the tuning (`indexed_text`). It is indexed by the
+baseline's `BM25Index` (the same tokenizer, `k1` and `b` as `FieldBM25`, which does the same
+for the Phase 1 breadcrumb). Statistics come from the units of the view alone. There is one
+index per (index fingerprint, view id) in an LRU of `VIEW_CACHE`, as `Tools._view_lexical`
+keeps them, so a hidden unit moves no score. The view is the set of documents in `admitted`
+that hold units of the index; the full index serves `admitted=None` and any view that holds
+every document.
+
+**Concept expansion (BM25 only).** The lexical query gains, after the caller's words, the
+other labels of every view concept label it contains as whole words (`expand_query`). The
+label map is built from the view's concepts only, so a hidden concept expands nothing.
+
+**Dense.** Each unit's `dense_text` gets one vector, and each aid gets one vector more. These
+come from the `EmbeddingCache` once, over every unit, and are stored under
+`<store>/units-index/<units id>/dense-<model hash[:16]>/`:
+- `index.json`: format, units id, `lexical_only`, embedding, counts and SHA-256 of the docs
+  and of the vectors;
+- `rows.jsonl`: one row per vector, giving its unit id and aid index;
+- `vectors.npy`.
+
+A unit's dense score is its best cosine over its own row and its aid rows (`row_scores`, a
+function of the row and the query alone). Scoring masks the rows to `admitted` and `types`. A
+later build with the same docs and model reuses the stored vectors and computes no
+embedding.
+
+**Lexical-only (C8).** `emb=None` builds no vector and embeds no query, so it never loads the
+embedding model. It records `lexical_only` in `<store>/units-index/<units id>/lexical/
+index.json`, and `search` is BM25's ranking: every unit with a positive score. The MCP and
+environment subprocesses, fixture stores and tests use it.
+
+**Fusion and order.** With vectors, the ranking is `linear(lex[:CHANNEL_K], dense[:CHANNEL_K],
+w)` and then the tail of every other admitted unit, as `retrieval.index._full_ranking` does.
+That whole ranking is then sorted by (score descending, unit id), so ties break the same way
+on both sides of the fused head. `search(k=…)` cuts it at `k`. A caller that fills a token
+budget (P20, builder note 11) can ask for as many hits as it needs; the index returns ids and
+scores, never text. `types` and `admitted` are hard filters: the channels mask their rows
+before any cut, so a filter never starves the result.
+
+**Tuning (C13).** `config/units/tuning.json` is keyed by corpus:
+`{corpus: {"weights": {type: {field: weight}}, "w": float}}`. Weights come from `WEIGHT_GRID`
+and `w` from `W_GRID`. The defaults set every weight to 1 and `w` to 1.0, and Task 13 tunes
+them on dev.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import os
+import re
+import shutil
+import threading
+import unicodedata
+import uuid
+from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+from adr_eval.retrieval.chunker import Chunk
+from adr_eval.retrieval.dense import _unit
+from adr_eval.retrieval.lexical import BM25Index
+from adr_store import acl
+from adr_store.chunking import BREADCRUMB_SEP
+from adr_store.embedding import EmbeddingCache
+from adr_store.retrieval.dense import row_scores
+from adr_store.retrieval.index import _full_ranking
+from adr_store.retrieval.lexical import masked_hits
+from adr_store.units.build import CORPUS_TYPES
+from adr_store.units.concepts import _Labels, _subpart_of, scope_contains
+from adr_store.units.contracts import UNIT_CONTRACT_DIR, UNIT_TYPES
+from adr_store.units.envelope import Unit
+
+FIELDS = ("title", "ref", "labels", "body", "aids")
+WEIGHT_GRID = (1, 2, 3)
+W_GRID = tuple(round(0.50 + 0.05 * i, 2) for i in range(11))
+INDEX_DIR = "units-index"
+VIEW_CACHE = 16
+FORMAT_VERSION = "0.1"
+TUNING_PATH = UNIT_CONTRACT_DIR / "tuning.json"
+
+Hits = list[tuple[str, float]]
+
+_VIEW_LOCK = threading.Lock()
+_VIEW_LEXICAL: OrderedDict[tuple[str, str], _ViewLexical] = OrderedDict()
+
+
+@dataclass(frozen=True)
+class UnitDoc:
+    """What the index holds of one unit (module docstring)."""
+
+    unit_id: str
+    type: str
+    doc_id: str
+    fields: dict[str, str]
+    dense_text: str
+    aids: tuple[str, ...]
+
+
+# -- documents ---------------------------------------------------------------------------------
+
+def _dedup(texts) -> list[str]:
+    """The non-empty texts, first occurrence kept."""
+    out: list[str] = []
+    for t in texts:
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def _model_values(field) -> list[str]:
+    """The value of a model-written field (`{value, quotes, status, null_reason}`) as a list
+    of texts: none when null, one for a string, all of a list."""
+    value = field.get("value") if isinstance(field, dict) else None
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else [v for v in value if isinstance(v, str)]
+
+
+def _concept_labels(concept: Unit) -> list[str]:
+    return _dedup([concept.body["pref_label"], *concept.body["alt_labels"]])
+
+
+def _closure_headings(card: Unit, units: dict[str, Unit]) -> list[str]:
+    out = []
+    for e in card.body.get("closure", []):
+        if e["relation"] == "defines":
+            continue
+        target = units.get(e["unit_id"]) if e["unit_id"] else None
+        if target is None:
+            out.append(e["ref"])
+            continue
+        heads = [h for h in target.heading_path if h != target.title]
+        out.append(heads[-1] if heads else target.title)
+    return _dedup(out)
+
+
+def _body(u: Unit, units: dict[str, Unit]) -> str:
+    b = u.body
+    if u.type == "concept":
+        parts = [b["definition"]["text"], b.get("scope_note")]
+    elif u.type == "rule_card":
+        parts = [b["text"], *_closure_headings(u, units)]
+    elif u.type == "procedure":
+        parts = [*_model_values(b.get("when_to_use")), *b.get("inputs", []),
+                 *b.get("preconditions", []), *(s["text"] for s in b["steps"]),
+                 b.get("escalation"), b.get("success_criteria")]
+    elif u.type == "faq":
+        parts = [(b.get(k) or {}).get("text") for k in
+                 ("question", "answer", "issue", "environment", "cause", "resolution")]
+    else:  # table_record
+        parts = [b.get("caption"), " ".join(b.get("headers", [])), b["description"]]
+    return "\n".join(p for p in parts if p)
+
+
+def _ref(u: Unit) -> str:
+    extra = []
+    if u.type == "rule_card":
+        extra = [u.body["provision_id"]]
+    elif u.type == "table_record":
+        extra = [(u.body.get("pointer") or {}).get("table")]
+    return "\n".join(_dedup([u.canonical_ref, *extra]))
+
+
+def _aids(u: Unit) -> tuple[str, ...]:
+    texts = [*u.aids.keywords, *u.aids.problem_abstractions, *u.aids.trigger_examples]
+    if u.type == "procedure":
+        texts += [*_model_values(u.body.get("problem_abstractions")),
+                  *_model_values(u.body.get("trigger_examples"))]
+    return tuple(_dedup(texts))
+
+
+def unit_docs(units: list[Unit], concept_units: list[Unit]) -> list[UnitDoc]:
+    """One `UnitDoc` per unit of `units`, sorted by unit id; `labels` come from the concepts
+    in scope (`concept_units`, module docstring)."""
+    by_id = {u.unit_id: u for u in units}
+    concepts = {c.unit_id: c for c in concept_units}
+    index = _Labels(concept_units)
+    docs = []
+    for u in sorted(units, key=lambda u: u.unit_id):
+        if u.type == "concept":
+            labels = _concept_labels(u)
+        elif u.type == "rule_card":
+            labels = [lab for cid in u.body.get("defined_terms", []) if cid in concepts
+                      for lab in _concept_labels(concepts[cid])]
+        elif u.type == "procedure":
+            text = "\n".join([u.title, _body(u, by_id)])
+            sub = _subpart_of(u)
+            found = index.mentions(u.doc_id, text)
+            hits = sorted(cid for cid in found if scope_contains(
+                concepts[cid].body["scope"]["ref"], u.canonical_ref, subpart=sub))
+            labels = [lab for cid in hits for lab in _concept_labels(concepts[cid])]
+        else:
+            labels = []
+        aids = _aids(u)
+        body = _body(u, by_id)
+        fields = {"title": "\n".join(_dedup([u.title, *u.heading_path])), "ref": _ref(u),
+                  "labels": "\n".join(_dedup([*labels, *u.aids.labels])), "body": body,
+                  "aids": "\n".join(aids)}
+        docs.append(UnitDoc(u.unit_id, u.type, u.doc_id, fields,
+                            BREADCRUMB_SEP.join(u.heading_path) + "\n" + body, aids))
+    return docs
+
+
+def indexed_text(doc: UnitDoc, weights: dict[str, int]) -> str:
+    """The text BM25 indexes for `doc`: each field repeated by its weight, in `FIELDS` order."""
+    return " ".join(doc.fields[f] for f in FIELDS for _ in range(weights[f]))
+
+
+# -- concept expansion -------------------------------------------------------------------------
+
+_WORD = re.compile(r"\w+")
+
+
+def _words(text: str) -> list[str]:
+    return _WORD.findall(unicodedata.normalize("NFKC", text).casefold())
+
+
+def label_key(label: str) -> str:
+    """The matching key of a label or query phrase: NFKC, case-folded words joined by spaces."""
+    return " ".join(_words(label))
+
+
+def expand_query(query: str, label_map: dict[str, tuple[str, ...]]) -> str:
+    """`query` followed by the alternate labels (`label_map[key]`) of every label key it holds
+    as whole words, in the order the keys start in the query (longer first at one start),
+    leaving out labels whose key the query or an earlier addition already has. BM25 only."""
+    words = _words(query)
+    if not words or not label_map:
+        return query
+    longest = max(len(k.split()) for k in label_map)
+    grams = [[" ".join(words[i:i + n]) for n in range(min(longest, len(words) - i), 0, -1)]
+             for i in range(len(words))]                 # per start, longest first
+    seen = {g for at in grams for g in at}              # what the query already says
+    added: list[str] = []
+    for key in (g for at in grams for g in at):
+        for alt in label_map.get(key, ()):
+            if label_key(alt) not in seen:
+                seen.add(label_key(alt))
+                added.append(alt)
+    return query if not added else query + " " + " ".join(added)
+
+
+def _label_map(docs: list[UnitDoc]) -> dict[str, tuple[str, ...]]:
+    """{label key: the other labels of every concept that has that label}, from the concept
+    docs given (the labels field, one label per line)."""
+    out: dict[str, list[str]] = {}
+    for d in docs:
+        if d.type != "concept":
+            continue
+        labels = [lab for lab in d.fields["labels"].split("\n") if label_key(lab)]
+        for lab in labels:
+            alts = out.setdefault(label_key(lab), [])
+            for other in labels:
+                if label_key(other) != label_key(lab) and other not in alts:
+                    alts.append(other)
+    return {k: tuple(v) for k, v in sorted(out.items()) if v}
+
+
+# -- tuning ------------------------------------------------------------------------------------
+
+def check_tuning(tuning: object, types: tuple[str, ...] | None = None) -> dict:
+    """`tuning` (`{"weights": {type: {field: weight}}, "w": float}`) checked: every weight in
+    `WEIGHT_GRID`, exactly the `FIELDS` per type, `w` in `W_GRID`, and (given `types`) exactly
+    those types."""
+    if not isinstance(tuning, dict) or set(tuning) != {"weights", "w"}:
+        raise ValueError(f"tuning must be {{'weights': ..., 'w': ...}}, got {tuning!r}")
+    w = tuning["w"]
+    if isinstance(w, bool) or not isinstance(w, (int, float)) or float(w) not in W_GRID:
+        raise ValueError(f"w must be one of {W_GRID}, got {w!r}")
+    weights = tuning["weights"]
+    if not isinstance(weights, dict):
+        raise ValueError(f"tuning weights must be {{type: {{field: weight}}}}, got {weights!r}")
+    if types is not None and set(weights) != set(types):
+        raise ValueError(f"tuning types {sorted(weights)} are not the corpus types "
+                         f"{sorted(types)}")
+    for t, fw in weights.items():
+        if t not in UNIT_TYPES:
+            raise ValueError(f"unknown unit type {t!r} in tuning")
+        if not isinstance(fw, dict) or set(fw) != set(FIELDS):
+            raise ValueError(f"tuning weights of {t!r} must name exactly the fields {FIELDS}")
+        for f, v in fw.items():
+            if isinstance(v, bool) or v not in WEIGHT_GRID:
+                raise ValueError(f"weight of {t}.{f} must be one of {WEIGHT_GRID}, got {v!r}")
+    return {"weights": {t: {f: int(weights[t][f]) for f in FIELDS} for t in sorted(weights)},
+            "w": float(w)}
+
+
+def load_tuning(corpus: str, path: Path = TUNING_PATH) -> dict:
+    """The tuning of `corpus` from the tuning file (C13): `{"weights": {type: {field:
+    weight}}, "w": float}` for exactly the corpus's unit types."""
+    if corpus not in CORPUS_TYPES:
+        raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if corpus not in data:
+        raise ValueError(f"{path}: no tuning for corpus {corpus!r}")
+    return check_tuning(data[corpus], CORPUS_TYPES[corpus])
+
+
+# -- the per-view lexical index ----------------------------------------------------------------
+
+class _ViewLexical:
+    """BM25 over the indexed texts of one view's units, with their types, doc ids and the
+    view's label map."""
+
+    def __init__(self, docs: list[UnitDoc], weights: dict[str, dict[str, int]]):
+        self.ids = [d.unit_id for d in docs]
+        self.types = np.array([d.type for d in docs], dtype=str)
+        self.bm25 = BM25Index()
+        self.bm25.build([Chunk(d.unit_id, d.doc_id, 0, 1, indexed_text(d, weights[d.type]))
+                         for d in docs])
+        self.label_map = _label_map(docs)
+
+    def hits(self, query: str, types: tuple[str, ...] | None) -> Hits:
+        """Every unit of the view with a positive BM25 score for `query` (the expanded
+        query), masked to `types`, sorted by (-score, unit id)."""
+        scores = self.bm25.scores(query)
+        mask = np.ones(len(self.ids), dtype=bool) if types is None else \
+            np.isin(self.types, np.array(types, dtype=str))
+        return masked_hits(self.ids, scores, mask, len(self.ids), positive=True)
+
+
+def _check_types(types) -> tuple[str, ...] | None:
+    if types is None:
+        return None
+    if not isinstance(types, tuple) or not types:
+        raise ValueError(f"types must be None or a non-empty tuple of unit types, got "
+                         f"{types!r}")
+    for t in types:
+        if t not in UNIT_TYPES:
+            raise ValueError(f"unknown unit type {t!r}; one of {', '.join(UNIT_TYPES)}")
+    return tuple(sorted(set(types)))
+
+
+def _check_admitted(admitted) -> frozenset[str] | None:
+    if admitted is None:
+        return None
+    if not isinstance(admitted, (frozenset, set)):
+        raise ValueError(f"admitted must be None or a set of document ids, got "
+                         f"{type(admitted).__name__}")
+    return frozenset(admitted)
+
+
+def _sha256_json(value) -> str:
+    blob = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _json_bytes(value) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            + "\n").encode("utf-8")
+
+
+# -- the stored dense vectors ------------------------------------------------------------------
+
+def _rows(docs: list[UnitDoc]) -> list[tuple[str, int | None, str]]:
+    """(unit id, aid index or None, embedded text) of every vector: each unit's `dense_text`
+    in unit-id order, then each unit's aids."""
+    return ([(d.unit_id, None, d.dense_text) for d in docs]
+            + [(d.unit_id, i, a) for d in docs for i, a in enumerate(d.aids)])
+
+
+def _read_stored(dir: Path, meta: dict) -> np.ndarray | None:
+    """The stored vectors of `dir` when its index.json equals `meta` (vectors hash aside)
+    and the vectors file has the recorded hash, else None."""
+    try:
+        stored = json.loads((dir / "index.json").read_text(encoding="utf-8"))
+        data = (dir / "vectors.npy").read_bytes()
+    except (OSError, ValueError):
+        return None
+    if {k: v for k, v in stored.items() if k != "vectors_sha256"} != meta or \
+            stored.get("vectors_sha256") != hashlib.sha256(data).hexdigest():
+        return None
+    return np.load(dir / "vectors.npy", allow_pickle=False)
+
+
+def _install(dir: Path, files: dict[str, bytes]) -> None:
+    """Write `files` into `dir` as one directory, through a fresh sibling and a rename; an
+    existing `dir` with exactly these files is kept, any other is replaced."""
+    def same() -> bool:
+        try:
+            return (sorted(p.name for p in dir.iterdir()) == sorted(files)
+                    and all((dir / n).read_bytes() == b for n, b in files.items()))
+        except OSError:
+            return False
+
+    if dir.is_dir() and same():
+        return
+    dir.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dir.parent / f".{dir.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    tmp.mkdir()
+    try:
+        for name, data in files.items():
+            (tmp / name).write_bytes(data)
+        try:
+            os.rename(tmp, dir)
+            return
+        except OSError:
+            if same():                  # another process installed the same index
+                return
+        old = dir.parent / f".{dir.name}.{os.getpid()}.{uuid.uuid4().hex}.old"
+        os.rename(dir, old)
+        os.rename(tmp, dir)
+        shutil.rmtree(old, ignore_errors=True)
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _npy_bytes(vectors: np.ndarray) -> bytes:
+    buf = io.BytesIO()
+    np.save(buf, np.ascontiguousarray(vectors, dtype=np.float32), allow_pickle=False)
+    return buf.getvalue()
+
+
+# -- the index ---------------------------------------------------------------------------------
+
+class UnitIndex:
+    """Build with `UnitIndex.build(store_path, units_id, docs, emb, tuning)`."""
+
+    def __init__(self, units_id: str, docs: list[UnitDoc], tuning: dict, directory: Path,
+                 emb: EmbeddingCache | None, vectors: np.ndarray | None,
+                 rows: list[tuple[str, int | None, str]] | None):
+        self.units_id = units_id
+        self.docs = docs
+        self.tuning = tuning
+        self.directory = directory
+        self.emb = emb
+        self.lexical_only = emb is None
+        self.doc_ids = frozenset(d.doc_id for d in docs)
+        self.docs_sha256 = _sha256_json([[d.unit_id, d.type, d.doc_id, d.fields,
+                                          d.dense_text, list(d.aids)] for d in docs])
+        self.fingerprint = _sha256_json({
+            "format": FORMAT_VERSION, "units_id": units_id, "docs": self.docs_sha256,
+            "weights": tuning["weights"], "bm25": BM25Index().config()})
+        self._ids = [d.unit_id for d in docs]
+        self._doc_of = np.array([d.doc_id for d in docs], dtype=str)
+        self._type_of = np.array([d.type for d in docs], dtype=str)
+        self._vectors = vectors
+        if rows is not None:
+            pos = {u: i for i, u in enumerate(self._ids)}
+            self._aid_parent = np.array([pos[u] for u, aid, _ in rows if aid is not None],
+                                        dtype=np.int64)
+        self._full: _ViewLexical | None = None
+
+    @classmethod
+    def build(cls, store_path: Path, units_id: str, docs: list[UnitDoc],
+              emb: EmbeddingCache | None, tuning: dict) -> UnitIndex:
+        """The index of `docs` (`unit_docs` of build `units_id`), with dense vectors from
+        `emb` stored under `<store_path>/units-index/<units id>/`; `emb=None` builds a
+        lexical-only index (C8). `tuning` is a corpus's entry of the tuning file."""
+        docs = sorted(docs, key=lambda d: d.unit_id)
+        if len({d.unit_id for d in docs}) != len(docs):
+            raise ValueError("unit docs repeat a unit id")
+        tuning = check_tuning(tuning)
+        missing = sorted({d.type for d in docs} - set(tuning["weights"]))
+        if missing:
+            raise ValueError(f"the tuning has no field weights for unit types "
+                             f"{', '.join(missing)}")
+        root = Path(store_path) / INDEX_DIR / units_id
+        index = cls(units_id, docs, tuning, root / "lexical", emb, None, None)
+        meta = {"format": FORMAT_VERSION, "units_id": units_id, "units": len(docs),
+                "docs_sha256": index.docs_sha256}
+        if emb is None:
+            _install(index.directory, {"index.json": _json_bytes(
+                {**meta, "lexical_only": True, "embedding": None})})
+            return index
+        rows = _rows(docs)
+        directory = root / f"dense-{emb.model_hash[:16]}"
+        meta = {**meta, "lexical_only": False, "rows": len(rows),
+                "embedding": {"model": emb.model_name, "model_hash": emb.model_hash}}
+        vectors = _read_stored(directory, meta)
+        if vectors is None:
+            vectors, _ = emb.embed_texts([t for _, _, t in rows])
+            data = _npy_bytes(vectors)
+            _install(directory, {
+                "index.json": _json_bytes({**meta,
+                                           "vectors_sha256": hashlib.sha256(data).hexdigest()}),
+                "rows.jsonl": b"".join(_json_bytes({"unit_id": u, "aid": a})
+                                       for u, a, _ in rows),
+                "vectors.npy": data})
+        return cls(units_id, docs, tuning, directory, emb, vectors, rows)
+
+    # -- views -----------------------------------------------------------------------------
+
+    def _view(self, admitted: frozenset[str] | None) -> _ViewLexical | None:
+        """The lexical index of the view (module docstring); None for a view with no unit."""
+        docs = self.doc_ids if admitted is None else admitted & self.doc_ids
+        if not docs:
+            return None
+        if docs == self.doc_ids:
+            if self._full is None:
+                self._full = _ViewLexical(self.docs, self.tuning["weights"])
+            return self._full
+        key = (self.fingerprint, acl.view_id(docs))
+        with _VIEW_LOCK:
+            if key in _VIEW_LEXICAL:
+                _VIEW_LEXICAL.move_to_end(key)
+                return _VIEW_LEXICAL[key]
+        lex = _ViewLexical([d for d in self.docs if d.doc_id in docs], self.tuning["weights"])
+        with _VIEW_LOCK:
+            _VIEW_LEXICAL[key] = lex
+            _VIEW_LEXICAL.move_to_end(key)
+            while len(_VIEW_LEXICAL) > VIEW_CACHE:
+                _VIEW_LEXICAL.popitem(last=False)
+        return lex
+
+    def label_map(self, admitted: frozenset[str] | None) -> dict[str, tuple[str, ...]]:
+        """The label map of the view's concepts (what `expand_query` reads)."""
+        view = self._view(_check_admitted(admitted))
+        return {} if view is None else view.label_map
+
+    def lexical_query(self, query: str, admitted: frozenset[str] | None) -> str:
+        """`query` expanded by the view's concept labels: what BM25 searches."""
+        return expand_query(query, self.label_map(admitted))
+
+    # -- channels --------------------------------------------------------------------------
+
+    def _mask(self, admitted: frozenset[str] | None, types: tuple[str, ...] | None
+              ) -> np.ndarray:
+        mask = np.ones(len(self._ids), dtype=bool)
+        if admitted is not None:
+            mask &= np.isin(self._doc_of, np.array(sorted(admitted), dtype=str))
+        if types is not None:
+            mask &= np.isin(self._type_of, np.array(types, dtype=str))
+        return mask
+
+    def dense_scores(self, query: str, *, admitted: frozenset[str] | None,
+                     types: tuple[str, ...] | None) -> Hits:
+        """Every admitted unit of `types` with its dense score (best cosine of its own row
+        and its aid rows), sorted by (-score, unit id)."""
+        if self.lexical_only:
+            raise ValueError("this unit index is lexical-only (built with emb=None)")
+        admitted, types = _check_admitted(admitted), _check_types(types)
+        mask = self._mask(admitted, types)
+        if not mask.any() or not self._ids:
+            return []
+        q = _unit(next(iter(self.emb.model().query_embed([query]))))
+        scores = row_scores(self._vectors, q)
+        best = scores[:len(self._ids)].copy()
+        np.maximum.at(best, self._aid_parent, scores[len(self._ids):])
+        return masked_hits(self._ids, best, mask, len(self._ids), positive=False)
+
+    def search(self, query: str, *, types: tuple[str, ...] | None,
+               admitted: frozenset[str] | None, k: int = 10) -> Hits:
+        """The top `k` units for `query` among the units of the documents in `admitted`
+        (None: every unit) of `types` (None: every type), as (unit id, score) sorted by
+        (-score, unit id) (module docstring)."""
+        if isinstance(k, bool) or not isinstance(k, int) or k < 0:
+            raise ValueError(f"k must be an integer >= 0, got {k!r}")
+        admitted, types = _check_admitted(admitted), _check_types(types)
+        view = self._view(admitted)
+        if view is None or k == 0:
+            return []
+        lex = view.hits(expand_query(query, view.label_map), types)
+        if self.lexical_only:
+            return lex[:k]
+        dense = self.dense_scores(query, admitted=admitted, types=types)
+        ranked = sorted(_full_ranking(lex, dense, self.tuning["w"]),
+                        key=lambda h: (-h[1], h[0]))
+        return ranked[:k]

@@ -1,0 +1,87 @@
+{
+  "gov": {
+    "weights": {
+      "concept": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "procedure": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "rule_card": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "table_record": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      }
+    },
+    "w": 1.0
+  },
+  "research": {
+    "weights": {
+      "concept": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "table_record": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      }
+    },
+    "w": 1.0
+  },
+  "bench": {
+    "weights": {
+      "concept": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "faq": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "procedure": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      },
+      "table_record": {
+        "title": 1,
+        "ref": 1,
+        "labels": 1,
+        "body": 1,
+        "aids": 1
+      }
+    },
+    "w": 1.0
+  }
+}
