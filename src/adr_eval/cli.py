@@ -573,7 +573,7 @@ def _run(a: argparse.Namespace) -> int:
     except (BudgetExceeded, ModelError) as e:
         # tables mode only (v0.1 runs stop per item, and a stored input rejection is a row):
         # the runner attaches the run's budget
-        print(stop_status(e.budget, e))
+        print(stop_status(getattr(e, "budget", None), e))
         return 1
     if a.dry_run:
         return 0

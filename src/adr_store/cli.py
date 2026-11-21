@@ -960,7 +960,7 @@ def _tables_build(a: argparse.Namespace) -> int:
     except eval_runner.ProfileError as e:
         raise tools.ToolError(str(e)) from e
     except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
-        print(stop_status(meter["meter"].budget, e))
+        print(stop_status(meter["meter"].budget if meter else None, e))
         return 1
     m = tables_overlay.load_manifest(a.store, res.tables_id)
     head = tables_overlay.read_head(a.store)

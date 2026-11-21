@@ -198,3 +198,9 @@ def test_stop_status_reports_budget_units():
     with pytest.raises(BudgetExceeded):
         dollars.reserve(1.0)
     assert stop_status(dollars).startswith("status: stopped at --max-dollars 0.01 (0 budget")
+
+
+def test_stop_status_without_a_budget_names_the_failure():
+    from adr_eval.pipeline import stop_status
+    line = stop_status(None, RuntimeError("transport  down"))
+    assert line == "status: stopped: transport down; nothing written."

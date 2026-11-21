@@ -154,11 +154,13 @@ class Budget:
             self.calls += made_call
 
 
-def stop_status(budget: Budget, error: BaseException | None = None) -> str:
+def stop_status(budget: Budget | None, error: BaseException | None = None) -> str:
     """The status line of a command that stopped with nothing written, shared by `adr` and
     `adr-eval`: at its cap (`error` None or BudgetExceeded) or on a model failure that is not
     cached (ruling P21), and the budget units `budget` used (`Budget.calls`: with
     `count_attempts` every transport attempt, retries included)."""
+    if budget is None:   # a failure that escaped before any budget was attached
+        return (f"status: stopped: {' '.join(str(error).split())}; nothing written.")
     if error is None or isinstance(error, BudgetExceeded):
         cap = (f"--max-dollars {budget.max_dollars}" if budget.stop_reason == "budget"
                else f"--max-calls {budget.max_calls}")
