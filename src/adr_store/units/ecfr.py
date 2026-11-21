@@ -8,45 +8,52 @@ A **provision** is one `P` element of a `DIV8` section of an eCFR part (33 CFR 1
   a whole line block inside its section, from the end of the previous paragraph, and re-sliced.
   A paragraph that cannot be located is rejected (`provisions(.., misses)` lists it). A section
   number seen twice is kept once (the first), as `ecfr_sections` does.
-- **Marker path.** Level 1 `(a)`, level 2 `(1)`, level 3 roman `(i)`, level 4 `(A)`; a
-  paragraph starting with several markers ("(a)(1)") takes them all. A marker that is both a
-  letter and a roman numeral (`i`, `v`, `x`, `ii`, ...) is roman when the current path is at
-  level 2 or deeper, unless it is the letter right after the path's level-1 letter; at level 1
-  a single letter is a letter, and a longer one is roman unless it is the next letter. Two
-  additions the real parts need (they hold no duplicate ids in 33 CFR 117 either way): a
-  marker read as a letter is roman when the next paragraph starts with its roman successor
-  ("(i)" after "(h)(1)", then "(ii)"), and an italic marker ("(<I>1</I>)", eCFR level 5)
-  sits below level 4. A paragraph without a marker takes the last marked path plus `p<n>`, n
-  counting the unmarked paragraphs under that path from 1. The provision id is
+- **Marker path.** Level 1 `(a)`, level 2 `(1)`, level 3 roman `(i)`, level 4 `(A)`, and the
+  italic levels 5 `(<I>1</I>)` and 6 `(<I>i</I>)`. A paragraph starting with several markers
+  ("(a)(1)") takes them all, each one deeper than the one before it ("(4)(i)" after (h)(3) is
+  (h)(4)(i); "(L)(1)" puts the (1) at level 5). A marker after an italic subject heading
+  counts as a leading marker too: "(d) <I>Regulations</I>—(1) <I>Positive control.</I> (i)
+  Except" is (d)(1)(i), the deepest marker, and its heading text belongs to that provision.
+  For a paragraph's first marker that is both a letter and a roman numeral (`i`, `v`, `x`,
+  `ii`, ...): it is the next roman numeral's sibling when it follows that numeral ("(ii)"
+  after "(i)", at any level); else it is roman when the current path is at level 2 or deeper,
+  unless it is the letter right after the path's level-1 letter; at level 1 a single letter
+  is a letter, and a longer one is roman unless it is the next letter. A marker read as a
+  letter is roman when the next paragraph starts with its roman successor ("(i)" after
+  "(h)(1)", then "(ii)"). A paragraph without a marker takes the last marked path plus `p<n>`,
+  n counting the unmarked paragraphs under that path from 1. The provision id is
   `"<title> CFR <section>"` followed by `(<marker>)` per level: § 117.5 is one unmarked
-  paragraph, so its id is `33 CFR 117.5(p1)`.
+  paragraph, so its id is `33 CFR 117.5(p1)`. Repeated markers in the source can give two
+  provisions one id; `closure.duplicate_provision_ids` lists them.
 - **Modality** (§8.1). The leftmost match of a lexicon phrase (case-insensitive, word-bounded),
   the longest at equal start, gives the class; `modal_spans` hold every match, scanned left to
   right without overlap. Provision `modal_spans` are document offsets. A paragraph with no
   match is a non-modal provision: not a rule card, but a closure target (P4).
-- **Cross-references** (§8.3). "§ N.N", "§§ N.N and N.N" (any list joined by commas, "and",
-  "or", "to" or "through"; one reference per number), "paragraph(s) (x)(y) of this section",
-  "N CFR part N" and "N CFR N.N" (also "N CFR § N.N"), each section form with an optional
-  trailing paragraph path ("§ 117.31(b)"); a range ("§§ 73.3587-3589") gives its first
-  section. A "§" number takes the provision's title. Overlapping
-  matches keep the earliest, then the longest. A target in another part is `external`; in the
-  same part it is `resolved` when the version holds that section (a reference to the part
-  itself always), else `dangling`. Offsets are document offsets.
+- **Cross-references** (§8.3 as amended after the Task 2 review). "§ N.N", "§§ N.N and N.N"
+  (any list joined by commas, "and", "or", "to" or "through"; one reference per number),
+  ranges "§ A-B" and "§§ 73.3587-3589" (both ends, as "A through B"),
+  "paragraph(s) (x)(y) of this section", "N CFR part N" and "N CFR N.N" (also "N CFR § N.N"),
+  each section form with an optional trailing paragraph path ("§ 117.31(b)"). A "§" number
+  takes the provision's title. Overlapping matches keep the earliest, then the longest. A
+  target in another part is `external`. In the same part, a target is `resolved` only when a
+  provision at or under it exists in the version; a missing section or a section without the
+  cited paragraph is `dangling` (`closure.closure_census` gives the reason). A reference to
+  the provision's own part is recorded as `resolved` and counted apart from U2. Offsets are
+  document offsets.
 
 A **rule card** is a modal provision as a `rule_card` unit: `canonical_ref` is the provision
 id, the unit text is the paragraph, and the body holds the provision id, the verbatim text,
 modality, modal spans, cross-references (`target_unit` is the card whose `canonical_ref` is the
-target, else null) and the not-extracted form of the four enrichment fields; `closure` is
-filled from `units.closure` and `bindings` later. Versions are linked by the build
+target, the first in document order when several share it, else null) and the not-extracted
+form of the four enrichment fields; `closure` is filled from `units.closure` and `bindings`
+later. Versions are linked by the build
 (`envelope.link_versions` over every version's cards).
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 from lxml import etree
@@ -55,7 +62,7 @@ from adr_eval.corpora.extract import extract_text
 from adr_store import applicability as ap
 from adr_store.applicability import Applicability
 from adr_store.store import Store
-from adr_store.tables.ecfr import _locate_line, chain_docs
+from adr_store.tables.ecfr import _locate_line, chain_docs, located_div8
 from adr_store.units.envelope import Unit, make_unit, text_sha12, unit_id
 
 __all__ = ["MODAL_LEXICON", "PARTS", "CrossRef", "Provision", "cross_refs", "ecfr_docs",
@@ -166,19 +173,30 @@ def _roman_successor(tok: str) -> str:
     return out
 
 
+def _candidates(tok: str, italic: bool) -> tuple[int, ...]:
+    """The levels marker `tok` can hold, shallowest first."""
+    if tok.isdigit():
+        return (5,) if italic else (2, 5)
+    if tok.isupper():
+        return (4,)
+    if italic:
+        return (6,)
+    roman, letter = bool(_ROMAN.match(tok)), _is_letter(tok)
+    return (1, 3, 6) if roman and letter else (3, 6) if roman else (1,)
+
+
 def _level(tok: str, path: tuple[str, ...], italic: bool = False,
            following: str | None = None) -> int:
-    """The level of marker `tok` read after the marked path `path`."""
-    if tok.isdigit():
-        return 5 if italic else 2
-    if italic and tok.islower():
-        return 6
-    if tok.isupper():
-        return 4
-    roman, letter = bool(_ROMAN.match(tok)), _is_letter(tok)
-    if not (roman and letter):
-        return 3 if roman else 1
+    """The level of the first marker of a paragraph, `tok`, read after the marked path
+    `path`; `following` is the first marker of the next paragraph, if any."""
+    cands = _candidates(tok, italic)
+    if len(cands) == 1 or cands == (2, 5):
+        return cands[0]
     levels = _stored_levels(path)
+    if path and _ROMAN.match(path[-1]) and tok == _roman_successor(path[-1]):
+        return levels[-1]                            # "(ii)" after "(i)": a sibling
+    if cands == (3, 6):
+        return 3
     first = path[0] if levels and levels[0] == 1 else None
     if first is not None and tok == _next_letter(first):
         lv = 1
@@ -186,10 +204,8 @@ def _level(tok: str, path: tuple[str, ...], italic: bool = False,
         return 3
     else:
         lv = 1 if len(tok) == 1 else 3
-    if lv == 1 and following is not None:
-        nxt = _leading_markers(following.lstrip())
-        if nxt and nxt[0] == _roman_successor(tok):
-            return 3
+    if lv == 1 and following == _roman_successor(tok):
+        return 3
     return lv
 
 
@@ -201,31 +217,80 @@ def _leading_markers(text: str) -> list[str]:
     return toks
 
 
-def marker_path(prev: tuple[str, ...], text: str, *, italic: bool = False,
-                following: str | None = None) -> tuple[str, ...]:
-    """The marker path of paragraph `text` read after a paragraph whose path is `prev`.
-    `italic`: the paragraph's first marker is set in italics (eCFR levels 5 and 6).
-    `following`: the next paragraph's text; a marker read as a letter is roman instead when
-    the next paragraph starts with its roman successor ("(i)" then "(ii)")."""
+def _path_of(prev: tuple[str, ...], toks: list[str], italic: tuple[bool, ...],
+             following: str | None) -> tuple[str, ...]:
     base = prev[:-1] if prev and _UNMARKED.match(prev[-1]) else prev
-    toks = _leading_markers(text.lstrip())
     if not toks:
         n = int(prev[-1][1:]) + 1 if prev and _UNMARKED.match(prev[-1]) else 1
         return (*base, f"p{n}")
     path, levels = list(base), _stored_levels(base)
     for k, tok in enumerate(toks):
-        lv = _level(tok, tuple(path), italic and k == 0,
-                    following if k == len(toks) - 1 else None)
+        it = k < len(italic) and italic[k]
+        if k == 0:
+            lv = _level(tok, tuple(path), it, following if len(toks) == 1 else None)
+        else:   # each later marker of the paragraph sits deeper than the one before it
+            deeper = [c for c in _candidates(tok, it) if c > levels[-1]]
+            lv = deeper[0] if deeper else _level(tok, tuple(path), it)
         keep = [i for i, v in enumerate(levels) if v < lv]
         cut = keep[-1] + 1 if keep else 0
         path, levels = path[:cut] + [tok], levels[:cut] + [lv]
     return tuple(path)
 
 
-def _italic_marker(p: etree._Element) -> bool:
-    """Whether paragraph element `p` opens with an italic marker, "(<I>1</I>)"."""
-    return ((p.text or "").strip() == "(" and len(p) > 0 and p[0].tag in ("I", "E")
-            and (p[0].tail or "").startswith(")"))
+def marker_path(prev: tuple[str, ...], text: str, *, italic: tuple[bool, ...] = (),
+                following: str | None = None) -> tuple[str, ...]:
+    """The marker path of paragraph `text` read after a paragraph whose path is `prev`.
+    `italic`: per leading marker, whether it is set in italics (eCFR levels 5 and 6).
+    `following`: the next paragraph's text; a marker read as a letter is roman instead when
+    the next paragraph starts with its roman successor ("(i)" then "(ii)")."""
+    nxt = _leading_markers(following.lstrip()) if following is not None else []
+    return _path_of(prev, _leading_markers(text.lstrip()), italic, nxt[0] if nxt else None)
+
+
+_HEADING_GAP = re.compile(r"[\s.:—–-]*")
+
+
+def _element_markers(p: etree._Element) -> tuple[list[str], tuple[bool, ...]]:
+    """The leading markers of paragraph element `p` and whether each is italic. A marker may
+    be italic ("(<I>1</I>)"), and an italic subject heading after a marker may be followed by
+    more markers ("(d) <I>Regulations</I>—(1) <I>Positive control.</I> (i) Except"): the
+    paragraph then starts with all of them."""
+    text, mask = "", []
+    for seg, it in _segments_until_other(p):
+        text += seg
+        mask += [it] * len(seg)
+    toks: list[str] = []
+    italic: list[bool] = []
+    i = len(text) - len(text.lstrip())
+    while True:
+        m = _TOKEN.match(text, i)
+        if m and _token_ok(m.group(1)):
+            toks.append(m.group(1))
+            italic.append(all(mask[m.start(1):m.end(1)]))
+            i = m.end()
+            continue
+        j = i + len(text[i:]) - len(text[i:].lstrip())
+        if not toks or j >= len(text) or not mask[j] or text[j] == "(":
+            break
+        k = j
+        while k < len(text) and mask[k]:
+            k += 1
+        k = _HEADING_GAP.match(text, k).end()
+        nxt = _TOKEN.match(text, k)
+        if not (nxt and _token_ok(nxt.group(1))):
+            break
+        i = k
+    return toks, tuple(italic)
+
+
+def _segments_until_other(p: etree._Element) -> list[tuple[str, bool]]:
+    """(text, italic) segments of `p` up to its first child that is not `I` or `E`."""
+    out = [(p.text or "", False)]
+    for c in p:
+        if c.tag not in ("I", "E"):
+            break
+        out += [("".join(c.itertext()), True), (c.tail or "", False)]
+    return out
 
 
 # -- provisions ------------------------------------------------------------------------------
@@ -248,23 +313,12 @@ def _subpart_of(div: etree._Element) -> str | None:
 def _read(store: Store, doc_id: str, misses: list | None = None
           ) -> tuple[list[Provision], set[str]]:
     """(the provisions of `doc_id` in document order, the section numbers it holds)."""
-    raw = (Path(store.path) / "blobs" / doc_id[:2] / doc_id).read_bytes()
-    if hashlib.sha256(raw).hexdigest() != doc_id:
-        raise ValueError(f"{doc_id[:12]}: the stored bytes are not the document's bytes")
     title, part = _part_of(store, doc_id)
-    full = store.text(doc_id)
-    root = etree.fromstring(raw, etree.XMLParser(resolve_entities=False, no_network=True))
+    full, divs = located_div8(store, doc_id)
     out: list[Provision] = []
     sections: set[str] = set()
-    cursor = 0
-    for div in root.iter("DIV8"):
-        text = extract_text(etree.tostring(div, with_tail=False), "xml")
-        if not text:
-            continue
-        at = full.find(text, cursor)
-        if at < 0:
-            raise ValueError(f"{doc_id[:12]}: section {div.get('N')} not found in extracted text")
-        cursor, end = at + len(text), at + len(text)
+    for div, at, text, _ in divs:
+        end = at + len(text)
         number = div.get("N") or ""
         if not number or number in sections:
             continue
@@ -272,14 +326,14 @@ def _read(store: Store, doc_id: str, misses: list | None = None
         heading, subpart = text.split("\n", 1)[0], _subpart_of(div)
         path: tuple[str, ...] = ()
         inner = at + len(heading)
-        paras = [(t, _italic_marker(p)) for p in div.iter("P")
+        paras = [(t, *_element_markers(p)) for p in div.iter("P")
                  if (t := extract_text(etree.tostring(p, with_tail=False), "xml"))]
-        for i, (ptext, italic) in enumerate(paras):
-            path = marker_path(path, ptext, italic=italic,
-                               following=paras[i + 1][0] if i + 1 < len(paras) else None)
+        for i, (ptext, toks, italic) in enumerate(paras):
+            following = paras[i + 1][1][0] if i + 1 < len(paras) and paras[i + 1][1] else None
+            path = _path_of(path, toks, italic, following)
             pid = f"{title} CFR {number}" + "".join(f"({m})" for m in path)
             found = _locate_line(full, ptext, inner, end)
-            if found is None or full[found[0]:found[1]] != ptext:
+            if found is None:
                 if misses is not None:
                     misses.append((number, pid))
                 continue
@@ -306,22 +360,29 @@ def ecfr_docs(store: Store) -> list[str]:
     return [d for chain in PARTS for d in chain_docs(store, chain)]
 
 
+def skips_a_level(path: tuple[str, ...]) -> bool:
+    """Whether a marker path skips a level ("(d)(iv)" holds no level 2), ignoring `p<n>`."""
+    marked = tuple(m for m in path if not _UNMARKED.match(m))
+    levels = _stored_levels(marked)
+    return any(b - a > 1 for a, b in zip([0, *levels], levels, strict=False))
+
+
 # -- cross-references --------------------------------------------------------------------------
 
 # A section number: "117.5", "117.162T", "165.T01-0149", "1.05-1". A dash suffix is part of it
-# after a "T" number or when it has one or two digits; "73.3587-3589" and "165.766-165.768"
-# are ranges, read as their first section.
+# after a "T" number or when it has one or two digits; otherwise a dash starts a range end
+# ("73.3587-3589", "165.766-165.768"), and a range gives both ends.
 _SEC = r"\d+\.(?:T[0-9A-Za-z]+(?:-[0-9A-Za-z]+)?|[0-9A-Za-z]+(?:-\d{1,2})?)(?!\.?\d)"
 _PATH = r"(?:\s?(?:\(\w{1,5}\))+)?"
-_JOIN = r"(?:,\s*(?:and\s+|or\s+)?|\s+(?:and|or|to|through)\s+)"
 _CFR_PART = re.compile(r"\b(\d+)\s+CFR\s+parts?\s+(\d+)\b")
 _CFR_SEC = re.compile(rf"\b(\d+)\s+CFR\s+(?:§§?\s*)?({_SEC})({_PATH})")
-_SECS = re.compile(rf"§§\s*({_SEC}{_PATH})((?:{_JOIN}{_SEC}{_PATH})*)")
-_SEC1 = re.compile(rf"§\s*({_SEC})({_PATH})")
+_SIGN = re.compile(r"(§§?)\s*")
+_ITEM = re.compile(rf"({_SEC})({_PATH})")
+_LIST_JOIN = re.compile(r",\s*(?:and\s+|or\s+)?|\s+(?:and|or|to|through)\s+")
+_RANGE_END = re.compile(r"-(?:(" + _SEC + r")|(\d+)(?!\w|\.\d))")
 _PARAS = re.compile(r"\bparagraphs?\s+((?:\(\w{1,5}\))+)"
                     r"((?:(?:,\s*(?:and\s+|or\s+)?|\s+(?:and|or|through)\s+)(?:\(\w{1,5}\))+)*)"
                     r",?\s+of\s+this\s+section\b")
-_ITEM = re.compile(rf"({_SEC})({_PATH})")
 _MARKS = re.compile(r"\((\w{1,5})\)")
 
 
@@ -329,53 +390,79 @@ def _marks(path: str) -> str:
     return "".join(f"({m})" for m in _MARKS.findall(path))
 
 
-def cross_refs(p: Provision, section_numbers: set[str]) -> list[CrossRef]:
-    """The explicit references of provision `p` in text order (§8.3); `section_numbers` are
-    the sections the version of `p` holds."""
+def _sign_items(text: str, m: re.Match) -> tuple[list[tuple[int, int, str, str]], int]:
+    """The section items after a "§" or "§§" sign at `m`: (start, end, section, path) each,
+    and where they end. A "§§" takes a list; either sign takes range ends."""
+    first = _ITEM.match(text, m.end())
+    if first is None:
+        return [], m.end()
+    items = [(m.start(), first.end(), first.group(1), first.group(2))]
+    i = first.end()
+    while True:
+        if r := _RANGE_END.match(text, i):
+            sec = items[-1][2]
+            if r.group(1):
+                sec_end = r.group(1)
+            else:
+                head, rest = sec.split(".", 1)
+                d = r.group(2)
+                sec_end = f"{head}.{rest[:-len(d)] + d if len(d) <= len(rest) else d}"
+            items.append((r.start() + 1, r.end(), sec_end, ""))
+            i = r.end()
+            continue
+        j = _LIST_JOIN.match(text, i) if m.group(1) == "§§" else None
+        it = _ITEM.match(text, j.end()) if j else None
+        if it is None:
+            break
+        items.append((it.start(), it.end(), it.group(1), it.group(2)))
+        i = it.end()
+    return items, i
+
+
+def cross_refs(p: Provision, section_numbers: set[str],
+               provision_ids: set[str] | None = None) -> list[CrossRef]:
+    """The explicit references of provision `p` in text order (§8.3). `section_numbers` are
+    the sections the version of `p` holds; with `provision_ids` (the version's provision
+    ids), an in-part target resolves only when a provision at or under it exists (spec §8.3:
+    a section without the cited paragraph is `dangling`)."""
     title, part = p.part.split(" CFR ")
 
-    def resolve(t: str, sec: str) -> str:
+    def resolve(t: str, sec: str, target: str) -> str:
         if sec.split(".", 1)[0] != part or t != title:
             return "external"
-        return "resolved" if sec in section_numbers else "dangling"
+        if sec not in section_numbers:
+            return "dangling"
+        if provision_ids is not None and not any(
+                q == target or q.startswith(target + "(") for q in provision_ids):
+            return "dangling"
+        return "resolved"
 
     found: list[tuple[int, int, list[CrossRef]]] = []
 
-    def at(a: int, b: int) -> tuple[int, int]:
-        return p.start + a, p.start + b
+    def ref(a: int, b: int, t: str, sec: str, path: str) -> CrossRef:
+        target = f"{t} CFR {sec}{_marks(path)}"
+        return CrossRef(p.text[a:b], p.start + a, p.start + b, target, resolve(t, sec, target))
 
     for m in _CFR_PART.finditer(p.text):
         same = (m.group(1), m.group(2)) == (title, part)
         found.append((m.start(), m.end(), [CrossRef(
-            m.group(0), *at(m.start(), m.end()), f"{m.group(1)} CFR part {m.group(2)}",
-            "resolved" if same else "external")]))
+            m.group(0), p.start + m.start(), p.start + m.end(),
+            f"{m.group(1)} CFR part {m.group(2)}", "resolved" if same else "external")]))
     for m in _CFR_SEC.finditer(p.text):
-        sec = m.group(2)
-        found.append((m.start(), m.end(), [CrossRef(
-            m.group(0), *at(m.start(), m.end()), f"{m.group(1)} CFR {sec}{_marks(m.group(3))}",
-            resolve(m.group(1), sec))]))
-    for m in _SECS.finditer(p.text):
-        refs = []
-        for i, it in enumerate(_ITEM.finditer(p.text, m.start(), m.end())):
-            a = m.start() if i == 0 else it.start()
-            sec = it.group(1)
-            refs.append(CrossRef(p.text[a:it.end()], *at(a, it.end()),
-                                 f"{title} CFR {sec}{_marks(it.group(2))}", resolve(title, sec)))
-        found.append((m.start(), m.end(), refs))
-    for m in _SEC1.finditer(p.text):
-        sec = m.group(1)
-        found.append((m.start(), m.end(), [CrossRef(
-            m.group(0), *at(m.start(), m.end()), f"{title} CFR {sec}{_marks(m.group(2))}",
-            resolve(title, sec))]))
+        found.append((m.start(), m.end(), [ref(m.start(), m.end(), m.group(1), m.group(2),
+                                               m.group(3))]))
+    for m in _SIGN.finditer(p.text):
+        items, end = _sign_items(p.text, m)
+        if items:
+            found.append((m.start(), end, [ref(a, b, title, sec, path)
+                                           for a, b, sec, path in items]))
     for m in _PARAS.finditer(p.text):
         first = tuple(_MARKS.findall(m.group(1)))
         paths = [first] + [marker_path(first, g.group(0)) for g in
                            re.finditer(r"(?:\(\w{1,5}\))+", m.group(2))]
-        own = "resolved" if p.section in section_numbers else "dangling"
-        refs = [CrossRef(m.group(0), *at(m.start(), m.end()),
-                         f"{title} CFR {p.section}" + "".join(f"({x})" for x in path), own)
-                for path in paths]
-        found.append((m.start(), m.end(), refs))
+        found.append((m.start(), m.end(), [
+            ref(m.start(), m.end(), title, p.section, "".join(f"({x})" for x in path))
+            for path in paths]))
     out: list[CrossRef] = []
     taken = -1
     for a, b, refs in sorted(found, key=lambda f: (f[0], -f[1])):
@@ -419,7 +506,10 @@ def rule_cards(store: Store, doc_id: str, overlay: Applicability | None,
     every provision of it). The cards' closure is empty here (`units.closure` computes it)."""
     provs, sections = _read(store, doc_id)
     full = store.text(doc_id)
+    ids = {p.provision_id for p in provs}
     modal = [p for p in provs if p.modality is not None and full[p.start:p.end] == p.text]
+    # a provision id held by several cards (repeated markers in the source) names the first
+    # of them in document order
     card_ids: dict[str, str] = {}
     for p in modal:
         card_ids.setdefault(p.provision_id,
@@ -435,7 +525,7 @@ def rule_cards(store: Store, doc_id: str, overlay: Applicability | None,
                 {"raw": x.raw, "target_ref": x.target_ref,
                  "target_unit": card_ids.get(x.target_ref) if x.resolution == "resolved"
                  else None, "resolution": x.resolution, "span": [x.start, x.end]}
-                for x in cross_refs(p, sections)],
+                for x in cross_refs(p, sections, ids)],
             "closure": [], "bindings": []}
         cards.append(_card(store, overlay, corpus, p, body))
     return cards, provs

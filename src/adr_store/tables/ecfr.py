@@ -87,19 +87,20 @@ def _group_of(div: etree._Element) -> etree._Element | None:
     return None
 
 
-def ecfr_sections(store: Store, doc_id: str) -> list[SectionUnit]:
-    """The sections of one stored eCFR document in document order; a section number seen twice
-    is kept once (the first), and a section with no text is dropped."""
+def located_div8(store: Store, doc_id: str
+                 ) -> tuple[str, list[tuple[etree._Element, int, str, int]]]:
+    """(the canonical text of eCFR document `doc_id`, every `DIV8` with text as (element,
+    start, extracted text, end of the previous section) in document order). Each section's
+    extracted text is found by `find` from the end of the previous one; ValueError when the
+    stored bytes are not the document's or a section is not found. Shared by `ecfr_sections`
+    and the Phase 4 provision reader (`units.ecfr`)."""
     raw = (Path(store.path) / "blobs" / doc_id[:2] / doc_id).read_bytes()
     if hashlib.sha256(raw).hexdigest() != doc_id:
         raise ValueError(f"{doc_id[:12]}: the stored bytes are not the document's bytes")
-    source = store.source(doc_id)
     full = store.text(doc_id)
     parser = etree.XMLParser(resolve_entities=False, no_network=True)
     root = etree.fromstring(raw, parser)
-    out: list[SectionUnit] = []
-    seen: set[str] = set()
-    state_spans: dict[etree._Element, tuple[int, int] | None] = {}
+    out = []
     cursor = 0
     for div in root.iter("DIV8"):
         text = extract_text(etree.tostring(div, with_tail=False), "xml")
@@ -108,6 +109,20 @@ def ecfr_sections(store: Store, doc_id: str) -> list[SectionUnit]:
         at = full.find(text, cursor)
         if at < 0:
             raise ValueError(f"{doc_id[:12]}: section {div.get('N')} not found in extracted text")
+        out.append((div, at, text, cursor))
+        cursor = at + len(text)
+    return full, out
+
+
+def ecfr_sections(store: Store, doc_id: str) -> list[SectionUnit]:
+    """The sections of one stored eCFR document in document order; a section number seen twice
+    is kept once (the first), and a section with no text is dropped."""
+    source = store.source(doc_id)
+    full, divs = located_div8(store, doc_id)
+    out: list[SectionUnit] = []
+    seen: set[str] = set()
+    state_spans: dict[etree._Element, tuple[int, int] | None] = {}
+    for div, at, text, cursor in divs:
         number = div.get("N") or ""
         group = _group_of(div)
         state = _group_state(div)
@@ -120,7 +135,6 @@ def ecfr_sections(store: Store, doc_id: str) -> list[SectionUnit]:
                 doc_id=doc_id, version=source.source_version, section=number, heading=heading,
                 state=state, start=at, end=at + len(text), heading_span=(at, at + len(heading)),
                 state_span=None if group is None else state_spans[group], text=text))
-        cursor = at + len(text)
     return out
 
 

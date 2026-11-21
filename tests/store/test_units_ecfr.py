@@ -2,6 +2,8 @@
 §8, P3, P4, P8, P31; preflight rulings C1, C14). Fixture stores under `tmp_path`; nothing reads
 `data/` or `.cache/`."""
 
+import json
+
 import pytest
 
 from adr_eval.corpora.gov import ecfr_url
@@ -28,6 +30,7 @@ from adr_store.units.ecfr import (
     normalise_rule_id,
     provisions,
     rule_cards,
+    skips_a_level,
 )
 from tests.store import units_fixtures as uf
 from tests.store.tables_fixtures import ECFR_NEW, _doc
@@ -166,14 +169,35 @@ def test_marker_paths_italic_levels_and_roman_lookahead():
     assert marker_path(("u",), "(v) A", following="(vi) B") == ("u", "v")
     # italic markers are levels 5 and 6: "(<I>1</I>)" under "(C)"
     path = ("e", "3", "iv", "C")
-    path = marker_path(path, "(1) X", italic=True)
+    path = marker_path(path, "(1) X", italic=(True,))
     assert path == ("e", "3", "iv", "C", "1")
-    path = marker_path(path, "(i) X", italic=True)
+    path = marker_path(path, "(i) X", italic=(True,))
     assert path == ("e", "3", "iv", "C", "1", "i")
-    assert marker_path(path, "(2) Y", italic=True) == ("e", "3", "iv", "C", "2")
+    assert marker_path(path, "(2) Y", italic=(True,)) == ("e", "3", "iv", "C", "2")
     path = marker_path(path, "(D) Y")
     assert path == ("e", "3", "iv", "D")
-    assert marker_path(marker_path(path, "(1) Z", italic=True), "(4) W") == ("e", "4")
+    assert marker_path(marker_path(path, "(1) Z", italic=(True,)), "(4) W") == ("e", "4")
+    # the italics of every leading marker count: "(L)(<I>1</I>)"
+    assert marker_path(("a", "2", "ii"), "(L)(1) X", italic=(False, True)) == (
+        "a", "2", "ii", "L", "1")
+
+
+def test_later_markers_of_a_paragraph_go_deeper():                         # review I1(a)
+    # 47 CFR 73.3801: "(h)(4)(i)" read after (h)(3); the (i) is roman under (4)
+    assert marker_path(("h", "3"), "(4)(i) X") == ("h", "4", "i")
+    assert run_markers(["(h) A", "(3) B", "(4)(i) C", "(ii) D", "(5) E"]) == [
+        ("h",), ("h", "3"), ("h", "4", "i"), ("h", "4", "ii"), ("h", "5")]
+    # 33 CFR 165.923: "(L)(1)" after (a)(2)(ii); the (1) sits below (L), at level 5
+    assert marker_path(("a", "2", "ii"), "(L)(1) X") == ("a", "2", "ii", "L", "1")
+    assert run_markers(["(a) A", "(2) B", "(ii) C", "(L)(1) D", "(2) E"]) == [
+        ("a",), ("a", "2"), ("a", "2", "ii"), ("a", "2", "ii", "L", "1"), ("a", "2")]
+    assert marker_path((), "(h)(i) X") == ("h", "i")
+    assert marker_path((), "(a)(1)(i)(A) X") == ("a", "1", "i", "A")
+
+
+def test_a_top_level_roman_list_gives_siblings():                          # review M5
+    assert run_markers(["(i) a", "(ii) b", "(iii) c"]) == [("i",), ("ii",), ("iii",)]
+    assert run_markers(["intro", "(i) a", "(ii) b"]) == [("p1",), ("i",), ("ii",)]
 
 
 LEVELS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -193,6 +217,24 @@ LEVELS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <P>(B) Its programming.</P>
 <P>(2) A station must keep records.</P>
 </DIV8>
+<DIV8 N="73.3801" TYPE="SECTION">
+<HEAD>&#xA7; 73.3801 Simulcasting.</HEAD>
+<P>(h) <I>Notice.</I></P>
+<P>(3) If any information changes, the station shall notify viewers.</P>
+<P>(4)(i) Stations must provide notice at least 90 days ahead.</P>
+<P>(ii) If the date changes, the station shall notify viewers again.</P>
+<P>(i) <I>Records</I>&#8212;(1) <I>Logs.</I> (i) Each station shall keep logs.</P>
+<P>(ii) Each station shall keep records of complaints.</P>
+<P>(2) <I>Retention.</I> Logs are kept for two years.</P>
+</DIV8>
+<DIV8 N="73.3802" TYPE="SECTION">
+<HEAD>&#xA7; 73.3802 Lights.</HEAD>
+<P>(a) <I>Rules.</I></P>
+<P>(2) <I>Vessels.</I></P>
+<P>(ii) <I>Lights.</I></P>
+<P>(L)(<I>1</I>) Each vessel shall show a light.</P>
+<P>(<I>2</I>) Each vessel shall sound a signal.</P>
+</DIV8>
 </DIV5>
 """
 
@@ -205,7 +247,17 @@ def test_provision_ids_follow_italic_markers_and_roman_lookahead(tmp_path):
         "47 CFR 73.682(h)", "47 CFR 73.682(h)(1)", "47 CFR 73.682(h)(1)(i)",
         "47 CFR 73.682(h)(1)(ii)", "47 CFR 73.682(i)", "47 CFR 73.682(i)(1)",
         "47 CFR 73.682(i)(1)(A)", "47 CFR 73.682(i)(1)(A)(1)",
-        "47 CFR 73.682(i)(1)(A)(2)", "47 CFR 73.682(i)(1)(B)", "47 CFR 73.682(i)(2)"]
+        "47 CFR 73.682(i)(1)(A)(2)", "47 CFR 73.682(i)(1)(B)", "47 CFR 73.682(i)(2)",
+        # review I1(a) and I1(b): later markers go deeper; markers after an italic heading
+        "47 CFR 73.3801(h)", "47 CFR 73.3801(h)(3)", "47 CFR 73.3801(h)(4)(i)",
+        "47 CFR 73.3801(h)(4)(ii)", "47 CFR 73.3801(i)(1)(i)", "47 CFR 73.3801(i)(1)(ii)",
+        "47 CFR 73.3801(i)(2)",
+        "47 CFR 73.3802(a)", "47 CFR 73.3802(a)(2)", "47 CFR 73.3802(a)(2)(ii)",
+        "47 CFR 73.3802(a)(2)(ii)(L)(1)", "47 CFR 73.3802(a)(2)(ii)(L)(2)"]
+    assert not any(skips_a_level(p.path) for p in provisions(store, d)
+                   if p.section == "73.3801")
+    assert skips_a_level(("d", "iv")) and skips_a_level(("1",))
+    assert not skips_a_level(("a", "1", "i", "A", "1", "p2"))
 
 
 def test_117_5_is_one_unmarked_paragraph_and_its_card_is_p1(units_store):
@@ -265,8 +317,8 @@ def test_a_paragraph_that_cannot_be_located_is_rejected(units_store, monkeypatch
 def test_one_card_per_modal_paragraph_per_version_and_spans_reslice(units_store):
     for d in ecfr_docs(units_store):
         cards, provs = rule_cards(units_store, d, overlay_of(units_store))
-        assert {c.body["provision_id"] for c in cards} == \
-            {p.provision_id for p in provs if p.modality}
+        assert [c.body["provision_id"] for c in cards] == \
+            [p.provision_id for p in provs if p.modality]
         for c in cards:
             r = c.source_refs[0]
             assert units_store.text(d)[r.start:r.end] == c.body["text"]
@@ -345,8 +397,10 @@ def test_cross_references(units_store, raw, target, res):
     ("§§ 117.4, 117.40, and 117.999", [("33 CFR 117.4", "resolved"),
                                        ("33 CFR 117.40", "resolved"),
                                        ("33 CFR 117.999", "dangling")]),
-    ("§ 165.766-165.768", [("33 CFR 165.766", "external")]),
-    ("§§ 117.4-117", [("33 CFR 117.4", "resolved")]),
+    ("§ 165.766-165.768", [("33 CFR 165.766", "external"), ("33 CFR 165.768", "external")]),
+    ("§§ 117.4-117.5", [("33 CFR 117.4", "resolved"), ("33 CFR 117.5", "resolved")]),
+    ("§§ 117.900 through 117.999", [("33 CFR 117.900", "dangling"),
+                                    ("33 CFR 117.999", "dangling")]),
     ("§ 165.T01-0149.", [("33 CFR 165.T01-0149", "external")]),
     ("§ 1.05-1.", [("33 CFR 1.05-1", "external")]),
     ("§ 117.162T", [("33 CFR 117.162T", "dangling")]),
@@ -367,7 +421,23 @@ def test_section_sign_refs_take_the_provisions_title():
     refs = cross_refs(p, {"73.1201", "73.1212", "73.3587"})
     assert [(x.raw, x.target_ref, x.resolution) for x in refs] == [
         ("§ 73.1212", "47 CFR 73.1212", "resolved"), ("§ 1.1307", "47 CFR 1.1307", "external"),
-        ("§§ 73.3587", "47 CFR 73.3587", "resolved")]
+        ("§§ 73.3587", "47 CFR 73.3587", "resolved"), ("3589", "47 CFR 73.3589", "dangling")]
+    for x in refs:
+        assert p.text[x.start - p.start:x.end - p.start] == x.raw
+
+
+def test_in_part_targets_resolve_at_provision_level(units_store):           # review I2
+    provs = provisions(units_store, DOC_117_NEW)
+    ids, sections = {q.provision_id for q in provs}, {q.section for q in provs}
+    p = synthetic("The owner shall comply with § 117.31(b)(2), § 117.31(c), § 117.31, "
+                  "paragraph (d) of this section and 33 CFR part 117.")
+    refs = cross_refs(p, sections, ids)
+    assert [(x.target_ref, x.resolution) for x in refs] == [
+        ("33 CFR 117.31(b)(2)", "resolved"), ("33 CFR 117.31(c)", "dangling"),
+        ("33 CFR 117.31", "resolved"), ("33 CFR 117.901(d)", "dangling"),
+        ("33 CFR part 117", "resolved")]
+    # without provision ids the section is enough (the brief's form)
+    assert [x.resolution for x in cross_refs(p, sections)][:4] == ["resolved"] * 4
 
 
 def test_double_section_sign_gives_two_references(units_store):
@@ -423,9 +493,13 @@ def test_subpart_b_cards_are_exceptions_of_117_5_and_117_31b(units_store):
     assert len(cards) == 2 * 10
     for c in cards:
         entries = [e for e in cl[c.unit_id] if e.relation == "exception_of"]
-        # C14: the targets are reached as their cards, so § 117.5 is its card 33 CFR 117.5(p1)
-        assert {e.ref for e in entries} == {"33 CFR 117.5(p1)", "33 CFR 117.31(b)"}
-        assert all(e.unit_id is not None and e.doc_id == c.doc_id for e in entries)
+        # C14: § 117.5 is reached as its card 33 CFR 117.5(p1); review I3: § 117.31(b) with
+        # what is under it, its vessel list (non-modal, unit_id None)
+        assert [e.ref for e in entries] == [
+            "33 CFR 117.5(p1)", "33 CFR 117.31(b)", "33 CFR 117.31(b)(1)",
+            "33 CFR 117.31(b)(2)", "33 CFR 117.31(b)(3)", "33 CFR 117.31(b)(4)"]
+        assert [e.unit_id is not None for e in entries] == [True, True] + [False] * 4
+        assert all(e.doc_id == c.doc_id for e in entries)
     # subpart A cards get no exception_of
     all_c, _ = all_cards(units_store)
     a = card_of(all_c, DOC_117_NEW, "33 CFR 117.40(a)")
@@ -467,7 +541,7 @@ def test_closure_order_and_context_by_mile_key(units_store):
                    and p.provision_id == "33 CFR 117.31(b)(1)")
     assert cites[3].span == (one_b_1.start, one_b_1.end)
     # the same target under another relation is kept; within a relation it is not repeated
-    assert [e.ref for e in cl[d.unit_id] if e.relation == "exception_of"] == [
+    assert [e.ref for e in cl[d.unit_id] if e.relation == "exception_of"][:2] == [
         "33 CFR 117.5(p1)", "33 CFR 117.31(b)"]
     for c in cards:
         keys = [(e.relation, e.doc_id, e.span) for e in cl[c.unit_id]]
@@ -530,21 +604,105 @@ def test_context_outside_117_is_the_nearest_non_modal_provisions(tmp_path):
 
 
 def test_closure_census_lists_unresolved_in_part_references(units_store):
-    cards, _ = all_cards(units_store)
-    census = closure_census(cards)
+    cards, provs = all_cards(units_store)
+    census = closure_census(cards, provs)
     # per version: 117.901(c) -> (b); 117.1081(a)(1) -> 117.5, 117.31; 117.1081(c) -> 117.999
-    assert census["in_part"] == 2 * 4
+    assert census["in_part"] == 2 * 4 and census["in_part_resolved"] == 2 * 3
     assert census["resolution"] == {"resolved": 2 * 3, "dangling": 2 * 1, "external": 2 * 1}
     assert census["resolved_rate"] == 0.75
+    assert census["reasons"] == {"section_missing": 2}
     assert census["unresolved"] == sorted(census["unresolved"],
                                           key=lambda u: (u["unit_id"], u["span"]))
     assert [(u["canonical_ref"], u["raw"], u["target_ref"], u["reason"])
             for u in census["unresolved"]] == [
-        ("33 CFR 117.1081(c)", "§ 117.999", "33 CFR 117.999",
-         "section 117.999 is not in this version")] * 2
+        ("33 CFR 117.1081(c)", "§ 117.999", "33 CFR 117.999", "section_missing")] * 2
     assert {u["doc_id"] for u in census["unresolved"]} == {DOC_117_OLD, DOC_117_NEW}
-    assert closure_census([]) == {"cards": 0, "in_part": 0, "resolution": {
-        "resolved": 0, "dangling": 0, "external": 0}, "resolved_rate": None, "unresolved": []}
+    assert census["part_references"] == [] and census["duplicate_provision_ids"] == []
+    assert closure_census([], []) == {
+        "cards": 0, "in_part": 0, "in_part_resolved": 0, "resolved_rate": None,
+        "resolution": {"resolved": 0, "dangling": 0, "external": 0}, "reasons": {},
+        "unresolved": [], "part_references": [], "duplicate_provision_ids": []}
+
+
+EXTRA_117_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<DIV5 N="117" TYPE="PART">
+<HEAD>PART 117&#8212;DRAWBRIDGE OPERATION REGULATIONS</HEAD>
+<DIV6 N="B" TYPE="SUBPART">
+<HEAD>Subpart B&#8212;Specific Requirements</HEAD>
+<DIV8 N="117.900" TYPE="SECTION">
+<HEAD>&#xA7; 117.900 Mill Creek.</HEAD>
+<P>(a) The owner shall comply with paragraph (d) of this section.</P>
+<P>(b) The draw shall open on signal.</P>
+<P>(b) The draw shall open on request.</P>
+<P>(c) The owner shall post paragraph (b) of this section and comply with 33 CFR part 117.</P>
+</DIV8>
+<DIV8 N="117.997" TYPE="SECTION">
+<HEAD>&#xA7; 117.997 Elizabeth River.</HEAD>
+<P>(c) The draw of the Gilmerton bridge, mile 5.8, in Chesapeake:</P>
+<P>(1) The draw shall open on signal.</P>
+<P>(2) The draw need not open from 6 a.m. to 8 a.m.</P>
+<P>(d) The Gilmerton bridge, mile 5.8, is painted green.</P>
+<P>(e) The Dominion bridge, mile 8.8, is painted red.</P>
+<P>(f) The draw of the Dominion bridge shall open on the hour.</P>
+</DIV8>
+</DIV6>
+</DIV5>
+"""
+
+
+def extra_store(tmp_path):
+    doc = _doc(EXTRA_117_XML, "xml", ECFR_NEW, ecfr_url(33, "117", ECFR_NEW))
+    store = uf.make_units_store(tmp_path / "x", docs=[doc])
+    (d,) = ecfr_docs(store)
+    cards, provs = rule_cards(store, d, overlay_of(store))
+    return store, d, cards, provs
+
+
+def test_census_reasons_part_references_and_duplicate_ids(tmp_path):        # review I2, M2, M3
+    _, d, cards, provs = extra_store(tmp_path)
+    census = closure_census(cards, provs)
+    assert census["reasons"] == {"paragraph_missing": 1, "part_reference": 1}
+    assert [(u["canonical_ref"], u["target_ref"], u["reason"]) for u in census["unresolved"]] \
+        == [("33 CFR 117.900(a)", "33 CFR 117.900(d)", "paragraph_missing")]
+    assert [(u["canonical_ref"], u["target_ref"], u["reason"])
+            for u in census["part_references"]] == [
+        ("33 CFR 117.900(c)", "33 CFR part 117", "part_reference")]
+    # the part reference is recorded on the card but kept out of the denominator
+    assert census["in_part"] == 2 and census["in_part_resolved"] == 1
+    assert census["resolution"]["resolved"] == 2
+    assert census["duplicate_provision_ids"] == [
+        {"doc_id": d, "provision_id": "33 CFR 117.900(b)", "count": 2, "modal": 2}]
+    # target_unit among duplicates: the first card in document order
+    first_b = next(c for c in cards if c.canonical_ref == "33 CFR 117.900(b)")
+    c = next(c for c in cards if c.canonical_ref == "33 CFR 117.900(c)")
+    assert c.body["cross_refs"][0]["target_unit"] == first_b.unit_id
+    assert first_b.body["text"] == "(b) The draw shall open on signal."
+
+
+def test_context_takes_ancestor_paragraphs_and_their_draw_keys(tmp_path):   # review I4
+    _, d, cards, provs = extra_store(tmp_path)
+    cl = closure(cards, provs)
+    for ref in ("33 CFR 117.997(c)(1)", "33 CFR 117.997(c)(2)"):
+        c = next(c for c in cards if c.canonical_ref == ref)
+        assert [e.ref for e in cl[c.unit_id] if e.relation == "context"] == [
+            "33 CFR 117.997(c)", "33 CFR 117.997(d)"]
+    f = next(c for c in cards if c.canonical_ref == "33 CFR 117.997(f)")
+    assert [e.ref for e in cl[f.unit_id] if e.relation == "context"] == []
+
+
+def test_a_build_twice_is_byte_identical(units_store):                      # review M5
+    def build() -> bytes:
+        cards, provs = all_cards(units_store)
+        cl = closure(cards, provs)
+        rows = [{"unit": c.model_dump(mode="json"),
+                 "closure": [e.model_dump(mode="json") for e in cl[c.unit_id]]} for c in cards]
+        payload = {"rows": rows, "census": closure_census(cards, provs)}
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+
+    assert build() == build()
+    cards, _ = all_cards(units_store)
+    ids = sorted(c.unit_id for c in cards)
+    assert len(ids) == len(set(ids))
 
 
 # -- the validator keeps closure in the card's document (P5, P31) -------------------------------

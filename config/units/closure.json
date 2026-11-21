@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The one structural closure rule (Phase 4 spec §8.3, P8): every rule card of 33 CFR 117 subpart B is an exception of § 117.5, and § 117.31(b) overrides the operating schedule of every subpart B card. Each target is reached as the rule cards at or under it in the card's own document.",
+  "description": "The one structural closure rule (Phase 4 spec §8.3, P8): every rule card of 33 CFR 117 subpart B is an exception of § 117.5, and § 117.31(b) overrides the operating schedule of every subpart B card. Each target is reached as the provisions at or under it in the card's own document (rule cards and non-modal provisions).",
   "rules": [
     {
       "part": "33 CFR 117",
