@@ -10,8 +10,10 @@ never crosses documents, so a unit reaches nothing its caller could not see (P5,
   the provisions at or under the target (`33 CFR 117.31` reaches `33 CFR 117.31(b)(1)`), in
   document order, at most `CITES_PER_REF`. A reference to a whole part, an external or a
   dangling one reaches nothing.
-- `defines`: added by `units.concepts.link_concepts` (Task 3), between `cites` and
-  `exception_of`; `closure` itself writes none.
+- `defines`: the concepts of the card's document whose labels occur in the card and whose
+  scope contains it (`units.concepts.defines_entries`, rules there), each pointing at its
+  definition span; written when `concepts` are given, as `units.concepts.link_concepts`
+  writes them into an existing closure.
 - `exception_of`: for a card in a rule's part and subpart, the provisions at or under each
   target, as for `cites` (§ 117.5 is reached as its card `33 CFR 117.5(p1)`, § 117.31(b)
   with its vessel list (b)(1)-(4)).
@@ -109,9 +111,12 @@ def _ancestors(here: Provision, section: list[Provision]) -> list[Provision]:
 def closure(cards: list[Unit], provs: list[Provision], concepts: list[Unit] = ()
             ) -> dict[str, list[ClosureEntry]]:
     """{card unit id: its closure entries} for every card of `cards`; `provs` are the
-    provisions of the cards' documents (from `ecfr.rule_cards`). `concepts` is the input of
-    `defines`, which `units.concepts.link_concepts` adds (Task 3); it is not read here."""
-    del concepts
+    provisions of the cards' documents (from `ecfr.rule_cards`); `concepts` are the concept
+    units the `defines` entries come from (none: no `defines`)."""
+    # imported here: units.concepts builds on ClosureEntry and RELATIONS of this module
+    from adr_store.units.concepts import _Labels, defines_entries
+
+    labels = _Labels(list(concepts))
     rules = load_structural_rules()
     by_doc: dict[str, list[Provision]] = {}
     for p in provs:
@@ -132,6 +137,7 @@ def closure(cards: list[Unit], provs: list[Provision], concepts: list[Unit] = ()
                 continue
             hits = [p for p in others if _under(p.provision_id, x["target_ref"])]
             entries += [_entry("cites", p, card_of) for p in hits[:CITES_PER_REF]]
+        entries += defines_entries(c, labels)
         for r in rules:
             if (here.part, here.subpart) != (r["part"], r["subpart"]):
                 continue
