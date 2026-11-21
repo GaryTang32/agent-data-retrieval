@@ -11,9 +11,9 @@
 - **Q2 fails.** `p3-typed` answered 66 of 97 gov-tables test items (0.680), below the 0.80 bar fixed in §12. The margin part passes: `baseline-linear` scored 0.237, the difference is +0.443 with a 95% interval of [+0.330, +0.557], and McNemar p is 2.4 × 10⁻¹⁰. In 26 of the 31 misses the generated query equals the gold query. The table, built from the first extraction pass, gives a different value than the second-pass facts the gold was computed from. So most misses come from the two passes disagreeing. They are not query or compiler errors, and which pass is right is not known.
 - **E1 fails on two columns and passes overall.** 5,401 of 5,452 non-null model values are grounded (99.1%). `closed_periods` (89.9%) and `seasonal` (94.6%) are below the 95% target per column (§7.3). The other seven columns are at 99.9% or 100%.
 - **E2 passes.** The four required columns are at or above 0.85: `waterway` 0.979, `bridge` 0.921, `notice_hours` 0.950, `opens_on_signal` 0.956. The lowest unrequired columns are `closed_periods` (0.707) and `owner_or_agency` (0.797).
-- **T1, T3, T4, T5 and T6 pass.** **T2 passes for every run made**: the Q1 and Q2 runs and the SQL-guard and applicability probe sets each gave byte-identical rows twice. The leak, equivalence, fail-closed and MCP probe sets were not re-run on the 3B build (below).
+- **T1, T3, T4, T5 and T6 pass.** **T2 passes for every run made**: the Q1 and Q2 runs and the SQL-guard, leak, equivalence and applicability probe sets each gave byte-identical rows twice. The fail-closed and MCP probe sets were not re-run on the 3B build.
 - **The gate promoted the 3B build with 0 flips.** It answered 126 of 158 gold cases: v0.1 38 of 38 and gov-tables 88 of 120.
-- **The 3B probes (Step 9) were not run, because of a defect.** The probe CLI cannot build reference stores with the extraction tables, and cannot point the applicability probes at the drawbridge tables. Both need code changes. See "3B: probes".
+- **The 3B probes (Step 9) pass, with no model call.** Leak: 0 in 300, of which 65 target hidden drawbridge rows. Equivalence: 500 of 500. Applicability: 153 of 153, of which 102 are on the drawbridge tables, and each returns only the version in force. The reference stores read their extraction tables from the cache with zero calls. This came after the Task 7b fix to the probe code. See "3B: probes".
 
 **Verdict for 3A.**
 - **Q1 holds.** `p3-typed` answers 27 of 27 gov and 26 of 27 research test count questions from the typed tables. `baseline-linear` answered 2 of 27 and 16 of 27. Gov's paired McNemar p is 6.0 × 10⁻⁸ and research's is 0.0020. Both accuracies are at least 0.90, and gov's p is below 0.05.
@@ -322,30 +322,58 @@ Every check ran with `HF_HUB_OFFLINE=1`, each command in a fresh process, with n
 | # | Check | Result |
 |---|---|---|
 | T1 | `cp -a` of `.cache/store-p2/gov`, then `adr tables build --tables-for gov --with-extraction --max-calls 0` into the copy, deleting nothing | **Pass.** Tables id `fec2a2b12e31…` again. All 37 files of the snapshot's tables directory, including the per-table reports, had the same SHA-256 before and after. In a second copy, the 3B table files and the manifest were deleted, and the build wrote them again byte-identical (manifest SHA-256 = tables id). |
-| T2 | Each suite run twice in fresh processes with `--max-calls 0` | **Pass for every set run.** Byte-identical `results.jsonl` and `compile.json` for: the Q2 runs (p3-typed test and dev, baseline-linear test), the Q1 runs (gov and research), and the SQL-guard (120 of 120) and applicability (51 of 51, `fr_documents`) probe sets on the 3B build. Against the original model-calling Q2 runs, every field of every row is equal except `notional_cost_usd`, and `latency_s` for the baseline: a cache hit records these as 0 and null. Re-running `p3-q2` on the reruns gives the same summary. The leak, equivalence, fail-closed and MCP probe sets were not re-run on the 3B build (see "3B: probes"). |
+| T2 | Each suite run twice in fresh processes with `--max-calls 0` | **Pass for every set run.** Byte-identical `results.jsonl` and `compile.json` for: the Q2 runs (p3-typed test and dev, baseline-linear test), the Q1 runs (gov and research), and the SQL-guard (120 of 120) and applicability (51 of 51, `fr_documents`) probe sets on the 3B build. Against the original model-calling Q2 runs, every field of every row is equal except `notional_cost_usd`, and `latency_s` for the baseline: a cache hit records these as 0 and null. Re-running `p3-q2` on the reruns gives the same summary. The leak, equivalence and applicability sets with the drawbridge tables were byte-identical twice in Step 9 (see "3B: probes"). The fail-closed and MCP sets were not re-run on the 3B build. |
 | T3 | Every provenance span of every table of the promoted build, re-sliced with `provenance.reslice` | **Pass: 32,889 of 32,889**, including all 15,162 model-value quotes |
 | T4 | Every stored value carries a `spec_id` | **Pass: 60,295 of 60,295.** The 22,121 non-null values without a span are computed values (entity tables, FR agency and reference ids, `status`, and the drawbridge `version` and `draw`), each with its `spec_id`. |
 | T5 | `tests/store/test_tables_extract.py::test_a_spec_change_reextracts_only_its_group` | **Pass** |
 | T6 | `tests/store/test_tables_gate.py::test_gate_refuses_too_many_flips_and_keeps_head` | **Pass** |
 
-## 3B: probes (Step 9, not run)
+## 3B: probes (Step 9)
 
-Step 9 asks for `tables-leak`, `tables-equivalence` and `tables-applicability` on gov with the 3B
-build. The applicability set should include at least 50 probes on `drawbridge_sections` and
-`drawbridge_bridges`, and the reference stores should read the extraction from the cache with
-`--max-calls 0`. The probe CLI cannot do either without code changes, so these probes were not
-run:
+Step 9 re-ran `tables-leak`, `tables-equivalence` and `tables-applicability` on gov with the
+promoted 3B build (tables `fec2a2b12e31…`), on `.cache/store-p2/gov` after a fresh ACL sync.
+These are the commands and seed of Task 7. The applicability set also probes the drawbridge
+tables (`--tables fr_documents drawbridge_sections drawbridge_bridges`).
 
-- **Reference stores lack the drawbridge tables.** `References.path_of` in `src/adr_eval/probes/tables.py` builds each view's reference store with `build_tables(path, corpus)`, a metadata-only build. No option builds the extraction tables there from the cache. A leak or equivalence call on a drawbridge table would compare the store with a reference that has no such table, so its verdict would mean nothing.
-- **The applicability probes cover `fr_documents` only.** `adr-eval probes tables-applicability` calls `applicability_probes(store, n=…)` with the default `tables=("fr_documents",)`. No option adds the drawbridge tables. The function's docstring says they "join once they exist", but no later task added them.
+The first attempt (Task 11) was blocked by two defects in the probe code. Both were fixed first,
+test first, in Task 7b:
+- **Reference stores now hold the extraction tables.** If the store's tables include the
+  extraction tables, each view's reference store builds them with `with_extraction=True` and
+  `max_calls=0`. The replies come from the cache, under the generator profile given by
+  `--generator` (default: the configured generator).
+  - The cache key covers adapter, model, prompt, section text and token cap, but not the store.
+    So a reference store that holds a subset of the documents finds the same cached replies for
+    the sections it has.
+  - A reply missing from the cache stops the run (P21) without a call. A reference whose
+    extraction would differ from the store's (another model, prompt or specs) is refused.
+- **`tables-applicability` takes `--tables`.**
+  - For the drawbridge tables, the `as_of` dates first include each eCFR version's first day in
+    force and the day before it. The rest are seeded draws from the Federal Register dates, as
+    for `fr_documents`.
+  - A probe also fails if it returns more than one version of a chain.
+- **Equivalence on a store with the extraction tables** also draws `count_by` on six drawbridge
+  columns. On a 3A store the query pool is unchanged.
 
-Both are defects of the probe code (Task 7's). The fix would build reference stores with
-`with_extraction=True` and a zero-call budget, and pass the drawbridge tables to
-`applicability_probes`. After it, the three sets can be run from the cache with no calls.
+**No model calls.** `.cache/llm` held 12,010 files before, between the two passes and after.
+The model CLI was shadowed by a stub that records any call, and it recorded none. `.cache/store`
+and `.cache/index` are unchanged (sizes and mtimes of all 7,320 files).
 
-The 3A probe results above still stand for the 3A tables. Two probe sets need no reference
-store, and they were run on the 3B build twice each (T2). The SQL guard passed 120 of 120. The
-applicability probes on `fr_documents` passed 51 of 51, byte-identical to the 3A run.
+| Set | Result |
+|---|---|
+| Leak (S1) | **300 probes, 0 leaks, 0 invalid**, all 300 compared with a reference store. 65 target hidden drawbridge rows: 34 in `drawbridge_sections` and 31 in `drawbridge_bridges`, across all five families. All 680 log lines are complete. |
+| Equivalence (S1) | **500 of 500 identical** over 20 views (300 `query_table` and 200 `sql` calls); all 1,000 log lines are complete. 32 of the calls are drawbridge `count_by`. Only 9 of those 32 fall in the 7 views that see the drawbridge rows; the other 23 return no rows on either store. |
+| Applicability | **153 of 153** with 0 rows of documents not in force: 51 on `fr_documents`, 51 on `drawbridge_sections` and 51 on `drawbridge_bridges`. 459 log lines, complete. |
+| Applicability on the drawbridge tables | 102 probes: 2 default and 100 `as_of`. 28 of the `as_of` probes return rows (14 per table). Per table, these are 5 of the 6 boundary dates (each version's first day in force, and the day before the second and third versions) and 9 Federal Register dates on or after 27 June 2024. Every probe returns at most one eCFR version. The default returns the newest version (424 sections, 835 draws). The other 72 `as_of` dates fall before the first version, 26 June 2024 among them, and return no rows, as they should. |
+| T2 | All three sets gave byte-identical `probes.json` and `results.json` in two fresh processes. Each pass built the reference stores again from the cache. On `fr_documents` the rows equal Task 11's run, apart from the new `versions` field. |
+
+**Hidden drawbridge rows.** The eCFR §117 chain is visible only to `tenant:acme`, so its rows are
+hidden from the globex, initech and outsider users. This covers 13 directory users and 13 of
+the 20 views. The leak probes drew 65 such rows. Each reference store read its extraction tables
+from the cache: 7 with the drawbridge rows, and 13 whose drawbridge tables are empty. No call was
+made.
+
+The 3A probe results above still stand for the 3A tables. The fail-closed and MCP sets were
+not re-run on the 3B build. The SQL guard was re-run on it in Task 11 and passed 120 of 120.
 
 ## Files
 
@@ -353,7 +381,8 @@ applicability probes on `fr_documents` passed 51 of 51, byte-identical to the 3A
   - 3A: the two Q1 `p3-typed` runs and the table probe summaries (`probes-tables-*-20261120T19*`, `tables-7-checks`). Each Q1 run has `config.json`, `compile.json`, `report.json`, `report.md` and `q1-<baseline>.json`, the aggregated `adr-eval p3-q1 --summary` form.
   - 3B: the three gov-tables runs (`gov-tables-p3-typed-test-…`, `gov-tables-p3-typed-dev-…`, `gov-tables-baseline-linear-test-…`), each with `config.json`, `compile.json`, `report.json` and `report.md`.
   - 3B: `q2-gov-tables.json`, the aggregated `adr-eval p3-q2 --summary` form.
-  - 3B: the two probe sets re-run on the 3B build (`probes-tables-sql-gov-20261120T235517`, `probes-tables-applicability-gov-20261120T235528`).
+  - 3B: the two probe sets re-run on the 3B build in Task 11 (`probes-tables-sql-gov-20261120T235517`, `probes-tables-applicability-gov-20261120T235528`, `fr_documents` only).
+  - 3B, Step 9: `probes-tables-leak-gov-20261121T002541`, `probes-tables-equivalence-gov-20261121T002855` and `probes-tables-applicability-gov-20261121T002359` (with the drawbridge tables), plus `tables-7b-checks/checks.json` (the two-pass hashes and the cache counts).
   - 3B: `tables-11-checks/checks.json`, the aggregate E1, E2, regex, Q2-attribution and T1–T6 figures.
 
   No committed file names an item. Per-item rows (`results.jsonl`), the full Q1 and Q2 outputs and the probe sets stay local in `runs/`.
