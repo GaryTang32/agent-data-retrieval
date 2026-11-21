@@ -1,0 +1,84 @@
+{
+  "config": {
+    "acl_entries_sha256": "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2",
+    "corpus": "bench",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "units-procedures",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261121,
+    "snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
+    "store": ".cache/store-p2/bench",
+    "tools": [
+      "define",
+      "rule_lookup",
+      "procedure_lookup",
+      "unit_search"
+    ],
+    "units": "d50f23029eed14af978e657963b1fcc9735bdec933fa16b6a9a5143ed39ad5a2"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 0,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 0,
+        "decisions": {},
+        "lines": 0,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {},
+        "unit_calls": 0,
+        "unit_lines": 0,
+        "units_missing": 0
+      }
+    },
+    "total": {
+      "allowed": 0,
+      "allowed_unresolved": 0,
+      "calls_mismatch": 0,
+      "complete": true,
+      "complete_lines": 0,
+      "decisions": {},
+      "lines": 0,
+      "logs_missing": 0,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "text_lines": 0,
+      "tools": {},
+      "unit_calls": 0,
+      "unit_lines": 0,
+      "units_missing": 0
+    }
+  },
+  "summary": {
+    "checks": {
+      "labels_ok": 70,
+      "mermaid_round_trip": 70,
+      "skill_round_trip": 70,
+      "stable": 70,
+      "valid_ir": 70
+    },
+    "max_body_lines": 60,
+    "max_description_chars": 107,
+    "max_name_chars": 64,
+    "n": 70,
+    "names_unique": true,
+    "passed": 70,
+    "total": {
+      "n": 70,
+      "passed": 70
+    }
+  }
+}

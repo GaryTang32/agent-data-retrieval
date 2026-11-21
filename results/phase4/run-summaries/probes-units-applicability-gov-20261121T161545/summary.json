@@ -1,0 +1,120 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "caller": "user:auditor",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "units-applicability",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261121,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tools": [
+      "define",
+      "rule_lookup",
+      "procedure_lookup",
+      "unit_search"
+    ],
+    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 255,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 255,
+        "decisions": {
+          "allowed": 255
+        },
+        "lines": 255,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 51,
+          "procedure_lookup": 51,
+          "rule_lookup": 102,
+          "unit_search": 51
+        },
+        "unit_calls": 255,
+        "unit_lines": 255,
+        "units_missing": 0
+      }
+    },
+    "total": {
+      "allowed": 255,
+      "allowed_unresolved": 0,
+      "calls_mismatch": 0,
+      "complete": true,
+      "complete_lines": 255,
+      "decisions": {
+        "allowed": 255
+      },
+      "lines": 255,
+      "logs_missing": 0,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "text_lines": 0,
+      "tools": {
+        "define": 51,
+        "procedure_lookup": 51,
+        "rule_lookup": 102,
+        "unit_search": 51
+      },
+      "unit_calls": 255,
+      "unit_lines": 255,
+      "units_missing": 0
+    }
+  },
+  "summary": {
+    "by_tool": {
+      "define": {
+        "max_versions": 1,
+        "n": 51,
+        "outside": 0,
+        "passed": 51,
+        "with_units": 38
+      },
+      "procedure_lookup": {
+        "max_versions": 1,
+        "n": 51,
+        "outside": 0,
+        "passed": 51,
+        "with_units": 25
+      },
+      "rule_lookup": {
+        "max_versions": 1,
+        "n": 102,
+        "outside": 0,
+        "passed": 102,
+        "with_units": 86
+      },
+      "unit_search": {
+        "max_versions": 1,
+        "n": 51,
+        "outside": 0,
+        "passed": 51,
+        "with_units": 44
+      }
+    },
+    "total": {
+      "as_of": 250,
+      "dates": 50,
+      "default": 5,
+      "n": 255,
+      "outside": 0,
+      "passed": 255
+    }
+  }
+}

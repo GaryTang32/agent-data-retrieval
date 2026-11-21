@@ -1,0 +1,16 @@
+# Unit probes: equivalence (bench)
+
+Store `.cache/store-p2/bench` (snapshot `7d8d1f8adda6`, units `d50f23029eed`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+
+500 of 500 identical over 20 views.
+
+| tool | calls | identical | refused |
+|---|---|---|---|
+| define | 120 | 120 | 0 |
+| procedure_lookup | 120 | 120 | 41 |
+| rule_lookup | 120 | 120 | 0 |
+| unit_search | 140 | 140 | 0 |
+
+## Log fields
+
+1000 log lines (1000 of the unit tools, for 1000 unit calls; 0 log(s) whose count differs, 0 missing), 1000 with caller, principals, acl_snapshot and acl_decision; 0 without `units`; 1000 allowed, 0 of them with a null resolved field or units id; 0 with statement text. Complete: True.

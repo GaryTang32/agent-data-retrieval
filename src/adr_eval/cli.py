@@ -1,7 +1,9 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
 retrieval-compare, retrieval-identical, p2-compare, p3-q1, p3-q2, probes (temporal, acl,
 equivalence; the table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
-tables-applicability, tables-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
+tables-applicability, tables-mcp; the unit probes units-leak, units-equivalence,
+units-failclosed, units-applicability, units-define, units-closure, units-procedures,
+units-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
 from __future__ import annotations
 
@@ -701,6 +703,8 @@ def _p3_q2(a: argparse.Namespace) -> int:
 def _probes(a: argparse.Namespace) -> int:
     if a.kind.startswith("tables-"):
         return _probes_tables(a)
+    if a.kind.startswith("units-"):
+        return _probes_units(a)
     if a.corpus == "tools":
         raise runner.RunError(f"the {a.kind} probes take a content corpus, not tools")
     if a.kind == "temporal":
@@ -1344,6 +1348,318 @@ def _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb) -> int:
     return 0 if ok else 1
 
 
+UNIT_KINDS = ("units-leak", "units-equivalence", "units-failclosed", "units-applicability",
+              "units-define", "units-closure", "units-procedures", "units-mcp")
+
+
+def _units_config(path: Path, label: str) -> tuple[dict, dict]:
+    """(what a unit probe run read of one store: snapshot, units id, ACL entries, directory
+    and policy; the ACL snapshot id and sequence, which change with every sync)."""
+    from adr_store import acl as acl_mod
+    from adr_store import handles
+    from adr_store.store import Store
+
+    store = Store.open(path)
+    sid, snap = acl_mod.read_head(path)
+    return ({"corpus": label, "store": runner._display_path(Path(path)),
+             "snapshot": store.snapshot_id,
+             "units": handles.units_head(path, store.snapshot_id),
+             "acl_entries_sha256": snap.entries_sha256,
+             "directory_sha256": snap.directory_sha256, "policy_sha256": snap.policy_sha256},
+            {"acl_snapshot": sid, "acl_sequence": snap.sequence})
+
+
+def _probes_units(a: argparse.Namespace) -> int:
+    """`adr-eval probes units-<kind> <corpus> --store S` (Phase 4 spec §15.4; S1, S2, U1–U3,
+    applicability and the MCP leg of D1): the unit probes of `adr_eval.probes.units`, through
+    `Tools` with the ACL layer (units-mcp: through `adr mcp` servers), against unit reference
+    stores of each view built or reused under --views (removed unless --keep-views). Writes
+    <out>/probes-<kind>-<corpus>-<time>/: probes.json, results.json (per-item rows),
+    summary.json and summary.md (counts only, byte-identical between runs on the same build)
+    and provenance.json (the ACL snapshots and how each reference store came about)."""
+    from datetime import UTC, datetime
+
+    from adr_eval.probes import units as pu
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    p2 = runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2")
+    kind = a.kind[len("units-"):]
+    _tables_fresh(a.store)
+    try:
+        ctx = pu.unit_context(a.store)
+    except ValueError as e:
+        raise runner.RunError(str(e)) from e
+    if ctx.corpus != a.corpus:
+        raise runner.RunError(f"{a.store}: its units are of {ctx.corpus}, not {a.corpus}")
+    if kind == "leak" and a.corpus not in pu.LEAK_SIZES:
+        raise runner.RunError(f"units-leak has probe sizes for {', '.join(pu.LEAK_SIZES)} only, "
+                              f"not {a.corpus}")
+    gov_config = None if a.gov_config is None else json.loads(
+        Path(a.gov_config).read_text(encoding="utf-8"))
+    kw = {"directory": a.directory, "policy": a.policy}
+    root = Path(a.views) if a.views is not None else p2 / "views" / f"units-{a.corpus}"
+    refs = pu.UnitReferences(ctx, root, generator=a.generator, gov_config=gov_config, **kw)
+    cfg, prov = _units_config(a.store, a.corpus)
+    cfg.update(kind=a.kind, seed=pu.SEED4, tools=list(pu.present_tools()))
+    if kind == "mcp":
+        return _probes_units_mcp(a, pu, ctx, refs, root, cfg, prov, gov_config, started, t0)
+    store_log = pu.log_path(a.store)
+    offset, calls0 = pu.log_size(store_log), pu.unit_calls(store_log)
+    extra_logs: dict = {}
+    probe_set: dict = {"seed": pu.SEED4}
+    if kind == "leak":
+        sizes = None if a.per_family is None else dict.fromkeys(pu.LEAK_SIZES[a.corpus],
+                                                                a.per_family)
+        probes = pu.leak_probes(a.store, a.corpus, sizes=sizes)
+        results = pu.run_leaks(probes, a.store, root, refs=refs, **kw)
+        summary = pu.summarize_leaks(results)
+        summary["targets_by_type"] = dict(sorted(Counter(p.target["type"]
+                                                         for p in probes).items()))
+        cfg["sizes"] = sizes or pu.LEAK_SIZES[a.corpus]
+        probe_set["leak"] = [p.to_dict() for p in probes]
+        rows = [r.to_dict() for r in results]
+        t = summary["total"]
+        ok = t["leaks"] == 0 and t["invalid"] == 0
+        head = (f"{t['n']} leak probes, {t['leaks']} leaks, {t['invalid']} invalid; "
+                f"{t['compared']} compared with a reference store")
+        table = ("| family | probes | leaks | invalid | callers | outcomes |\n"
+                 "|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
+                     f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                     for n, b in summary["families"].items()))
+    elif kind == "equivalence":
+        rows = pu.equivalence(a.store, a.corpus, root, a.queries, refs=refs, **kw)
+        summary = pu.summarize_equivalence(rows)
+        cfg["calls_per_view"] = a.queries
+        probe_set["calls"] = {v.view: pu.equivalence_calls(ctx, v, a.queries)
+                              for v in refs.views}
+        ok = summary["differing"] == 0
+        head = f"{summary['identical']} of {summary['n']} identical over {summary['views']} views"
+        table = ("| tool | calls | identical | refused |\n|---|---|---|---|\n" + "".join(
+            f"| {n} | {b['n']} | {b['identical']} | {b['refused']} |\n"
+            for n, b in summary["by_tool"].items()))
+    elif kind == "failclosed":
+        clones = Path(a.clones) if a.clones is not None else p2 / "clones" / f"units-{a.corpus}"
+        rows = pu.failclosed(a.store, clones, a.corpus, logs=extra_logs, **kw)
+        extra_logs.pop("store", None)   # the store's log is scanned below
+        summary = pu.summarize_failclosed(rows)
+        probe_set["targets"] = pu.failclosed_identity(rows)
+        cfg["failclosed_callers"] = sorted({r["caller"] for r in rows
+                                            if r["family"] == "no_entry"})
+        cfg["target_types"] = pu.failclosed_identity(rows)
+        t = summary["total"]
+        ok = t["passed"] == t["n"]
+        head = (f"{t['n']} probes ({len(summary['conditions'])} conditions × "
+                f"{len(summary['by_tool'])} tools × 5 callers), {t['passed']} passed, "
+                f"{t['content']} with content")
+        table = ("| condition | probes | passed | with content | outcomes |\n"
+                 "|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['passed']} | {b['content']} | "
+                     f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                     for n, b in summary["conditions"].items()))
+    elif kind == "applicability":
+        caller = a.as_user or "user:auditor"
+        rows = pu.applicability_probes(a.store, n=a.n or 50, caller=caller)
+        summary = pu.summarize_applicability(rows)
+        cfg["caller"] = caller
+        t = summary["total"]
+        ok = t["passed"] == t["n"]
+        head = (f"{t['n']} probes ({t['default']} default, {t['as_of']} as_of over {t['dates']} "
+                f"dates), {t['passed']} passed, {t['outside']} units of documents not in force")
+        table = ("| tool | probes | passed | with units | units outside | most versions "
+                 "returned |\n|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['passed']} | {b['with_units']} | {b['outside']} | "
+                     f"{b['max_versions']} |\n" for n, b in summary["by_tool"].items()))
+    elif kind == "define":
+        rows = pu.define_probes(a.store, n_absent=a.absent, **kw)
+        summary = pu.summarize_define(rows)
+        cfg["absent"] = a.absent
+        t = summary["total"]
+        ok = t["correct"] == t["n"] and t["hidden_senses"] == 0
+        head = (f"{t['n']} define probes, {t['correct']} correct, {t['hidden_senses']} senses "
+                f"from hidden documents ({t['owner_hidden']} terms whose concept the caller "
+                f"cannot see; {t['callers']} callers)")
+        table = ("| kind | probes | correct | with senses | hidden senses |\n"
+                 "|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['correct']} | {b['with_senses']} | "
+                     f"{b['hidden_senses']} |\n" for n, b in summary["by_kind"].items()))
+    elif kind == "closure":
+        census = pu.closure_census(a.store)
+        rows = census
+        summary = {"all": pu.census_counts(census["all"]),
+                   "newest": pu.census_counts(census["newest"]),
+                   "threshold": census["threshold"], "pass": census["pass"],
+                   "matches_build_report": census["matches_build_report"],
+                   "total": {"n": census["all"]["in_part"],
+                             "passed": census["all"]["in_part_resolved"]}}
+        ok = census["pass"] and census["matches_build_report"]
+
+        def rate(c):
+            return "n/a" if c["resolved_rate"] is None else f"{100 * c['resolved_rate']:.2f}%"
+
+        head = (f"U2 {'passes' if census['pass'] else 'fails'} (threshold "
+                f"{100 * census['threshold']:.0f}%): every version {rate(census['all'])} of "
+                f"{census['all']['in_part']} in-part references resolved, the newest versions "
+                f"{rate(census['newest'])} of {census['newest']['in_part']}; every unresolved "
+                f"reference is listed with its reason in results.json; equal to the build's "
+                f"report: {census['matches_build_report']}")
+        table = ("| versions | rule cards | in-part references | resolved | rate | reasons |\n"
+                 "|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {c['cards']} | {c['in_part']} | {c['in_part_resolved']} | "
+                     f"{rate(c)} | {', '.join(f'{k} {v}' for k, v in c['reasons'].items())} |\n"
+                     for n, c in (("all", census["all"]), ("newest", census["newest"]))))
+    else:   # procedures
+        census = pu.procedure_census(a.store)
+        rows = census["procedures"]
+        summary = {k: v for k, v in census.items() if k != "procedures"}
+        summary["total"] = {"n": census["n"], "passed": census["passed"]}
+        ok = census["passed"] == census["n"] and census["names_unique"]
+        head = (f"{census['passed']} of {census['n']} procedures pass (valid IR, both round "
+                f"trips, description at most 1,024 characters, body under 500 lines, labels "
+                f"at most 80 characters, stable renderings); names unique: "
+                f"{census['names_unique']}")
+        table = ("| check | passed |\n|---|---|\n" + "".join(
+            f"| {n} | {v} |\n" for n, v in census["checks"].items()))
+    scans = {"store": pu.scan_unit_log(store_log, offset,
+                                       calls=pu.unit_calls(store_log) - calls0),
+             **{f"reference/{k}": v for k, v in refs.log_scans().items()}, **extra_logs}
+    logs = {"total": pu.total_unit_scan(scans), "by_store": scans}
+    ok = ok and logs["total"]["complete"]
+    if kind in ("leak", "equivalence"):
+        cfg["views"] = refs.info
+        prov["views"] = refs.provenance()
+        prov["views_removed"] = [] if a.keep_views else [
+            runner._display_path(Path(p)) for p in refs.remove()]
+    lt = logs["total"]
+    md = (f"# Unit probes: {kind} ({a.corpus})\n\nStore `{cfg['store']}` (snapshot "
+          f"`{cfg['snapshot'][:12]}`, units `{(cfg['units'] or 'none')[:12]}`). Seed "
+          f"{pu.SEED4}. Tools: {', '.join(cfg['tools'])}. No model calls.\n\n{head}.\n\n"
+          + table + f"\n## Log fields\n\n{lt['lines']} log lines ({lt['unit_lines']} of the "
+          f"unit tools, for {lt['unit_calls']} unit calls; {lt['calls_mismatch']} log(s) whose "
+          f"count differs, {lt['logs_missing']} missing), {lt['complete_lines']} with caller, "
+          f"principals, acl_snapshot and acl_decision; {lt['units_missing']} without `units`; "
+          f"{lt['allowed']} allowed, {lt['allowed_unresolved']} of them with a null resolved "
+          f"field or units id; {lt['text_lines']} with statement text. Complete: "
+          f"{lt['complete']}.\n")
+    d = _write_probe_run(a, a.kind, started,
+                         {"probes.json": probe_set, "results.json": {"results": rows},
+                          "summary.json": {"config": cfg, "summary": summary, "logs": logs},
+                          "provenance.json": prov}, md)
+    print(md)
+    print(f"{d}: {a.kind}; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0 if ok else 1
+
+
+def _probes_units_mcp(a, pu, ctx, refs, root, cfg, prov, gov_config, started, t0) -> int:
+    """`adr-eval probes units-mcp <corpus> --store S [--also LABEL=PATH]`: the seeded --n (60)
+    of the unit leak probes of the stores, each through an `adr mcp` server of its caller,
+    judged against the Python API's reference stores, every result replayed with its
+    handle."""
+    from adr_store import tools as store_tools
+    from adr_store.mcp_client import McpTools
+
+    config = runner.load_config()
+    emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    kw = {"directory": a.directory, "policy": a.policy}
+    stores = {a.corpus: Path(a.store)}
+    for spec in a.also or []:
+        label, sep, path = spec.partition("=")
+        if not sep or label not in pu.LEAK_SIZES or label in stores:
+            raise runner.RunError(f"--also takes CORPUS=PATH with another corpus of "
+                                  f"{', '.join(pu.LEAK_SIZES)}, got {spec!r}")
+        _tables_fresh(Path(path))
+        stores[label] = Path(path)
+    if a.corpus not in pu.LEAK_SIZES:
+        raise runner.RunError(f"units-mcp draws leak probes, which have sizes for "
+                              f"{', '.join(pu.LEAK_SIZES)} only")
+    contexts = {a.corpus: ctx}
+    references = {a.corpus: refs}
+    universe = []
+    cfg_stores, prov_stores = {}, {}
+    for label, path in stores.items():
+        if label not in contexts:
+            contexts[label] = pu.unit_context(path)
+            references[label] = pu.UnitReferences(contexts[label], root.parent / f"units-{label}",
+                                                  generator=a.generator,
+                                                  gov_config=gov_config, **kw)
+        cfg_stores[label], prov_stores[label] = _units_config(path, label)
+        universe += [(label, p) for p in pu.leak_probes(path, label)]
+    n = a.n or pu.MCP_SUBSET
+    selected = pu.select_mcp(universe, n)
+    logs_of = {label: pu.log_path(path) for label, path in stores.items()}
+    offsets = {label: pu.log_size(log) for label, log in logs_of.items()}
+    made: dict = {}
+
+    def reference_for(label, caller):
+        path = references[label].path_for(caller)
+        if path is None:
+            return None
+        if (label, caller) not in made:
+            made[(label, caller)] = store_tools.Tools(path, acl=True, caller=caller)
+        return made[(label, caller)]
+
+    def make_server(label, caller):
+        from adr_eval.probes import tables as tp
+
+        tp.keep_fresh(stores[label], a.directory, a.policy, tp.acl.utc_now)
+        return McpTools(stores[label], caller, emb_cache=emb, env={"HF_HUB_OFFLINE": "1"},
+                        cwd=runner.REPO_ROOT, timeout=a.timeout)
+
+    results, replays, calls = pu.run_mcp(selected, contexts=contexts,
+                                         reference_for=reference_for, make_server=make_server)
+    mcp_scans = {label: pu.scan_unit_log(log, offsets[label])
+                 for label, log in logs_of.items()}
+    ref_scans = {f"{label}/{k}": v for label, r in references.items()
+                 for k, v in r.log_scans().items()}
+    n_calls = {label: sum(c.values()) for label, c in calls.items()}
+    logs = {"mcp": {"total": pu.total_unit_scan(mcp_scans), "by_store": mcp_scans,
+                    "calls": calls},
+            "reference": {"total": pu.total_unit_scan(ref_scans), "by_store": ref_scans},
+            "total": pu.total_unit_scan({**mcp_scans, **ref_scans})}
+    summary = pu.summarize_mcp(results, replays)
+    prov = {"stores": prov_stores,
+            "views": {label: r.provenance() for label, r in references.items()},
+            "views_removed": [] if a.keep_views else [runner._display_path(Path(p))
+                                                      for r in references.values()
+                                                      for p in r.remove()]}
+    cfg = {"kind": a.kind, "seed": pu.SEED4, "n": n, "universe": len(universe),
+           "tools": cfg["tools"], "stores": cfg_stores,
+           "selected": dict(sorted(Counter(f"{lb}/{p.family}" for lb, p in selected).items())),
+           "server_env": {"HF_HUB_OFFLINE": "1"},
+           "views": {label: r.info for label, r in references.items()}}
+    calls_match = all(mcp_scans[label]["unit_lines"] == n_calls.get(label, 0)
+                      for label in stores)
+    t = summary["total"]
+    rp = summary["replays"]
+    ok = (t["leaks"] == 0 and t["invalid"] == 0 and rp["identical"] == rp["n"]
+          and rp["handle_units"] == rp["n"] and logs["total"]["complete"] and calls_match)
+    md = (f"# Unit probes through MCP (D1)\n\nThe {n} of {len(universe)} unit leak probes with "
+          f"the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed {pu.SEED4}), each through "
+          f"an `adr mcp` server of its caller. No model calls.\n\n{t['n']} probes, "
+          f"{t['leaks']} leaks, {t['invalid']} invalid. Handle replays: {rp['identical']} of "
+          f"{rp['n']} identical, {rp['handle_units']} handles naming the units.\n\n"
+          f"| store | probes | leaks | invalid |\n|---|---|---|---|\n" + "".join(
+              f"| {lb} | {b['n']} | {b['leaks']} | {b['invalid']} |\n"
+              for lb, b in summary["stores"].items())
+          + f"\n## Log fields\n\n{sum(n_calls.values())} calls through MCP; "
+            f"{logs['mcp']['total']['unit_lines']} unit-tool log lines in the probed stores "
+            f"(equal per store: {calls_match}). Complete (MCP and reference logs): "
+            f"{logs['total']['complete']}.\n")
+    d = _write_probe_run(a, a.kind, started, {
+        "probes.json": {"seed": pu.SEED4, "selected": [
+            {"store": lb, **p.to_dict()} for lb, p in selected]},
+        "results.json": {"results": [{"store": lb, **r.to_dict()} for lb, r in results],
+                         "replays": replays},
+        "summary.json": {"config": cfg, "summary": summary, "logs": logs},
+        "provenance.json": prov}, md)
+    print(md)
+    print(f"{d}: {len(selected)} probes through MCP; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    return 0 if ok else 1
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -1525,8 +1841,12 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("probes", help="probe sets (no model calls): Phase 2 temporal (gov), "
                                       "acl (leak and fail-closed), equivalence (B2); Phase 3 "
                                       "tables-leak, tables-sql, tables-equivalence, "
-                                      "tables-failclosed, tables-applicability, tables-mcp")
-    p.add_argument("kind", choices=("temporal", "acl", "equivalence", *TABLE_KINDS))
+                                      "tables-failclosed, tables-applicability, tables-mcp; "
+                                      "Phase 4 units-leak, units-equivalence, "
+                                      "units-failclosed, units-applicability, units-define, "
+                                      "units-closure, units-procedures, units-mcp")
+    p.add_argument("kind", choices=("temporal", "acl", "equivalence", *TABLE_KINDS,
+                                    *UNIT_KINDS))
     p.add_argument("corpus", choices=(*NAMES, "tools"),
                    help="the store's corpus (tools: the tool store, tables-equivalence only)")
     p.add_argument("--store", type=Path, required=True,
@@ -1581,7 +1901,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--also", action="append", default=None, metavar="CORPUS=PATH",
                    help="tables-mcp: another store whose leak probes join the universe")
     p.add_argument("--timeout", type=float, default=300.0,
-                   help="tables-mcp: seconds to wait for a server's reply")
+                   help="tables-mcp, units-mcp: seconds to wait for a server's reply")
+    p.add_argument("--absent", type=int, default=50, metavar="N",
+                   help="units-define: terms no concept holds (default 50)")
+    p.add_argument("--gov-config", type=Path, default=None, metavar="PATH",
+                   help="units-leak, units-equivalence, units-mcp: the gov config the unit "
+                        "reference stores derive their applicability under (default the "
+                        "repository's, which the stores were derived with)")
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-<kind>-<corpus>-<ts>/")
     p.set_defaults(fn=_probes)

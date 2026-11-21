@@ -1,0 +1,914 @@
+{
+  "config": {
+    "acl_entries_sha256": "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2",
+    "calls_per_view": 25,
+    "corpus": "bench",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "units-equivalence",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261121,
+    "snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
+    "store": ".cache/store-p2/bench",
+    "tools": [
+      "define",
+      "rule_lookup",
+      "procedure_lookup",
+      "unit_search"
+    ],
+    "units": "d50f23029eed14af978e657963b1fcc9735bdec933fa16b6a9a5143ed39ad5a2",
+    "views": [
+      {
+        "caller": "user:acme-0",
+        "documents": 895,
+        "path": "0303a54a7583",
+        "units": "5eb3063d2b45f0c5be9abea064402910d788a032fb163e7cbab5ccc87fae866e",
+        "units_equal": 167,
+        "units_of_view": 167,
+        "users": [
+          "user:acme-0"
+        ],
+        "view": "0303a54a7583074ebc0cf0da95c86f3e95a33854947f98565ca5faa9beaeb46c"
+      },
+      {
+        "caller": "user:acme-1",
+        "documents": 903,
+        "path": "be3b823b4f7a",
+        "units": "95aebf1f8f5ac4b45f28fc223e8806f114e4c4c43413ee4387e5b3a5f11736ca",
+        "units_equal": 163,
+        "units_of_view": 163,
+        "users": [
+          "user:acme-1"
+        ],
+        "view": "be3b823b4f7a507822ee2b479e2a9dfe5cd1850e35a4dfee532e0b870e408710"
+      },
+      {
+        "caller": "user:acme-2",
+        "documents": 902,
+        "path": "37229981e7a6",
+        "units": "4fc44142997a01c59b8379ed20c7170b4f7b3f988dfe75e1bedbb4c5d099b661",
+        "units_equal": 166,
+        "units_of_view": 166,
+        "users": [
+          "user:acme-2"
+        ],
+        "view": "37229981e7a601f3ca2cf6295e24ffc08aa071384d123957460fedf4da9bcc6a"
+      },
+      {
+        "caller": "user:acme-3",
+        "documents": 899,
+        "path": "c41b5f3a1c20",
+        "units": "a78992283861bd0240bb0b43ac6ee2956f8629eab2a5aa1a2e1cf7bf807d6e57",
+        "units_equal": 167,
+        "units_of_view": 167,
+        "users": [
+          "user:acme-3"
+        ],
+        "view": "c41b5f3a1c209e5f4532b2f5cdb73719e259f7e62ec0ed0875d3737a176f701a"
+      },
+      {
+        "caller": "user:acme-4",
+        "documents": 938,
+        "path": "563543a47520",
+        "units": "5a8fd417f1c7e2089f4ae072be4f55215318d41f68d8f8f55c96af094832159d",
+        "units_equal": 169,
+        "units_of_view": 169,
+        "users": [
+          "user:acme-4"
+        ],
+        "view": "563543a47520960a58825cfdaf96eec8d54ab9692f2f92c499d6f7568f65aa65"
+      },
+      {
+        "caller": "user:acme-5",
+        "documents": 945,
+        "path": "3717286ad181",
+        "units": "7bd7ecc8e907a28a24fbbfd1d17e0afb36c0ae3747ce8b739f0ac8e67c24a773",
+        "units_equal": 168,
+        "units_of_view": 168,
+        "users": [
+          "user:acme-5"
+        ],
+        "view": "3717286ad1819f1709c75c5a227829e23fe3d6cdd338bfd245803dff695b186a"
+      },
+      {
+        "caller": "user:auditor",
+        "documents": 2000,
+        "path": "94f2892b5860",
+        "units": "d50f23029eed14af978e657963b1fcc9735bdec933fa16b6a9a5143ed39ad5a2",
+        "units_equal": 394,
+        "units_of_view": 394,
+        "users": [
+          "user:auditor"
+        ],
+        "view": "94f2892b586073a6db3adbb5de111cf8f8870dbd12634e5e0fa33d6fd6ed0f05"
+      },
+      {
+        "caller": "user:globex-0",
+        "documents": 901,
+        "path": "c266be946d60",
+        "units": "f25d11c437cf9d903bdaf7704a0ddaadcc7b845309771b073ba3cc0332501db6",
+        "units_equal": 186,
+        "units_of_view": 186,
+        "users": [
+          "user:globex-0"
+        ],
+        "view": "c266be946d60d2fd2d55afd86412ea897284992ce5e0d5be0dfb1c433fb8fc4c"
+      },
+      {
+        "caller": "user:globex-1",
+        "documents": 907,
+        "path": "f9afb114ffa8",
+        "units": "bae6db8c674b510799df62dd41ca155cbbd3d06097eb3c8c5880af22270602dd",
+        "units_equal": 188,
+        "units_of_view": 188,
+        "users": [
+          "user:globex-1"
+        ],
+        "view": "f9afb114ffa866ab05bf246e439727043640babe0eaf7e91eba6e7dc4c277cdc"
+      },
+      {
+        "caller": "user:globex-2",
+        "documents": 900,
+        "path": "1fbea2c67261",
+        "units": "8ee3511dfa30fd94b1b908a5ef9780b2f2ef2f65abaf7ad00869569f1ed4c363",
+        "units_equal": 188,
+        "units_of_view": 188,
+        "users": [
+          "user:globex-2"
+        ],
+        "view": "1fbea2c672618c90677e9d9c0ac01be1aaaf373c8da54532bc9e255488f9f245"
+      },
+      {
+        "caller": "user:globex-3",
+        "documents": 901,
+        "path": "c4d30101ab90",
+        "units": "6e739c62e1d20d1ea47d3658cf63c6efb23ecb4a6cee9be5423a8185b9f2b4e1",
+        "units_equal": 188,
+        "units_of_view": 188,
+        "users": [
+          "user:globex-3"
+        ],
+        "view": "c4d30101ab90c62a072e5bf66d7c5d5eec1d208161530362023ec4869aa04a39"
+      },
+      {
+        "caller": "user:globex-4",
+        "documents": 946,
+        "path": "15ba51b9ce3a",
+        "units": "1928acf81aa49f221ee15d7b8866f8d7e7f068e68840b51ce3180ac62dccf780",
+        "units_equal": 195,
+        "units_of_view": 195,
+        "users": [
+          "user:globex-4"
+        ],
+        "view": "15ba51b9ce3a7fb06c25bb125a48d7d4178c0e6532780bc3f029e71d87c388f9"
+      },
+      {
+        "caller": "user:globex-5",
+        "documents": 945,
+        "path": "be67494bcaa8",
+        "units": "d64558c9f4a6062b104bde0d094a0eaf32246967e134a9886702ccd62ce613e4",
+        "units_equal": 197,
+        "units_of_view": 197,
+        "users": [
+          "user:globex-5"
+        ],
+        "view": "be67494bcaa8c78c31e0c3a7b00976958763263d75d898a29e948733658c74b7"
+      },
+      {
+        "caller": "user:initech-0",
+        "documents": 923,
+        "path": "a502ee3ca25e",
+        "units": "3f21f2926a1c2885ff6453c869dae02953ac096d9116d33fa95d3a056a235f08",
+        "units_equal": 196,
+        "units_of_view": 196,
+        "users": [
+          "user:initech-0"
+        ],
+        "view": "a502ee3ca25e898963bce45f9eb61dfeb2d799fdec261900c0a3b8200cad1b35"
+      },
+      {
+        "caller": "user:initech-1",
+        "documents": 927,
+        "path": "24e9a7039a55",
+        "units": "8f142698fc636cf88e1bd0b9a9270754e3e01e353585789a6edf98399880aa96",
+        "units_equal": 194,
+        "units_of_view": 194,
+        "users": [
+          "user:initech-1"
+        ],
+        "view": "24e9a7039a55db01408ebd7813a3b37856effdf4ad1067c1c9c904cbca66b19a"
+      },
+      {
+        "caller": "user:initech-2",
+        "documents": 944,
+        "path": "c3cc80ae6fd6",
+        "units": "c9b41c10b8a2c314d14f2f31d03ab4a6943eae5c8320cdbf509a1db372d7a0d8",
+        "units_equal": 205,
+        "units_of_view": 205,
+        "users": [
+          "user:initech-2"
+        ],
+        "view": "c3cc80ae6fd64c07a496d5c197959b2146d759b77c3ff54bc21a7f49369b71f0"
+      },
+      {
+        "caller": "user:initech-3",
+        "documents": 937,
+        "path": "1982f8456a41",
+        "units": "6df6881f8e36ecc37af6edce4102e7b4100a2e57a96a524f4f513565398179b7",
+        "units_equal": 201,
+        "units_of_view": 201,
+        "users": [
+          "user:initech-3"
+        ],
+        "view": "1982f8456a412b62d42a542294f4360d5f6ff1c6e1f97d72628b56e413c926a6"
+      },
+      {
+        "caller": "user:initech-4",
+        "documents": 954,
+        "path": "bd3d844579c4",
+        "units": "8f806f8ff9bcacb0149cb6d6cef56e6856e14e21ed71dceb6634c587966f9861",
+        "units_equal": 196,
+        "units_of_view": 196,
+        "users": [
+          "user:initech-4"
+        ],
+        "view": "bd3d844579c4f5e5df8a6cc772a2a1b6b5119b4a75dda3ac1ab0e11b09b924be"
+      },
+      {
+        "caller": "user:initech-5",
+        "documents": 975,
+        "path": "e03f2714edd6",
+        "units": "85db991245ef6e5975b066079ab08e3875687a0e0b8dbf6bf50865ccd8f404a8",
+        "units_equal": 205,
+        "units_of_view": 205,
+        "users": [
+          "user:initech-5"
+        ],
+        "view": "e03f2714edd62e63f89c425d41a5d28c854a6a7d8f2bbcc85208a97dc3226f5f"
+      },
+      {
+        "caller": "user:outsider",
+        "documents": 436,
+        "path": "8ef800eff786",
+        "units": "c44960f327dbc1a6cbea10d9779d05f2d6e4e3d30f22fc5a7d71221a51dbd558",
+        "units_equal": 88,
+        "units_of_view": 88,
+        "users": [
+          "user:outsider"
+        ],
+        "view": "8ef800eff7865fa0fc689966b0282e93bec8d619734d8ed693e24231fedc2a87"
+      }
+    ]
+  },
+  "logs": {
+    "by_store": {
+      "reference/0303a54a7583": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/15ba51b9ce3a": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/1982f8456a41": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/1fbea2c67261": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/24e9a7039a55": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/3717286ad181": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/37229981e7a6": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/563543a47520": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/8ef800eff786": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/94f2892b5860": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/a502ee3ca25e": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/bd3d844579c4": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/be3b823b4f7a": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/be67494bcaa8": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/c266be946d60": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/c3cc80ae6fd6": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/c41b5f3a1c20": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/c4d30101ab90": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/e03f2714edd6": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/f9afb114ffa8": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "store": {
+        "allowed": 500,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 500,
+        "decisions": {
+          "allowed": 500
+        },
+        "lines": 500,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 120,
+          "procedure_lookup": 120,
+          "rule_lookup": 120,
+          "unit_search": 140
+        },
+        "unit_calls": 500,
+        "unit_lines": 500,
+        "units_missing": 0
+      }
+    },
+    "total": {
+      "allowed": 1000,
+      "allowed_unresolved": 0,
+      "calls_mismatch": 0,
+      "complete": true,
+      "complete_lines": 1000,
+      "decisions": {
+        "allowed": 1000
+      },
+      "lines": 1000,
+      "logs_missing": 0,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "text_lines": 0,
+      "tools": {
+        "define": 240,
+        "procedure_lookup": 240,
+        "rule_lookup": 240,
+        "unit_search": 280
+      },
+      "unit_calls": 1000,
+      "unit_lines": 1000,
+      "units_missing": 0
+    }
+  },
+  "summary": {
+    "by_tool": {
+      "define": {
+        "identical": 120,
+        "n": 120,
+        "refused": 0
+      },
+      "procedure_lookup": {
+        "identical": 120,
+        "n": 120,
+        "refused": 41
+      },
+      "rule_lookup": {
+        "identical": 120,
+        "n": 120,
+        "refused": 0
+      },
+      "unit_search": {
+        "identical": 140,
+        "n": 140,
+        "refused": 0
+      }
+    },
+    "differing": 0,
+    "identical": 500,
+    "n": 500,
+    "total": {
+      "n": 500,
+      "passed": 500
+    },
+    "views": 20
+  }
+}

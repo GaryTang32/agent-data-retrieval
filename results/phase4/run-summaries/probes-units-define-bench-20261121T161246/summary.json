@@ -1,0 +1,121 @@
+{
+  "config": {
+    "absent": 50,
+    "acl_entries_sha256": "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2",
+    "corpus": "bench",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "units-define",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261121,
+    "snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
+    "store": ".cache/store-p2/bench",
+    "tools": [
+      "define",
+      "rule_lookup",
+      "procedure_lookup",
+      "unit_search"
+    ],
+    "units": "d50f23029eed14af978e657963b1fcc9735bdec933fa16b6a9a5143ed39ad5a2"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 968,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 968,
+        "decisions": {
+          "allowed": 968
+        },
+        "lines": 968,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 968
+        },
+        "unit_calls": 968,
+        "unit_lines": 968,
+        "units_missing": 0
+      }
+    },
+    "total": {
+      "allowed": 968,
+      "allowed_unresolved": 0,
+      "calls_mismatch": 0,
+      "complete": true,
+      "complete_lines": 968,
+      "decisions": {
+        "allowed": 968
+      },
+      "lines": 968,
+      "logs_missing": 0,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "text_lines": 0,
+      "tools": {
+        "define": 968
+      },
+      "unit_calls": 968,
+      "unit_lines": 968,
+      "units_missing": 0
+    }
+  },
+  "summary": {
+    "by_kind": {
+      "absent": {
+        "correct": 50,
+        "hidden_senses": 0,
+        "n": 50,
+        "with_senses": 0
+      },
+      "alt": {
+        "correct": 100,
+        "hidden_senses": 0,
+        "n": 100,
+        "with_senses": 60
+      },
+      "context": {
+        "correct": 81,
+        "hidden_senses": 0,
+        "n": 81,
+        "with_senses": 81
+      },
+      "hidden": {
+        "correct": 596,
+        "hidden_senses": 0,
+        "n": 596,
+        "with_senses": 322
+      },
+      "label": {
+        "correct": 119,
+        "hidden_senses": 0,
+        "n": 119,
+        "with_senses": 63
+      },
+      "no_context": {
+        "correct": 22,
+        "hidden_senses": 0,
+        "n": 22,
+        "with_senses": 22
+      }
+    },
+    "total": {
+      "callers": 20,
+      "correct": 968,
+      "hidden_senses": 0,
+      "n": 968,
+      "owner_hidden": 433
+    }
+  }
+}

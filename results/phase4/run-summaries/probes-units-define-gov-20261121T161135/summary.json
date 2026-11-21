@@ -1,0 +1,121 @@
+{
+  "config": {
+    "absent": 50,
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "units-define",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261121,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tools": [
+      "define",
+      "rule_lookup",
+      "procedure_lookup",
+      "unit_search"
+    ],
+    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 3382,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 3382,
+        "decisions": {
+          "allowed": 3382
+        },
+        "lines": 3382,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 3382
+        },
+        "unit_calls": 3382,
+        "unit_lines": 3382,
+        "units_missing": 0
+      }
+    },
+    "total": {
+      "allowed": 3382,
+      "allowed_unresolved": 0,
+      "calls_mismatch": 0,
+      "complete": true,
+      "complete_lines": 3382,
+      "decisions": {
+        "allowed": 3382
+      },
+      "lines": 3382,
+      "logs_missing": 0,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "text_lines": 0,
+      "tools": {
+        "define": 3382
+      },
+      "unit_calls": 3382,
+      "unit_lines": 3382,
+      "units_missing": 0
+    }
+  },
+  "summary": {
+    "by_kind": {
+      "absent": {
+        "correct": 50,
+        "hidden_senses": 0,
+        "n": 50,
+        "with_senses": 0
+      },
+      "alt": {
+        "correct": 226,
+        "hidden_senses": 0,
+        "n": 226,
+        "with_senses": 149
+      },
+      "context": {
+        "correct": 422,
+        "hidden_senses": 0,
+        "n": 422,
+        "with_senses": 422
+      },
+      "hidden": {
+        "correct": 2111,
+        "hidden_senses": 0,
+        "n": 2111,
+        "with_senses": 1193
+      },
+      "label": {
+        "correct": 472,
+        "hidden_senses": 0,
+        "n": 472,
+        "with_senses": 240
+      },
+      "no_context": {
+        "correct": 101,
+        "hidden_senses": 0,
+        "n": 101,
+        "with_senses": 101
+      }
+    },
+    "total": {
+      "callers": 20,
+      "correct": 3382,
+      "hidden_senses": 0,
+      "n": 3382,
+      "owner_hidden": 1519
+    }
+  }
+}
