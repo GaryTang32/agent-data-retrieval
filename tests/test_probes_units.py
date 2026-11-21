@@ -425,6 +425,75 @@ def test_the_unit_context_oracle_reads_section_7_on_its_own(store):
     assert not pu.holds(drawbridge, pu.place_of(section))
 
 
+def test_the_u1_oracle_reads_ref_contexts_on_its_own(store, monkeypatch):
+    """Task 12 carry C: a ref-string context is judged by the oracle's own `place_of_ref` and
+    `holds_ref` (no `scope_contains`, `_KIND_RANK` or `tools_units` helper), and a hidden
+    unit-id context by the ref inside the id, as the tool reads it."""
+    from adr_store.units import concepts
+
+    ctx = pu.unit_context(store.path)
+    by_ref = {u.body["scope"]["ref"]: u for u in ctx.by_type["concept"]
+              if u.body["pref_label"].lower() == "designated representative"}
+    part, section = by_ref["33 CFR part 165"], by_ref["33 CFR 165.T01"]
+    every = frozenset(ctx.units[u].doc_id for u in ctx.units)
+    for ref, holds_part, holds_section in (("33 CFR part 165", True, False),
+                                           ("33 CFR 165.T01", True, True),
+                                           ("33 CFR 165.T01(b)", True, True),
+                                           ("33 CFR 165.13(b)", True, False),
+                                           ("33 CFR part 117", False, False),
+                                           ("IRM 21.4.1.3", False, False)):
+        place = pu.place_of_ref(ctx, ref, every)
+        assert pu.holds_ref(part, ref, place) is holds_part, ref
+        assert pu.holds_ref(section, ref, place) is holds_section, ref
+    irm = next(u for u in ctx.by_type["concept"] if u.doc_id == DOC_IRM)
+    chapter = irm.body["scope"]["ref"]
+    assert pu.holds_ref(irm, chapter, pu.place_of_ref(ctx, chapter, every))
+    deeper = chapter + ".9"
+    assert pu.holds_ref(irm, deeper, pu.place_of_ref(ctx, deeper, every))
+    assert not pu.holds_ref(irm, chapter + "9", pu.place_of_ref(ctx, chapter + "9", every))
+    # the subpart of a section ref comes from a visible card of that section
+    sub_place = pu.place_of_ref(ctx, "33 CFR 117.821", every)
+    assert sub_place.subpart == "B" and sub_place.section == "117.821"
+    assert pu.place_of_ref(ctx, "33 CFR 117.821", frozenset()).subpart is None
+    # the ref inside a unit id, read without the tool's pattern
+    card = next(u for u in ctx.by_type["rule_card"] if u.doc_id == DOC_165)
+    assert pu.ref_of_unit_id(card.unit_id) == card.canonical_ref
+    assert pu.ref_of_unit_id("33 CFR 165.13") is None
+    assert pu.ref_of_unit_id(f"rule_card/{card.canonical_ref}/xyz/{DOC_165[:16]}") is None
+    # a hidden unit-id context ranks as its ref does, not as the whole id string
+    term = "designated representative"
+    hidden_ctx = f"rule_card/33 CFR 165.T01(c)/{'0' * 12}/{'f' * 16}"       # absent unit
+    assert pu._expected_ids(ctx, term, hidden_ctx, every) == \
+        pu._expected_ids(ctx, term, "33 CFR 165.T01(c)", every)
+    assert pu._expected_ids(ctx, term, hidden_ctx, every)[0] == section.unit_id
+    # independence: the oracle never calls the tool's helpers
+    def boom(*a, **kw):
+        raise AssertionError("the U1 oracle used a tool helper")
+
+    for target, name in ((pu, "scope_contains"), (concepts, "scope_contains"),
+                         (pu.tu, "section_of"), (pu.tu, "subpart"), (pu.tu, "context_ref")):
+        if hasattr(target, name):
+            monkeypatch.setattr(target, name, boom)
+    for context in ("33 CFR part 165", "33 CFR 165.T01(b)", "33 CFR 117.821", chapter,
+                    hidden_ctx, None):
+        pu._expected_ids(ctx, term, context, every)
+
+
+def test_equivalence_contexts_include_visible_unit_ids(store):
+    """Task 12 carry C (ii): `define` calls of the equivalence set take a visible unit id as
+    context too."""
+    import adr_eval.probes.equivalence as eq
+
+    ctx = pu.unit_context(store.path)
+    seen = frozenset(ctx.visible("user:acme-1"))
+    view = eq.View("v", "user:acme-1", ("user:acme-1",), seen)
+    calls = pu.equivalence_calls(ctx, view, n_calls=300)
+    contexts = [c["args"].get("context") for c in calls.values() if c["tool"] == "define"]
+    unit_ids = [c for c in contexts if c in ctx.units]
+    assert unit_ids and all(ctx.units[c].doc_id in seen for c in unit_ids)
+    assert any(c is None for c in contexts) and any(c and c not in ctx.units for c in contexts)
+
+
 def test_define_probes_catch_a_unit_context_read_as_its_ref(store, monkeypatch):
     """The Task 8 reading before fix round 1 (a unit id stands for its canonical ref only) is
     caught by the unit-id context probes."""

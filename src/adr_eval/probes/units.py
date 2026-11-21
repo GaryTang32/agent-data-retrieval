@@ -59,7 +59,8 @@ the store and on its reference store; call `i` uses the tool of slot `i` (the fo
 then a last `unit_search`: 6 `define`, 6 `rule_lookup`, 6 `procedure_lookup`, 7 `unit_search`
 in 25) on a unit drawn by seeded hash from the
 view's units (two calls in three) or from all units (the third), with its arguments (term,
-context, rule id, section, query, part, view, types) and applicability (default,
+context: none, a concept's scope, a card's ref or a unit id the caller sees; rule id, section,
+query, part, view, types) and applicability (default,
 `include_superseded`, an `as_of` date of a version boundary) by seeded hash. Results must be
 identical, or the same refusal.
 
@@ -91,11 +92,13 @@ filters or `include_superseded`; `n_absent` (50) terms no concept holds; every t
 more than one scope, with each of its scopes as context and once without, each as a caller
 who sees a sense of that scope (drawn by seeded hash); and for each such scope, a unit id as
 context (`unit_context`): the sense's own concept and another unit of its document (a rule
-card, procedure, FAQ or table record, by seeded hash), as a caller who sees that unit. A
-unit-id context is judged by an independent reading of §7 (`place_of`, `holds`, `BREADTH`):
-where the unit sits is read from its own fields (a concept's scope, a card's provision, a
-table's section, its subpart, its document) and containment from the sense's scope kind and
-ref, sharing no code with the tool's context resolution or ranking. The expected senses
+card, procedure, FAQ or table record, by seeded hash), as a caller who sees that unit. Every
+context is judged by an independent reading of §7 (`place_of`, `place_of_ref`, `holds`,
+`holds_ref`, `BREADTH`): where a visible unit sits is read from its own fields (a concept's
+scope, a card's provision, a table's section, its subpart, its document), where a ref string
+sits from the ref alone (a unit id the caller cannot see, or an absent one, stands for the ref
+inside it, as the tool reads it), and containment from the sense's scope kind and ref, sharing
+no code with the tool's context resolution or ranking. The expected senses
 are worked out from the units and the ACL snapshot (labels first, hidden labels only when no
 label matches; ranked by scope holding the context, then narrowest scope, then unit id; the
 nearest labels by edit distance when none): `correct` when the senses (and nearest labels) are
@@ -176,7 +179,6 @@ from adr_store.tools import (
 from adr_store.units import closure as closure_mod
 from adr_store.units import tools_units as tu
 from adr_store.units.build import build_units, unit_reports
-from adr_store.units.concepts import _KIND_RANK, scope_contains
 from adr_store.units.ecfr import ecfr_docs, normalise_rule_id, rule_cards
 from adr_store.units.envelope import Unit
 from adr_store.units.gate import units_gate
@@ -883,7 +885,7 @@ def _filters_variant(h: int, dates: list[str], wide: bool) -> dict:
 
 
 def _equivalence_call(ctx: UnitContext, tool: str, pool: list[Unit], h: int,
-                      dates: list[str]) -> dict:
+                      dates: list[str], visible: list[Unit] = ()) -> dict:
     types = TOOL_TYPES[tool]
     units = [u for u in pool if types is None or u.type in types] or \
         [u for u in ctx.units.values() if types is None or u.type in types] or \
@@ -896,9 +898,10 @@ def _equivalence_call(ctx: UnitContext, tool: str, pool: list[Unit], h: int,
         term = terms[h2 % len(terms)]
         cards = ctx.by_type.get("rule_card", [])
         contexts = [None, u.body["scope"]["ref"] if u.type == "concept" else None,
-                    cards[h2 % len(cards)].canonical_ref if cards else None]
+                    cards[h2 % len(cards)].canonical_ref if cards else None,
+                    visible[(h2 // 3) % len(visible)].unit_id if visible else None]
         args = {"term": term, **_filters_variant(h2 // 7, dates, True)}
-        if (c := contexts[(h2 // 5) % 3]) is not None:
+        if (c := contexts[(h2 // 5) % 4]) is not None:
             args["context"] = c
         return {"tool": tool, "args": args}
     if tool == "rule_lookup":
@@ -938,7 +941,7 @@ def equivalence_calls(ctx: UnitContext, v: eq.View, n_calls: int = 25,
         tool = tools[i % len(tools)]
         pool = mine if i % 3 != 2 and mine else every
         out[f"{i:03d}"] = _equivalence_call(ctx, tool, pool, _h(seed, "equivalence", v.view, i),
-                                            dates)
+                                            dates, mine)
     return out
 
 
@@ -1345,30 +1348,22 @@ def summarize_applicability(rows: list[dict]) -> dict:
 # -- define (U1) -------------------------------------------------------------------------------
 
 
-def _oracle_context(ctx: UnitContext, context: str | None, allowed: frozenset[str]
-                    ) -> tuple[str | None, str | None]:
-    """(the canonical ref of a ref `context`, the subpart holding it): the subpart of a
-    visible card in force of its section. Unit-id contexts are judged by `place_of` and
-    `holds` instead."""
-    if context is None:
-        return None, None
-    ref = normalise_rule_id(context.strip()) or context.strip()
-    section = tu.section_of(ref)
-    unit = next((u for u in ctx.by_type.get("rule_card", ())
-                 if u.doc_id in allowed and tu.section_of(u.canonical_ref) == section), None)
-    return ref, None if unit is None else tu.subpart(unit)
-
-
-# An independent reading of §7 for unit-id contexts: where a unit sits is read from its own
-# fields, and whether a sense's scope holds it from the sense's scope kind and ref. It shares
-# no code with the tool's context resolution or ranking (`_sense_context`, `context_ref`,
-# `scope_contains`, `_KIND_RANK`).
+# An independent reading of §7 for every context: where a unit sits is read from its own fields
+# (`place_of`), where a ref string sits from the ref alone (`place_of_ref`; the ref inside a
+# unit id the caller may not see, `ref_of_unit_id`), and whether a sense's scope holds it from
+# the sense's scope kind and ref (`holds`, `holds_ref`); senses rank by `BREADTH`. It shares no
+# code with the tool's context resolution or ranking (`_sense_context`, `context_ref`,
+# `section_of`, `subpart`, `scope_contains`, `_KIND_RANK`).
 BREADTH = ("paragraph", "section", "subpart", "part", "document")   # §7: narrowest first
 _O_PART = re.compile(r"^(\d+) CFR part (\w+)(?:, subpart (\w+))?$")
 _O_PROV = re.compile(r"^(\d+) CFR (\w+)\.([\w-]+)((?:\([^()]*\))*)")
 _O_DRAW = re.compile(r'^tables:drawbridge_\w+:\{"section":"(\w+)\.([\w-]+)"')
 _O_MARK = re.compile(r"\(([^()]*)\)")
 _O_TITLE = {"117": "33", "165": "33", "73": "47"}   # the eCFR parts of the gov corpus
+_O_IRM = re.compile(r"^IRM (\d+(?:\.\d+)*)$")
+_O_DOC = re.compile(r"^\w+:([0-9a-f]{64})$")         # a document scope, "<corpus>:<doc id>"
+_O_TYPES = ("concept", "rule_card", "procedure", "faq", "table_record")
+_O_SHA12, _O_DOC16 = re.compile(r"[0-9a-f]{12}"), re.compile(r"[0-9a-f]{16}")
 
 
 @dataclass(frozen=True)
@@ -1376,12 +1371,13 @@ class Place:
     """Where a unit sits: its document and, where it has one, its eCFR title, part, section
     ("117.313"), paragraph marks and subpart."""
 
-    doc: str
+    doc: str | None              # None for a ref string (it names no document)
     title: str | None = None
     part: str | None = None
     section: str | None = None
     marks: tuple[str, ...] = ()
     subpart: str | None = None
+    irm: tuple[str, ...] = ()    # an IRM ref string's numbers ("21", "4", "1")
 
 
 def place_of(u: Unit) -> Place:
@@ -1408,7 +1404,10 @@ def holds(sense: Unit, place: Place) -> bool:
     paragraphs; a paragraph those under it."""
     kind, ref = sense.body["scope"]["kind"], sense.body["scope"]["ref"]
     if kind == "document":
-        return place.doc == sense.doc_id
+        if place.irm and (m := _O_IRM.match(ref)):     # an IRM chapter holds its sections
+            numbers = tuple(m.group(1).split("."))
+            return place.irm[:len(numbers)] == numbers
+        return place.doc is not None and place.doc == sense.doc_id
     if m := _O_PART.match(ref):
         same = (place.title, place.part) == (m.group(1), m.group(2))
         return same and (kind == "part" or place.subpart == m.group(3))
@@ -1420,6 +1419,45 @@ def holds(sense: Unit, place: Place) -> bool:
     return False
 
 
+def ref_of_unit_id(context: str) -> str | None:
+    """The canonical ref inside a unit id "<type>/<canonical ref>/<12 hex>/<16 hex>", or None
+    when `context` is not one."""
+    head, sep, rest = context.partition("/")
+    if not sep or head not in _O_TYPES:
+        return None
+    parts = rest.rsplit("/", 2)
+    if len(parts) != 3 or not parts[0] or not _O_SHA12.fullmatch(parts[1]) or \
+            not _O_DOC16.fullmatch(parts[2]):
+        return None
+    return parts[0]
+
+
+def place_of_ref(ctx: UnitContext, ref: str, allowed: frozenset[str]) -> Place:
+    """Where a ref string sits, read from the ref alone: a document scope's document, an IRM
+    ref's numbers, a part or subpart, or a provision's section and marks (a table's section,
+    "33 CFR 117.313 table 1"); a provision's subpart is that of a rule card in force the
+    caller may see (`allowed`) of the same section (`place_of`), the first by unit id."""
+    if m := _O_DOC.match(ref):
+        return Place(m.group(1))
+    if m := _O_IRM.match(ref):
+        return Place(None, irm=tuple(m.group(1).split(".")))
+    if m := _O_PART.match(ref):
+        return Place(None, m.group(1), m.group(2), subpart=m.group(3))
+    if m := _O_PROV.match(re.sub(r" table \d+$", "", ref)):
+        title, part, section = m.group(1), m.group(2), f"{m.group(2)}.{m.group(3)}"
+        sub = next((q.subpart for q in (place_of(u) for u in ctx.by_type.get("rule_card", ())
+                                        if u.doc_id in allowed)
+                    if (q.title, q.part, q.section) == (title, part, section)), None)
+        return Place(None, title, part, section, tuple(_O_MARK.findall(m.group(4))), sub)
+    return Place(None)
+
+
+def holds_ref(sense: Unit, ref: str, place: Place) -> bool:
+    """Whether `sense`'s scope holds the ref string `ref` (at `place`): a scope holds its own
+    ref, and whatever `holds` says of the place."""
+    return ref == sense.body["scope"]["ref"] or holds(sense, place)
+
+
 def _expected_senses(ctx: UnitContext, term: str, context: str | None,
                      allowed: frozenset[str]) -> list[Unit]:
     concepts = [u for u in ctx.by_type.get("concept", ()) if u.doc_id in allowed]
@@ -1427,19 +1465,20 @@ def _expected_senses(ctx: UnitContext, term: str, context: str | None,
     found = [u for u in concepts if key and key in {base_key(x) for x in _labels(u)}]
     if not found:
         found = [u for u in concepts if key and key in u.body["hidden_labels"]]
-    unit = ctx.units.get(context.strip()) if context is not None else None
-    if unit is not None and unit.doc_id in allowed:   # a unit-id context (independent oracle)
+
+    def breadth(u: Unit) -> int:
+        return BREADTH.index(u.body["scope"]["kind"])
+
+    if context is None:
+        return sorted(found, key=lambda u: (breadth(u), u.unit_id))
+    c = context.strip()
+    unit = ctx.units.get(c)
+    if unit is not None and unit.doc_id in allowed:   # a visible unit: where it sits
         place = place_of(unit)
-        return sorted(found, key=lambda u: (not holds(u, place),
-                                            BREADTH.index(u.body["scope"]["kind"]), u.unit_id))
-    ref, sub = _oracle_context(ctx, context, allowed)
-
-    def rank(u: Unit) -> tuple:
-        inside = ref is not None and scope_contains(u.body["scope"]["ref"], ref, subpart=sub)
-        return (not inside, _KIND_RANK.get(u.body["scope"]["kind"], len(_KIND_RANK)),
-                u.unit_id)
-
-    return sorted(found, key=rank)
+        return sorted(found, key=lambda u: (not holds(u, place), breadth(u), u.unit_id))
+    ref = ref_of_unit_id(c) or c                     # a hidden or absent unit id: its ref
+    place = place_of_ref(ctx, ref, allowed)
+    return sorted(found, key=lambda u: (not holds_ref(u, ref, place), breadth(u), u.unit_id))
 
 
 def _expected_ids(ctx: UnitContext, term: str, context: str | None,

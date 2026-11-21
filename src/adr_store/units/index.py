@@ -93,7 +93,11 @@ index returns ids and scores, never text.
 **Tuning (C13).** `config/units/tuning.json` is keyed by corpus:
 `{corpus: {"weights": {type: {field: weight}}, "w": float}}`. Weights come from `WEIGHT_GRID`
 and `w` from `W_GRID`. The defaults set every weight to 1 and `w` to 1.0, and Task 13 tunes
-them on dev.
+them on dev (`adr_eval.phase4.tune`, written by `write_tuning`).
+
+**Pinned tuning (P42).** A handle names the tuning entry it ran on by its SHA-256 (handle part
+`unit_index`, `tuning_id`); the entry is pinned, write-once, at
+`<store>/units-index/<units id>/tuning-<unit_index>.json` (`pin_tuning`, `pinned_tuning`).
 """
 
 from __future__ import annotations
@@ -352,15 +356,100 @@ def check_tuning(tuning: object, types: tuple[str, ...] | None = None) -> dict:
             "w": float(w)}
 
 
-def load_tuning(corpus: str, path: Path = TUNING_PATH) -> dict:
-    """The tuning of `corpus` from the tuning file (C13): `{"weights": {type: {field:
-    weight}}, "w": float}` for exactly the corpus's unit types."""
+def load_tuning(corpus: str, path: Path | None = None) -> dict:
+    """The tuning of `corpus` from the tuning file (C13; `path`, default `TUNING_PATH` read
+    when called): `{"weights": {type: {field: weight}}, "w": float}` for exactly the corpus's
+    unit types."""
     if corpus not in CORPUS_TYPES:
         raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    path = TUNING_PATH if path is None else Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
     if corpus not in data:
         raise ValueError(f"{path}: no tuning for corpus {corpus!r}")
     return check_tuning(data[corpus], CORPUS_TYPES[corpus])
+
+
+def write_tuning(corpus: str, entry: dict, path: Path | None = None) -> Path:
+    """Set the tuning of `corpus` in the tuning file (`path`, default `TUNING_PATH`) to
+    `entry` (checked), keeping the other corpora's entries and their order; the file is
+    written whole (indent 2, newline-terminated). Returns the path."""
+    if corpus not in CORPUS_TYPES:
+        raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
+    entry = check_tuning(entry, CORPUS_TYPES[corpus])
+    path = TUNING_PATH if path is None else Path(path)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    data[corpus] = entry
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def default_tuning(corpus: str) -> dict:
+    """Every field weight 1 for every unit type of `corpus`, and `w = 1.0` (lexical-only): what
+    a handle with a null `unit_index` stands for (the index Task 8 served)."""
+    if corpus not in CORPUS_TYPES:
+        raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
+    return check_tuning({"weights": {t: dict.fromkeys(FIELDS, 1) for t in CORPUS_TYPES[corpus]},
+                         "w": 1.0}, CORPUS_TYPES[corpus])
+
+
+# -- the pinned tuning (spec P42) --------------------------------------------------------------
+# A handle's `unit_index` is the SHA-256 of a corpus's canonical tuning entry (`tuning_bytes`:
+# sorted keys, no spaces, no trailing newline). The entry is pinned, content-addressed and
+# write-once, at `<store>/units-index/<units id>/tuning-<id>.json`, so a handle replays with
+# the weights it names whatever the tuning file says later.
+
+def tuning_bytes(entry: dict) -> bytes:
+    """The canonical bytes of a tuning entry (checked): its SHA-256 is its `unit_index`."""
+    return json.dumps(check_tuning(entry), sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
+
+def tuning_id(entry: dict) -> str:
+    """The `unit_index` of a tuning entry: the SHA-256 of `tuning_bytes(entry)`."""
+    return hashlib.sha256(tuning_bytes(entry)).hexdigest()
+
+
+def pin_path(store_path: Path, units_id: str, tid: str) -> Path:
+    return Path(store_path) / INDEX_DIR / units_id / f"tuning-{tid}.json"
+
+
+def pinned_tuning(store_path: Path, units_id: str, tid: str,
+                  types: tuple[str, ...] | None = None) -> dict | None:
+    """The tuning entry pinned as `tid` for build `units_id` (checked, and of exactly `types`
+    when given), or None when it is missing, does not hash to `tid` or does not check."""
+    try:
+        data = pin_path(store_path, units_id, tid).read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(data).hexdigest() != tid:
+        return None
+    try:
+        return check_tuning(json.loads(data.decode("utf-8")), types)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return None
+
+
+def pin_tuning(store_path: Path, units_id: str, entry: dict) -> str:
+    """Pin `entry` for build `units_id` (write-once: an existing pin with the right bytes is
+    kept, a damaged one replaced through a fresh file and a rename); its `unit_index`. Never
+    writes an index directory."""
+    data = tuning_bytes(entry)
+    tid = hashlib.sha256(data).hexdigest()
+    path = pin_path(store_path, units_id, tid)
+    try:
+        if path.read_bytes() == data:
+            return tid
+    except OSError:
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / f".{path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return tid
 
 
 # -- the per-view lexical index ----------------------------------------------------------------

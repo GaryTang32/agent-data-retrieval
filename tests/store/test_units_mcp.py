@@ -147,8 +147,9 @@ def test_a_handle_replay_through_mcp_is_identical(store, servers):              
     s = m.unit_search("drawbridge", handle=first.handle)
     assert m.unit_search("drawbridge", handle=s.handle) == s
     # a Phase 3 handle (no units part) validates, and is refused by the unit tools only
-    old = {k: v for k, v in first.handle.items() if k != "units"}
-    assert m.read(DOC_117_NEW, 0, 20, handle=old).handle == {**old, "units": None}
+    old = {k: v for k, v in first.handle.items() if k not in ("units", "unit_index")}
+    assert m.read(DOC_117_NEW, 0, 20, handle=old).handle == {**old, "units": None,
+                                                             "unit_index": None}
     with pytest.raises(tools.ToolError) as e:
         m.procedure_lookup("refund", handle=old)
     assert str(e.value) == tools.NO_HANDLE_UNITS

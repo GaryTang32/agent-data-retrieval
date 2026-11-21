@@ -4,11 +4,13 @@ tools of `adr_store.tools.Tools` use (`define`, `rule_lookup`, `procedure_lookup
 `unit_search`). Access, applicability, handles, logging and every refusal stay in
 `adr_store.tools`; nothing here reads the ACL or raises a `ToolError`.
 
-- `UnitSet.of(store_path, units_id, manifest)` loads a build's units and its lexical unit index
-  (preflight C8: `emb=None`, built in memory: a read call never writes into the store), kept
-  in a process LRU of `UNIT_CACHE` builds by (store, units id, the corpus's field weights). A
-  build is immutable (its id is the SHA-256 of a manifest naming every file by its hash), so
-  the cache never changes an answer.
+- `UnitSet.of(store_path, units_id, manifest, tuning, emb)` loads a build's units and its unit
+  index with `tuning` (the pinned entry the call runs on, spec P42). At `w = 1.0` the index is
+  lexical-only and built in memory (preflight C8: `emb=None`; nothing is written); below 1 it
+  is fused with dense vectors from `emb`, stored under `<store>/units-index/<units id>/dense-*`
+  once and reused. Kept in a process LRU of `UNIT_CACHE` builds by (store, units id, tuning,
+  embedding model). A build is immutable (its id is the SHA-256 of a manifest naming every
+  file by its hash), so the cache never changes an answer.
 - `part_prefix`, `under`, `section_of`, `subpart`, `context_ref`, `span`, `model_value`, `labels`,
   `edit_distance`, `reader_text`, `catalog_entry`, `hit` and `card_order`: what their
   docstrings say.
@@ -28,8 +30,8 @@ from adr_store.units.ecfr import _TITLE_OF_PART, normalise_rule_id
 from adr_store.units.envelope import Unit
 from adr_store.units.overlay import UnitsManifest, load_units
 
-UNIT_CACHE = 4  # unit builds (units, index) kept in memory, by store, units id and weights
-UNIT_SETS: OrderedDict[tuple[str, str, str], UnitSet] = OrderedDict()
+UNIT_CACHE = 4  # unit builds (units, index) kept in memory, by store, units id and tuning
+UNIT_SETS: OrderedDict[tuple[str, str, str, str | None], UnitSet] = OrderedDict()
 _LOCK = threading.Lock()
 
 
@@ -45,9 +47,13 @@ class UnitSet:
     index: units_index.UnitIndex
 
     @classmethod
-    def of(cls, store_path: Path, units_id: str, manifest: UnitsManifest) -> UnitSet:
-        tuning = units_index.load_tuning(manifest.corpus)
-        key = (str(Path(store_path).resolve()), units_id, json.dumps(tuning, sort_keys=True))
+    def of(cls, store_path: Path, units_id: str, manifest: UnitsManifest, tuning: dict,
+           emb=None) -> UnitSet:
+        """The units of build `units_id` with their index under `tuning`; `emb` (an
+        `EmbeddingCache`) is used only when `tuning["w"]` is below 1."""
+        emb = emb if tuning["w"] < 1 else None
+        key = (str(Path(store_path).resolve()), units_id, json.dumps(tuning, sort_keys=True),
+               None if emb is None else emb.model_hash)
         with _LOCK:
             if key in UNIT_SETS:
                 UNIT_SETS.move_to_end(key)
@@ -57,8 +63,8 @@ class UnitSet:
         for u in units:
             by_type.setdefault(u.type, []).append(u)
         docs = units_index.unit_docs(units, by_type.get("concept", []))
-        index = units_index.UnitIndex.build(store_path, units_id, docs, None, tuning,
-                                            install=False)
+        index = units_index.UnitIndex.build(store_path, units_id, docs, emb, tuning,
+                                            install=emb is not None)
         found = cls(units_id, manifest.corpus, tuple(f.type for f in manifest.units),
                     {u.unit_id: u for u in units}, by_type, index)
         with _LOCK:

@@ -20,7 +20,7 @@ from typing import get_args
 
 from pydantic import ValidationError
 
-from adr_eval import runner, systems
+from adr_eval import phase4, runner, systems
 from adr_eval.cache import Cache
 from adr_eval.corpora.base import ExtractionError, HashMismatch
 from adr_eval.corpora.registry import (
@@ -738,6 +738,83 @@ def _p2_compare(a: argparse.Namespace) -> int:
     d = phase2.write_compare(c, out)
     print((d / "compare.md").read_text(encoding="utf-8"))
     print(f"written: {d / 'compare.json'}")
+    return 0
+
+
+def _p4_retrieval(a: argparse.Namespace) -> int:
+    """`adr-eval p4-retrieval --golden G --system S --split SPLIT`: one Phase 4 retrieval run
+    (`phase4.run_p4`; no model call), written under --out (default runs/)."""
+
+
+    t0 = time.perf_counter()
+    out = phase4.OUT_ROOT if a.out is None else a.out
+    run_id = phase4.run_p4(a.golden, a.system, a.split, runner.load_config(), out)
+    data = phase4.load_run(out / run_id)
+    p = data["summary"]["pooled"]
+    if data["config"]["kind"] == "rule":
+        shown = ", ".join(f"{k} {'-' if p[k] is None else f'{p[k]:.3f}'}"
+                          for k in ("recall", "closure_recall", "recall@10", "mrr"))
+        shown += f", tokens@10 {p['tokens@10']:.1f}"
+    else:
+        shown = ", ".join(f"{k} {p[k]:.3f}" for k in phase4.PROCEDURE_METRICS)
+    print(f"{out / run_id} (p4-retrieval): {p['n']} items; {shown}; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    return 0
+
+
+def _p4_dir(name: str, out: Path) -> Path:
+    d = Path(name) if Path(name).is_dir() else out / name
+    if not (d / "p4.json").is_file():
+        raise runner.RunError(f"{d}: no p4.json; pass a p4-retrieval run id under {out} or a "
+                              f"run dir")
+    return d
+
+
+def _p4_compare(a: argparse.Namespace) -> int:
+    """`adr-eval p4-compare RUN_A RUN_B --metric M [--pool RUN_A RUN_B]...`: `run_b - run_a`
+    with the paired bootstrap (`phase4.p4_compare`); written to
+    `<run_a>/p4-compare-<run_b>-<metric>.json` and, with --summary, to OUT (no item id)."""
+
+
+    out = phase4.OUT_ROOT if a.out is None else a.out
+    run_a, run_b = _p4_dir(a.run_a, out), _p4_dir(a.run_b, out)
+    pooled = [(_p4_dir(x, out), _p4_dir(y, out)) for x, y in a.pool]
+    c = phase4.p4_compare(run_a, run_b, a.metric, pooled=pooled)
+    text = json.dumps(c, indent=2, sort_keys=True) + "\n"
+    (run_a / f"p4-compare-{run_b.name}-{a.metric}.json").write_text(text, encoding="utf-8")
+    if a.summary is not None:
+        a.summary.parent.mkdir(parents=True, exist_ok=True)
+        a.summary.write_text(text, encoding="utf-8")
+    print(f"{c['metric']}: {c['system_b']} minus {c['system_a']}")
+    for e in c["each"]:
+        print(f"  {e['golden']} ({e['split']}): n {e['n']}, {e['mean_a']:.3f} -> "
+              f"{e['mean_b']:.3f}, diff {e['diff']:+.3f} [{e['ci'][0]:+.3f}, {e['ci'][1]:+.3f}]")
+    q = c["pooled"]
+    print(f"  pooled: n {q['n']}, diff {q['diff']:+.3f} [{q['ci'][0]:+.3f}, {q['ci'][1]:+.3f}]"
+          f"; lower bound above +{c['margin']}: {q['lower_above_margin']}; every point >= 0: "
+          f"{c['each_point_non_negative']}")
+    return 0
+
+
+def _p4_tune(a: argparse.Namespace) -> int:
+    """`adr-eval p4-tune --golden G [--golden G2] --store S`: tune the unit index of the
+    store's corpus on the dev items (`phase4.tune`, C13) and write the corpus's entry of the
+    tuning file (--out, default config/units/tuning.json). No model call; the dense vectors
+    come from the local embedding model."""
+
+    from adr_store import tools as store_tools
+    from adr_store.units import index as units_index
+
+    emb = store_tools.make_embedding_cache(
+        a.emb_cache if a.emb_cache is not None else store_tools.DEFAULT_EMB_CACHE)
+    report: dict = {}
+    entry = phase4.tune(a.golden, a.store, emb=emb, report=report)
+    path = units_index.write_tuning(report["corpus"], entry, a.out)
+    print(f"{report['corpus']}: w {entry['w']}; dev {report['dev']}; nDCG@10 weights "
+          f"{ {k: round(v, 4) for k, v in report['weights_ndcg10'].items()} }, at w "
+          f"{report['w_ndcg10']:.4f}; written to {path}")
+    for t, fw in entry["weights"].items():
+        print(f"  {t}: {fw}")
     return 0
 
 
@@ -1923,6 +2000,42 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="run output root (default runs); writes p2-compare-<a>--<b>/")
     p.set_defaults(fn=_p2_compare)
+
+    p = sub.add_parser("p4-retrieval",
+                       help="Phase 4 retrieval run (no model calls): R1 rule-ID recall at 2,000 "
+                            "tokens or R2 procedure ranks for one system over one golden set")
+    p.add_argument("--golden", required=True, choices=phase4.GOLDENS)
+    p.add_argument("--system", required=True, choices=phase4.SYSTEMS)
+    p.add_argument("--split", choices=("dev", "test"), default="test")
+    p.add_argument("--out", type=Path, default=None, help="run output root (default runs)")
+    p.set_defaults(fn=_p4_retrieval)
+
+    p = sub.add_parser("p4-compare",
+                       help="paired comparison of two p4-retrieval runs (run_b minus run_a), "
+                            "pooled with other corpora's runs of the same systems")
+    p.add_argument("run_a")
+    p.add_argument("run_b")
+    p.add_argument("--metric", required=True,
+                   help="a row metric: recall, closure_recall, recall@10, mrr, hit@1, hit@5, rr")
+    p.add_argument("--pool", nargs=2, action="append", default=[], metavar=("RUN_A", "RUN_B"),
+                   help="another pair of runs (same two systems, another golden set) to pool")
+    p.add_argument("--summary", type=Path, default=None, metavar="OUT",
+                   help="also write the comparison (no item id) to OUT")
+    p.add_argument("--out", type=Path, default=None, help="run output root (default runs)")
+    p.set_defaults(fn=_p4_compare)
+
+    p = sub.add_parser("p4-tune",
+                       help="tune the unit index (field weights per type, then w) on dev items "
+                            "and write the corpus's entry of the tuning file (no model calls)")
+    p.add_argument("--golden", action="append", required=True,
+                   choices=phase4.TUNE_GOLDENS,
+                   help="gov: gov-rules and/or gov-procedures; bench: bench-procedures")
+    p.add_argument("--store", type=Path, required=True,
+                   help="the p2 store whose promoted units are tuned")
+    p.add_argument("--out", type=Path, default=None,
+                   help="the tuning file (default config/units/tuning.json)")
+    p.add_argument("--emb-cache", type=Path, default=None, help="embedding cache directory")
+    p.set_defaults(fn=_p4_tune)
 
     p = sub.add_parser("p3-q2",
                        help="Phase 3 Q2: a p3-typed gov-tables test run against a "

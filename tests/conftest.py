@@ -71,6 +71,9 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     gov-rules, gov-procedures and bench-procedures directories (`golden.units.RULES_DIR`,
     `GOV_PROCEDURES_DIR`, `BENCH_PROCEDURES_DIR`, which `adr-eval golden rules --gen` and
     `adr-eval golden procedures --gen` write).
+    The default output root of `adr-eval p4-retrieval` (`phase4.OUT_ROOT`) goes there too, and
+    the unit-index tuning file (`units.index.TUNING_PATH`, which `adr-eval p4-tune` writes and
+    the unit tools read) is a fresh copy of the committed one per test.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -121,6 +124,13 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
                     ("BENCH_PROCEDURES_DIR", "bench-procedures")):
         monkeypatch.setattr(golden_units, name, tmp_path_factory.mktemp(f"golden-{d}") / d
                             / "v0.1")
+    from adr_eval import phase4
+    from adr_store.units import index as units_index
+
+    monkeypatch.setattr(phase4, "OUT_ROOT", writable_state / "runs")
+    tuning = tmp_path_factory.mktemp("units-tuning") / "tuning.json"
+    tuning.write_bytes(units_index.TUNING_PATH.read_bytes())
+    monkeypatch.setattr(units_index, "TUNING_PATH", tuning)
 
 
 @pytest.fixture

@@ -1285,17 +1285,29 @@ def _units_show(a: argparse.Namespace) -> int:
 
 
 def _units_gate(a: argparse.Namespace) -> int:
-    if a.gold:
-        raise tools.ToolError("unit gold sets are not wired yet: the rule and procedure gold "
-                              "kinds come with the retrieval measurement; without --gold the "
-                              "gate runs only a first promotion")
+    """`adr units gate`: with `--gold DIR` (unit golden sets), gov-rules items are rule cases
+    and procedure items procedure cases (`adr_eval.phase4.gold_cases`), each hit as
+    `user:auditor` on the build (`phase4.gate_hit`: every gold provision within the 2,000-token
+    budget of `p4-units`, or the gold section among the first five); without one only a first
+    promotion (no units/HEAD) can pass."""
     units_overlay.load_units_manifest(a.store, a.candidate)
+    if a.gold:
+        from adr_eval import phase4
+        from adr_eval.runner import RunError
 
-    def no_hit(store_path, units_id, case):
-        raise AssertionError("no gold case to evaluate")
+        try:
+            cases = [c for d in a.gold for c in phase4.gold_cases(d)]
+        except (RunError, ValueError) as e:
+            raise tools.ToolError(str(e)) from e
+        hit = phase4.gate_hit
+    else:
+        cases = []
+
+        def hit(store_path, units_id, case):
+            raise AssertionError("no gold case to evaluate")
 
     try:
-        r = units_gate_mod.units_gate(a.store, a.candidate, [], a.max_flips, hit=no_hit)
+        r = units_gate_mod.units_gate(a.store, a.candidate, cases, a.max_flips, hit=hit)
     except ValueError as e:
         raise tools.ToolError(str(e)) from e
     if a.json:
@@ -1782,7 +1794,9 @@ def _parser() -> argparse.ArgumentParser:
     ung.add_argument("--store", type=Path, required=True, help="store directory")
     ung.add_argument("--candidate", required=True, help="the candidate's units id")
     ung.add_argument("--gold", type=Path, action="append", default=[], metavar="DIR",
-                     help="a unit golden set (not wired yet); without one only a first "
+                     help="a unit golden set directory (items.jsonl of gov-rules, "
+                          "gov-procedures or bench-procedures; repeatable), its dev and test "
+                          "items evaluated as user:auditor; without one only a first "
                           "promotion (no units/HEAD) can pass")
     ung.add_argument("--max-flips", type=_non_negative, required=True,
                      help="cases HEAD hits that the candidate may miss")

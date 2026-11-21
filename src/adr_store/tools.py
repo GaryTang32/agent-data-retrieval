@@ -299,6 +299,7 @@ from adr_store.tables.semantic import UnknownTable, describe
 from adr_store.tables.sqlguard import SQL_ROW_CAP, SqlRefused, run_sql
 from adr_store.tool_catalog import ToolCatalog
 from adr_store.tool_records import definition as tool_definition
+from adr_store.units import index as units_index
 from adr_store.units import tools_units as tu
 from adr_store.units.concepts import _KIND_RANK, _UNIT_ID, scope_contains
 from adr_store.units.contracts import UNIT_TYPES
@@ -334,6 +335,7 @@ TABLE_DB_CACHE = 8  # per-view table databases per Tools instance (LRU, see `_vi
 QUERY_ROW_CAP = SQL_ROW_CAP  # ids of a `list`, groups of a `count_by` (one more: truncated)
 NO_UNITS = "no units for snapshot {}…; run `adr units build` and `adr units gate`"
 NO_HANDLE_UNITS = "the handle names no units; call without a handle or with a current one"
+NO_UNIT_TUNING = "the unit index tuning cannot be read or pinned"
 UNKNOWN_RULE = "no rule card with that rule_id is in force for this caller"
 UNKNOWN_PROCEDURE = "no procedure with that id"
 NO_DEFINITION = "no definition"
@@ -1213,7 +1215,8 @@ class Tools:
                     self.store_path, active["fingerprint"]) is None:
                 active = None
             known["index"] = active
-        for part in ("applicability", "dedup", "tools", "tool_index", "tables", "units"):
+        for part in ("applicability", "dedup", "tools", "tool_index", "tables", "units",
+                     "unit_index"):
             if part in self._memo:
                 known[part] = self._memo[part]
         if "dedup" not in known and known["index"] is not None and self._index is not None \
@@ -2350,7 +2353,13 @@ class Tools:
         """The unit build the call reads (logged in `fields`): the handle's, or `units/HEAD`
         when its manifest is of the call's content snapshot (NO_UNITS otherwise: a build not
         yet promoted, or one of an older snapshot, is never used; NO_HANDLE_UNITS for a
-        handle without units). Never a fallback to HEAD."""
+        handle without units). Never a fallback to HEAD.
+
+        Its index runs on a tuning entry (spec P42): the handle's pinned one (the uniform
+        lexical default for a handle with a null `unit_index`), or the tuning file's entry
+        for the build's corpus, pinned write-once under `units-index/<units id>/` (the only
+        file a unit call may add to the store at `w = 1.0`). Below `w = 1` the index fuses
+        dense vectors from the embedding cache."""
         if self._pin is not None:
             units_id = self._pin.units
             if units_id is None:
@@ -2364,8 +2373,19 @@ class Tools:
             if self._pin is not None:  # checked on entry: removed or damaged since
                 raise handles_mod.unavailable("units")
             raise ToolError(NO_UNITS.format(self.snapshot[:12]))
+        if self._pin is not None:
+            tuning = self._pin.unit_tuning or units_index.default_tuning(m.corpus)
+            unit_index = self._pin.handle.unit_index
+        else:
+            try:
+                tuning = units_index.load_tuning(m.corpus)
+                unit_index = units_index.pin_tuning(self.store_path, units_id, tuning)
+            except (OSError, ValueError) as e:
+                raise ToolError(f"{NO_UNIT_TUNING}: {e}") from e
         fields["units"] = self._memo["units"] = units_id
-        return tu.UnitSet.of(self.store_path, units_id, m)
+        self._memo["unit_index"] = unit_index
+        emb = make_embedding_cache(self.emb_cache) if tuning["w"] < 1 else None
+        return tu.UnitSet.of(self.store_path, units_id, m, tuning, emb)
 
     def _unit_scope(self, filters: dict, fields: dict
                     ) -> tuple[_Applied, frozenset[str] | None, frozenset[str] | None,

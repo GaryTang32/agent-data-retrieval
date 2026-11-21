@@ -93,3 +93,35 @@ def holm(pvals: dict[str, float]) -> dict[str, float]:
         running = max(running, (m - j) * p)
         out[key] = min(1.0, running)
     return out
+
+
+def paired_ratio_diff_ci(
+    num_a: list[float], den_a: list[float], num_b: list[float], den_b: list[float],
+    n: int = 10_000, seed: int = 20261108, alpha: float = 0.05,
+) -> tuple[float, float, float]:
+    """sum(num_b)/sum(den_b) - sum(num_a)/sum(den_a) with a percentile bootstrap interval that
+    resamples clusters (items or tasks) with replacement, the same draw for both sides (paired).
+
+    Cluster i contributes (num_a[i], den_a[i]) and (num_b[i], den_b[i]). A resample whose summed
+    denominator is zero on either side has no ratio and is left out of the percentiles; each
+    side's total denominator must be positive. The rng construction and index draws are those
+    of `cluster_bootstrap_ratio_ci`, so with every num_a zero the result equals
+    `cluster_bootstrap_ratio_ci(num_b, den_b)` bit for bit.
+    """
+    lengths = {len(num_a), len(den_a), len(num_b), len(den_b)}
+    if len(lengths) != 1:
+        raise ValueError("num_a, den_a, num_b and den_b differ in length")
+    if not num_a:
+        raise ValueError("empty sample")
+    na, da = np.asarray(num_a, dtype=float), np.asarray(den_a, dtype=float)
+    nb, db = np.asarray(num_b, dtype=float), np.asarray(den_b, dtype=float)
+    if da.sum() <= 0 or db.sum() <= 0:
+        raise ValueError("total denominator is zero")
+    if (da < 0).any() or (db < 0).any():
+        raise ValueError("denominators must not be negative")
+    idx = np.random.default_rng(seed).integers(0, len(na), size=(n, len(na)))
+    sa, sb = da[idx].sum(axis=1), db[idx].sum(axis=1)
+    keep = (sa > 0) & (sb > 0)
+    diffs = nb[idx].sum(axis=1)[keep] / sb[keep] - na[idx].sum(axis=1)[keep] / sa[keep]
+    lo, hi = np.percentile(diffs, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float(nb.sum() / db.sum() - na.sum() / da.sum()), float(lo), float(hi)
