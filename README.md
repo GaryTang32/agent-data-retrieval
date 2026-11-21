@@ -4,8 +4,8 @@
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
 > harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, Phase 2:
 > applicability filters, permissions, tools as data and an MCP server, and Phase 3, the typed
-> database, which is built and measured on its branch but not merged: 13 of its 15 exit criteria
-> pass, and two (Q2 and E1) fail. Phases 4–6 are not started. Interfaces, file formats and
+> database (merged, #8): 13 of its 15 exit criteria pass, and two (Q2 and E1) fail. Phase 4,
+> knowledge units, is being designed; Phases 5–6 are not started. Interfaces, file formats and
 > results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
@@ -49,8 +49,8 @@ flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
     P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
     P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ merged"]
-    P3["Phase 3<br/>Typed database<br/>🟡 built and measured<br/>13 of 15 criteria pass"]
-    P4["Phase 4<br/>Knowledge units"]
+    P3["Phase 3<br/>Typed database<br/>✅ merged<br/>13 of 15 criteria pass"]
+    P4["Phase 4<br/>Knowledge units<br/>🔄 in design"]
     P5["Phase 5<br/>Graph and<br/>navigation"]
     P6["Phase 6<br/>Closed loop and<br/>governance"]
     P0 --> P1 --> P2
@@ -70,8 +70,8 @@ flowchart LR
 | 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
 | 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | ✅ Built and measured ([results](results/phase1/README.md)) | 6 of 6 | `██████████` |
 | 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Merged (#7) ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
-| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | 🟡 Built and measured on the branch, not merged ([results](results/phase3/README.md)): 13 of 15 criteria pass; Q2 and E1 fail | 12 of 12 | `██████████` |
-| 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
+| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | ✅ Merged (#8, [results](results/phase3/README.md)): 13 of 15 criteria pass; Q2 and E1 fail | 12 of 12 | `██████████` |
+| 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | 🔄 In design | – | `░░░░░░░░░░` |
 | 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
 | 6. Closed loop and governance | Audits, gap mining, exporters, a public harness | Not started | – | `░░░░░░░░░░` |
 
@@ -149,7 +149,7 @@ design targets taken from the research, not results.
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
 | **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **Built and measured.** Three exit criteria met, one partly (no bounding boxes), one deferred (parse routing needs layout models), one not applicable. Retrieval is level with the baseline, which stays the reference ([results](results/phase1/README.md)) |
 | **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Merged** (#7). All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
-| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | **Built and measured on its branch, not merged.** 13 of 15 exit criteria pass; Q2 (accuracy on new drawbridge questions) and E1 (grounding of two columns) fail ([results](results/phase3/README.md)) |
+| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | **Merged (#8).** 13 of 15 exit criteria pass; Q2 (accuracy on new drawbridge questions) and E1 (grounding of two columns) fail ([results](results/phase3/README.md)) |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
 | **5. Graph and navigation layers** | Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy. Each layer is kept only if it beats the earlier phases on accuracy or tokens. | Not started |
 | **6. Closed loop, interoperability and governance** | Gap mining and audits, spec v1.0, exporters to external catalogs and graph stores, a public neutral harness. | Not started |
