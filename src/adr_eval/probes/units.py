@@ -1419,6 +1419,27 @@ def holds(sense: Unit, place: Place) -> bool:
     return False
 
 
+# The rule-id forms §11.2 names for `rule_id` ("§117.1081(a)(2)", "33 CFR 117.1081 (a)(2)",
+# "117.1081(a)(2)"), read here on their own: an optional "<title> CFR" (dots and spaces
+# allowed), optional section signs, "<part>.<section>", then paragraph marks with optional
+# spaces; a bare part number takes the title of its eCFR part.
+_O_RULE = re.compile(r"^(?:(\d+)\s*C\.?\s*F\.?\s*R\.?\s*)?(?:§+\s*)?"
+                     r"(\d+)\.([0-9A-Za-z]+(?:-[0-9A-Za-z]+)?)((?:\s*\(\s*\w+\s*\))*)\s*$")
+
+
+def oracle_rule_id(text: str) -> str | None:
+    """The canonical ref "<title> CFR <part>.<section>(<mark>)..." of a rule id written in one
+    of §11.2's forms, or None when `text` is not one."""
+    m = _O_RULE.match(text.strip())
+    if m is None:
+        return None
+    title = m.group(1) or _O_TITLE.get(m.group(2))
+    if title is None:
+        return None
+    marks = "".join(f"({x})" for x in re.findall(r"\(\s*(\w+)\s*\)", m.group(4)))
+    return f"{int(title)} CFR {m.group(2)}.{m.group(3)}{marks}"
+
+
 def ref_of_unit_id(context: str) -> str | None:
     """The canonical ref inside a unit id "<type>/<canonical ref>/<12 hex>/<16 hex>", or None
     when `context` is not one."""
@@ -1476,7 +1497,9 @@ def _expected_senses(ctx: UnitContext, term: str, context: str | None,
     if unit is not None and unit.doc_id in allowed:   # a visible unit: where it sits
         place = place_of(unit)
         return sorted(found, key=lambda u: (not holds(u, place), breadth(u), u.unit_id))
-    ref = ref_of_unit_id(c) or c                     # a hidden or absent unit id: its ref
+    # a hidden or absent unit id stands for the ref inside it; another context is read as a
+    # rule id when it is one (`oracle_rule_id`), else as written
+    ref = ref_of_unit_id(c) or oracle_rule_id(c) or c
     place = place_of_ref(ctx, ref, allowed)
     return sorted(found, key=lambda u: (not holds_ref(u, ref, place), breadth(u), u.unit_id))
 

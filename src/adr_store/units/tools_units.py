@@ -6,11 +6,15 @@ tools of `adr_store.tools.Tools` use (`define`, `rule_lookup`, `procedure_lookup
 
 - `UnitSet.of(store_path, units_id, manifest, tuning, emb)` loads a build's units and its unit
   index with `tuning` (the pinned entry the call runs on, spec P42). At `w = 1.0` the index is
-  lexical-only and built in memory (preflight C8: `emb=None`; nothing is written); below 1 it
-  is fused with dense vectors from `emb`, stored under `<store>/units-index/<units id>/dense-*`
-  once and reused. Kept in a process LRU of `UNIT_CACHE` builds by (store, units id, tuning,
-  embedding model). A build is immutable (its id is the SHA-256 of a manifest naming every
-  file by its hash), so the cache never changes an answer.
+  lexical-only and built in memory (preflight C8: `emb=None`); below 1 it is fused with the
+  dense vectors `pin_build` stored under `<store>/units-index/<units id>/dense-*` (only read
+  here: `UnitVectorsMissing` without them). A read writes nothing. Kept in a process LRU of
+  `UNIT_CACHE` builds by (store, units id, tuning, embedding model). A build is immutable
+  (its id is the SHA-256 of a manifest naming every file by its hash), so the cache never
+  changes an answer.
+- `pin_build(store_path, units_id, entry, emb)` is the one writer: it pins a tuning entry for
+  a build (no file for the corpus's default entry) and, below `w = 1`, stores its dense
+  vectors. `adr-eval p4-tune`, units promotion and `adr units pin` call it.
 - `part_prefix`, `under`, `section_of`, `subpart`, `context_ref`, `span`, `model_value`, `labels`,
   `edit_distance`, `reader_text`, `catalog_entry`, `hit` and `card_order`: what their
   docstrings say.
@@ -28,7 +32,7 @@ from pathlib import Path
 from adr_store.units import index as units_index
 from adr_store.units.ecfr import _TITLE_OF_PART, normalise_rule_id
 from adr_store.units.envelope import Unit
-from adr_store.units.overlay import UnitsManifest, load_units
+from adr_store.units.overlay import UnitsManifest, load_units, load_units_manifest
 
 UNIT_CACHE = 4  # unit builds (units, index) kept in memory, by store, units id and tuning
 UNIT_SETS: OrderedDict[tuple[str, str, str, str | None], UnitSet] = OrderedDict()
@@ -64,7 +68,9 @@ class UnitSet:
             by_type.setdefault(u.type, []).append(u)
         docs = units_index.unit_docs(units, by_type.get("concept", []))
         index = units_index.UnitIndex.build(store_path, units_id, docs, emb, tuning,
-                                            install=emb is not None)
+                                            install=False, stored_only=True) \
+            if emb is not None else units_index.UnitIndex.build(
+                store_path, units_id, docs, None, tuning, install=False)
         found = cls(units_id, manifest.corpus, tuple(f.type for f in manifest.units),
                     {u.unit_id: u for u in units}, by_type, index)
         with _LOCK:
@@ -73,6 +79,28 @@ class UnitSet:
             while len(UNIT_SETS) > UNIT_CACHE:
                 UNIT_SETS.popitem(last=False)
         return found
+
+
+def pin_build(store_path: Path, units_id: str, entry: dict | None = None, emb=None) -> str:
+    """Pin `entry` (default: the tuning file's entry for the build's corpus) for build
+    `units_id` and, when its `w` is below 1, store the build's dense vectors from `emb` (an
+    `EmbeddingCache`, required then); idempotent. The corpus's default entry needs no file.
+    Returns the entry's `unit_index`."""
+    m = load_units_manifest(store_path, units_id)
+    corpus_types = units_index.CORPUS_TYPES[m.corpus]
+    entry = units_index.check_tuning(units_index.load_tuning(m.corpus) if entry is None
+                                     else entry, corpus_types)
+    tid = units_index.tuning_id(entry)
+    if tid != units_index.tuning_id(units_index.default_tuning(m.corpus)):
+        units_index.pin_tuning(store_path, units_id, entry)
+    if entry["w"] < 1:
+        if emb is None:
+            raise ValueError(f"w {entry['w']} needs the embedding cache to store the dense "
+                             f"vectors")
+        units = sorted(load_units(store_path, m), key=lambda u: u.unit_id)
+        docs = units_index.unit_docs(units, [u for u in units if u.type == "concept"])
+        units_index.UnitIndex.build(store_path, units_id, docs, emb, entry)
+    return tid
 
 
 _PART = re.compile(r"^(?:(\d+)\s*C\.?\s?F\.?\s?R\.?\s*)?(?:part\s+)?(\d+)$", re.IGNORECASE)

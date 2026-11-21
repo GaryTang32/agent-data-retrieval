@@ -13,6 +13,10 @@ candidate misses; the candidate becomes HEAD only when it has at most `max_flips
   that the candidate keeps HEAD's hits.
 - A HEAD file that names a build that does not load is refused too, rather than read as no
   HEAD; so is a candidate that does not load, and one of another corpus than HEAD's.
+- **Promotion pins the unit-index tuning** (spec P42): before HEAD moves, the tuning file's
+  entry for the candidate's corpus is pinned for the candidate, with its dense vectors when
+  its `w` is below 1 (`tools_units.pin_build`; `emb`, default the tools' embedding cache).
+  A tuning that cannot be read or pinned refuses the promotion and HEAD does not move.
 """
 
 from __future__ import annotations
@@ -55,8 +59,27 @@ def _head_file(store_path: Path) -> str | None:
         return None
 
 
+def pin_promoted(store_path: Path, units_id: str, emb=None) -> str:
+    """Pin the tuning file's entry in force for build `units_id` (module docstring); its
+    `unit_index`. `UnitsError` when the tuning cannot be read or the vectors stored."""
+    from adr_store.units import index as units_index
+    from adr_store.units.tools_units import pin_build
+
+    corpus = load_units_manifest(store_path, units_id).corpus
+    try:
+        entry = units_index.load_tuning(corpus)
+        if entry["w"] < 1 and emb is None:
+            from adr_store.tools import make_embedding_cache  # the tools import this module
+
+            emb = make_embedding_cache()
+        return pin_build(store_path, units_id, entry, emb)
+    except (OSError, ValueError) as e:
+        raise UnitsError(f"cannot pin the unit-index tuning for {units_id[:12]}: {e}; HEAD is "
+                         f"unchanged") from e
+
+
 def units_gate(store_path: Path, candidate: str, cases: list[UnitCase], max_flips: int,
-               hit: Callable[[Path, str, UnitCase], bool]) -> UnitsGateResult:
+               hit: Callable[[Path, str, UnitCase], bool], *, emb=None) -> UnitsGateResult:
     """Evaluate `candidate` against HEAD on `cases` and move HEAD to it when it has at most
     `max_flips` flips (module docstring)."""
     if max_flips < 0:
@@ -83,6 +106,7 @@ def units_gate(store_path: Path, candidate: str, cases: list[UnitCase], max_flip
     flips = sorted(hits_old - hits_new)
     promoted = len(flips) <= max_flips
     if promoted:
+        pin_promoted(store_path, candidate, emb)
         _set_units_head(store_path, candidate)
     return UnitsGateResult(promoted, candidate, current, flips, sorted(hits_new - hits_old),
                            len(cases))

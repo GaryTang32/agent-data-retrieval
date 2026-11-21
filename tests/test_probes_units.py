@@ -479,6 +479,31 @@ def test_the_u1_oracle_reads_ref_contexts_on_its_own(store, monkeypatch):
         pu._expected_ids(ctx, term, context, every)
 
 
+def test_the_u1_oracle_normalises_ref_contexts_on_its_own(store):
+    """Fix round M2: a rule id written another way ("§ 117.821", "117.821(b)", "33 C.F.R.
+    117.821 (b)") is read as its canonical ref by the oracle's own normaliser, as the tool
+    reads it, so oracle and tool agree."""
+    ctx = pu.unit_context(store.path)
+    assert pu.oracle_rule_id("§ 117.821") == "33 CFR 117.821"
+    assert pu.oracle_rule_id("117.821(b)") == "33 CFR 117.821(b)"
+    assert pu.oracle_rule_id("33 C.F.R. § 117.821 (b)") == "33 CFR 117.821(b)"
+    assert pu.oracle_rule_id("47 CFR 73.3526(e)(2)") == "47 CFR 73.3526(e)(2)"
+    assert pu.oracle_rule_id("§§ 165.T01") == "33 CFR 165.T01"
+    for other in ("IRM 21.4.1.3", "33 CFR part 165", "999.1", "drawbridge"):
+        assert pu.oracle_rule_id(other) is None
+    every = frozenset(u.doc_id for u in ctx.units.values())
+    t = tools.Tools(store.path, acl=True, caller="user:auditor", clock=lambda: NOW)
+    term = "designated representative"
+    for written, canonical in (("§ 165.T01(c)", "33 CFR 165.T01(c)"),
+                               ("165.T01", "33 CFR 165.T01"),
+                               ("33 C.F.R. 165.13 (b)", "33 CFR 165.13(b)")):
+        want = pu._expected_ids(ctx, term, canonical, every)
+        assert pu._expected_ids(ctx, term, written, every) == want
+        got = [x.unit_id for x in t.define(term, context=written,
+                                            include_superseded=True).senses]
+        assert got == want, written
+
+
 def test_equivalence_contexts_include_visible_unit_ids(store):
     """Task 12 carry C (ii): `define` calls of the equivalence set take a visible unit id as
     context too."""

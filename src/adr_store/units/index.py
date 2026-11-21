@@ -137,6 +137,7 @@ INDEX_DIR = "units-index"
 VIEW_CACHE = 16
 FORMAT_VERSION = "0.1"
 TUNING_PATH = UNIT_CONTRACT_DIR / "tuning.json"
+TUNING_ENV = "ADR_UNITS_TUNING"  # overrides TUNING_PATH (tests; `adr mcp` inherits it)
 
 Hits = list[tuple[str, float]]
 
@@ -356,13 +357,19 @@ def check_tuning(tuning: object, types: tuple[str, ...] | None = None) -> dict:
             "w": float(w)}
 
 
+def tuning_path() -> Path:
+    """The tuning file in force: `$ADR_UNITS_TUNING` when set, else `TUNING_PATH` (read when
+    called)."""
+    env = os.environ.get(TUNING_ENV)
+    return Path(env) if env else TUNING_PATH
+
+
 def load_tuning(corpus: str, path: Path | None = None) -> dict:
-    """The tuning of `corpus` from the tuning file (C13; `path`, default `TUNING_PATH` read
-    when called): `{"weights": {type: {field: weight}}, "w": float}` for exactly the corpus's
-    unit types."""
+    """The tuning of `corpus` from the tuning file (C13; `path`, default `tuning_path()`):
+    `{"weights": {type: {field: weight}}, "w": float}` for exactly the corpus's unit types."""
     if corpus not in CORPUS_TYPES:
         raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
-    path = TUNING_PATH if path is None else Path(path)
+    path = tuning_path() if path is None else Path(path)
     data = json.loads(path.read_text(encoding="utf-8"))
     if corpus not in data:
         raise ValueError(f"{path}: no tuning for corpus {corpus!r}")
@@ -370,13 +377,13 @@ def load_tuning(corpus: str, path: Path | None = None) -> dict:
 
 
 def write_tuning(corpus: str, entry: dict, path: Path | None = None) -> Path:
-    """Set the tuning of `corpus` in the tuning file (`path`, default `TUNING_PATH`) to
+    """Set the tuning of `corpus` in the tuning file (`path`, default `tuning_path()`) to
     `entry` (checked), keeping the other corpora's entries and their order; the file is
     written whole (indent 2, newline-terminated). Returns the path."""
     if corpus not in CORPUS_TYPES:
         raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
     entry = check_tuning(entry, CORPUS_TYPES[corpus])
-    path = TUNING_PATH if path is None else Path(path)
+    path = tuning_path() if path is None else Path(path)
     data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
     data[corpus] = entry
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -384,8 +391,9 @@ def write_tuning(corpus: str, entry: dict, path: Path | None = None) -> Path:
 
 
 def default_tuning(corpus: str) -> dict:
-    """Every field weight 1 for every unit type of `corpus`, and `w = 1.0` (lexical-only): what
-    a handle with a null `unit_index` stands for (the index Task 8 served)."""
+    """Every field weight 1 for every unit type of `corpus`, and `w = 1.0` (lexical-only): the
+    entry that resolves without a pin file, and what a handle saved before Task 12 (null
+    `unit_index`) stands for (the index Task 8 served)."""
     if corpus not in CORPUS_TYPES:
         raise ValueError(f"no tuning for corpus {corpus!r}; one of {', '.join(CORPUS_TYPES)}")
     return check_tuning({"weights": {t: dict.fromkeys(FIELDS, 1) for t in CORPUS_TYPES[corpus]},
@@ -396,7 +404,9 @@ def default_tuning(corpus: str) -> dict:
 # A handle's `unit_index` is the SHA-256 of a corpus's canonical tuning entry (`tuning_bytes`:
 # sorted keys, no spaces, no trailing newline). The entry is pinned, content-addressed and
 # write-once, at `<store>/units-index/<units id>/tuning-<id>.json`, so a handle replays with
-# the weights it names whatever the tuning file says later.
+# the weights it names whatever the tuning file says later. Pins are written only where a
+# tuning is written or adopted (`adr-eval p4-tune`, units promotion, `adr units pin`), never
+# by a read; the corpus's default entry resolves without a file.
 
 def tuning_bytes(entry: dict) -> bytes:
     """The canonical bytes of a tuning entry (checked): its SHA-256 is its `unit_index`."""
@@ -414,9 +424,14 @@ def pin_path(store_path: Path, units_id: str, tid: str) -> Path:
 
 
 def pinned_tuning(store_path: Path, units_id: str, tid: str,
-                  types: tuple[str, ...] | None = None) -> dict | None:
+                  types: tuple[str, ...] | None = None, corpus: str | None = None
+                  ) -> dict | None:
     """The tuning entry pinned as `tid` for build `units_id` (checked, and of exactly `types`
-    when given), or None when it is missing, does not hash to `tid` or does not check."""
+    when given), or None when it is missing, does not hash to `tid` or does not check. With
+    `corpus`, its default entry (`default_tuning`) resolves without a file."""
+    if corpus is not None and corpus in CORPUS_TYPES and \
+            tid == tuning_id(default_tuning(corpus)):
+        return default_tuning(corpus)
     try:
         data = pin_path(store_path, units_id, tid).read_bytes()
     except OSError:
@@ -598,6 +613,10 @@ def fuse(lex: Hits, dense: Hits, w: float) -> Hits:
 
 # -- the index ---------------------------------------------------------------------------------
 
+class UnitVectorsMissing(ValueError):
+    """A read needs the stored dense vectors of a build and they are not there."""
+
+
 class UnitIndex:
     """Build with `UnitIndex.build(store_path, units_id, docs, emb, tuning)`."""
 
@@ -629,13 +648,16 @@ class UnitIndex:
 
     @classmethod
     def build(cls, store_path: Path, units_id: str, docs: list[UnitDoc],
-              emb: EmbeddingCache | None, tuning: dict, *, install: bool = True) -> UnitIndex:
+              emb: EmbeddingCache | None, tuning: dict, *, install: bool = True,
+              stored_only: bool = False) -> UnitIndex:
         """The index of `docs` (`unit_docs` of build `units_id`), with dense vectors from
         `emb` stored under `<store_path>/units-index/<units id>/`; `emb=None` builds a
         lexical-only index (C8). `tuning` is a corpus's entry of the tuning file.
-        `install=False` (lexical-only only) builds it in memory and writes nothing: the
-        tools' path, where a read call never writes into the store."""
-        if not install and emb is not None:
+        `install=False` (lexical-only only) builds it in memory and writes nothing.
+        `stored_only=True` (dense) reads the stored vectors and never embeds a document or
+        writes: `UnitVectorsMissing` when they are not there. Both are the tools' path,
+        where a read call never writes into the store."""
+        if not install and emb is not None and not stored_only:
             raise ValueError("a dense unit index stores its vectors: install=False needs "
                              "emb=None")
         docs = sorted(docs, key=lambda d: d.unit_id)
@@ -660,6 +682,9 @@ class UnitIndex:
         meta = {**meta, "lexical_only": False, "rows": len(rows),
                 "embedding": {"model": emb.model_name, "model_hash": emb.model_hash}}
         vectors = _read_stored(directory, meta)
+        if vectors is None and stored_only:
+            raise UnitVectorsMissing(f"no stored dense vectors of units {units_id[:12]} for "
+                                     f"{emb.model_name}")
         if vectors is None:
             vectors, _ = emb.embed_texts([t for _, _, t in rows])
             data = _npy_bytes(vectors)

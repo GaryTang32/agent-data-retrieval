@@ -18,6 +18,7 @@ Needs the `[mcp]` extra.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -59,12 +60,17 @@ def error_of(text: str) -> tools.ToolError:
 
 def server_parameters(store: Path, caller: str | None, *, emb_cache: Path | None = None,
                       env: dict | None = None, cwd: Path | None = None):
-    """The `StdioServerParameters` of `adr mcp` for this store and caller."""
+    """The `StdioServerParameters` of `adr mcp` for this store and caller. The unit-index
+    tuning override (`$ADR_UNITS_TUNING`, `units.index.TUNING_ENV`) is passed on when set."""
     try:
         from mcp import StdioServerParameters
     except ImportError as e:
         raise McpUnavailable(NO_MCP) from e
     args = ["-m", "adr_store.cli", "mcp", "--store", str(store)]
+    from adr_store.units.index import TUNING_ENV  # the MCP SDK passes only a safe env subset
+
+    if os.environ.get(TUNING_ENV) and TUNING_ENV not in (env or {}):
+        env = {**(env or {}), TUNING_ENV: os.environ[TUNING_ENV]}
     if caller is not None:
         args += ["--as", caller]
     if emb_cache is not None:

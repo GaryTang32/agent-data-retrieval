@@ -31,11 +31,14 @@ Components (planner's calls, Task 12):
   still validates; the other parts are required.
 - `unit_index` (optional, default null; spec P42) is the SHA-256 of the canonical tuning entry
   of the units' corpus the unit tools ran on (`units.index.tuning_id`), pinned write-once at
-  `<store>/units-index/<units id>/tuning-<unit_index>.json` by the first unit call that used
-  it (`units.index.pin_tuning`). A handle with `units` and a null `unit_index` (saved before
-  the part existed) runs the uniform-weight lexical index (`units.index.default_tuning`). In
-  `current`, a call that did not use the units names the entry of the tuning file in force
-  when it is pinned, else null.
+  `<store>/units-index/<units id>/tuning-<unit_index>.json` by the commands that write or
+  adopt a tuning (`adr-eval p4-tune`, units promotion, `adr units pin`; never a read). The
+  corpus's default entry (`units.index.default_tuning`) resolves without a file. A handle
+  with `units` and a null `unit_index` is one saved before Task 12: it runs the
+  uniform-weight lexical index. `current` names the tuning file's entry in force; when that
+  entry cannot be served (unreadable, or neither pinned for the units nor the default), the
+  units cannot be served either, and both `units` and `unit_index` are null. So every handle
+  a call returns replays.
 - The ACL snapshot is never part of a handle (ruling R15): every call is judged against the
   current ACL, whatever its handle names (`adr_store.tools`).
 - A handle's parameters (the system label and the weights) are what the client asks for, not
@@ -500,7 +503,8 @@ def tool_head(store_path: Path) -> str | None:
 
 def current_unit_index(store_path: Path, units: str | None) -> str | None:
     """The `unit_index` of the tuning file's entry for the corpus of build `units` when that
-    entry is pinned for it, else None (no units, an unreadable tuning file, or not pinned)."""
+    entry can be served (pinned for the build, or the corpus's default), else None (no
+    units, an unreadable tuning file, or an unpinned entry: the units cannot be served)."""
     from adr_store.units import index as units_index  # it imports the tools' dependencies
 
     m = None if units is None else units_manifest(store_path, units)
@@ -510,7 +514,8 @@ def current_unit_index(store_path: Path, units: str | None) -> str | None:
         tid = units_index.tuning_id(units_index.load_tuning(m.corpus))
     except (OSError, ValueError, RecursionError):
         return None
-    return tid if units_index.pinned_tuning(store_path, units, tid) is not None else None
+    found = units_index.pinned_tuning(store_path, units, tid, corpus=m.corpus)
+    return tid if found is not None else None
 
 
 def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNSET,
@@ -543,6 +548,8 @@ def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNS
         units = units_head(store_path, snapshot)
     if unit_index is _UNSET:
         unit_index = current_unit_index(store_path, units if isinstance(units, str) else None)
+        if unit_index is None:      # units whose tuning in force cannot be served
+            units = None
     parts = {"applicability": applicability, "dedup": dedup, "tools": tools, "tables": tables,
              "units": units, "unit_index": unit_index}
     parts = {k: v if isinstance(v, str) and _HEX64.fullmatch(v) else None
@@ -662,7 +669,7 @@ def resolve(store_path: Path, handle: Handle | dict | None) -> Resolved:
             from adr_store.units.build import CORPUS_TYPES
 
             unit_tuning = units_index.pinned_tuning(store_path, handle.units, handle.unit_index,
-                                                    CORPUS_TYPES.get(um.corpus))
+                                                    CORPUS_TYPES.get(um.corpus), um.corpus)
             if unit_tuning is None:
                 raise unavailable("unit_index")
     elif handle.unit_index is not None:

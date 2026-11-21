@@ -51,6 +51,29 @@ def writable_state(tmp_path_factory):
     return tmp_path_factory.mktemp("adr_eval_state")
 
 
+def _default_tuning_file(path):
+    """A unit-index tuning file holding every corpus's default entry (`w = 1.0`)."""
+    from adr_store.units import index as units_index
+
+    for corpus in units_index.CORPUS_TYPES:
+        units_index.write_tuning(corpus, units_index.default_tuning(corpus), path)
+    return path
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _default_unit_tuning(tmp_path_factory):
+    """Every corpus's default unit-index tuning in force for the whole session, before any
+    module- or session-scoped fixture builds or promotes units (C8, Task 12 fix round I2):
+    whatever `config/units/tuning.json` commits, no test reads it unless it asks to."""
+    from adr_store.units import index as units_index
+
+    path = _default_tuning_file(tmp_path_factory.mktemp("units-tuning-session") / "tuning.json")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(units_index, "TUNING_PATH", path)
+        mp.setenv(units_index.TUNING_ENV, str(path))
+        yield path
+
+
 @pytest.fixture(autouse=True)
 def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     """Keep tests from writing the repo's .cache/: the shipped config's index, LLM cache, store
@@ -73,7 +96,10 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     `adr-eval golden procedures --gen` write).
     The default output root of `adr-eval p4-retrieval` (`phase4.OUT_ROOT`) goes there too, and
     the unit-index tuning file (`units.index.TUNING_PATH`, which `adr-eval p4-tune` writes and
-    the unit tools read) is a fresh copy of the committed one per test.
+    the unit tools read) is a fresh file per test holding every corpus's default entry
+    (`w = 1.0`, lexical-only), whatever the committed file says, so no test loads an embedding
+    model (C8). `$ADR_UNITS_TUNING` names it too, and `adr mcp` subprocesses inherit it
+    (`mcp_client.server_parameters`); CLI subprocesses inherit the environment.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -128,9 +154,9 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     from adr_store.units import index as units_index
 
     monkeypatch.setattr(phase4, "OUT_ROOT", writable_state / "runs")
-    tuning = tmp_path_factory.mktemp("units-tuning") / "tuning.json"
-    tuning.write_bytes(units_index.TUNING_PATH.read_bytes())
+    tuning = _default_tuning_file(tmp_path_factory.mktemp("units-tuning") / "tuning.json")
     monkeypatch.setattr(units_index, "TUNING_PATH", tuning)
+    monkeypatch.setenv(units_index.TUNING_ENV, str(tuning))
 
 
 @pytest.fixture

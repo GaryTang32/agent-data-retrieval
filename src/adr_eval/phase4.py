@@ -814,20 +814,46 @@ def gold_cases(directory: Path) -> list:
     return cases
 
 
-def _build_tools(store_path: Path, units_id: str):
-    """(the auditor's tools, a handle naming build `units_id` and the pinned tuning in force
-    for its corpus)."""
+@dataclass
+class _GateBuild:
+    """What the gate's hit functions need of one build, made once per run (M4): the
+    auditor's tools, a handle naming the build and the tuning in force (pinned for it, as
+    promotion pins it), its procedure units and the store's IRM sections."""
+
+    tools: object
+    handle: dict
+    procedures: dict
+    sections: dict
+
+
+_GATE_BUILDS: dict[tuple, _GateBuild] = {}
+
+
+def _gate_build(store_path: Path, units_id: str) -> _GateBuild:
     from adr_store import handles
     from adr_store.store import Store
     from adr_store.units import index as ui
+    from adr_store.units.overlay import load_units
+    from adr_store.units.tools_units import pin_build
 
     m = handles.units_manifest(store_path, units_id)
     if m is None:
         raise RunError(f"{store_path}: units {units_id[:12]} do not load")
-    snapshot = Store.open(store_path).snapshot_id
-    tid = ui.pin_tuning(store_path, units_id, ui.load_tuning(m.corpus))
-    handle = handles.current(store_path, snapshot, units=units_id, unit_index=tid)
-    return _unit_tools(Path(store_path), AUDITOR), handle.model_dump()
+    entry = ui.load_tuning(m.corpus)
+    store = Store.open(store_path)
+    key = (str(Path(store_path).resolve()), store.snapshot_id, units_id, ui.tuning_id(entry))
+    if key not in _GATE_BUILDS:
+        emb = None
+        if entry["w"] < 1:
+            from adr_store.tools import make_embedding_cache
+
+            emb = make_embedding_cache()
+        tid = pin_build(store_path, units_id, entry, emb)      # the gate is promotion's path
+        handle = handles.current(store_path, store.snapshot_id, units=units_id, unit_index=tid)
+        procedures = {u.unit_id: u for u in load_units(store_path, m) if u.type == "procedure"}
+        _GATE_BUILDS[key] = _GateBuild(_unit_tools(Path(store_path), AUDITOR),
+                                       handle.model_dump(), procedures, irm_section_map(store))
+    return _GATE_BUILDS[key]
 
 
 def rule_hit(store_path: Path, units_id: str, case) -> bool:
@@ -836,9 +862,10 @@ def rule_hit(store_path: Path, units_id: str, case) -> bool:
     from adr_eval.golden.units import RuleItem
 
     item = p4_item(RuleItem.model_validate(case.payload))
-    tools, handle = _build_tools(store_path, units_id)
+    gb = _gate_build(store_path, units_id)
+    tools = gb.tools
     res = tools.rule_lookup(item.question, as_of=item.as_of, closure=True, limit=UNIT_DEPTH,
-                            handle=handle)
+                            handle=gb.handle)
     text: dict[str, str] = {}
 
     def sl(doc, a, b):
@@ -850,24 +877,20 @@ def rule_hit(store_path: Path, units_id: str, case) -> bool:
               (Piece(c.doc_id, c.start, c.end, sl(c.doc_id, c.start, c.end), c.unit_id),
                *(Piece(e["doc_id"], e["start"], e["end"], e["text"], e["ref"])
                  for e in c.closure))]
-    return rule_recall(budget_cut(pieces), list(item.gold)) == 1.0
+    return rule_recall(budget_cut(pieces, TOKEN_BUDGET), list(item.gold)) == 1.0
 
 
 def procedure_hit(store_path: Path, units_id: str, case) -> bool:
     """Whether the gold section of procedure case `case` is among the first `HIT_K` sections
     of `procedure_lookup` on build `units_id`, as `user:auditor`."""
     from adr_eval.golden.units import ProcedureItem
-    from adr_store.store import Store
-    from adr_store.units.overlay import load_units, load_units_manifest
 
     item = p4_item(ProcedureItem.model_validate(case.payload))
-    tools, handle = _build_tools(store_path, units_id)
-    res = tools.procedure_lookup(item.question, limit=UNIT_DEPTH, handle=handle)
-    units = {u.unit_id: u for u in load_units(store_path, load_units_manifest(
-        store_path, units_id)) if u.type == "procedure"}
-    sections = irm_section_map(Store.open(store_path))
+    gb = _gate_build(store_path, units_id)
+    res = gb.tools.procedure_lookup(item.question, limit=UNIT_DEPTH, handle=gb.handle)
+    units = gb.procedures
     keys = [section_key(units[e["unit_id"]].doc_id, units[e["unit_id"]].source_refs[0].start,
-                        sections) for e in res.catalog]
+                        gb.sections) for e in res.catalog]
     return procedure_ranks(keys, item.gold_key)[f"hit@{HIT_K}"] == 1
 
 

@@ -617,11 +617,99 @@ def test_tune_picks_weights_then_w_on_dev(p4, tmp_path, monkeypatch, capsys):
     assert written["gov"] == entry and list(written) == list(committed)
     assert {k: v for k, v in written.items() if k != "gov"} == {
         k: v for k, v in committed.items() if k != "gov"}
-    # refusals: two corpora at once, the secondary set, no dev items
+    head = read_units_head(store.path)
+    assert ui.pinned_tuning(store.path, head, ui.tuning_id(entry), corpus="gov") == entry
+    # refusals: two corpora at once, the secondary set
     with pytest.raises(runner.RunError, match="one corpus"):
         phase4.tune(["gov-rules", "bench-procedures"], store.path, emb=object())
     with pytest.raises(runner.RunError, match="tune takes"):
         phase4.tune(["gov-v0.1-ecfr"], store.path, emb=object())
+
+
+def test_p4_tune_pins_its_entry_and_dense_vectors(p4, tmp_path, monkeypatch, capsys):
+    """I1: `adr-eval p4-tune` pins the entry it writes under the tuned store's units, with the
+    dense vectors below w = 1, so the unit tools serve it once it is the tuning in force."""
+    from tests.store.test_retrieval import fake_cache
+
+    store, cfg = p4
+    head = read_units_head(store.path)
+    tuned = ui.default_tuning("gov")
+    tuned["weights"]["rule_card"].update(body=3, title=2)
+    tuned = {**tuned, "w": 0.6}
+    emb = fake_cache(tmp_path / "emb")
+
+    def fake_tune(goldens, store_path, *, emb=None, report=None):
+        report.update(corpus="gov", units=head, dev={"gov-rules": 2}, weights_ndcg10={},
+                      w_ndcg10=0.0)
+        return tuned
+
+    monkeypatch.setattr(phase4, "tune", fake_tune)
+    monkeypatch.setattr(tools, "make_embedding_cache", lambda *a, **kw: emb)
+    out = tmp_path / "tuning.json"
+    out.write_bytes(ui.tuning_path().read_bytes())
+    t = tools.Tools(store.path, acl=True, caller="user:auditor", clock=lambda: NOW)
+    monkeypatch.setenv(ui.TUNING_ENV, str(out))
+    assert eval_main(["p4-tune", "--golden", "gov-rules", "--store", str(store.path),
+                      "--out", str(out)]) == 0
+    assert f"pinned as unit_index {ui.tuning_id(tuned)[:12]}" in capsys.readouterr().out
+    assert json.loads(ui.pin_path(store.path, head, ui.tuning_id(tuned)).read_bytes()) == tuned
+    assert list((store.path / "units-index" / head).glob("dense-*/vectors.npy"))
+    res = t.rule_lookup("drawbridge notice")                   # served, embedding no document
+    assert res.handle["unit_index"] == ui.tuning_id(tuned) and res.cards
+    # `adr units pin` is idempotent over it
+    from adr_store import cli as adr_cli
+
+    assert adr_cli.main(["units", "pin", "--store", str(store.path)]) == 0
+    assert ui.tuning_id(tuned)[:12] in capsys.readouterr().out
+
+
+def test_rule_hit_respects_the_budget(p4, monkeypatch):
+    """M1: the gate's rule hit cuts at the budget: with no budget left nothing is hit."""
+    store, _ = p4
+    head = read_units_head(store.path)
+    case = phase4.gold_cases(gu.RULES_DIR)[0]
+    assert phase4.rule_hit(store.path, head, case)
+    monkeypatch.setattr(phase4, "TOKEN_BUDGET", 0)
+    assert not phase4.rule_hit(store.path, head, case)
+
+
+def test_recall_at_10_counts_closure_pieces():
+    """M1 (ruling 6): a card and its closure are one item: a gold provision covered only by
+    the closure piece of the first item counts for Recall@10; the eleventh item does not."""
+    gold = Evidence(doc_id="d", char_start=100, char_end=120, quote="x" * 20)
+    card = Piece("d", 0, 10, "card text", "u1")
+    closure = Piece("d", 105, 115, "closure text", "33 CFR 1.1(a)")
+    filler = [[Piece("e", i * 10, i * 10 + 5, f"w{i}", f"f{i}")] for i in range(10)]
+    item = P4Item("x", "q", None, "test", "rule", (gold,))
+    assert phase4.score_rule(item, [[card, closure], *filler[:9]])["recall@10"] == 1.0
+    assert phase4.score_rule(item, [*filler, [card, closure]])["recall@10"] == 0.0
+    assert phase4.score_rule(item, [[card], *filler[:9]])["recall@10"] == 0.0
+
+
+def test_tune_never_reads_test_items(p4, tmp_path, monkeypatch):
+    """M1 (C13): tuning searches the dev questions only; poisoned test items are never
+    searched; a set without dev items is refused."""
+    from tests.store.test_retrieval import fake_cache
+
+    store, _ = p4
+    poisoned = [rule_item(store, 9, "33 CFR 117.40(a)", "POISON drawbridge owner request"),
+                *rule_items(store)]
+    write_items(gu.RULES_DIR, poisoned, [])
+    asked: list[str] = []
+    real = ui.UnitIndex.search
+
+    def search(self, query, **kw):
+        asked.append(query)
+        return real(self, query, **kw)
+
+    monkeypatch.setattr(ui.UnitIndex, "search", search)
+    phase4.tune(["gov-rules", "gov-procedures"], store.path, emb=fake_cache(tmp_path / "e"))
+    dev = {i.question for i in [*poisoned, *procedure_items(store)] if i.split == "dev"}
+    assert asked and set(asked) == dev
+    write_items(gu.GOV_PROCEDURES_DIR, [i for i in procedure_items(store) if i.split == "test"],
+                [])
+    with pytest.raises(runner.RunError, match="no dev items"):
+        phase4.tune(["gov-procedures"], store.path, emb=object())
 
 
 def test_write_tuning_keeps_the_file_and_other_corpora(tmp_path):

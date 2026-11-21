@@ -335,7 +335,9 @@ TABLE_DB_CACHE = 8  # per-view table databases per Tools instance (LRU, see `_vi
 QUERY_ROW_CAP = SQL_ROW_CAP  # ids of a `list`, groups of a `count_by` (one more: truncated)
 NO_UNITS = "no units for snapshot {}…; run `adr units build` and `adr units gate`"
 NO_HANDLE_UNITS = "the handle names no units; call without a handle or with a current one"
-NO_UNIT_TUNING = "the unit index tuning cannot be read or pinned"
+NO_UNIT_TUNING = "the unit index tuning cannot be read"
+NOT_PINNED = ("the unit-index tuning in force is not pinned for units {}; run `adr units pin "
+              "--store {}` (or `adr-eval p4-tune`)")
 UNKNOWN_RULE = "no rule card with that rule_id is in force for this caller"
 UNKNOWN_PROCEDURE = "no procedure with that id"
 NO_DEFINITION = "no definition"
@@ -2356,10 +2358,11 @@ class Tools:
         handle without units). Never a fallback to HEAD.
 
         Its index runs on a tuning entry (spec P42): the handle's pinned one (the uniform
-        lexical default for a handle with a null `unit_index`), or the tuning file's entry
-        for the build's corpus, pinned write-once under `units-index/<units id>/` (the only
-        file a unit call may add to the store at `w = 1.0`). Below `w = 1` the index fuses
-        dense vectors from the embedding cache."""
+        lexical default for a handle saved before Task 12, with a null `unit_index`), or the
+        tuning file's entry for the build's corpus when it is pinned for the build or is the
+        corpus's default; any other entry is refused (`NOT_PINNED`, fail closed). Below
+        `w = 1` the index fuses the stored dense vectors (refused when they are missing). A
+        read never writes."""
         if self._pin is not None:
             units_id = self._pin.units
             if units_id is None:
@@ -2379,13 +2382,20 @@ class Tools:
         else:
             try:
                 tuning = units_index.load_tuning(m.corpus)
-                unit_index = units_index.pin_tuning(self.store_path, units_id, tuning)
             except (OSError, ValueError) as e:
                 raise ToolError(f"{NO_UNIT_TUNING}: {e}") from e
+            unit_index = units_index.tuning_id(tuning)
+            if units_index.pinned_tuning(self.store_path, units_id, unit_index,
+                                         corpus=m.corpus) is None:
+                raise ToolError(NOT_PINNED.format(units_id[:12], self.store_path))
         fields["units"] = self._memo["units"] = units_id
         self._memo["unit_index"] = unit_index
         emb = make_embedding_cache(self.emb_cache) if tuning["w"] < 1 else None
-        return tu.UnitSet.of(self.store_path, units_id, m, tuning, emb)
+        try:
+            return tu.UnitSet.of(self.store_path, units_id, m, tuning, emb)
+        except units_index.UnitVectorsMissing as e:
+            raise ToolError(f"{e}; {NOT_PINNED.format(units_id[:12], self.store_path)}") \
+                from e
 
     def _unit_scope(self, filters: dict, fields: dict
                     ) -> tuple[_Applied, frozenset[str] | None, frozenset[str] | None,

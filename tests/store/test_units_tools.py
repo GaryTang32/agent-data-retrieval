@@ -164,9 +164,8 @@ def test_unit_tools_follow_document_access(store, tmp_path_factory):
 
 
 def test_unit_tools_load_no_embedding_model(tmp_path, monkeypatch):
-    """C8: at the committed tuning (`w = 1.0`) the unit tools serve a lexical-only unit index;
-    no call embeds or loads a model, and the index is built in memory: `units-index/` holds
-    only the pinned tuning entry (P42), no index directory."""
+    """C8: the unit tools serve a lexical-only unit index; no call embeds or loads a model, and
+    the index is built in memory (no `units-index/` is written)."""
     import fastembed
 
     from adr_store.embedding import EmbeddingCache
@@ -183,16 +182,12 @@ def test_unit_tools_load_no_embedding_model(tmp_path, monkeypatch):
         outcome(call, t)
     head = units_overlay.read_units_head(s.path)
     us = next(v for k, v in tools._UNIT_SETS.items() if k[:2] == (str(s.path.resolve()), head))
-    assert us.index.lexical_only
-    written = sorted(p.relative_to(s.path).as_posix() for p in (s.path / "units-index").rglob("*"))
-    assert len(written) == 2 and written[0] == f"units-index/{head}"
-    assert re.fullmatch(rf"units-index/{head}/tuning-[0-9a-f]{{64}}\.json", written[1])
+    assert us.index.lexical_only and not (s.path / "units-index").exists()
 
 
 def test_a_unit_call_never_writes_into_the_store(tmp_path, monkeypatch):
     """M7: the unit tools build their index in memory: with the index writer refusing, every
-    call still runs, and nothing in the store but the retrieval log changes, except the pinned
-    tuning entry the first unit call writes once (P42, Task 12); later calls write nothing."""
+    call still runs, and nothing in the store but the retrieval log changes."""
     from adr_store.units import index as units_index
 
     def no_write(*a, **kw):
@@ -209,14 +204,7 @@ def test_a_unit_call_never_writes_into_the_store(tmp_path, monkeypatch):
     t = as_(s)
     results = [outcome(call, t) for call in UNIT_CALLS]
     assert sum(not isinstance(r, Exception) for r in results) > 20
-    after = tree()
-    added = sorted(set(after) - set(before))
-    head = units_overlay.read_units_head(s.path)
-    assert {k: v for k, v in after.items() if k in before} == before and len(added) == 1
-    assert re.fullmatch(rf"units-index/{head}/tuning-[0-9a-f]{{64}}\.json", added[0])
-    assert hashlib.sha256(after[added[0]]).hexdigest() == added[0][-69:-5]
-    [outcome(call, as_(s)) for call in UNIT_CALLS]
-    assert tree() == after                                   # the pin is written once
+    assert tree() == before and not (s.path / "units-index").exists()
     with pytest.raises(ValueError, match="install=False needs emb=None"):
         units_index.UnitIndex.build(s.path, "x", [], object(), {}, install=False)
 
@@ -868,17 +856,18 @@ built_units = uf.built_units
 units_store_with_tables = uf.units_store_with_tables
 
 
-# -- the pinned unit-index tuning (spec P42; Task 12 carry A) ------------------------------------
+# -- the pinned unit-index tuning (spec P42; Task 12 carry A and fix round I1) -----------------
 
 def _tuning_file(tmp_path, monkeypatch, gov: dict, name: str = "tuning.json"):
-    """Point the tuning file at a copy of the committed one with `gov` as the gov entry."""
+    """Make a tuning file whose gov entry is `gov` (the other corpora at their defaults) the
+    one in force (`$ADR_UNITS_TUNING`)."""
     from adr_store.units import index as ui
 
     path = tmp_path / name
-    data = json.loads(ui.TUNING_PATH.read_text(encoding="utf-8"))
+    data = json.loads(ui.tuning_path().read_text(encoding="utf-8"))
     data["gov"] = gov
     path.write_text(json.dumps(data), encoding="utf-8")
-    monkeypatch.setattr(ui, "TUNING_PATH", path)
+    monkeypatch.setenv(ui.TUNING_ENV, str(path))
     return path
 
 
@@ -890,17 +879,59 @@ def _gov(w: float = 1.0, **rule_card_fields) -> dict:
     return {**entry, "w": w}
 
 
+def _pin(store, emb=None) -> str:
+    """`adr units pin` for the store's units/HEAD (the tuning in force)."""
+    from adr_store.units.gate import pin_promoted
+
+    return pin_promoted(store.path, units_overlay.read_units_head(store.path), emb)
+
+
+def _tree(store) -> dict:
+    """The store's files, the retrieval log and the Phase 2 search's index lock aside."""
+    return {str(p.relative_to(store.path)): p.read_bytes() for p in store.path.rglob("*")
+            if p.is_file() and p.relative_to(store.path).parts[0] != "log"
+            and not p.name.endswith(".lock")}
+
+
+def _oracle(store, entry, emb=None) -> list[str]:
+    """The auditor's top-10 rule cards for RANKING_QUERY from the unit index itself."""
+    from adr_store.units import index as ui
+    from adr_store.units.overlay import load_units, load_units_manifest
+
+    head = units_overlay.read_units_head(store.path)
+    units = load_units(store.path, load_units_manifest(store.path, head))
+    docs = ui.unit_docs(units, [u for u in units if u.type == "concept"])
+    view = frozenset(visible(store, "user:auditor"))
+    old_doc = {u.doc_id for u in units if u.applicability.status == "superseded"}
+    idx = ui.UnitIndex.build(store.path, head, docs, emb, entry, install=emb is not None)
+    return [i for i, _ in idx.search(RANKING_QUERY, types=("rule_card",), view=view,
+                                     admitted=view - old_doc, k=10)]
+
+
 RANKING_QUERY = "drawbridge open notice signal"
+
+
+def test_the_default_tuning_needs_no_pin_and_a_read_writes_nothing(units_built):
+    from adr_store.units import index as ui
+
+    before = _tree(units_built)
+    res = as_(units_built).rule_lookup(RANKING_QUERY)
+    assert res.handle["unit_index"] == ui.tuning_id(ui.default_tuning("gov"))
+    assert as_(units_built).search("drawbridge").handle == res.handle
+    assert as_(units_built).rule_lookup(RANKING_QUERY, handle=res.handle) == res
+    assert _tree(units_built) == before and not (units_built.path / "units-index").exists()
 
 
 def test_a_retune_changes_the_handle_and_pins_each_entry(units_built, tmp_path, monkeypatch):
     from adr_store.units import index as ui
 
     head = units_overlay.read_units_head(units_built.path)
-    first, second = _gov(), _gov(body=3, title=2)
+    first, second = _gov(body=2), _gov(body=3, title=2)
     _tuning_file(tmp_path, monkeypatch, first)
+    assert _pin(units_built) == ui.tuning_id(first)
     a = as_(units_built).rule_lookup(RANKING_QUERY)
     _tuning_file(tmp_path, monkeypatch, second, "tuning-2.json")
+    _pin(units_built)
     b = as_(units_built).rule_lookup(RANKING_QUERY)
     assert a.handle["unit_index"] == ui.tuning_id(first)
     assert b.handle["unit_index"] == ui.tuning_id(second) != a.handle["unit_index"]
@@ -909,45 +940,70 @@ def test_a_retune_changes_the_handle_and_pins_each_entry(units_built, tmp_path, 
         pin = units_built.path / "units-index" / head / f"tuning-{ui.tuning_id(entry)}.json"
         assert hashlib.sha256(pin.read_bytes()).hexdigest() == ui.tuning_id(entry)
         assert json.loads(pin.read_bytes()) == ui.check_tuning(entry)
-    # a Phase 2 call names the tuning in force once it is pinned
     assert as_(units_built).search("drawbridge").handle == b.handle
+    assert _pin(units_built) == ui.tuning_id(second)                 # idempotent
+
+
+def test_a_search_before_any_unit_call_replays_the_tuning_in_force(units_built, tmp_path,
+                                                                   monkeypatch):
+    """I1: after a tuning is written and pinned, a Phase 2 call made before any unit call
+    names it, and a unit call replayed with that handle runs it."""
+    tuned = _gov(body=3, title=3, ref=2)
+    assert _oracle(units_built, tuned) != _oracle(units_built, _gov())
+    _tuning_file(tmp_path, monkeypatch, tuned)
+    _pin(units_built)
+    h = as_(units_built).search("drawbridge").handle             # no unit call before it
+    from adr_store.units import index as ui
+
+    assert h["unit_index"] == ui.tuning_id(tuned)
+    replay = as_(units_built).rule_lookup(RANKING_QUERY, handle=h)
+    assert ids(replay) == _oracle(units_built, tuned)
+    assert replay == as_(units_built).rule_lookup(RANKING_QUERY)    # the same as a fresh call
+    assert as_(units_built).search("drawbridge").handle == h       # history does not matter
+
+
+def test_an_unpinned_tuning_refuses_and_names_no_units(units_built, tmp_path, monkeypatch):
+    """I1: a tuning in force that is neither pinned nor the default: the unit tools refuse
+    (fail closed, with the fix) and other calls' handles carry no units part."""
+    before = _tree(units_built)
+    _tuning_file(tmp_path, monkeypatch, _gov(body=2))
+    for call in (lambda t: t.rule_lookup(RANKING_QUERY), lambda t: t.define("drawtender"),
+                 lambda t: t.procedure_lookup("refund"), lambda t: t.unit_search("refund")):
+        with pytest.raises(ToolError, match=r"not pinned for units .*; run `adr units pin"):
+            call(as_(units_built))
+    h = as_(units_built).search("drawbridge").handle
+    assert h["units"] is None and h["unit_index"] is None
+    with pytest.raises(ToolError) as e:                 # that handle refuses the unit tools
+        as_(units_built).rule_lookup(RANKING_QUERY, handle=h)
+    assert str(e.value) == NO_HANDLE_UNITS
+    assert _tree(units_built) == before                 # nothing written by any of it
 
 
 def test_an_old_handle_replays_with_its_pinned_weights(units_built, tmp_path, monkeypatch):
     from adr_store.units import index as ui
-    from adr_store.units.overlay import load_units, load_units_manifest
 
-    head = units_overlay.read_units_head(units_built.path)
-    m = load_units_manifest(units_built.path, head)
-    units = load_units(units_built.path, m)
-    docs = ui.unit_docs(units, [u for u in units if u.type == "concept"])
-    view = frozenset(visible(units_built, "user:auditor"))
-    old_doc = {u.doc_id for u in units if u.applicability.status == "superseded"}
-
-    def ranking(entry):  # the unit index itself, with this tuning: the oracle
-        idx = ui.UnitIndex.build(units_built.path, head, docs, None, entry, install=False)
-        return [i for i, _ in idx.search(RANKING_QUERY, types=("rule_card",), view=view,
-                                         admitted=view - old_doc, k=10)]
-
-    first, second = _gov(), _gov(body=3, title=3, ref=2)
-    assert ranking(first) != ranking(second)              # the re-tune changes the ranking
+    first, second = _gov(), _gov(body=3, title=3, ref=2)        # the default needs no pin
+    assert _oracle(units_built, first) != _oracle(units_built, second)
     _tuning_file(tmp_path, monkeypatch, first)
+    _pin(units_built)
     a = as_(units_built).rule_lookup(RANKING_QUERY)
-    assert ids(a) == ranking(first)
+    assert ids(a) == _oracle(units_built, first)
     _tuning_file(tmp_path, monkeypatch, second, "tuning-2.json")
-    assert ids(as_(units_built).rule_lookup(RANKING_QUERY)) == ranking(second)
+    _pin(units_built)
+    assert ids(as_(units_built).rule_lookup(RANKING_QUERY)) == _oracle(units_built, second)
     again = as_(units_built).rule_lookup(RANKING_QUERY, handle=a.handle)
-    assert again == a and ids(again) == ranking(first)
+    assert again == a and ids(again) == _oracle(units_built, first)
     # a handle with a null unit_index (saved before Task 12) runs the uniform lexical index
     older = {**a.handle, "unit_index": None}
     assert ids(as_(units_built).rule_lookup(RANKING_QUERY, handle=older)) == \
-        ranking(ui.default_tuning("gov"))
+        _oracle(units_built, ui.default_tuning("gov"))
 
 
 def test_a_missing_pinned_entry_refuses(units_built, tmp_path, monkeypatch):
     from adr_store.units import index as ui
 
     _tuning_file(tmp_path, monkeypatch, _gov(body=2))
+    _pin(units_built)
     a = as_(units_built).rule_lookup(RANKING_QUERY)
     pin = ui.pin_path(units_built.path, a.handle["units"], a.handle["unit_index"])
     pin.write_bytes(pin.read_bytes() + b" ")                       # damaged: not its hash
@@ -964,45 +1020,100 @@ def test_a_missing_pinned_entry_refuses(units_built, tmp_path, monkeypatch):
         as_(units_built).search("drawbridge", handle={**a.handle, "units": None})
     with pytest.raises(ToolError, match="^handle no longer available: unit_index$"):
         as_(units_built).search("drawbridge", handle={**a.handle, "unit_index": "0" * 64})
-    # without a handle the current tuning is pinned again
-    assert as_(units_built).rule_lookup(RANKING_QUERY).handle == a.handle and pin.is_file()
+    # a read does not pin it again: refused until `adr units pin`
+    with pytest.raises(ToolError, match="not pinned"):
+        as_(units_built).rule_lookup(RANKING_QUERY)
+    assert not pin.exists()
+    _pin(units_built)
+    assert as_(units_built).rule_lookup(RANKING_QUERY, handle=a.handle) == a
+
+
+def test_a_read_on_a_read_only_store_does_not_fail(units_built, tmp_path, monkeypatch):
+    """Every unit-index write path refuses (as a read-only units-index would; chmod does not
+    bind root): unit calls at the default tuning and at a pinned tuning still run and write
+    nothing (the retrieval log every tool appends, Phase 2's behaviour, aside)."""
+    from adr_store.units import index as ui
+
+    default = _tuning_file(tmp_path, monkeypatch, _gov(), "tuning-default.json")
+    _tuning_file(tmp_path, monkeypatch, _gov(body=2))
+    _pin(units_built)
+
+    def refuse(*a, **kw):
+        raise PermissionError("read-only store")
+
+    from adr_store.units import tools_units
+
+    for target, name in ((ui, "_install"), (ui, "pin_tuning"), (tools_units, "pin_build"),
+                         (ui.Path, "write_bytes"), (ui.Path, "write_text"), (ui.os, "replace"),
+                         (ui.os, "rename")):
+        monkeypatch.setattr(target, name, refuse)
+    before = _tree(units_built)
+    results = [outcome(call, as_(units_built)) for call in UNIT_CALLS]
+    assert sum(not isinstance(r, Exception) for r in results) > 20
+    assert all("not pinned" not in str(r) and "read-only" not in str(r) for r in results)
+    monkeypatch.setenv(ui.TUNING_ENV, str(default))
+    assert as_(units_built).rule_lookup(RANKING_QUERY).cards
+    assert _tree(units_built) == before
+
+
+def test_promotion_pins_the_tuning_in_force(tmp_path, monkeypatch):
+    """Units promotion (`units_gate`) pins the tuning in force for the promoted build before
+    HEAD moves, with its dense vectors below w = 1; a tuning it cannot read refuses it."""
+    from adr_store.units import index as ui
+    from adr_store.units.build import build_units
+    from adr_store.units.gate import units_gate
+    from tests.store.test_retrieval import fake_cache
+
+    tuned = _gov(0.5, body=2)
+    _tuning_file(tmp_path, monkeypatch, tuned)
+    s = make_units_store(tmp_path / "s", rules=uf.UNITS_ACL_RULES)
+    cand = build_units(s.path, "gov").units_id
+    emb = fake_cache(tmp_path / "emb")
+    assert units_gate(s.path, cand, [], 0, hit=None, emb=emb).promoted
+    pin = ui.pin_path(s.path, cand, ui.tuning_id(tuned))
+    assert json.loads(pin.read_bytes()) == ui.check_tuning(tuned)
+    assert list((s.path / "units-index" / cand).glob("dense-*/vectors.npy"))
+    # a read now runs the dense index from the stored vectors, embedding no document
+    embedded = len(emb.model().passage.calls)
+    monkeypatch.setattr(tools, "make_embedding_cache", lambda *a, **kw: emb)
+    t = as_(s)
+    assert ids(t.rule_lookup(RANKING_QUERY)) == _oracle(s, tuned, emb)
+    # the read embedded its query only (the fake model's query channel is its passage one)
+    assert all(c == [RANKING_QUERY] for c in emb.model().passage.calls[embedded:])
+    # unreadable tuning: refused, HEAD unchanged
+    from adr_store.units.gate import UnitCase
+
+    (tmp_path / "tuning.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(units_overlay.UnitsError, match="cannot pin"):
+        units_gate(s.path, cand, [UnitCase("c", "rule", {})], 0, hit=lambda *a: True)
+    assert units_overlay.read_units_head(s.path) == cand
 
 
 def test_dense_below_w1_and_lexical_at_w1(units_built, tmp_path, monkeypatch):
-    """The unit tools build dense vectors through the embedding cache when the pinned `w` is
-    below 1 (the fake model here, C8), and never make an embedding cache at `w = 1.0`."""
+    """The unit tools fuse the stored dense vectors when the pinned `w` is below 1 (the fake
+    model here, C8), and never make an embedding cache at `w = 1.0`; a read never embeds a
+    document: missing vectors refuse."""
     from adr_store.units import index as ui
     from tests.store.test_retrieval import fake_cache
-
-    made: list = []
 
     def no_cache(*a, **kw):
         raise AssertionError("an embedding cache was made at w = 1.0")
 
     monkeypatch.setattr(tools, "make_embedding_cache", no_cache)
-    _tuning_file(tmp_path, monkeypatch, _gov(1.0))
     lex = as_(units_built).rule_lookup(RANKING_QUERY)
     head = lex.handle["units"]
-    assert not any((units_built.path / "units-index" / head).glob("dense-*"))
-
-    def cache(*a, **kw):
-        made.append(fake_cache(tmp_path / "emb"))
-        return made[-1]
-
-    monkeypatch.setattr(tools, "make_embedding_cache", cache)
-    _tuning_file(tmp_path, monkeypatch, _gov(0.5), "tuning-2.json")
+    assert not (units_built.path / "units-index").exists()
+    emb = fake_cache(tmp_path / "emb")
+    monkeypatch.setattr(tools, "make_embedding_cache", lambda *a, **kw: emb)
+    _tuning_file(tmp_path, monkeypatch, _gov(0.5))
+    ui.pin_tuning(units_built.path, head, _gov(0.5))              # pinned without vectors
+    with pytest.raises(ToolError, match="no stored dense vectors"):
+        as_(units_built).rule_lookup(RANKING_QUERY)
+    assert all(c == [RANKING_QUERY] for c in emb.model().passage.calls)   # no document
+    _pin(units_built, emb)
+    embedded = len(emb.model().passage.calls)
+    assert embedded and any((units_built.path / "units-index" / head).glob("dense-*/vectors.npy"))
     dense = as_(units_built).rule_lookup(RANKING_QUERY)
-    assert made and made[-1].model().passage.calls                # documents embedded
-    assert any((units_built.path / "units-index" / head).glob("dense-*/vectors.npy"))
-    # the ranking is the P41 fusion of BM25 and the fake vectors at w = 0.5
-    from adr_store.units.overlay import load_units, load_units_manifest
-
-    units = load_units(units_built.path, load_units_manifest(units_built.path, head))
-    docs = ui.unit_docs(units, [u for u in units if u.type == "concept"])
-    view = frozenset(visible(units_built, "user:auditor"))
-    old_doc = {u.doc_id for u in units if u.applicability.status == "superseded"}
-    idx = ui.UnitIndex.build(units_built.path, head, docs, fake_cache(tmp_path / "emb2"),
-                             _gov(0.5))
-    want = [i for i, _ in idx.search(RANKING_QUERY, types=("rule_card",), view=view,
-                                     admitted=view - old_doc, k=10)]
-    assert ids(dense) == want and dense.handle["unit_index"] == ui.tuning_id(_gov(0.5))
+    assert emb.model().passage.calls[embedded:] == [[RANKING_QUERY]]  # its query, no document
+    assert ids(dense) == _oracle(units_built, _gov(0.5), fake_cache(tmp_path / "emb2"))
+    assert dense.handle["unit_index"] == ui.tuning_id(_gov(0.5))

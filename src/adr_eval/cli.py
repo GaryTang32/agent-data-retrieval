@@ -744,8 +744,6 @@ def _p2_compare(a: argparse.Namespace) -> int:
 def _p4_retrieval(a: argparse.Namespace) -> int:
     """`adr-eval p4-retrieval --golden G --system S --split SPLIT`: one Phase 4 retrieval run
     (`phase4.run_p4`; no model call), written under --out (default runs/)."""
-
-
     t0 = time.perf_counter()
     out = phase4.OUT_ROOT if a.out is None else a.out
     run_id = phase4.run_p4(a.golden, a.system, a.split, runner.load_config(), out)
@@ -774,8 +772,6 @@ def _p4_compare(a: argparse.Namespace) -> int:
     """`adr-eval p4-compare RUN_A RUN_B --metric M [--pool RUN_A RUN_B]...`: `run_b - run_a`
     with the paired bootstrap (`phase4.p4_compare`); written to
     `<run_a>/p4-compare-<run_b>-<metric>.json` and, with --summary, to OUT (no item id)."""
-
-
     out = phase4.OUT_ROOT if a.out is None else a.out
     run_a, run_b = _p4_dir(a.run_a, out), _p4_dir(a.run_b, out)
     pooled = [(_p4_dir(x, out), _p4_dir(y, out)) for x, y in a.pool]
@@ -798,21 +794,24 @@ def _p4_compare(a: argparse.Namespace) -> int:
 
 def _p4_tune(a: argparse.Namespace) -> int:
     """`adr-eval p4-tune --golden G [--golden G2] --store S`: tune the unit index of the
-    store's corpus on the dev items (`phase4.tune`, C13) and write the corpus's entry of the
-    tuning file (--out, default config/units/tuning.json). No model call; the dense vectors
-    come from the local embedding model."""
-
+    store's corpus on the dev items (`phase4.tune`, C13), write the corpus's entry of the
+    tuning file (--out, default config/units/tuning.json) and pin it for the store's units,
+    with its dense vectors when w < 1 (P42). No model call; the dense vectors come from the
+    local embedding model."""
     from adr_store import tools as store_tools
     from adr_store.units import index as units_index
+    from adr_store.units.tools_units import pin_build
 
     emb = store_tools.make_embedding_cache(
         a.emb_cache if a.emb_cache is not None else store_tools.DEFAULT_EMB_CACHE)
     report: dict = {}
     entry = phase4.tune(a.golden, a.store, emb=emb, report=report)
     path = units_index.write_tuning(report["corpus"], entry, a.out)
+    tid = pin_build(a.store, report["units"], entry, emb)     # P42: pinned where it is tuned
     print(f"{report['corpus']}: w {entry['w']}; dev {report['dev']}; nDCG@10 weights "
           f"{ {k: round(v, 4) for k, v in report['weights_ndcg10'].items()} }, at w "
-          f"{report['w_ndcg10']:.4f}; written to {path}")
+          f"{report['w_ndcg10']:.4f}; written to {path}; pinned as unit_index {tid[:12]} for "
+          f"units {report['units'][:12]}")
     for t, fw in entry["weights"].items():
         print(f"  {t}: {fw}")
     return 0

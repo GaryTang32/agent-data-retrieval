@@ -1323,6 +1323,23 @@ def _units_gate(a: argparse.Namespace) -> int:
     return 0 if r.promoted else EXIT_CONFORMANCE
 
 
+def _units_pin(a: argparse.Namespace) -> int:
+    """`adr units pin --store S`: pin the tuning file's entry in force for the store's
+    units/HEAD, with its dense vectors when its `w` is below 1 (idempotent; spec P42). For a
+    store whose tuning file changed other than by `adr-eval p4-tune`."""
+    head = units_overlay.read_units_head(a.store)
+    if head is None:
+        raise tools.ToolError(f"{a.store}: no units/HEAD to pin a tuning for")
+    emb = tools.make_embedding_cache(a.emb_cache if a.emb_cache is not None
+                                     else tools.DEFAULT_EMB_CACHE)
+    try:
+        tid = units_gate_mod.pin_promoted(a.store, head, emb)
+    except units_overlay.UnitsError as e:
+        raise tools.ToolError(str(e)) from e
+    print(f"units {head[:12]}: unit_index {tid[:12]} pinned")
+    return 0
+
+
 def _unit_tools(a: argparse.Namespace) -> tools.Tools:
     """The tools of a unit command: with `--as USER`, as that caller with the ACL layer."""
     if a.as_user is None:
@@ -1802,6 +1819,12 @@ def _parser() -> argparse.ArgumentParser:
                      help="cases HEAD hits that the candidate may miss")
     ung.add_argument("--json", action="store_true", help="print the result as JSON")
     ung.set_defaults(fn=_units_gate)
+    unp = un_sub.add_parser("pin", help="pin the unit-index tuning in force for units/HEAD "
+                                        "(and its dense vectors when w < 1); idempotent")
+    unp.add_argument("--store", type=Path, required=True, help="store directory")
+    unp.add_argument("--emb-cache", type=Path, default=None,
+                     help="embedding cache directory (used only when w < 1)")
+    unp.set_defaults(fn=_units_pin)
 
     def unit_tool(name: str, help: str, fn) -> argparse.ArgumentParser:
         p = un_sub.add_parser(name, help=help, description=f"{help}. {NOT_A_BOUNDARY}")
