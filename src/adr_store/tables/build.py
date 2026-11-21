@@ -71,8 +71,8 @@ class BuildResult:
 
 def build_tables(store_path: Path, corpus: Literal["gov", "research"], *,
                  contracts_dir: Path = CONTRACT_DIR, with_extraction: bool = False,
-                 client=None, generator_profile: str | None = None, max_calls: int = 0
-                 ) -> BuildResult:
+                 client=None, generator_profile: str | None = None, max_calls: int = 0,
+                 meter=None) -> BuildResult:
     """Build the tables of `corpus` for the HEAD snapshot of the store: the metadata and entity
     tables, and with `with_extraction` the extraction tables too.
 
@@ -80,7 +80,9 @@ def build_tables(store_path: Path, corpus: Literal["gov", "research"], *,
     `generator_profile`, else the configured generator) metered by `ex.metered_client` with a
     budget of `max_calls` (default 0), every transport attempt counted, so a rebuild finds the
     cached replies under the same adapter and model key and calls nothing; a reply that is not
-    cached stops the build (BudgetExceeded) when the cap is reached. The metadata loaders call
+    cached stops the build (BudgetExceeded) when the cap is reached. `meter`, when given, is
+    that metered client already made (`ex.metered_client`; the caller reads its budget after a
+    stop) and replaces `client`, `generator_profile` and `max_calls`. The metadata loaders call
     no model whatever these are."""
     store = Store.open(store_path)
     snapshot = store.snapshot_id
@@ -92,8 +94,9 @@ def build_tables(store_path: Path, corpus: Literal["gov", "research"], *,
     loaded = fr_tables(store, overlay) if corpus == "gov" else papers_tables(store)
     extraction = None
     if any(c.source.loader == "extraction" for c in contracts):
-        rows, extraction = _extraction(store, available, contracts_dir, client,
-                                       generator_profile, max_calls)
+        if meter is None:
+            meter = ex.metered_client(max_calls, client=client, profile=generator_profile)
+        rows, extraction = _extraction(store, available, contracts_dir, meter)
         loaded = {**loaded, **rows}
     tables: list[TableFile] = []
     reports: dict[str, dict] = {}
@@ -113,12 +116,12 @@ def build_tables(store_path: Path, corpus: Literal["gov", "research"], *,
     return BuildResult(tables_id, path, manifest.tables, reports)
 
 
-def _extraction(store: Store, contracts: dict, contracts_dir: Path, client,
-                generator_profile: str | None, max_calls: int) -> tuple[dict, dict]:
-    """(the extraction tables' rows, what they came from for the manifest: prompt version,
-    adapter, model, max tokens, groups and specs, nothing that differs between rebuilds)."""
+def _extraction(store: Store, contracts: dict, contracts_dir: Path, meter
+                ) -> tuple[dict, dict]:
+    """(the extraction tables' rows read through `meter`, what they came from for the
+    manifest: prompt version, adapter, model, max tokens, groups and specs, nothing that
+    differs between rebuilds)."""
     cfg = ex.load_config(Path(contracts_dir) / EXTRACTION_CONFIG)
-    meter = ex.metered_client(max_calls, client=client, profile=generator_profile)
     results, _ = ex.extract_all(store, meter, cfg, contracts)
     rows = ex.drawbridge_rows(results, ex.units(store), cfg.specs)
     return rows, {"prompt_version": ex.PROMPT_VERSION, "adapter": meter.name,

@@ -457,7 +457,8 @@ def test_golden_tables_gen_stops_on_a_failure_that_is_no_input_rejection(
                             facts_env["facts_id"], "--generator", "claude_code_sonnet",
                             "--max-calls", 10)
     assert code == 1, err
-    assert "status: stopped: giving up after 5 retries" in out and "nothing written" in out
+    assert "status: stopped: giving up after 5 retries: usage limit (" in out
+    assert "budget unit(s) used); nothing written" in out
     assert not tables.GOLDEN_DIR.exists()
 
 

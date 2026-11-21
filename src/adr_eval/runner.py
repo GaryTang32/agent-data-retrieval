@@ -27,6 +27,7 @@ from adr_eval.llm import (
     ClaudeCodeClient,
     Completion,
     ModelClient,
+    ModelError,
     OpenAICompatibleClient,
     StubClient,
     _CachedClient,
@@ -45,6 +46,7 @@ from adr_eval.pipeline import (
     price_usd,
     process_item,
     retrieval_scores,
+    stop_status,
 )
 from adr_eval.retrieval.chunker import Chunk, chunk_document
 from adr_eval.retrieval.dense import DenseIndex
@@ -658,7 +660,11 @@ def run(
                   mode="tables" if tables else "v0.1", judge_enabled=not tables,
                   table_queries=table_queries)
     if tables:
-        rows = _run_whole(items, retrieved, ctx, cfg["concurrency"], budget, max_calls)
+        try:
+            rows = _run_whole(items, retrieved, ctx, cfg["concurrency"], budget)
+        except (BudgetExceeded, ModelError) as e:
+            e.budget = budget       # for the stop status (`pipeline.stop_status`)
+            raise
         run_dir = _new_run_dir(Path(out_root), run_id)
         cfg["run_id"] = run_dir.name
         _write_json(run_dir / "compile.json", compile_data)
@@ -721,7 +727,7 @@ def _finish(cfg: dict, rows: list[dict], budget: Budget, gen_meter: MeteredClien
 
 
 def _run_whole(items: list[GoldenItem], retrieved: dict, ctx: Context, concurrency: int,
-               budget: Budget, max_calls: int | None) -> list[dict]:
+               budget: Budget) -> list[dict]:
     """Every row of a tables-mode run, or nothing: a budget stop raises BudgetExceeded (after
     the calls in flight end; their replies are cached) and a model failure propagates."""
     rows: list[dict] = []
@@ -734,10 +740,7 @@ def _run_whole(items: list[GoldenItem], retrieved: dict, ctx: Context, concurren
             pool.shutdown(wait=True, cancel_futures=True)  # drop queued items
             raise
     if budget.stopped:
-        cap = (f"--max-calls {max_calls}" if budget.stop_reason == "calls"
-               else f"--max-dollars {budget.max_dollars}")
-        raise BudgetExceeded(f"stopped at {cap} ({budget.calls} budget unit(s) used); nothing "
-                             f"written. Completed calls are cached: rerun to continue.")
+        raise BudgetExceeded(stop_status(budget).removeprefix("status: "))
     return rows
 
 

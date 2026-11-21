@@ -8,6 +8,7 @@ documents, extraction tables promoted, ACL synced, second-pass facts written), g
 generated with a stub; nothing reads `data/` or `.cache/`, and no model is called."""
 
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -419,6 +420,7 @@ def test_adr_eval_run_gov_tables_stops_on_a_model_failure(env, monkeypatch, caps
                              "claude_code_sonnet", "--max-calls", 10, "--out", env["out"])
     assert code == 1, err
     assert "status: stopped: giving up after 5 retries" in out and "nothing written" in out
+    assert re.search(r"usage limit \(\d+ budget unit\(s\) used\); nothing written", out)
     assert not env["out"].exists()
 
 

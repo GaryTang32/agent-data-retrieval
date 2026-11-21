@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -256,7 +257,9 @@ def test_adr_tables_build_options(tables_store, tmp_path, capsys, monkeypatch):
     # an extraction build reads cached replies only by default: none are cached here
     code, out, err = adr(["tables", "build", "--store", tables_store, "--with-extraction"],
                          capsys)
-    assert code == 1 and "stopped at --max-calls 0" in out and "0 model call(s) made" in out
+    assert code == 1 and "stopped at --max-calls 0 (0 budget unit(s) used)" in out
+    meter = seen[-1][1].pop("meter")    # the build reads its replies through the CLI's meter
+    assert meter.budget.max_calls == 0 and meter.budget.count_attempts
     assert seen[-1] == ("gov", {"with_extraction": True, "generator_profile": generator,
                                 "max_calls": 0})
     # the corpus comes from the store's documents, or --tables-for when both are there
@@ -302,12 +305,12 @@ def test_adr_tables_extract_stops_at_the_cap_then_extracts(tables_store, tmp_pat
                           "claude_code_sonnet", "--max-calls", 0], capsys)
     assert code == 1, err
     assert "8 distinct section texts from 14 sections, 7 in the newest version" in out
-    assert "stopped at --max-calls 0" in out and "0 model call(s) made" in out
+    assert "stopped at --max-calls 0 (0 budget unit(s) used)" in out
     assert not (snapshot_dir / "extraction-report.json").exists()       # nothing written
     assert made == ["claude_code_sonnet"]
     code, out, err = adr(["tables", "extract", "--store", tables_store, "--generator",
                           "claude_code_sonnet", "--max-calls", 3, "--concurrency", 2], capsys)
-    assert code == 1 and "3 model call(s) made" in out
+    assert code == 1 and "stopped at --max-calls 3 (3 budget unit(s) used)" in out
     code, out, err = adr(["tables", "extract", "--store", tables_store, "--generator",
                           "claude_code_sonnet", "--max-calls", 5], capsys)
     assert code == 0, err
@@ -353,10 +356,12 @@ def test_adr_tables_extract_and_build_stop_on_a_failure_that_is_no_input_rejecti
                               "--generator", "claude_code_sonnet", "--max-calls", 5], capsys)
         assert code == 1 and "Traceback" not in err
         assert "status: stopped:" in out and "nothing written" in out
+        assert re.search(r"\(\d+ budget unit\(s\) used\); nothing written", out)
         assert ("usage limit" if error == "usage" else "HTTP 401") in out
     code, out, err = adr(["tables", "build", "--store", tables_store, "--with-extraction",
                           "--generator", "claude_code_sonnet", "--max-calls", 5], capsys)
     assert code == 1 and "status: stopped:" in out and "Traceback" not in err
+    assert re.search(r"\(\d+ budget unit\(s\) used\); nothing written", out)
     written = sorted(f.name for f in snapshot_dir.iterdir()) if snapshot_dir.exists() else []
     assert not [f for f in written if f.startswith(("extraction-report", "second-pass",
                                                     "drawbridge", "tables-"))], written

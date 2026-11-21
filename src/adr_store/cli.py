@@ -942,37 +942,25 @@ def _tables_corpus(a: argparse.Namespace) -> str:
     return found.pop()
 
 
-def _stopped(max_calls: int, calls: int) -> str:
-    return (f"status: stopped at --max-calls {max_calls} ({calls} model call(s) made); nothing "
-            f"written. Completed calls are cached: rerun to continue.")
-
-
-def _failed(error: Exception, calls: int | None = None) -> str:
-    """The stop status of a model failure that is not cached (retries exhausted, the usage
-    limit, a configuration error): the run stops and a later run retries it (ruling P21)."""
-    made = "" if calls is None else f" ({calls} budget unit(s) used)"
-    return (f"status: stopped: {_one_line(error)}{made}; nothing written. Completed calls are "
-            f"cached: rerun to continue.")
-
-
 def _tables_build(a: argparse.Namespace) -> int:
     from adr_eval.llm import ModelError
-    from adr_eval.pipeline import BudgetExceeded
+    from adr_eval.pipeline import BudgetExceeded, stop_status
 
     corpus = _tables_corpus(a)
-    # only an extraction build calls a model: a metadata build resolves no profile
+    # only an extraction build calls a model: a metadata build resolves no profile, and an
+    # extraction build reads its replies through a meter whose units the stop status reports
     generator = (a.generator or eval_runner.load_config()["generator"]) if a.with_extraction \
         else a.generator
     try:
+        meter = {"meter": tables_extract.metered_client(a.max_calls, profile=generator)} \
+            if a.with_extraction else {}
         res = tables_build.build_tables(a.store, corpus, with_extraction=a.with_extraction,
-                                        generator_profile=generator, max_calls=a.max_calls)
+                                        generator_profile=generator, max_calls=a.max_calls,
+                                        **meter)
     except eval_runner.ProfileError as e:
         raise tools.ToolError(str(e)) from e
-    except BudgetExceeded:
-        print(_stopped(a.max_calls, a.max_calls))
-        return 1
-    except ModelError as e:            # a stored input rejection never reaches here
-        print(_failed(e))
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter["meter"].budget, e))
         return 1
     m = tables_overlay.load_manifest(a.store, res.tables_id)
     head = tables_overlay.read_head(a.store)
@@ -998,7 +986,7 @@ def _tables_extract(a: argparse.Namespace) -> int:
     the store's 33 CFR 117 sections, under --max-calls (every transport attempt counts). A
     model failure other than a stored input rejection stops it with exit 1, nothing written."""
     from adr_eval.llm import ModelError
-    from adr_eval.pipeline import BudgetExceeded
+    from adr_eval.pipeline import BudgetExceeded, stop_status
     from adr_store.tables.contracts import load_contracts
     from adr_store.tables.ecfr import chain_docs
 
@@ -1021,11 +1009,8 @@ def _tables_extract(a: argparse.Namespace) -> int:
         else:
             _, report = tables_extract.extract_all(store, meter, tables_extract.load_config(),
                                                    contracts, workers=workers)
-    except BudgetExceeded:
-        print(_stopped(a.max_calls, meter.budget.calls))
-        return 1
-    except ModelError as e:            # a stored input rejection never reaches here
-        print(_failed(e, meter.budget.calls))
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
         return 1
     report = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
               "max_calls": a.max_calls, "budget_units": meter.budget.calls,

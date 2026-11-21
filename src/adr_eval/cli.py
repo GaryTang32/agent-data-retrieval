@@ -434,20 +434,6 @@ def _golden_gen_logged(a: argparse.Namespace) -> int:
 TABLES_GOLDEN = "tables"   # `adr-eval golden tables`: the gov-tables v0.1 set (Phase 3 §10.3)
 
 
-def _stopped(max_calls: int, units: int) -> str:
-    """The status line of a command stopped by its call cap (as `adr tables extract`)."""
-    return (f"status: stopped at --max-calls {max_calls} ({units} budget unit(s) used); "
-            f"nothing written. Completed calls are cached: rerun to continue.")
-
-
-def _failed(error: Exception, units: int) -> str:
-    """The status line of a command stopped by a model failure that is not cached (retries
-    exhausted, the usage limit, a configuration error; ruling P21)."""
-    text = " ".join(str(error).split())
-    return (f"status: stopped: {text} ({units} budget unit(s) used); nothing written. "
-            f"Completed calls are cached: rerun to continue.")
-
-
 def _golden_tables_gen(a: argparse.Namespace) -> int:
     """`adr-eval golden tables --gen --store S --facts ID --generator P --max-calls N`: the
     gov-tables v0.1 items from the second-pass facts `ID` of store `S`, phrased by profile `P`
@@ -456,7 +442,7 @@ def _golden_tables_gen(a: argparse.Namespace) -> int:
     calls from the cache."""
     from adr_eval.golden import tables
     from adr_eval.llm import ModelError
-    from adr_eval.pipeline import BudgetExceeded
+    from adr_eval.pipeline import BudgetExceeded, stop_status
     from adr_store.tables.extract import metered_client
     from adr_store.tables.overlay import TablesError
 
@@ -473,11 +459,8 @@ def _golden_tables_gen(a: argparse.Namespace) -> int:
         res = tables.generate_all(a.store, a.facts, meter, n=tables.N_ITEMS)
     except TablesError as e:
         raise runner.RunError(str(e)) from e
-    except BudgetExceeded:
-        print(_stopped(a.max_calls, meter.budget.calls))
-        return 1
-    except ModelError as e:            # a stored input rejection never reaches here
-        print(_failed(e, meter.budget.calls))
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
         return 1
     tables.write_items(out, res.items, res.rejected)
     dev = sum(i.split == "dev" for i in res.items)
@@ -564,7 +547,7 @@ def _run(a: argparse.Namespace) -> int:
     and a stop at the call cap or on a model failure that is no input rejection exits 1 with
     nothing written."""
     from adr_eval.llm import ModelError
-    from adr_eval.pipeline import BudgetExceeded
+    from adr_eval.pipeline import BudgetExceeded, stop_status
 
     config = runner.load_config()
     if a.stub:
@@ -587,12 +570,10 @@ def _run(a: argparse.Namespace) -> int:
                             max_calls=a.max_calls,
                             qtypes=None if a.qtype is None else tuple(a.qtype),
                             golden=a.golden)
-    except BudgetExceeded as e:        # tables mode only: v0.1 runs stop per item
-        print(f"status: {e}")
-        return 1
-    except ModelError as e:            # tables mode only; a stored input rejection is a row
-        print(f"status: stopped: {' '.join(str(e).split())}; nothing written. Completed "
-              f"calls are cached: rerun to continue.")
+    except (BudgetExceeded, ModelError) as e:
+        # tables mode only (v0.1 runs stop per item, and a stored input rejection is a row):
+        # the runner attaches the run's budget
+        print(stop_status(e.budget, e))
         return 1
     if a.dry_run:
         return 0
