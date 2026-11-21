@@ -1,0 +1,449 @@
+{
+  "accuracy_ok": false,
+  "b": 47,
+  "baseline": {
+    "accuracy": 0.23711340206185566,
+    "correct": 23,
+    "system": "baseline-linear"
+  },
+  "baseline_misses": [
+    {
+      "cause": "abstained",
+      "n": 57,
+      "outcome": "abstained"
+    },
+    {
+      "cause": "wrong value",
+      "n": 17,
+      "outcome": "wrong"
+    }
+  ],
+  "baseline_run": "gov-tables-baseline-linear-test-20261120T234009",
+  "c": 4,
+  "difference": {
+    "ci95": [
+      0.32989690721649484,
+      0.5567010309278351
+    ],
+    "mean": 0.44329896907216493,
+    "resamples": 10000,
+    "seed": 20261108
+  },
+  "facts": [
+    "541f4c587ee9a271068604a4a12fbe5584cc74392ff431f29e7683b45916707b"
+  ],
+  "golden_sha256": "08c41d3a51007c69f1d1779dc25510764e1da8b3c9871260ec89624b664690d2",
+  "margin_ok": true,
+  "mcnemar_p": 2.4163071543625847e-10,
+  "misses": [
+    {
+      "cause": "query differs from gold",
+      "differs": [
+        "filters"
+      ],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": "notice_hours",
+        "filter_keys": [
+          "closed_periods__contains",
+          "mile__lte"
+        ],
+        "op": "lookup",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query differs from gold",
+      "differs": [
+        "filters"
+      ],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "bridge__isnull",
+          "waterway_key"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query differs from gold",
+      "differs": [
+        "filters"
+      ],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "mile__isnull",
+          "waterway_key"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query differs from gold",
+      "differs": [
+        "filters"
+      ],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "opens_on_signal__isnull",
+          "waterway__contains"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query differs from gold",
+      "differs": [
+        "table",
+        "filters"
+      ],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "waterway_key"
+        ],
+        "op": "list",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": "mile",
+        "filter_keys": [
+          "closed_periods__contains"
+        ],
+        "op": "lookup",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "bridge__isnull",
+          "closed_periods__contains"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains",
+          "notice_hours__gte",
+          "notice_hours__lte"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 2,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains",
+          "notice_hours__isnull"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains",
+          "opens_on_signal__isnull"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains",
+          "state"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "closed_periods__contains"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "mile__isnull",
+          "opens_on_signal__isnull"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "mile__lte",
+          "notice_hours"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "notice_hours__isnull",
+          "state"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "opens_on_signal",
+          "waterway"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "opens_on_signal__isnull",
+          "state"
+        ],
+        "op": "count",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "opens_on_signal__isnull",
+          "state"
+        ],
+        "op": "list",
+        "table": "drawbridge_bridges"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 4,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "owner_or_agency__isnull",
+          "state"
+        ],
+        "op": "count",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "owner_or_agency__isnull",
+          "state"
+        ],
+        "op": "list",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "owner_or_agency__isnull",
+          "vhf_channel__isnull"
+        ],
+        "op": "list",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 2,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "seasonal__isnull",
+          "state"
+        ],
+        "op": "count",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "seasonal__isnull",
+          "state"
+        ],
+        "op": "list",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "seasonal__isnull",
+          "vhf_channel"
+        ],
+        "op": "count",
+        "table": "drawbridge_sections"
+      }
+    },
+    {
+      "cause": "query equals gold, wrong value",
+      "differs": [],
+      "n": 1,
+      "outcome": "wrong",
+      "query": {
+        "field": null,
+        "filter_keys": [
+          "waterway__isnull"
+        ],
+        "op": "count",
+        "table": "drawbridge_sections"
+      }
+    }
+  ],
+  "n": 97,
+  "passed": false,
+  "thresholds": {
+    "margin": 0.02,
+    "min_accuracy": 0.8
+  },
+  "typed": {
+    "accuracy": 0.6804123711340206,
+    "correct": 66,
+    "system": "p3-typed"
+  },
+  "typed_run": "gov-tables-p3-typed-test-20261120T233723"
+}
