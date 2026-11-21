@@ -1319,6 +1319,15 @@ def applicability_dates(ctx: TableContext, overlay, table: str, n: int,
     return [*first, *(rest[k % len(rest)] for k in range(max(0, n - len(first))))][:n]
 
 
+APPLICABILITY_TABLES = ("fr_documents", "drawbridge_sections", "drawbridge_bridges")
+
+
+def applicability_tables(ctx: TableContext) -> tuple[str, ...]:
+    """The tables `tables-applicability` probes by default: `fr_documents` and whichever of
+    the drawbridge tables the current tables hold, in `APPLICABILITY_TABLES` order."""
+    return ("fr_documents", *(t for t in APPLICABILITY_TABLES[1:] if t in ctx.contracts))
+
+
 def applicability_probes(store_path: Path, tables: tuple[str, ...] = ("fr_documents",),
                          n: int = 50, seed: int = SEED3, *, caller: str = "user:auditor",
                          clock: Callable = acl.utc_now) -> list[dict]:

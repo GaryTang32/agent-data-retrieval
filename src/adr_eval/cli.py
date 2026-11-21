@@ -1209,13 +1209,14 @@ def _probes_tables(a: argparse.Namespace) -> int:
                      f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
                      for n, b in summary["conditions"].items()))
     elif a.kind == "tables-applicability":
+        probed = tuple(a.tables) if a.tables else tp.applicability_tables(ctx)
         try:
-            rows = tp.applicability_probes(a.store, tuple(a.tables), n=a.n or 50)
+            rows = tp.applicability_probes(a.store, probed, n=a.n or 50)
         except ValueError as e:
             raise runner.RunError(str(e)) from e
         statements = [tp.applicability_statement(t) for t in sorted({r["table"] for r in rows})]
         summary = tp.summarize_applicability(rows)
-        cfg["tables_probed"] = list(a.tables)
+        cfg["tables_probed"] = list(probed)
         ok = summary["total"]["passed"] == summary["total"]["n"]
         head = (f"{summary['total']['n']} probes on {', '.join(summary['tables'])} "
                 f"({summary['total']['default']} default, {summary['total']['as_of']} as_of "
@@ -1325,6 +1326,10 @@ def _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb) -> int:
            "server_env": {"HF_HUB_OFFLINE": "1"},
            "views": {label: r.info for label, r in references.items()},
            "views_removed": removed}
+    if any(c.manifest is not None and c.manifest.extraction is not None
+           for c in contexts.values()):
+        # the references' extraction tables come from this profile's cached replies
+        cfg["generator"] = a.generator or runner.load_config()["generator"]
     calls_match = all(mcp_scans[label]["lines"] == n_calls.get(label, 0) for label in stores)
     t = summary["total"]
     rp = summary["replays"]
@@ -1579,10 +1584,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--n", type=int, default=None, metavar="N",
                    help="tables-applicability: as_of dates per table (default 50); "
                         "tables-mcp: probes through MCP (default 60)")
-    p.add_argument("--tables", nargs="+", default=["fr_documents"], metavar="TABLE",
-                   help="tables-applicability: the tables to probe (default fr_documents; "
-                        "with the extraction tables: fr_documents drawbridge_sections "
-                        "drawbridge_bridges)")
+    p.add_argument("--tables", nargs="+", default=None, metavar="TABLE",
+                   help="tables-applicability: the tables to probe (default fr_documents and "
+                        "whichever of drawbridge_sections and drawbridge_bridges the store's "
+                        "current tables hold)")
     p.add_argument("--generator", metavar="PROFILE", default=None,
                    help="tables-leak, tables-equivalence, tables-mcp on a store with "
                         "extraction tables: the model profile whose cached replies build the "

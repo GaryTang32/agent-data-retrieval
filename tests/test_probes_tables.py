@@ -437,6 +437,38 @@ def test_applicability_probes_catch_drawbridge_rows_of_superseded_versions(three
     assert any(r["versions"] > 1 for r in rows)
 
 
+def test_applicability_probes_catch_two_versions_on_one_date(three_b, monkeypatch):
+    """The `versions <= 1` term alone: an overlay that keeps the oldest eCFR version in force
+    after its successor starts admits two versions of one chain on one date. The tools and
+    the probe's expectation read the same overlay, so the rows returned equal those expected
+    and none is outside the admitted documents; only the version count fails the probe."""
+    from adr_store import applicability as ap
+    from adr_store import tools
+
+    store, _ = three_b
+    real = ap.load_overlay
+
+    def planted(store_path, snapshot, overlay_id=None):
+        overlay = real(store_path, snapshot, overlay_id)
+        if overlay is None:
+            return None
+        chained = sorted((e for e in overlay.records.values()
+                          if e.chain_id is not None and e.valid_from is not None),
+                         key=lambda e: e.valid_from)
+        oldest = chained[0]
+        assert oldest.valid_to is not None
+        records = {**overlay.records, oldest.doc_id: oldest.model_copy(update={"valid_to": None})}
+        return ap.Applicability(overlay.overlay_id, overlay.snapshot, records)
+
+    monkeypatch.setattr(ap, "load_overlay", planted)
+    monkeypatch.setattr(tools, "load_overlay", planted)
+    rows = tp.applicability_probes(store.path, tables=DRAWBRIDGE, clock=lambda: NOW)
+    failed = [r for r in rows if not r["pass"]]
+    assert failed and all(r["versions"] == 2 for r in failed)
+    assert all(r["outside"] == 0 and r["rows"] == r["expected"] for r in failed)
+    assert all(r["pass"] for r in rows if r["versions"] <= 1)
+
+
 def test_applicability_probes_catch_rows_of_documents_not_in_force(built, monkeypatch):
     leaking_view_databases(monkeypatch)
     rows = tp.applicability_probes(built.path, clock=lambda: NOW)
@@ -553,6 +585,7 @@ def test_the_cli_runs_the_table_probe_kinds(public, tmp_path, capsys, monkeypatc
     (d,) = out.glob("probes-tables-applicability-gov-*")
     summary = json.loads((d / "summary.json").read_text())
     assert summary["logs"]["statements_checked"] == 1   # the GROUP BY _doc_id statement
+    assert summary["config"]["tables_probed"] == [FR]   # no drawbridge tables in this store
     (d,) = out.glob("probes-tables-failclosed-gov-*")
     target = json.loads((d / "probes.json").read_text())["target"]
     rows = json.loads((d / "results.json").read_text())["results"]
@@ -600,3 +633,31 @@ def test_the_cli_probes_the_drawbridge_tables_with_the_generator(three_b, tmp_pa
     assert set(summary["summary"]["targets_by_table"]) & set(DRAWBRIDGE)
     # an unknown table is refused before any probe runs
     assert main(["probes", "tables-applicability", "gov", *common, "--tables", "nope"]) == 2
+    # without --tables: fr_documents and the drawbridge tables the store holds
+    plain = tmp_path / "plain"
+    assert main(["probes", "tables-applicability", "gov", *common[:-1], str(plain)]) == 0
+    capsys.readouterr()
+    (d,) = plain.glob("probes-tables-applicability-gov-*")
+    summary = json.loads((d / "summary.json").read_text())
+    assert summary["summary"]["total"]["n"] == 153
+    assert summary["config"]["tables_probed"] == [FR, *DRAWBRIDGE]
+
+
+def test_tables_mcp_records_the_generator_on_a_store_with_extraction_tables(three_b, tmp_path,
+                                                                            capfd):
+    """Like tables-leak and tables-equivalence, the MCP leg's reference stores build their
+    extraction tables from a profile's cached replies, so its config names that profile."""
+    pytest.importorskip("mcp")
+    store, replies = three_b
+    made = len(replies)
+    directory, policy = config_of(store)
+    acl.sync(store.path, directory, policy)   # the real clock: the servers read it
+    out = tmp_path / "runs"
+    assert main(["probes", "tables-mcp", "gov", "--store", str(store.path), "--directory",
+                 str(directory), "--policy", str(policy), "--views", str(tmp_path / "views"),
+                 "--out", str(out), "--n", "2", "--generator", "gen"]) == 0
+    capfd.readouterr()
+    assert len(replies) == made                   # the references read the cache only
+    (d,) = out.glob("probes-tables-mcp-gov-*")
+    cfg = json.loads((d / "summary.json").read_text())["config"]
+    assert cfg["generator"] == "gen"
