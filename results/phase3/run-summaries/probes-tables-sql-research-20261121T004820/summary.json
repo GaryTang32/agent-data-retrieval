@@ -1,0 +1,161 @@
+{
+  "config": {
+    "acl_entries_sha256": "7f8fb0e62d37989484cb47d7d89a60dbb205a2995fe2175ef0eae24d2d80f09f",
+    "acl_sequence": 24,
+    "acl_snapshot": "899783ca0e0acf500a2b7c5a0f4913cc471132efbc129c5e28dc533701235b84",
+    "caller": "user:auditor",
+    "corpus": "research",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-sql",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "store": ".cache/store-p2/research",
+    "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 241,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 241,
+        "decisions": {
+          "allowed": 241
+        },
+        "lines": 241,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 241,
+        "sql_text_lines": 0,
+        "table_lines": 241,
+        "tables_missing": 0,
+        "tools": {
+          "sql": 241
+        }
+      }
+    },
+    "statements_checked": 113,
+    "total": {
+      "allowed": 241,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 241,
+      "decisions": {
+        "allowed": 241
+      },
+      "lines": 241,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 241,
+      "sql_text_lines": 0,
+      "table_lines": 241,
+      "tables_missing": 0,
+      "tools": {
+        "sql": 241
+      }
+    }
+  },
+  "summary": {
+    "categories": {
+      "attach": {
+        "n": 6,
+        "outcomes": {
+          "refused:syntax": 6
+        },
+        "passed": 6
+      },
+      "cross_join": {
+        "n": 8,
+        "outcomes": {
+          "refused:budget": 8
+        },
+        "passed": 8
+      },
+      "ddl": {
+        "n": 15,
+        "outcomes": {
+          "refused:denied": 1,
+          "refused:syntax": 14
+        },
+        "passed": 15
+      },
+      "extension": {
+        "n": 4,
+        "outcomes": {
+          "refused:denied": 4
+        },
+        "passed": 4
+      },
+      "function": {
+        "n": 20,
+        "outcomes": {
+          "refused:budget": 5,
+          "refused:denied": 14,
+          "refused:rows": 1
+        },
+        "passed": 20
+      },
+      "multi": {
+        "n": 12,
+        "outcomes": {
+          "refused:syntax": 12
+        },
+        "passed": 12
+      },
+      "pragma": {
+        "n": 12,
+        "outcomes": {
+          "refused:denied": 4,
+          "refused:syntax": 8
+        },
+        "passed": 12
+      },
+      "recursive": {
+        "n": 8,
+        "outcomes": {
+          "ok": 1,
+          "refused:budget": 6,
+          "refused:rows": 1
+        },
+        "passed": 8
+      },
+      "trick": {
+        "n": 20,
+        "outcomes": {
+          "ok": 2,
+          "refused:denied": 11,
+          "refused:syntax": 7
+        },
+        "passed": 20
+      },
+      "write": {
+        "n": 15,
+        "outcomes": {
+          "refused:syntax": 15
+        },
+        "passed": 15
+      }
+    },
+    "total": {
+      "intact": 120,
+      "n": 120,
+      "outcomes": {
+        "ok": 3,
+        "refused:budget": 19,
+        "refused:denied": 34,
+        "refused:rows": 2,
+        "refused:syntax": 62
+      },
+      "passed": 120
+    }
+  }
+}

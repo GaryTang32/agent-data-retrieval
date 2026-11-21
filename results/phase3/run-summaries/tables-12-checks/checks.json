@@ -1,0 +1,365 @@
+{
+ "llm_cache_files": {
+  "after": 12010,
+  "before": 12010
+ },
+ "model_cli_invocations": 0,
+ "note": "Task 12 (X1 and the write-up): no model calls. Every probe set not already run twice in fresh processes on the current builds and code was run twice here (passes A and B, each command in a fresh process, after fresh ACL syncs); per-item probes.json and results.json compared byte for byte (not committed: runs/phase3-x1/). Summaries differ only in the ACL snapshot and sequence.",
+ "phase2_regression": {
+  "config_differs_only_in": [
+   "run_id",
+   "started",
+   "finished",
+   "wall_clock_s",
+   "settings.acl (the ACL snapshot of the sync)"
+  ],
+  "how": "adr-eval retrieval <corpus> --system p2-default --split test (no model calls), then adr-eval retrieval-identical against the local rows of the Phase 2 run whose summary is committed, and the summary compared with the committed one",
+  "runs": {
+   "bench": {
+    "identical": true,
+    "items": 572,
+    "new": "bench-p2-default-test-retrieval-20261121T012233",
+    "phase2_auditor_run": "bench-p2-default-test-retrieval-20261116T091038",
+    "summary_equal_to_committed": true,
+    "task5_run_without_acl": {
+     "max_score_difference": 1.8e-05,
+     "note": "ruling R17",
+     "ranked_ids_equal": true,
+     "run": "bench-p2-default-test-retrieval-20261116T061019",
+     "summary_equal": true
+    }
+   },
+   "gov": {
+    "also_identical_to_task5_run": "gov-p2-default-test-retrieval-20261116T060721",
+    "identical": true,
+    "items": 242,
+    "new": "gov-p2-default-test-retrieval-20261121T011905",
+    "phase2_auditor_run": "gov-p2-default-test-retrieval-20261116T090659",
+    "summary_equal_to_committed": true
+   },
+   "research": {
+    "identical": true,
+    "items": 222,
+    "new": "research-p2-default-test-retrieval-20261121T011949",
+    "phase2_auditor_run": "research-p2-default-test-retrieval-20261116T090011",
+    "summary_equal_to_committed": true,
+    "task5_run_without_acl": {
+     "max_score_difference": 3e-06,
+     "note": "ruling R17: the ACL path uses the row-exact dense kernel",
+     "ranked_ids_equal": true,
+     "run": "research-p2-default-test-retrieval-20261116T061615",
+     "summary_equal": true
+    }
+   }
+  }
+ },
+ "probe_pairs_run_here": {
+  "equivalence-bench": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-equivalence-bench-20261120T193111",
+     "task": "Task 7"
+    }
+   ],
+   "first": "probes-tables-equivalence-bench-20261121T004932",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "ab669b4e57110c677e0a8da3a1ba45420f5c2df9df800eb647648b575202d6ad",
+   "second": "probes-tables-equivalence-bench-20261121T010506",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "equivalence-research": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-equivalence-research-20261120T191946",
+     "task": "Task 7"
+    }
+   ],
+   "first": "probes-tables-equivalence-research-20261121T005355",
+   "probes_identical": true,
+   "probes_sha256": "e7574da6b4c278f5bd70468757f2c1d7f82465f334820022d9f6552b2d7386ef",
+   "results_identical": true,
+   "results_sha256": "d2badda8a80d267497d0c0c173cd63f12bceb5aee94a3f39e182fc8160617f43",
+   "second": "probes-tables-equivalence-research-20261121T010922",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "equivalence-tools": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-equivalence-tools-20261120T193152",
+     "task": "Task 7"
+    }
+   ],
+   "first": "probes-tables-equivalence-tools-20261121T005009",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "fe2a9262b2cc3440630e1c44c368c53573ab9d4a3cda719c2a081258f534d009",
+   "second": "probes-tables-equivalence-tools-20261121T010541",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "failclosed-gov": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-failclosed-gov-20261120T195154",
+     "task": "Task 7 fix round (3A build)"
+    }
+   ],
+   "first": "probes-tables-failclosed-gov-20261121T004837",
+   "probes_identical": true,
+   "probes_sha256": "528d6e6cf2162cea2d8a8a74a10e0229535c6af797acd8ed5ef02b979c37bb36",
+   "results_identical": true,
+   "results_sha256": "0b48f6ef69d20dfb2d65ae2f71038c13e9fd4929e2d64c895a1527e726e49c27",
+   "second": "probes-tables-failclosed-gov-20261121T010412",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "failclosed-research": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-failclosed-research-20261120T195204",
+     "task": "Task 7 fix round"
+    }
+   ],
+   "first": "probes-tables-failclosed-research-20261121T004852",
+   "probes_identical": true,
+   "probes_sha256": "bfb8a9f4bd7220e8b595f8125bf08ae65283dc2d0fb542269677eb43b1316dcd",
+   "results_identical": true,
+   "results_sha256": "32c183fd5adb4c2a1226946b988c2ac48438b1d281bf35123504d8e8b8d18b2a",
+   "second": "probes-tables-failclosed-research-20261121T010427",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "leak-research": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-leak-research-20261120T195301",
+     "task": "Task 7 fix round"
+    }
+   ],
+   "first": "probes-tables-leak-research-20261121T004924",
+   "probes_identical": true,
+   "probes_sha256": "8c7c88e39e7d3b9066626810eafae9d481337b08c32e0f1b68f99451767693a3",
+   "results_identical": true,
+   "results_sha256": "a61fcc1a8cadd255145e945a01f38d2a090f6497a7e4b03a1733a9a8d96f4da2",
+   "second": "probes-tables-leak-research-20261121T010459",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "mcp-gov": {
+   "earlier": [
+    {
+     "probes_identical": false,
+     "results_identical": false,
+     "run": "probes-tables-mcp-gov-20261120T195310",
+     "task": "Task 7 fix round (3A build)"
+    }
+   ],
+   "first": "probes-tables-mcp-gov-20261121T005013",
+   "probes_identical": true,
+   "probes_sha256": "f97801cda2713ef8434a67a3a927aba07f39493078e1bf477289465bfc846157",
+   "results_identical": true,
+   "results_sha256": "3d51f187dbb06ca15c327347f1d2adf5a79ff08c8ea698eaba34d2c8c75d3faf",
+   "second": "probes-tables-mcp-gov-20261121T010545",
+   "summary_differs_at": [
+    ".config.stores.gov.acl_sequence",
+    ".config.stores.gov.acl_snapshot",
+    ".config.stores.research.acl_sequence",
+    ".config.stores.research.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "sql-gov": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-sql-gov-20261120T191522",
+     "task": "Task 7 (3A build)"
+    },
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-sql-gov-20261120T235517",
+     "task": "Task 11 (3B build)"
+    }
+   ],
+   "first": "probes-tables-sql-gov-20261121T004809",
+   "probes_identical": true,
+   "probes_sha256": "5bc141e279ec2d5b6f4c95c4da78578ab794af848c281d121cca47b00b249876",
+   "results_identical": true,
+   "results_sha256": "0904bf30f856ad1875f7d77d4924810821b9c7ce48e6c97d32056661576974bf",
+   "second": "probes-tables-sql-gov-20261121T010344",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  },
+  "sql-research": {
+   "earlier": [
+    {
+     "probes_identical": true,
+     "results_identical": true,
+     "run": "probes-tables-sql-research-20261120T191534",
+     "task": "Task 7"
+    }
+   ],
+   "first": "probes-tables-sql-research-20261121T004820",
+   "probes_identical": true,
+   "probes_sha256": "5bc141e279ec2d5b6f4c95c4da78578ab794af848c281d121cca47b00b249876",
+   "results_identical": true,
+   "results_sha256": "effe9dd1a41a313e4443b8eb26b9daf84ab350bdb7e4e17abb663436bc016bda",
+   "second": "probes-tables-sql-research-20261121T010355",
+   "summary_differs_at": [
+    ".config.acl_sequence",
+    ".config.acl_snapshot"
+   ],
+   "summary_identical": false
+  }
+ },
+ "real_store_and_index_listing_sha256": "923ca5f717443fdaba56294071b1a71b5163521515c9deb940931cfcee6c42f0",
+ "real_store_and_index_unchanged": true,
+ "reused": {
+  "note": "already run twice in fresh processes on the current build, with no change to the code on their path since",
+  "probe_sets": "tables-7b-checks/checks.json: leak-gov, equivalence-gov, applicability-gov (with the drawbridge tables)",
+  "question_runs": [
+   {
+    "file": "results.jsonl",
+    "first": "gov-tables-p3-typed-test-20261120T234725",
+    "identical": true,
+    "second": "gov-tables-p3-typed-test-20261120T234749",
+    "sha256": "8ba3928973e1f03a288f1418d933cb3745a415f8427c788ba8a870b1fca0bc27"
+   },
+   {
+    "file": "results.jsonl",
+    "first": "gov-tables-p3-typed-dev-20261120T234737",
+    "identical": true,
+    "second": "gov-tables-p3-typed-dev-20261120T234801",
+    "sha256": "ab2cce85e864c88657befa54c2165a0be380e505b64473e41e9d251530e2c2a6"
+   },
+   {
+    "file": "results.jsonl",
+    "first": "gov-tables-baseline-linear-test-20261120T234651",
+    "identical": true,
+    "second": "gov-tables-baseline-linear-test-20261120T234709",
+    "sha256": "f13dc2ca7ef6d19e203b76a3f6cff2010153936549945335f477f0155d691cfa"
+   },
+   {
+    "file": "results.jsonl",
+    "first": "gov-p3-typed-test-20261120T234858",
+    "identical": true,
+    "second": "gov-p3-typed-test-20261120T235123",
+    "sha256": "2a93b8cc082ef6533a34d5839112a7d14e258a20e4c1ca1e1d02f859568c82cf"
+   },
+   {
+    "file": "results.jsonl",
+    "first": "research-p3-typed-test-20261120T235106",
+    "identical": true,
+    "second": "research-p3-typed-test-20261120T235331",
+    "sha256": "519b8b376d85c0c3d1056fbc39dd722db4aa78fcede3339f77f5508276afc2a7"
+   }
+  ]
+ },
+ "tables_built_twice": {
+  "how": "two cp -a copies of each scratch store; tables directory removed; adr tables build --max-calls 0 in fresh processes (gov metadata, gov --with-extraction, research); every file of the two copies compared, and with the promoted builds' files",
+  "result": {
+   "gov": {
+    "copies_identical": true,
+    "equal_to_p2_store_files": 22,
+    "files": 22,
+    "files_sha256": "b9b6b426b2189b1eaf8d1366f5535e6c2998fc546c5ecc11689f0d49ebcc2cbf",
+    "manifests": {
+     "2678b8da96338df9": {
+      "keys": [
+       "applicability",
+       "corpus",
+       "extraction",
+       "format_version",
+       "snapshot",
+       "tables"
+      ],
+      "member_files": null,
+      "present": true,
+      "sha256_is_id": true
+     },
+     "fec2a2b12e318fcb": {
+      "keys": [
+       "applicability",
+       "corpus",
+       "extraction",
+       "format_version",
+       "snapshot",
+       "tables"
+      ],
+      "member_files": null,
+      "present": true,
+      "sha256_is_id": true
+     }
+    },
+    "not_in_or_differs_from_p2_store": []
+   },
+   "research": {
+    "copies_identical": true,
+    "equal_to_p2_store_files": 11,
+    "files": 11,
+    "files_sha256": "4c110100135547af175c3e7eda1f1b018c3c79fb22802ce35568d5dcc99e6703",
+    "manifests": {
+     "62604e913378c76b": {
+      "keys": [
+       "applicability",
+       "corpus",
+       "extraction",
+       "format_version",
+       "snapshot",
+       "tables"
+      ],
+      "member_files": null,
+      "present": true,
+      "sha256_is_id": true
+     }
+    },
+    "not_in_or_differs_from_p2_store": []
+   }
+  }
+ },
+ "tables_heads": {
+  "gov": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230",
+  "gov_3A": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8",
+  "research": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+ }
+}

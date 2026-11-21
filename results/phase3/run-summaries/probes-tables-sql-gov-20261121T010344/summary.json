@@ -1,0 +1,163 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "acl_sequence": 26,
+    "acl_snapshot": "cd9f4c2335d8990839a0a89c366120c7f98ad7edd2ce4951ee4df872eec791d6",
+    "caller": "user:auditor",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-sql",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tables": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 241,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 241,
+        "decisions": {
+          "allowed": 241
+        },
+        "lines": 241,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 241,
+        "sql_text_lines": 0,
+        "table_lines": 241,
+        "tables_missing": 0,
+        "tools": {
+          "sql": 241
+        }
+      }
+    },
+    "statements_checked": 113,
+    "total": {
+      "allowed": 241,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 241,
+      "decisions": {
+        "allowed": 241
+      },
+      "lines": 241,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 241,
+      "sql_text_lines": 0,
+      "table_lines": 241,
+      "tables_missing": 0,
+      "tools": {
+        "sql": 241
+      }
+    }
+  },
+  "summary": {
+    "categories": {
+      "attach": {
+        "n": 6,
+        "outcomes": {
+          "refused:syntax": 6
+        },
+        "passed": 6
+      },
+      "cross_join": {
+        "n": 8,
+        "outcomes": {
+          "ok": 2,
+          "refused:budget": 5,
+          "refused:rows": 1
+        },
+        "passed": 8
+      },
+      "ddl": {
+        "n": 15,
+        "outcomes": {
+          "refused:denied": 1,
+          "refused:syntax": 14
+        },
+        "passed": 15
+      },
+      "extension": {
+        "n": 4,
+        "outcomes": {
+          "refused:denied": 4
+        },
+        "passed": 4
+      },
+      "function": {
+        "n": 20,
+        "outcomes": {
+          "refused:budget": 5,
+          "refused:denied": 14,
+          "refused:rows": 1
+        },
+        "passed": 20
+      },
+      "multi": {
+        "n": 12,
+        "outcomes": {
+          "refused:syntax": 12
+        },
+        "passed": 12
+      },
+      "pragma": {
+        "n": 12,
+        "outcomes": {
+          "refused:denied": 4,
+          "refused:syntax": 8
+        },
+        "passed": 12
+      },
+      "recursive": {
+        "n": 8,
+        "outcomes": {
+          "ok": 1,
+          "refused:budget": 6,
+          "refused:rows": 1
+        },
+        "passed": 8
+      },
+      "trick": {
+        "n": 20,
+        "outcomes": {
+          "ok": 2,
+          "refused:denied": 11,
+          "refused:syntax": 7
+        },
+        "passed": 20
+      },
+      "write": {
+        "n": 15,
+        "outcomes": {
+          "refused:syntax": 15
+        },
+        "passed": 15
+      }
+    },
+    "total": {
+      "intact": 120,
+      "n": 120,
+      "outcomes": {
+        "ok": 5,
+        "refused:budget": 16,
+        "refused:denied": 34,
+        "refused:rows": 3,
+        "refused:syntax": 62
+      },
+      "passed": 120
+    }
+  }
+}

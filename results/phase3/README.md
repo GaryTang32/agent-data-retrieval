@@ -1,120 +1,194 @@
 # Phase 3 results: the typed deterministic database
 
-> This page holds the 3A results (the metadata tables and the frozen count questions, Q1) and
-> the table probes (S1–S3 and the MCP leg of D1), recorded on 20 November 2026 under version 2
-> of the metric definitions, with golden sets v0.1. It also holds the 3B results: the extraction
-> run, gov-tables v0.1, Q2, E1, E2 and T1–T6, recorded on 20–21 November 2026. 3A made no model
-> call. 3B made 1,411 of the 1,500 calls the user approved (§11), all in its model-call steps.
-> Every check after those steps ran from the cache with `--max-calls 0`.
+> **Work in progress.** These are the measured numbers for Phase 3 of the roadmap, recorded on
+> 20 and 21 November 2026 under version 2 of the metric definitions, with golden sets v0.1 and
+> the new gov-tables v0.1. Part 3A (metadata tables) made no model call. Part 3B (extraction
+> from 33 CFR part 117) made 1,411 of the 1,500 model calls the user approved (§11), all in its
+> model-call steps; every check after those steps, this write-up's included, ran from the cache
+> with `--max-calls 0`.
 
-**Verdict for 3B.**
-- **Q2 fails.** `p3-typed` answered 66 of 97 gov-tables test items (0.680), below the 0.80 bar fixed in §12. The margin part passes: `baseline-linear` scored 0.237, the difference is +0.443 with a 95% interval of [+0.330, +0.557], and McNemar p is 2.4 × 10⁻¹⁰. In 26 of the 31 misses the generated query equals the gold query. The table, built from the first extraction pass, gives a different value than the second-pass facts the gold was computed from. So most misses come from the two passes disagreeing. They are not query or compiler errors, and which pass is right is not known.
-- **E1 fails on two columns and passes overall.** 5,401 of 5,452 non-null model values are grounded (99.1%). `closed_periods` (89.9%) and `seasonal` (94.6%) are below the 95% target per column (§7.3). The other seven columns are at 99.9% or 100%.
-- **E2 passes.** The four required columns are at or above 0.85: `waterway` 0.979, `bridge` 0.921, `notice_hours` 0.950, `opens_on_signal` 0.956. The lowest unrequired columns are `closed_periods` (0.707) and `owner_or_agency` (0.797).
-- **T1, T3, T4, T5 and T6 pass.** **T2 passes for every run made**: the Q1 and Q2 runs and the SQL-guard, leak, equivalence and applicability probe sets each gave byte-identical rows twice. The fail-closed and MCP probe sets were not re-run on the 3B build.
-- **The gate promoted the 3B build with 0 flips.** It answered 126 of 158 gold cases: v0.1 38 of 38 and gov-tables 88 of 120.
-- **The 3B probes (Step 9) pass, with no model call.** Leak: 0 in 300, of which 65 target hidden drawbridge rows. Equivalence: 500 of 500. Applicability: 153 of 153, of which 102 are on the drawbridge tables, and each returns only the version in force. The reference stores read their extraction tables from the cache with zero calls. This came after the Task 7b fix to the probe code. See "3B: probes".
+**Verdict.** 13 of the 15 exit criteria of the design (§12) pass, with the thresholds fixed before any result. **Q2 and E1 fail.**
+- **Typed tables (T1–T6).** Every table rebuilds byte for byte from the cache with zero calls, every one of 32,889 provenance spans re-slices to its stored quote, every one of 60,295 stored values names its spec, a spec change re-extracts only its own group, and the merge gate refuses a regression and keeps `tables/HEAD`.
+- **Q1 passes.** On the frozen count questions, `p3-typed` answers 27 of 27 gov and 26 of 27 research test items from the metadata tables, against `baseline-linear`'s 2 of 27 and 16 of 27 (McNemar p 6.0 × 10⁻⁸ on gov). Q1 was close to certain by construction (§10.2): it shows that the tables reproduce the record semantics, not a new ability to understand questions.
+- **Q2 fails on accuracy.** On the 97 test items of gov-tables v0.1, `p3-typed` scores 0.680, below the 0.80 bar. Its margin over `baseline-linear` (0.237) passes: +0.443 [+0.330, +0.557]. In 26 of its 31 misses the generated query equals the gold query: the table, built from the first extraction pass, disagrees with the second pass the gold was computed from. Which pass is right in those cases is not known.
+- **E1 fails on two columns.** 99.1% of the non-null model values are grounded overall, but `seasonal` (94.6%) and `closed_periods` (89.9%) are below the 95% bar, which applies per column. The other seven columns are at 99.9% or 100%.
+- **E2 passes.** The four required columns agree with the independent second pass at 0.921 to 0.979. Two unrequired columns agree less: `owner_or_agency` 0.797 and `closed_periods` 0.707.
+- **Access (S1–S3, D1) passes.** No leak in 700 leak probes over the three table tools (400 on the 3A tables, 300 on the 3B tables, 65 of them on hidden drawbridge rows), nor in 60 of them re-run through MCP on each build. Each table tool equals a store built from the caller's documents alone in 1,500 of 1,500 calls. 120 of 120 SQL attacks per corpus were refused or bounded, every fail-closed case returned nothing, and every log line carried its principals and the tables id.
+- **Determinism (X1) passes.** Every Phase 3 run and probe set gave identical rows and results in two fresh processes, and the gov and research tables, entity tables included, built twice from the same snapshot, contracts and cache gave the same files and tables ids. Phase 2 retrieval is unchanged (constraint 2): one `p2-default` run per corpus is identical to its Phase 2 run.
 
-**Verdict for 3A.**
-- **Q1 holds.** `p3-typed` answers 27 of 27 gov and 26 of 27 research test count questions from the typed tables. `baseline-linear` answered 2 of 27 and 16 of 27. Gov's paired McNemar p is 6.0 × 10⁻⁸ and research's is 0.0020. Both accuracies are at least 0.90, and gov's p is below 0.05.
-- **Q1 was close to certain by construction** (spec §10.2). The generated queries are the baseline's own, read back from the model cache. They already returned the gold records on 27 of 27 gov and 26 of 27 research items, and only the baseline's answering step, which read retrieved chunks, failed. So Q1 tests that the typed tables and the query compiler reproduce the record semantics of `golden/records.py`. It does not show a new ability to understand questions.
-- **The one miss is the `also_in` wording problem** (§4.2). The model read the question as topic membership, while the frozen gold compares the whole `;`-joined string. The tables keep the raw string, so they reproduce the gold. The miss belongs to the generated query, not to the tables.
-- **The table probes pass** (S1–S3, D1 MCP leg): 0 leaks in 400 leak probes, of which 300 were compared with a reference store. Fail-closed passed 90 of 90 per corpus, the SQL guard 120 of 120 per corpus, table equivalence 1,000 of 1,000 and applicability 51 of 51. The MCP leg found 0 leaks in 60 probes, and 44 of 44 handle replays were identical.
+Points that need care when reading these numbers:
+- **The gov-tables gold is a model's reading.** It comes from the second extraction pass (ruling P9); no person checked it. Errors shared by both passes are invisible, and in a disagreement nobody knows which pass is right.
+- **Q1 is by construction.** Its generated queries are the baseline's, read back from the cache, and already returned the gold records.
+- **The research tables test little about access.** Their only document, the papers manifest, is public, so every caller sees all of it or (as `user:ghost`) none: its leak probes can only be ghost denials.
+- **The tenants are synthetic**, as in Phase 2.
 
 Design: [`docs/superpowers/specs/2026-11-20-phase3-design.md`](../../docs/superpowers/specs/2026-11-20-phase3-design.md).
+Plan: [`docs/superpowers/plans/2026-11-20-phase3.md`](../../docs/superpowers/plans/2026-11-20-phase3.md).
 Phase 2 results: [`results/phase2/README.md`](../phase2/README.md).
 
-## 3A: what was run
+## What was run
 
-- **No model calls.** Every command ran with `HF_HUB_OFFLINE=1`. The two `p3-typed` runs ran with `--max-calls 0` and recorded `calls` 0. The model cache (`.cache/llm`) gained no entry.
-- **Cache inputs checked first.** `adr_eval.phase3.cache_inputs_unchanged` returned `[]` for gov and for research. The check covers the query-generation prompt (SHA-256 `249b0449466c…`) and the record-schema text (gov `1a88b8fce387…`, research `01c9cd8529b8…`), byte for byte as in the baseline runs. The message is captured from `generate_query` itself, without calling a model.
-- **Scratch stores.** Everything ran on the Phase 2 copies under `.cache/store-p2/`. `.cache/store` and `.cache/index` were only read: no file under them changed during this task. The only writes to the scratch stores were one `adr acl sync` per store before the runs (Phase 2 freshness limit: one hour).
-- **Caller.** The runs searched as `user:auditor`, who sees every document: 180 of 180 in gov and 245 of 245 in research.
+- **Model calls only in 3B's model-call steps:** 1,411 budget units of the 1,500 approved, every transport attempt counted (see [the ledger](#model-call-ledger)). Everything else ran with `--max-calls 0` from the model cache `.cache/llm`, which held 12,010 files after the model-call steps and 12,010 at the end of this write-up. Nothing was downloaded: every command ran with `HF_HUB_OFFLINE=1`.
+- **Scratch stores.** Everything ran on the Phase 2 copies under `.cache/store-p2/`. `.cache/store` and `.cache/index` were only read: no file under them changed in any task, and the SHA-256 of the sorted path, size and modification time of all 7,320 files (`923ca5f71744…`) was the same before and after Task 7b and this task.
+- **One machine:** a 4-core Intel Xeon at 2.10 GHz, 15 GB of memory, Python 3.13.18.
 
-| Store | Content snapshot | Tables id (promoted `tables/HEAD`) | Applicability overlay | ACL snapshot of the runs |
-|---|---|---|---|---|
-| `.cache/store-p2/gov` | `f002821f2cb3…` | `2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8` | `4c81d25fe905…` | `1ceb7924a52b…` (sequence 20, entries `053acb4a6d76…`) |
-| `.cache/store-p2/research` | `97c415b1aa71…` | `62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a` | – | `6b4d68836f4e…` (entries `7f8fb0e62d37…`) |
-
-The full manifest of each build is in its run's `compile.json` (under [`run-summaries/`](run-summaries/)).
-
-## 3A: the tables
-
-Each build is a set of write-once table files named by their SHA-256, plus a manifest whose SHA-256 is the tables id. Both builds were promoted through the merge gate (Task 6) with 0 flips on the v0.1 count questions: gov 38 of 38, research 35 of 35. **No row was rejected** in any table.
-
-| Corpus | Table | Kind | Rows | Rejected | Null cells (reason) |
+| Store | Content snapshot | Tables HEAD, 3A | Tables HEAD, 3B (current) | Applicability overlay | ACL `entries_sha256` |
 |---|---|---|---|---|---|
-| gov | `fr_documents` | data | 167 | 0 | `effective_on` 56 (absent); `title_state` 5 (absent), 113 (not_applicable) |
-| gov | `fr_cfr_refs` | data | 221 | 0 | – |
-| gov | `fr_agencies` | data | 278 | 0 | `parent_id` 167 (absent) |
-| gov | `fr_dockets` | data | 171 | 0 | – |
-| gov | `agencies` | entity | 278 | 0 | – |
-| gov | `cfr_parts` | entity | 221 | 0 | – |
-| gov | `dockets` | entity | 171 | 0 | – |
-| gov | `waterways` | entity | 1,320 | 0 | – |
-| research | `papers` | data | 2,570 | 0 | `licence_id` 2,336 (absent); `year` 19 (absent) |
-| research | `paper_authors` | data | 9,683 | 0 | `author_id` 2 (absent) |
-| research | `authors` | entity | 7,417 | 0 | – |
-| research | `licences` | entity | 34 | 0 | – |
-| research | `venues` | entity | 1,098 | 0 | – |
+| `.cache/store-p2/gov` | `f002821f2cb3…` | `2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8` | `fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230` | `4c81d25fe905…` | `053acb4a6d76…` |
+| `.cache/store-p2/research` | `97c415b1aa71…` | `62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a` | (unchanged: 3B adds no research table) | – | `7f8fb0e62d37…` |
+| `.cache/store-p2/bench`, `.cache/store-p2/toolret` | as in Phase 2 | no tables | no tables | as in Phase 2 | `e1ca0a6ae0f1…`, `3906197e26ef…` |
+
+- **Facts.** The second extraction pass is the facts file `541f4c587ee9a271068604a4a12fbe5584cc74392ff431f29e7683b45916707b` in the gov store's tables directory. gov-tables v0.1 is drawn from it.
+- **ACL.** Every store syncs from the committed directory and policy (`config/acl/`, `directory_sha256` `d83f6043cffc…`, `policy_sha256` `0e3024f237fc…`), and every sync gave the access entries above, the same as in Phase 2. An ACL snapshot id changes with every sync. The measured runs used these snapshots: the Q1 runs gov `1ceb7924a52b…` (sequence 20) and research `6b4d68836f4e…` (sequence 22); the Q2 `p3-typed` runs gov `aa92a84fcb17…` (sequence 21). The `baseline-linear` runs search with no ACL layer, as in Phase 0. Each probe summary records the snapshots of its store and of every reference store.
+- **Callers.** Every `p3-typed` run searches as `user:auditor` (§10.1), who sees every document: 180 of 180 in gov and 245 of 245 in research. The probes call as the directory's users, `user:ghost` and malformed callers.
+- **The parts:**
+
+  | Part | What | Criteria | Section |
+  |---|---|---|---|
+  | 3A | Metadata tables for gov and research, entity resolution, the merge gate; `p3-typed` on the frozen count questions | Q1; T1–T4, T6 for the 3A build | [3A](#3a-metadata-tables-and-q1) |
+  | 3B | Two extraction passes over 33 CFR 117, the drawbridge tables, gov-tables v0.1, `p3-typed` and `baseline-linear` on it | Q2, E1, E2, T1–T6 | [3B](#3b-extraction-from-33-cfr-117-and-q2) |
+  | Access | Leak, equivalence, SQL guard, fail-closed and applicability probes on both builds; the MCP leg | S1–S3, D1 | [Access](#access-s1s3-and-d1) |
+  | X1 | Every run and probe set twice in fresh processes; tables built twice; the Phase 2 regression | X1, constraint 2 | [X1](#x1-determinism) |
+
+**To reproduce** (after the Phase 2 stores of `results/phase2/README.md`, and with the model cache; the commands that call a model are marked):
+
+```
+# 3A: metadata tables, promoted through the gate on the v0.1 count questions
+adr tables build --store .cache/store-p2/gov --tables-for gov
+adr tables gate --store .cache/store-p2/gov --candidate 2678b8da96338df9… --gold golden/gov/v0.1 --max-flips 0
+adr tables build --store .cache/store-p2/research --tables-for research      # and its gate
+adr acl sync --store .cache/store-p2/gov                                       # and research
+adr-eval run gov --system p3-typed --split test --qtype count_filter --repeats 1 --max-calls 0
+adr-eval p3-q1 runs/gov-p3-typed-test-<ts> runs/gov-baseline-linear-test-20261113T094503 --summary <file>
+
+# 3B (model calls: the two passes, the golden phrasing, the Q2 runs)
+adr tables extract --store .cache/store-p2/gov --generator claude_code_sonnet --max-calls 554
+adr tables extract --store .cache/store-p2/gov --second-pass --generator claude_code_opus --max-calls 557
+adr tables build --store .cache/store-p2/gov --tables-for gov --with-extraction --max-calls 0
+adr-eval golden tables --gen --store .cache/store-p2/gov --facts 541f4c587ee9… --generator claude_code_sonnet --max-calls 137
+adr tables gate --store .cache/store-p2/gov --candidate fec2a2b12e318fcb… \
+    --gold golden/gov-tables/v0.1 --gold golden/gov/v0.1 --max-flips 0
+adr-eval run gov --golden gov-tables --system p3-typed --split test --qtype count_filter --max-calls 100
+adr-eval run gov --golden gov-tables --system p3-typed --split dev --qtype count_filter --max-calls 25
+adr-eval run gov --golden gov-tables --system baseline-linear --split test --max-calls 100
+adr-eval p3-q2 runs/gov-tables-p3-typed-test-<ts> runs/gov-tables-baseline-linear-test-<ts> --summary <file>
+
+# Access probes (no model calls), each store after `adr acl sync`
+adr-eval probes tables-leak gov --store .cache/store-p2/gov                    # and research
+adr-eval probes tables-equivalence gov --store .cache/store-p2/gov            # research, bench; tools on .cache/store-p2/toolret
+adr-eval probes tables-sql gov --store .cache/store-p2/gov                     # and research
+adr-eval probes tables-failclosed gov --store .cache/store-p2/gov              # and research
+adr-eval probes tables-applicability gov --store .cache/store-p2/gov \
+    --tables fr_documents drawbridge_sections drawbridge_bridges
+adr-eval probes tables-mcp gov --store .cache/store-p2/gov --also research=.cache/store-p2/research
+```
+
+With the cache in place, every command above can be rerun with `--max-calls 0` and gives the same files; the run-summary configurations record the exact arguments. The 3B commands with a cap are the ones that made calls in Task 11; from a cold cache the model may answer differently, because Claude Code does not pin temperature.
+
+## Exit criteria
+
+Thresholds as fixed in spec §12 (ruling P13). Q2's interval is the paired bootstrap of
+`adr_eval.scoring.stats` (10,000 resamples, seed 20261108); McNemar is exact. Every number is
+in the named file under [`run-summaries/`](run-summaries/).
+
+| # | Criterion | Threshold (§12) | Result | Pass | Summary files |
+|---|---|---|---|---|---|
+| T1 | Zero-call rebuild | Every table rebuilt with `--max-calls 0` from the cache in a fresh process: byte-identical table files and tables id | gov 3A and 3B and research, each built twice in fresh `cp -a` copies with the tables directory removed: 22 gov and 11 research files, all byte-identical to each other and to the promoted builds; tables ids `2678b8da9633…`, `fec2a2b12e31…`, `62604e913378…` reproduced. Task 11 also rebuilt the 3B build in place (37 of 37 files unchanged) | **Pass** | `tables-12-checks/checks.json`, `tables-11-checks/checks.json` |
+| T2 | Identical result sets | The 3A and 3B question suites and every probe set twice in fresh processes: identical rows and results | 5 of 5 question runs and 12 of 12 probe sets identical (see X1) | **Pass** | `tables-11-checks`, `tables-7b-checks`, `tables-12-checks` |
+| T3 | Every stored value re-slices | 100% of provenance spans re-slice to the stored quote or field text | 32,889 of 32,889 spans of all 10 tables of the 3B build, including 15,162 of 15,162 model-value quotes | **Pass** | `tables-11-checks/checks.json` |
+| T4 | Every value traces to a spec | 100% carry a `spec_id` (or structure provenance) | 60,295 of 60,295 stored values | **Pass** | `tables-11-checks/checks.json` |
+| T5 | A spec change re-extracts only affected fields | Only that group's calls run; other cache keys and values unchanged | `test_a_spec_change_reextracts_only_its_group` passes | **Pass** | `tests/store/test_tables_extract.py` |
+| T6 | The merge gate blocks regressions | Refused, and `tables/HEAD` unchanged | `test_gate_refuses_too_many_flips_and_keeps_head` passes. The real gate was used three times, each with 0 flips | **Pass** | `tests/store/test_tables_gate.py` |
+| Q1 | Typed tables answer the frozen count questions | ≥ 0.90 on each corpus, and above `baseline-linear` with McNemar p < 0.05 on gov | gov 27/27 = 1.000 against 2/27, p = 6.0 × 10⁻⁸; research 26/27 = 0.963 against 16/27, p = 0.0020. 0 model calls | **Pass** (by construction, §10.2) | `gov-p3-typed-test-20261120T200702`, `research-p3-typed-test-20261120T200924` |
+| Q2 | Typed tables answer the drawbridge questions | ≥ 0.80 accuracy, **and** the lower bound of the paired difference's 95% interval above +0.02 | Accuracy 66/97 = **0.680**. Difference against `baseline-linear` (0.237): +0.443 [+0.330, +0.557]; McNemar b = 47, c = 4, p = 2.4 × 10⁻¹⁰ | **Fail** (accuracy fails, margin passes) | `q2-gov-tables.json`, `gov-tables-*-20261120T23*` |
+| E1 | Extraction is grounded | ≥ 95% of non-null model values grounded, per column, before ungrounded values are dropped | Overall 5,401 / 5,452 = 99.1%. `seasonal` 157/166 = **94.6%** and `closed_periods` 365/406 = **89.9%**; the other seven columns 99.9–100% | **Fail** (two columns) | `tables-11-checks/checks.json` |
+| E2 | Extraction agrees with an independent pass | Reported for every column; ≥ 0.85 on `waterway`, `bridge`, `notice_hours`, `opens_on_signal` | `waterway` 0.979, `bridge` (draw set) 0.921, `notice_hours` 0.950, `opens_on_signal` 0.956. Unrequired: `mile` 0.998, `vhf_channel` 0.992, `seasonal` 0.972, `owner_or_agency` 0.797, `closed_periods` 0.707 | **Pass** | `tables-11-checks/checks.json` |
+| S1 | No leak through tables | 0 leaks (≥ 300 probes); 1,000 of 1,000 equivalent | Leak: 0 in 400 probes on the 3A build (300 compared with a reference store, 100 `user:ghost`) and 0 in 300 on the 3B build (all compared; 65 on hidden drawbridge rows). Equivalence: 1,000 of 1,000 on the 3A build (gov and research), and 500 of 500 gov calls again on the 3B build | **Pass** | `probes-tables-leak-*`, `probes-tables-equivalence-*` |
+| S2 | SQL is read-only and bounded | 100% refused or bounded, with the fixed messages | 120 of 120 per corpus on the 3A build, and 120 of 120 on the gov 3B build; the database intact after every case | **Pass** | `probes-tables-sql-*` |
+| S3 | Fail closed and logged | No content in any case; 100% of table-tool log lines carry the Phase 2 fields plus the tables id | Fail closed 90 of 90 per corpus, on both builds, no content. Applicability 51 of 51 on the 3A build and 153 of 153 on the 3B build (102 on the drawbridge tables), only rows of documents in force. Every log scan complete | **Pass** | `probes-tables-failclosed-*`, `probes-tables-applicability-*` |
+| D1 | Over MCP with handles | MCP tests for the three new tools; a handle replay: all pass, every result carries a handle with `tables` | The MCP tests of `tests/store/test_tables_mcp.py` pass. MCP leg: 60 leak probes through `adr mcp` servers on each build, 0 leaks; every handle replay identical and naming the tables | **Pass** | `probes-tables-mcp-*` |
+| X1 | Determinism | As T2, plus overlays and entity tables built twice: identical | Every run and probe set identical twice; gov and research tables, entity tables included, built twice: identical files and tables ids | **Pass** | `tables-12-checks/checks.json` |
+
+## Model-call ledger
+
+The user approved 1,500 calls (§11), split into fixed shares per command that sum to 1,485.
+Budget units count every transport attempt, retries included (Builder note 2), so real use could
+not exceed a share. Each command ran first as a 3-call check, then in full.
+
+| Command | Profile | Share | Runs (`--max-calls`) | Units used |
+|---|---|---|---|---|
+| `adr tables extract` (first pass) | `claude_code_sonnet` | 560 | check with prompt version 1 (3), check with prompt version 2 (3), full run (554) | 3 + 3 + 530 = **536** |
+| `adr tables extract --second-pass` | `claude_code_opus` | 560 | check (3), full run (557) | 3 + 535 = **538** |
+| `adr-eval golden tables --gen` (phrasing) | `claude_code_sonnet` | 140 | check (3), full run (137) | 3 + 117 = **120** |
+| `adr-eval run … --system p3-typed` (query generation) | `claude_code_sonnet` | 125 | test (100), dev (25) | 97 + 23 = **120** |
+| `adr-eval run … --system baseline-linear` (answers; its query calls all hit the cache) | `claude_code_sonnet` | 100 | test (100) | **97** |
+| `adr tables build --with-extraction`, `adr tables gate`, `adr acl sync` | – | 0 | `--max-calls 0` where the command takes it | 0 |
+| Everything after: E1, E2, T1–T6, Step 9, X1, regeneration checks, write-ups | – | 0 | `--max-calls 0` | 0 |
+| **Total** | | **1,485** | | **1,411 of 1,500** |
+
+- **No command failed or stopped early**, no transport attempt was retried, and no input was rejected, so no failure was cached (ruling P21).
+- **The 3 calls of the first check are lost to ruling P22.** That check, with prompt version 1, found the model writing `seasonal: false` with no quote, which the span check rejects. The prompts were changed (version 2: a `false` needs a quote that states it), and the check's replies are not used.
+- **The second pass's 538 units include 5 parse retries**, one for each reply that did not parse (§7.2 check 1). One parsed on the retry; the other 4 stayed unparseable, so the model columns of those 4 section texts are null `unparseable` in the facts.
+- **Each pass's served model is recorded** in its extraction report and in each run's configuration, and is the one §11 names.
+
+## 3A: metadata tables and Q1
+
+### The tables
+
+Each build is a set of write-once table files named by their SHA-256, plus a manifest whose SHA-256 is the tables id. Both 3A builds were promoted through the merge gate with 0 flips on the v0.1 count questions: gov 38 of 38, research 35 of 35. **No row was rejected** in any table.
+
+| Corpus | Table | Kind | Rows | Null cells (reason) |
+|---|---|---|---|---|
+| gov | `fr_documents` | data | 167 | `effective_on` 56 (absent); `title_state` 5 (absent), 113 (not_applicable) |
+| gov | `fr_cfr_refs` | data | 221 | – |
+| gov | `fr_agencies` | data | 278 | `parent_id` 167 (absent) |
+| gov | `fr_dockets` | data | 171 | – |
+| gov | `agencies` | entity | 278 | – |
+| gov | `cfr_parts` | entity | 221 | – |
+| gov | `dockets` | entity | 171 | – |
+| gov | `waterways` | entity | 1,320 | – |
+| research | `papers` | data | 2,570 | `licence_id` 2,336 (absent); `year` 19 (absent) |
+| research | `paper_authors` | data | 9,683 | `author_id` 2 (absent) |
+| research | `authors` | entity | 7,417 | – |
+| research | `licences` | entity | 34 | – |
+| research | `venues` | entity | 1,098 | – |
 
 ### Entity clusters
 
-Clusters form by exact normalised keys only (ruling P11). Each per-type override file is empty, and no override applies. "Source rows" counts the (entity, raw form, source, document) rows the clusters were built from. "Merged" counts clusters that join more than one raw form.
+Clusters form by exact normalised keys only (ruling P11); every override file is empty. "Source rows" counts the (entity, raw form, source, document) rows the clusters were built from; "merged" counts clusters that join more than one raw form.
 
-| Corpus | Type | Clusters | Singletons | Merged | Source rows | Largest clusters (key: forms, source rows) |
-|---|---|---|---|---|---|---|
-| gov | agencies | 3 | 3 | 0 | 278 | coast guard 1, 111; homeland security department 1, 111; federal communications commission 1, 56 |
-| gov | cfr_parts | 39 | 39 | 0 | 221 | 33 cfr 165 1, 57; 33 cfr 117 1, 56; 47 cfr 73 1, 56 |
-| gov | dockets | 157 | 157 | 0 | 171 | uscg-2022-0222 1, 4; mb 22-227 1, 3; mb 17-105 1, 2 |
-| gov | waterways | 467 | 435 | 32 | 1,416 | atlantic intracoastal waterway 2, 14; gulf intracoastal waterway 2, 11; miami river 2, 9 |
-| research | venues | 905 | 836 | 69 | 2,570 | arxiv 16, 878; sigir 15, 23; acl 12, 52; iclr 10, 54 |
-| research | licences | 33 | 32 | 1 | 234 | cc-by-4.0 2, 53 ("CC-BY-4.0", "CC BY 4.0") |
-| research | authors | 7,413 | 7,409 | 4 | 9,681 | inc 2, 4; anton troynikov 2, 2; han xiao 2, 2 |
+| Corpus | Type | Clusters | Singletons | Merged | Source rows |
+|---|---|---|---|---|---|
+| gov | agencies | 3 | 3 | 0 | 278 |
+| gov | cfr_parts | 39 | 39 | 0 | 221 |
+| gov | dockets | 157 | 157 | 0 | 171 |
+| gov | waterways | 467 | 435 | 32 | 1,416 |
+| research | venues | 905 | 836 | 69 | 2,570 |
+| research | licences | 33 | 32 | 1 | 234 |
+| research | authors | 7,413 | 7,409 | 4 | 9,681 |
 
-[`entity-samples.json`](entity-samples.json) holds a seeded sample (seed 20261120) of 50 clusters per type for inspection, or every cluster when a type has 50 or fewer. It also holds the ten largest clusters of each type. These come from the builds' operator-only reports, which are never served to callers.
+[`entity-samples.json`](entity-samples.json) holds the ten largest clusters of each type and a seeded sample (seed 20261120) of 50 clusters per type, or every cluster when a type has 50 or fewer. They come from the builds' operator-only reports, which are never served to callers. Known weak spots, all from the exact-key rule: author strings split on commas leave a cluster for company suffixes and a second form of some names with a stray bracket; unbalanced brackets stay in some venue keys; the stateless general section of § 117.140 gives a waterway key `general`, and title parts that name cities or counties also become waterway entities.
 
-Known weak spots, all from the exact-key rule:
-- **Authors:** "Inc." and "Inc.)" form the author cluster `inc`, and a stray closing bracket gives a second form of several names ("Anton Troynikov)"). The cause is author strings split on commas.
-- **Venues:** brackets that are not balanced stay in some keys, so "arXiv preprint (TIB)" becomes `arxiv (tib`. It is kept apart from `arxiv` by design.
-- **Waterways:** the key `general` comes from the state-grouped section § 117.140 General (California). Title parts that name cities or counties ("osprey", "stratford") also become waterway entities.
+**Waterway links.** [`waterway-links.json`](waterway-links.json) links each drawbridge FR title to its 33 CFR 117 sections on (waterway key, state), in the newest eCFR version (2026-06-26: 424 sections, 38 states). 47 of 54 titles link (the same 47 against all three versions). 5 have no matching heading and 2 are refused by the state check; the file lists each with its reason. There is no link table (Builder note 14): a row drawn from two documents would need both documents' access.
 
-### Waterway links
+### Q1, the frozen count questions
 
-[`waterway-links.json`](waterway-links.json) lists every drawbridge FR title, each linked to its 33 CFR 117 sections or marked unlinked with a reason. It uses the newest eCFR version (2026-06-26: 424 sections, 38 states). A title links to the sections that match it on (waterway key, state), one title to many sections.
-
-- **Linked: 47 of 54** drawbridge titles. Linking against all three eCFR versions gives the same 47.
-- **Unlinked (5): no matching heading.** 2023-06925 (Cheboygan River, MI), 2024-03455 (Reynolds Channel, NY), 2024-03462 (Sloop Channel, NY), 2026-01398 (Inside Thorofare, NJ) and 2026-01400 (a technical amendment that names no waterway).
-- **Unlinked (2): state mismatch.** 2024-02084 and 2026-00932 are Atlantic Intracoastal Waterway titles in Florida. The key appears only in NC, SC and VA headings, so the state check refuses them.
-
-## 3A: Q1, the frozen count questions
-
-`p3-typed` (§10.1) runs on `count_filter` items only. The runner refuses it unless `--qtype count_filter` is given. For each item it generates the query with the baseline's prompt and schema, so the cache hits. It compiles the query (`from_gold_query`) to one `query_table` call over the corpus's main table (`fr_documents`, `papers`), as `user:auditor`. Each answer is scored exactly as Phase 0 scores it: number closeness, set equality. There is no answer call, no judge and no fallback to chunks.
-
-```
-adr acl sync --store .cache/store-p2/gov        # and research
-adr-eval run gov --system p3-typed --split test --qtype count_filter --repeats 1 --max-calls 0
-adr-eval p3-q1 runs/gov-p3-typed-test-20261120T200702 runs/gov-baseline-linear-test-20261113T094503 \
-    --summary results/phase3/run-summaries/gov-p3-typed-test-20261120T200702/q1-gov-baseline-linear-test-20261113T094503.json
-```
-
-`p3-q1` writes its full output, which names items, only into the typed run's directory under `runs/` (gitignored). The committed `q1-<baseline>.json` is the `--summary` form (`phase3.q1_summary`). It holds no item id and no filter value. It gives each typed miss by its cause and the shape of its query (op, store, filter keys), and baseline misses and the `also_in` readings as counts.
+`p3-typed` (§10.1) runs on `count_filter` items only. For each item it generates the query with the baseline's prompt and schema, so the cache hits, compiles it to one `query_table` call over the corpus's main table (`fr_documents`, `papers`) as `user:auditor`, and scores the answer exactly as Phase 0 does. There is no answer call, no judge and no fallback to chunks. `adr_eval.phase3.cache_inputs_unchanged` first confirmed that the query-generation prompt and the record-schema text are byte-identical to the baseline runs'.
 
 | Corpus | Items | `p3-typed` | `baseline-linear` (Phase 0) | b (typed only) | c (baseline only) | McNemar p (exact) |
 |---|---|---|---|---|---|---|
 | gov | 27 | **27 (1.000)** | 2 (0.074) | 25 | 0 | 6.0 × 10⁻⁸ |
 | research | 27 | **26 (0.963)** | 16 (0.593) | 10 | 0 | 0.0020 |
 
-Each run ended `complete` with 27 rows and `calls` 0. Gov was run a second time in a fresh process (`…T201428`). Its rows and `compile.json` were byte-identical.
+Each run ended `complete` with 27 rows and 0 calls, and gave the same rows again on the 3B build.
 
-**Every miss and its cause.**
-- **`p3-typed`, 1 miss: one research test `list` item.** The generated query used `also_in__contains`, the membership reading, plus a status filter. It returned 23 ids, against the gold's 14. The gold compares the `also_in` string exactly. The same generated query gives the same 23 over the records (`query_exec_match` false), so the tables answered the query correctly. The cause is the question's wording against the frozen gold. This is the baseline's one generated-query miss, as §4.2 predicted.
-- **`baseline-linear`, 25 gov misses.** 21 were wrong and 4 abstained. In all 25 the generated query was right (`query_exec_match` true), so every miss came from the answer the model gave from retrieved chunks.
-- **`baseline-linear`, 11 research misses.** All 11 were wrong answers from retrieved chunks. In 10 of them the generated query was right. The 11th is the item of the typed miss above.
+- **The one `p3-typed` miss is the `also_in` wording problem (§4.2).** A research `list` item: the generated query used `also_in__contains`, the membership reading, and returned 23 ids against the gold's 14, which compares the whole `;`-joined string. The same query gives 23 over the records too (`query_exec_match` false), so the tables answered the query correctly; the miss belongs to the question's wording against the frozen gold.
+- **`baseline-linear` misses:** gov 25 (21 wrong, 4 abstained), each with a correct generated query, so all came from answering from retrieved chunks; research 11 wrong, 10 with a correct query and the 11th the item above.
+- **Q1 is close to certain by construction** (§10.2). The generated queries already returned the gold records on 27 of 27 gov and 26 of 27 research items; only the baseline's answering step failed. Q1 shows that the tables and the compiler reproduce the record semantics of `golden/records.py`.
 
-**The `also_in` readings (§4.2)**, over the v0.1 items whose gold compares `also_in` exactly. The table gives the count under each reading; a `list` item counts its ids. The wording class is "value" for a question that asks for an `also_in` value, else "membership".
+**The two `also_in` readings.** Over the six v0.1 count items whose gold compares `also_in` exactly, the count under the string reading (the frozen gold) and the membership reading:
 
-| Split | Op | Wording | Topics in the value | String (frozen gold) | Membership |
+| Split | Op | Wording | Topics in the value | String | Membership |
 |---|---|---|---|---|---|
 | test | count | value | 3 | 1 | 3 |
 | test | list | value | 2 | 2 | 2 |
@@ -123,63 +197,22 @@ Each run ended `complete` with 27 rows and `calls` 0. Gov was run a second time 
 | test | list | membership | 1 | 14 | 23 |
 | dev | count | membership | 1 | 2 | 8 |
 
-For a value with several topics, membership here means every topic of the value is among the record's topics. The two value-worded items ask for the value itself, so the string reading is the question's own. One of them differs only under the membership reading, which its wording rules out. Among the membership-worded items, three differ: dev 14 against 22, dev 2 against 8, and test 14 against 23 (the typed miss). These are the three items of §4.2. The tables expose both readings. `also_in` keeps the raw string, so the frozen gold reproduces, and `also_in_list` holds the topics for the membership reading.
+Three membership-worded items differ (the three of §4.2). The two value-worded items ask for the value itself, so the string reading is theirs. The tables keep both: `also_in` holds the raw string, so the frozen gold reproduces, and `also_in_list` holds the topics.
 
-## S1–S3 and D1: the table probes (Task 7)
+## 3B: extraction from 33 CFR 117 and Q2
 
-All probes ran on the scratch stores after a fresh ACL sync, with no model calls. Each set ran twice in fresh processes, and its results were byte-identical both times. The numbers below are the final ones, after Task 7's review round.
+### The two passes
 
-| Criterion | Probe set | Result |
-|---|---|---|
-| S1 leaks | 400 leak probes: gov 300, each compared with a reference store of the caller's documents; research 100 `user:ghost` probes, each denied F4 (the research manifest is public, so no directory user has a hidden row) | **0 leaks**, 0 invalid; 300 compared with a reference store |
-| S1 fail closed | 90 per corpus (target: gov `fr_documents` row of `7d10ca547e80…`, research `papers` row of `3fbd836906a9…`) | **90 of 90** per corpus |
-| S2 SQL guard | 120 statements per corpus (writes, DDL, ATTACH, PRAGMA, budget and other cases) | **120 of 120** per corpus refused with a fixed message or bounded, the database intact afterwards |
-| S3 equivalence | 500 gov and 500 research `query_table` and `sql` calls over 20 views, each against a reference store | **1,000 of 1,000** identical |
-| S3 applicability | 51 cases, with a scan of the log for the probe's statement | **51 of 51**; log scan complete |
-| D1 (MCP leg) | a seeded 60 of the 400 leak probes, each through an `adr mcp` server of its caller (16 as `user:ghost`, all research); handle replays | **0 leaks**, 0 invalid; **44 of 44** replays identical, each naming the tables; 196 calls, 196 log lines |
+The extraction family is 33 CFR part 117 in the gov store (ruling P2): 533 distinct section texts from 1,386 sections over three eCFR versions, 424 sections in the newest.
 
-The bench and tools stores hold no tables, and their empty checks pass.
-
-## 3B: the extraction run and its calls
-
-The 3B table comes from 33 CFR part 117 in the gov store: 533 distinct section texts from
-1,386 sections, 424 of them in the newest version. Two passes extracted the drawbridge facts:
-
-| Pass | Profile | Prompt |
-|---|---|---|
-| first | `claude_code_sonnet` | `drawbridge-extract@2`: one JSON form per section, all 9 model columns in one group |
-| second | `claude_code_opus` | `drawbridge-questions@2`: numbered questions, one call per section |
-
-Each pass's served model is in its report and is the one §11 names. Prompt version 2 is ruling
-P22. A 3-call check before the run found the model writing `seasonal: false` with no quote, so
-the prompts now require a quote for a `false` too. The 3 calls of that check, made with prompt
-version 1, are counted below. Their replies are not used.
-
-**Calls per command against the shares of §11.** Budget units count every transport attempt,
-retries included. No command failed, no transport attempt was retried, and no input was
-rejected. The second pass's 538 calls include 5 parse retries, one for each reply that did not
-parse (§7.2 check 1). One parsed on the retry. The other 4 stayed unparseable, so the model
-columns of those 4 section texts are null `unparseable` in the facts.
-
-| Command | Share | Runs (`--max-calls`) | Units used |
+| Pass | Profile | Prompt | Calls |
 |---|---|---|---|
-| `adr tables extract` (first pass) | 560 | check, prompt version 1 (3); check, prompt version 2 (3); full run (554) | 3 + 3 + 530 = **536** |
-| `adr tables extract --second-pass` | 560 | check (3); full run (557) | 3 + 535 = **538** |
-| `adr-eval golden tables --gen` | 140 | check (3); full run (137) | 3 + 117 = **120** |
-| `adr-eval run … --system p3-typed` (query generation) | 125 | test (100); dev (25) | 97 + 23 = **120** |
-| `adr-eval run … --system baseline-linear` (answers; its query calls all hit the cache) | 100 | test (100) | **97** |
-| `adr tables build --with-extraction`, `adr tables gate`, `adr acl sync` | 0 | `--max-calls 0` where the command takes it | 0 |
-| Steps 7–10: E1, E2, T1–T6, reruns, regeneration checks, this write-up | 0 | every command `--max-calls 0` | 0 |
-| **Total** | **1,485** | | **1,411 of 1,500 approved** |
+| first (the table) | `claude_code_sonnet` | `drawbridge-extract@2`: one JSON form per section text, all 9 model columns in one group | 533 replies, 0 failed |
+| second (the facts) | `claude_code_opus` | `drawbridge-questions@2`: numbered questions with quotes, one call per section text (P15) | 533 replies plus 5 parse retries; 4 texts unparseable |
 
-During Steps 7–10 the model cache `.cache/llm` held 12,010 files before and after: no call was
-made.
+### E1, grounding
 
-## 3B: E1, grounding
-
-E1 is the grounded share of non-null model values per column, from the first pass's extraction
-report, before ungrounded values are dropped (§7.3, target ≥ 95%). A value counts as non-null
-when the model gave one. Draw columns are counted per draw and section columns per section text.
+E1 is the grounded share of non-null model values per column, from the first pass's extraction report, before ungrounded values are dropped (§7.3). Draw columns count per draw, section columns per section text.
 
 | Column | Grounded / non-null | Share | Failed | ≥ 95% |
 |---|---|---|---|---|
@@ -194,20 +227,13 @@ when the model gave one. Draw columns are counted per draw and section columns p
 | `closed_periods` | 365 / 406 | **89.9%** | 17 span, 24 type | **no** |
 | **all** | **5,401 / 5,452** | **99.1%** | | |
 
-- **Why the two columns fall short.** A "span" failure is check 3: the quote is not in the section text. A "type" failure is check 2: the value could not be read as the column's type.
-  - `closed_periods` has 24 values that failed the type check, so they never reached the span check. On the span check alone it would be 365 of 382 (95.5%). The report counts them as not grounded, and so does this page.
-  - `seasonal` is short by 9 quotes that are not in the section text.
-- **Status of stored values.** 15,135 are `verified` and 27 are `auto-accepted`, because their number is not in the quote (check 4). No ungrounded value is stored: those are nulls with reason `ungrounded`, 25 in `drawbridge_sections` and 3 in `drawbridge_bridges`.
-- **Second pass.** Its own report gives 5,478 of 5,529 grounded (99.1%).
+- A "span" failure is check 3: the quote is not in the section text. A "type" failure is check 2: the value could not be read as the column's type, so it never reached the span check. On the span check alone `closed_periods` would be 365 of 382 (95.5%); the report and this page count the type failures as not grounded.
+- No ungrounded value is stored: those become nulls with reason `ungrounded` (25 in `drawbridge_sections`, 3 in `drawbridge_bridges`). Of the stored values, 15,135 are `verified` and 27 `auto-accepted` (their number is not in the quote, check 4).
+- The second pass's own report gives 5,478 of 5,529 grounded (99.1%).
 
-## 3B: E2, agreement with the second pass
+### E2, agreement with the second pass
 
-E2 is `agreement(first, second)` from `adr_store.tables.extract`. The first pass is read back
-from the cache (`extract_all` behind a zero-call budget: 533 replies cached, 0 calls), and the
-second pass from its facts file (`load_facts`, id `541f4c587ee9…`). All 533 section texts are
-compared. Draws are matched by bridge-name key, then by mile: 1,215 matched, 24 in the first
-pass only, 9 in the second only. Section columns are compared per section text and draw columns
-per matched draw. `bridge` is the share of section texts whose sets of draw keys are equal.
+E2 is `agreement(first, second)` from `adr_store.tables.extract`. The first pass is read back from the cache behind a zero-call budget (533 replies cached, 0 calls), the second from its facts file. Draws are matched by bridge-name key, then by mile: 1,215 matched, 24 in the first pass only, 9 in the second only. `bridge` is the share of section texts whose sets of draw keys are equal.
 
 | Column | Compared | Agree | Share | Required ≥ 0.85 |
 |---|---|---|---|---|
@@ -221,8 +247,7 @@ per matched draw. `bridge` is the share of section texts whose sets of draw keys
 | `owner_or_agency` | 533 | 425 | 0.797 | – |
 | `closed_periods` | 1,215 | 859 | 0.707 | – |
 
-**Regex cross-check (§7.2 check 5).** Three columns have a regular expression. The counts are
-over grounded values. Agreement is reported, never used to reject.
+**Regex cross-check (§7.2 check 5),** over grounded values; reported, never used to reject:
 
 | Column | First pass: agree / checked | Second pass: agree / checked | Regex finds nothing (first, second) |
 |---|---|---|---|
@@ -230,44 +255,19 @@ over grounded values. Agreement is reported, never used to reject.
 | `vhf_channel` | 37 / 37 (100%) | 37 / 37 (100%) | 2, 1 |
 | `notice_hours` | 278 / 394 (70.6%) | 283 / 393 (72.0%) | 328, 322 |
 
-Both passes disagree with the `notice_hours` expression at the same rate. The expression only
-finds digit forms like "24 hours notice". Its disagreements were not analysed one by one.
+Both passes disagree with the `notice_hours` expression at about the same rate; the expression finds only digit forms such as "24 hours", and its disagreements were not analysed one by one.
 
-## 3B: the build and the merge gate
+### The 3B build and the gate
 
-```
-adr tables build --store .cache/store-p2/gov --with-extraction --max-calls 0
-adr tables gate --store .cache/store-p2/gov --candidate fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230 \
-    --gold golden/gov-tables/v0.1 --gold golden/gov/v0.1 --max-flips 0
-```
+- **The build** made 10 tables and 6,919 rows with 0 rejected and 0 calls: the eight 3A gov tables (the same files as the 3A build) plus `drawbridge_sections` (1,386 rows, one per section and version) and `drawbridge_bridges` (2,706 rows, one per draw; ruling P14). Tables id `fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230`.
+- **The gate promoted it** over the 3A build with **0 flips** (ruling P12). The candidate answered 126 of 158 gold cases (v0.1 38 of 38, gov-tables 88 of 120); HEAD had answered 38.
+- **Q1 is unchanged on the 3B build**: rerun with `--max-calls 0` after the promotion, both Q1 runs gave rows byte-identical to the 3A runs.
 
-- **The build** made 10 tables and 6,919 rows, with 0 rejected and 0 calls. It holds the eight 3A tables of gov, the same files as the 3A build, plus `drawbridge_sections` (1,386 rows, one per section and version) and `drawbridge_bridges` (2,706 rows, one per draw). Tables id: `fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230`.
-- **The gate promoted it** over the 3A build `2678b8da9633…` with **0 flips**. The candidate answered 126 of 158 gold cases: v0.1 38 of 38 and gov-tables 88 of 120. HEAD had answered 38 of 158. It now sits at `tables/HEAD` of `.cache/store-p2/gov`.
-- **Q1 is unchanged on the 3B build.** The gov and research Q1 runs, rerun with `--max-calls 0` after the promotion, gave per-item rows byte-identical to those above (gov 27 of 27, research 26 of 27).
+### gov-tables v0.1
 
-## 3B: gov-tables v0.1
+120 items, 97 test and 23 dev: 53 count, 57 list and 10 lookup. The facts come from the second pass, a model words each question, and code computes each answer (ruling P9). [`golden/gov-tables/v0.1/README.md`](../../golden/gov-tables/v0.1/README.md) gives how the set was made, the draw counts (752 draws: 120 accepted, 170 repeats, 265 unusable, 197 rejected), the regex agreement of the gold facts and the limits of §10.3. The items are committed, as gov v0.1's are (US government works). Regenerating the set from the cache with `--max-calls 0` reproduced both files byte for byte.
 
-There are 120 items: 97 test and 23 dev, of which 53 are count, 57 list and 10 lookup. The facts
-come from the second pass, a model words each question, and code computes each answer (ruling
-P9). [`golden/gov-tables/v0.1/README.md`](../../golden/gov-tables/v0.1/README.md) gives:
-- how the set was made;
-- the draw and rejection counts (752 draws: 120 accepted, 170 repeats, 265 unusable, 197 rejected);
-- the regex agreement of the gold facts;
-- the limits of §10.3.
-
-The items are committed: the sources are US government works. Regenerating the set from the
-cache with `--max-calls 0` reproduced both files byte for byte.
-
-## 3B: Q2, the drawbridge questions
-
-```
-adr acl sync --store .cache/store-p2/gov
-adr-eval run gov --golden gov-tables --system p3-typed --split test --qtype count_filter --max-calls 100
-adr-eval run gov --golden gov-tables --system p3-typed --split dev --qtype count_filter --max-calls 25
-adr-eval run gov --golden gov-tables --system baseline-linear --split test --max-calls 100
-adr-eval p3-q2 runs/gov-tables-p3-typed-test-20261120T233723 runs/gov-tables-baseline-linear-test-20261120T234009 \
-    --summary results/phase3/run-summaries/q2-gov-tables.json
-```
+### Q2, the drawbridge questions
 
 | System | Test items | Right | Accuracy |
 |---|---|---|---|
@@ -276,20 +276,15 @@ adr-eval p3-q2 runs/gov-tables-p3-typed-test-20261120T233723 runs/gov-tables-bas
 | `p3-typed`, dev (information only) | 23 | 19 | 0.826 |
 
 - **Accuracy: fails.** 0.680 is below the 0.80 bar.
-- **Margin: passes.** The paired difference (typed minus baseline) is +0.443. Its 95% interval, from `paired_bootstrap_ci` with seed 20261108 and 10,000 resamples, is [+0.330, +0.557], and the lower bound is above +0.02.
-- **McNemar:** b = 47 (typed only), c = 4 (baseline only), exact p = 2.4 × 10⁻¹⁰.
-- **Verdict:** Q2 needs both parts, so it fails. The bar is kept as §12 fixed it (ruling P13).
+- **Margin: passes.** The paired difference is +0.443 [+0.330, +0.557]; its lower bound is far above +0.02. McNemar: b = 47, c = 4, p = 2.4 × 10⁻¹⁰.
+- **Verdict:** Q2 needs both parts, so it fails. The bar stays as §12 fixed it (ruling P13).
 
-**Why it fails.** The typed system's 31 misses were all wrong answers: no errors and no refused
-queries.
-- **5 misses: the query differs from the gold query.** 4 differ in the filters only, and 1 in the table and the filters. These are query-understanding misses.
-- **26 misses: the generated query equals the gold query, but the value is wrong.** The tables and the compiler ran the right query. The table holds the first pass's reading of the section, and the gold was computed from the second pass's reading, and the two differ. If the table agreed with the second pass on those 26, the accuracy would be 92 of 97 (0.948).
-- **No pass is known to be right.** Neither pass was checked by a person (rulings P9, P10). So Q2's accuracy measures how well the two passes agree on the values the questions read, as much as whether the table is right.
+**Why it fails.** All 31 typed misses were wrong values: no errors and no refused queries.
+- **5 misses: the query differs from the gold query** (4 in the filters, 1 in the table and the filters). These are query-understanding misses.
+- **26 misses: the query equals the gold query, but the value differs.** The tables and the compiler ran the right query. The table holds the first pass's reading of the section and the gold the second pass's, and the two differ. Had the table agreed with the second pass on those 26, accuracy would be 92 of 97 (0.948).
+- **No pass is known to be right.** Neither pass was checked by a person (P9, P10), so Q2's accuracy measures how well the two passes agree on the values the questions read, as much as whether the table is right.
 
-The 26 misses below are attributed to columns. Each column's clauses, and a lookup's field, were
-run on the promoted tables and on the second-pass facts, for the version in force. A miss counts
-under every column whose result differs: 15 misses have one column and 11 have two, so the rows
-add up to 37.
+Each of the 26 was attributed by running each column's clauses (and a lookup's field) on the promoted tables and on the facts, for the version in force. A miss counts under every column whose result differs (15 misses have one column, 11 have two, so the rows add up to 37):
 
 | Disagreeing column | Misses |
 |---|---|
@@ -302,90 +297,147 @@ add up to 37.
 | `vhf_channel` | 2 |
 | `bridge` (`__isnull`) | 1 |
 | `waterway` | 1 |
-| draw set (a draw one pass has and the other lacks, seen through a `state` clause on `drawbridge_bridges`) | 1 |
-| lookup that matches no row in the table | 1 |
+| draw set (a draw one pass has and the other lacks, through a `state` clause) | 1 |
+| lookup matching no row in the table | 1 |
 
-The two columns that cause the most misses are the two E2 measures as least in agreement
-(`closed_periods` 0.707, `owner_or_agency` 0.797).
+The two columns behind most misses are the two E2 measures as least in agreement. **`baseline-linear`** missed 74: 57 abstained and 17 were wrong. Its query calls all hit the cache the `p3-typed` runs had filled.
 
-**Baseline misses:** 74, of which 57 abstained and 17 were wrong. Its query calls all hit the
-cache that the `p3-typed` runs had filled.
+[`run-summaries/q2-gov-tables.json`](run-summaries/q2-gov-tables.json) is the `p3-q2 --summary` form: no item id, filter value or answer, typed misses counted by cause and query shape.
 
-[`run-summaries/q2-gov-tables.json`](run-summaries/q2-gov-tables.json) is the `p3-q2 --summary`
-form. It holds no item id, filter value or answer, and counts typed misses by cause and query
-shape. The full output is only in the typed run's directory under `runs/`.
-
-## 3B: T1–T6
-
-Every check ran with `HF_HUB_OFFLINE=1`, each command in a fresh process, with no model call.
+### T1–T6
 
 | # | Check | Result |
 |---|---|---|
-| T1 | `cp -a` of `.cache/store-p2/gov`, then `adr tables build --tables-for gov --with-extraction --max-calls 0` into the copy, deleting nothing | **Pass.** Tables id `fec2a2b12e31…` again. All 37 files of the snapshot's tables directory, including the per-table reports, had the same SHA-256 before and after. In a second copy, the 3B table files and the manifest were deleted, and the build wrote them again byte-identical (manifest SHA-256 = tables id). |
-| T2 | Each suite run twice in fresh processes with `--max-calls 0` | **Pass for every set run.** Byte-identical `results.jsonl` and `compile.json` for: the Q2 runs (p3-typed test and dev, baseline-linear test), the Q1 runs (gov and research), and the SQL-guard (120 of 120) and applicability (51 of 51, `fr_documents`) probe sets on the 3B build. Against the original model-calling Q2 runs, every field of every row is equal except `notional_cost_usd`, and `latency_s` for the baseline: a cache hit records these as 0 and null. Re-running `p3-q2` on the reruns gives the same summary. The leak, equivalence and applicability sets with the drawbridge tables were byte-identical twice in Step 9 (see "3B: probes"). The fail-closed and MCP sets were not re-run on the 3B build. |
-| T3 | Every provenance span of every table of the promoted build, re-sliced with `provenance.reslice` | **Pass: 32,889 of 32,889**, including all 15,162 model-value quotes |
-| T4 | Every stored value carries a `spec_id` | **Pass: 60,295 of 60,295.** The 22,121 non-null values without a span are computed values (entity tables, FR agency and reference ids, `status`, and the drawbridge `version` and `draw`), each with its `spec_id`. |
-| T5 | `tests/store/test_tables_extract.py::test_a_spec_change_reextracts_only_its_group` | **Pass** |
-| T6 | `tests/store/test_tables_gate.py::test_gate_refuses_too_many_flips_and_keeps_head` | **Pass** |
+| T1 | Zero-call rebuild | **Pass.** In Task 11, `adr tables build --tables-for gov --with-extraction --max-calls 0` into a `cp -a` copy reproduced `fec2a2b12e31…` with all 37 files of the snapshot's tables directory unchanged; in a second copy with the 3B files and the manifest deleted, it wrote them again byte-identical. In this task, every build was repeated from scratch (see X1). |
+| T2 | Each suite and probe set twice in fresh processes | **Pass** (see X1). |
+| T3 | Every provenance span of the promoted 3B build, re-sliced with `provenance.reslice` | **Pass: 32,889 of 32,889**, including all 15,162 model-value quotes. |
+| T4 | Every stored value carries a `spec_id` | **Pass: 60,295 of 60,295.** The 22,121 non-null values without a span are computed values (entity tables, FR agency and reference ids, `status`, the drawbridge `version` and `draw`), each with its `spec_id`. |
+| T5 | `test_a_spec_change_reextracts_only_its_group` | **Pass** |
+| T6 | `test_gate_refuses_too_many_flips_and_keeps_head` | **Pass** |
 
-## 3B: probes (Step 9)
+## Access: S1–S3 and D1
 
-Step 9 re-ran `tables-leak`, `tables-equivalence` and `tables-applicability` on gov with the
-promoted 3B build (tables `fec2a2b12e31…`), on `.cache/store-p2/gov` after a fresh ACL sync.
-These are the commands and seed of Task 7. The applicability set also probes the drawbridge
-tables (`--tables fr_documents drawbridge_sections drawbridge_bridges`).
+All probes ran on the scratch stores after a fresh ACL sync, with no model call, with seed 20261120. The 3A probes (Task 7) ran on the 3A builds; after the 3B promotion, every set that reads gov tables was run again on the 3B build (Task 7b, Task 11 and this task). The research tables did not change.
 
-The first attempt (Task 11) was blocked by two defects in the probe code. Both were fixed first,
-test first, in Task 7b:
-- **Reference stores now hold the extraction tables.** If the store's tables include the
-  extraction tables, each view's reference store builds them with `with_extraction=True` and
-  `max_calls=0`. The replies come from the cache, under the generator profile given by
-  `--generator` (default: the configured generator).
-  - The cache key covers adapter, model, prompt, section text and token cap, but not the store.
-    So a reference store that holds a subset of the documents finds the same cached replies for
-    the sections it has.
-  - A reply missing from the cache stops the run (P21) without a call. A reference whose
-    extraction would differ from the store's (another model, prompt or specs) is refused.
-- **`tables-applicability` takes `--tables`.**
-  - For the drawbridge tables, the `as_of` dates first include each eCFR version's first day in
-    force and the day before it. The rest are seeded draws from the Federal Register dates, as
-    for `fr_documents`.
-  - A probe also fails if it returns more than one version of a chain.
-- **Equivalence on a store with the extraction tables** also draws `count_by` on six drawbridge
-  columns. On a 3A store the query pool is unchanged.
+**Reference stores.** A leak or equivalence probe compares a call with the same call, by the same caller, on a reference store built from that caller's documents alone. On the 3B build each reference store builds its drawbridge tables from the cached first-pass replies with a zero-call budget (the cache key holds no store-specific input, so a subset store finds the same replies); a missing reply would stop the run without a call (P21), and a reference whose extraction would differ from the store's is refused. 7 views see the drawbridge rows and 13 have empty drawbridge tables.
 
-**No model calls.** `.cache/llm` held 12,010 files before, between the two passes and after.
-The model CLI was shadowed by a stub that records any call, and it recorded none. `.cache/store`
-and `.cache/index` are unchanged (sizes and mtimes of all 7,320 files).
+| Criterion | Probe set | 3A build | 3B build (gov `fec2a2b12e31…`) |
+|---|---|---|---|
+| S1 leaks | 5 families (by key, filter, aggregate, `count_by` group, error message) × the caller's hidden rows | **0 leaks in 400**: gov 300, all compared with a reference store; research 100, all `user:ghost` F4 denials | **0 leaks in 300**, all compared; 65 on hidden drawbridge rows (34 `drawbridge_sections`, 31 `drawbridge_bridges`), over all five families and 13 callers |
+| S1 equivalence | 20 views × 25 calls (15 `query_table`, 10 `sql`) per corpus | **1,000 of 1,000** identical (gov 500, research 500); bench and tools hold no tables and refuse alike (60 of 60, 3 of 3, not counted) | **500 of 500** gov; 32 calls are drawbridge `count_by`, only 9 of them in views that see drawbridge rows |
+| S2 SQL guard | 120 statements per corpus: writes, DDL, ATTACH, PRAGMA, extensions, schema tables, recursive and cross-join bombs, clock and amplifying functions, error-text leaks, comment tricks | **120 of 120** per corpus refused with a fixed message or bounded; database intact | **120 of 120**, the same outcomes |
+| S3 fail closed | (F1–F5, no entry) × 3 tools × 5 callers, per corpus | **90 of 90** per corpus, no content | **90 of 90** gov, no content |
+| S3 applicability | default and `as_of` | **51 of 51** on `fr_documents` | **153 of 153**: 51 on `fr_documents`, 51 on each drawbridge table, every probe at most one eCFR version |
+| S3 logs | every line the probes wrote | complete: every line has caller, principals, ACL snapshot, decision and `tables`; no `sql` line holds statement text | complete |
+| D1 MCP leg | a seeded 60 of the leak probes (gov and research), each through an `adr mcp` server of its caller, then replayed with its handle | **0 leaks**; 44 of 44 replays identical, each naming the tables; 196 calls, 196 log lines | **0 leaks** in 60 (gov 44, 5 of them on drawbridge rows; research 16 `user:ghost`); 44 of 44 replays identical, each naming its store's tables (gov `fec2a2b12e31…`); 196 calls, 196 log lines. Run twice in this task |
 
-| Set | Result |
+- **The applicability probes on the drawbridge tables** start with each eCFR version's first day in force and the day before it, then take seeded Federal Register dates. Of the 50 `as_of` dates per drawbridge table, 14 return rows and **36 fall before the first eCFR version** (27 June 2024) and correctly return nothing, so only 14 per table test the choice of version. The default returns the newest version (424 sections, 835 draws).
+- **D1 tests.** `tests/store/test_tables_mcp.py` checks the three table tools over MCP (listing, results with a `tables` handle, replay, refusals); its 5 tests (the tool list with handles, thirty fixed calls equal to the Python API, SQL refusals as error results with the fixed messages, a handle replay, text rendering) pass, alone and in the full suite.
+
+## X1: determinism
+
+**Verdict.** X1 passes. Every Phase 3 run and probe set was run twice in fresh processes and gave identical rows and results, and the gov and research tables built twice from the same inputs gave the same files and tables ids. Where an earlier task already ran a set twice in fresh processes on the current build and code, its evidence is reused; every other set was run twice in this task.
+
+**What counts as identical.** For runs, `results.jsonl` and `compile.json` byte for byte. For probe sets, `probes.json` and `results.json` byte for byte (the per-item files, kept under `runs/`). Only fields that record when, or under which ACL snapshot, a run happened differ between two runs, and those are in the summaries only.
+
+| Set | Build | Runs compared | Where | Result |
+|---|---|---|---|---|
+| Q1 `p3-typed` gov and research | 3B HEAD | Task 11, two fresh processes each; also equal to Task 8's runs on the 3A build | reused | **Identical** |
+| Q2 `p3-typed` test and dev, `baseline-linear` test | 3B HEAD | Task 11, two fresh processes each (`--max-calls 0`) | reused | **Identical** |
+| tables-leak gov | 3B | Task 7b, two fresh processes, reference stores built afresh in each | reused | **Identical** |
+| tables-equivalence gov | 3B | Task 7b | reused | **Identical** |
+| tables-applicability gov (3 tables) | 3B | Task 7b | reused | **Identical** |
+| tables-sql gov | 3B | passes A and B of this task | rerun | **Identical**; also byte-identical to Task 7's (3A) and Task 11's (3B) runs |
+| tables-sql research | 3A | passes A and B | rerun | **Identical**; equal to Task 7's run |
+| tables-failclosed gov | 3B | passes A and B | rerun | **Identical**; equal to Task 7's run on the 3A build (the fail-closed outcomes do not depend on the drawbridge tables) |
+| tables-failclosed research | 3A | passes A and B | rerun | **Identical**; equal to Task 7's run |
+| tables-leak research | 3A | passes A and B | rerun | **Identical**; equal to Task 7's run |
+| tables-equivalence research | 3A | passes A and B, 20 reference stores with dense indexes built afresh in each | rerun | **Identical**; equal to Task 7's run |
+| tables-equivalence bench and tools (no tables) | – | passes A and B | rerun | **Identical**; equal to Task 7's runs |
+| tables-mcp (gov 3B with research) | 3B | passes A and B, 17 gov reference stores built from the cache in each | rerun | **Identical** (differs from Task 7's 3A run, as it should: the gov leak probes changed with the build) |
+
+In all: **5 of 5 question runs and 12 of 12 probe sets identical.** The two passes' summaries differ only in the ACL snapshot and sequence of the syncs before them. Pass wall times: SQL guard 10 s (gov) and 16 s (research), fail closed 13 s and 31 s, research leak 6–7 s, bench equivalence 33–35 s, MCP leg 214–218 s, research equivalence 570–580 s.
+
+The question runs and the three Task 7b sets are reused because no code on their path changed after them: the only later changes (Task 7b's) are in the probe code and the `probes` command, and the Task 7b sets ran on that code. Task 7's earlier pairs on the 3A build (all 12 sets) and Task 11's pairs of the SQL-guard and `fr_documents` applicability sets on the 3B build are superseded by the rows above, and all were identical too.
+
+### Tables built twice
+
+In two `cp -a` copies of each scratch store, the whole tables directory was removed and the tables built again in fresh processes with `--max-calls 0`: gov metadata only, then gov with extraction, and research.
+
+| Corpus | Build | Tables id (both copies) | Files | Result |
+|---|---|---|---|---|
+| gov | 3A (8 tables: 4 data, 4 entity) | `2678b8da96338df9…` | 22 files in all for gov: 10 tables, each with its report, and the 2 manifests | **Byte-identical** between the copies, and to the promoted builds' files |
+| gov | 3B (10 tables: + `drawbridge_sections`, `drawbridge_bridges`) | `fec2a2b12e318fcb…` | | |
+| research | 3A (5 tables: 2 data, 3 entity) | `62604e913378c76b…` | 11 | **Byte-identical**, likewise |
+
+Each manifest's SHA-256 equals its tables id. The extraction build made 0 calls: its 533 replies came from the cache. The applicability overlay is Phase 2's, unchanged (its double derivation is Phase 2's X1).
+
+### Phase 2 regression (constraint 2)
+
+Constraint 2 asks that Phases 1 and 2 stay reproducible: the five Phase 2 tools return identical hits. One `p2-default` test run per corpus was made again with `adr-eval retrieval <corpus> --system p2-default --split test`, which makes no model call (as in Phase 2, R1), and compared with `adr-eval retrieval-identical` against the local rows of the Phase 2 run whose summary is committed:
+
+| Corpus | Items | Against the Phase 2 run as `user:auditor` (the 2B re-run) | Summary against the committed one |
+|---|---|---|---|
+| gov | 242 | **identical** (`…20261116T090659`): ranked chunk ids and exact scores | equal |
+| research | 222 | **identical** (`…20261116T090011`) | equal |
+| bench | 572 | **identical** (`…20261116T091038`) | equal |
+
+`p2-default` searches as `user:auditor` since Phase 2B. Against the earlier Phase 2 runs made before the ACL layer existed (`…T0607*`, `…T0616*`, `…T0610*`), gov is identical too, and research and bench keep every ranked id while scores differ in the last float32 bits (at most 3e-06 and 1.8e-05), the effect Phase 2 recorded under ruling R17; their summaries are equal to the committed ones. The new runs' configurations differ only in run id, times and the ACL snapshot. So the Phase 3 build left Phase 2 retrieval unchanged.
+
+## Rulings
+
+Spec §14 lists the rulings made without the user. P1–P17 were fixed with the design; **P18–P22 were made during the build** and added to the spec then.
+
+| # | Ruling (short) |
 |---|---|
-| Leak (S1) | **300 probes, 0 leaks, 0 invalid**, all 300 compared with a reference store. 65 target hidden drawbridge rows: 34 in `drawbridge_sections` and 31 in `drawbridge_bridges`, across all five families. All 680 log lines are complete. |
-| Equivalence (S1) | **500 of 500 identical** over 20 views (300 `query_table` and 200 `sql` calls); all 1,000 log lines are complete. 32 of the calls are drawbridge `count_by`. Only 9 of those 32 fall in the 7 views that see the drawbridge rows; the other 23 return no rows on either store. |
-| Applicability | **153 of 153** with 0 rows of documents not in force: 51 on `fr_documents`, 51 on `drawbridge_sections` and 51 on `drawbridge_bridges`. 459 log lines, complete. |
-| Applicability on the drawbridge tables | 102 probes: 2 default and 100 `as_of`. 28 of the `as_of` probes return rows (14 per table). Per table, these are 5 of the 6 boundary dates (each version's first day in force, and the day before the second and third versions) and 9 Federal Register dates on or after 27 June 2024. Every probe returns at most one eCFR version. The default returns the newest version (424 sections, 835 draws). The other 72 `as_of` dates fall before the first version, 26 June 2024 among them, and return no rows, as they should. |
-| T2 | All three sets gave byte-identical `probes.json` and `results.json` in two fresh processes. Each pass built the reference stores again from the cache. On `fr_documents` the rows equal Task 11's run, apart from the new `versions` field. |
+| P1 | Model calls only for the purposes and cap of §11 |
+| P2 | The extraction family is 33 CFR 117 |
+| P3 | One model extracts, a second checks |
+| P4 | Raw columns kept beside normalised ones; v0.1 gold semantics reproduced exactly |
+| P5 | Rows inherit document access; no row-level policy |
+| P6 | The JSONL overlay is the record; SQLite is a per-call derived view |
+| P7 | SQL errors return fixed messages per class |
+| P8 | A deterministic SQL budget in virtual-machine steps, not time |
+| P9 | gov-tables gold from the second extraction, phrased by a model, answered by code |
+| P10 | No human review step; `review-pending` reserved |
+| P11 | Entity resolution by exact normalised keys only |
+| P12 | The merge gate is built and tested, and used (the spec says once; it promoted three builds: gov 3A, research 3A, gov 3B) |
+| P13 | The margins and thresholds of §12 fixed before any result |
+| P14 | Two drawbridge tables: sections and draws |
+| P15 | The second pass is one numbered-question call per section |
+| P16 | `p3-typed` runs on count items only and never answers from chunks |
+| P17 | Entity display names computed per caller view |
+| **P18** | `describe_tables` is an index plus per-table detail, each at most 8 KB (Task 5) |
+| **P19** | A `sql` statement's own `ORDER BY` gets positional tie-breakers on every output column (Task 5) |
+| **P20** | `sql` bounds work per step: a per-value length limit, and string-amplifying functions charged against the step budget (Task 5). The spec's text says 64 KB; the build tightened it to 8 KB per stored value and 16 KB per row, enforced at build and at read |
+| **P21** | Only failures caused by the input are cached as `model_error`; retries exhausted, usage limits, other errors and budget stops stop the run uncached (Task 9) |
+| **P22** | A bool value needs a quote that states it, `false` included; prompts `drawbridge-extract@2` and `drawbridge-questions@2` (Task 11, after the first 3-call check) |
 
-**Hidden drawbridge rows.** The eCFR §117 chain is visible only to `tenant:acme`, so its rows are
-hidden from the globex, initech and outsider users. This covers 13 directory users and 13 of
-the 20 views. The leak probes drew 65 such rows. Each reference store read its extraction tables
-from the cache: 7 with the drawbridge rows, and 13 whose drawbridge tables are empty. No call was
-made.
+## Limits
 
-The 3A probe results above still stand for the 3A tables. The fail-closed and MCP sets were
-not re-run on the 3B build. The SQL guard was re-run on it in Task 11 and passed 120 of 120.
+- **The gov-tables gold comes from the model's second pass** (P9), and no person checked either pass (P10). Where the passes disagree, which one is right is not known; Q2's 26 value misses are exactly such disagreements.
+- **Errors shared by both passes are invisible** (§10.3). Two models reading a section the same wrong way agree in E2 and in Q2.
+- **Synthetic tenants.** Three tenants, twelve groups and twenty users give 20 views per corpus, as in Phase 2. On gov, the eCFR §117 chain is visible to one tenant only, so 13 of the 20 views hide every drawbridge row.
+- **Research access is all-or-nothing** (P5). The research tables come from one document, the public papers manifest, so no directory user has a hidden research row: research's 100 leak probes can only be `user:ghost` denials, and its equivalence compares views that all see everything. Gov carries the leak measurement.
+- **Raw versus normalised columns** (P4). Tables keep raw values (for example `also_in`, venue and author strings) beside normalised ones (`also_in_list`, entity keys), so the frozen gold reproduces; an agent may pick the raw column where the normalised one is meant. The semantic layer describes both.
+- **Q1 is by construction** (§10.2): it tests that the tables reproduce the record semantics, not query understanding.
+- **The `also_in` wording.** Three v0.1 research count items are worded as topic membership while their frozen gold compares the whole string; one of them is `p3-typed`'s only Q1 miss.
+- **Thin drawbridge equivalence coverage.** On the 3B build only 9 of the 500 equivalence calls touch drawbridge rows a view can see (32 are drawbridge `count_by`, 23 of them in views with empty drawbridge tables). The 65 drawbridge leak probes carry most of the drawbridge comparison.
+- **Most drawbridge `as_of` dates fall before the first version.** 36 of the 50 `as_of` dates per drawbridge table precede 27 June 2024 and return nothing; 14 per table test version selection.
+- **3 calls lost to P22.** The first-pass check with prompt version 1 used 3 units whose replies are not used.
+- **E1 and Q2 fail as measured.** The bars were not moved (P13). `closed_periods` is the weakest column on every measure: E1 89.9%, E2 0.707, and 9 of the 26 Q2 value misses.
+- **The merge gate's threshold is untested on a real regression** (P12): every real promotion had 0 flips.
+- **The SQL guard's residual cost.** A recursive copy of a stored value is bounded only by the step budget (about 13 s and 4 GB of temporary disk in the worst probe; documented in `sqlguard.py`).
+- **One machine.**
 
 ## Files
 
-- [`run-summaries/`](run-summaries/) holds the run and probe summaries:
-  - 3A: the two Q1 `p3-typed` runs and the table probe summaries (`probes-tables-*-20261120T19*`, `tables-7-checks`). Each Q1 run has `config.json`, `compile.json`, `report.json`, `report.md` and `q1-<baseline>.json`, the aggregated `adr-eval p3-q1 --summary` form.
-  - 3B: the three gov-tables runs (`gov-tables-p3-typed-test-…`, `gov-tables-p3-typed-dev-…`, `gov-tables-baseline-linear-test-…`), each with `config.json`, `compile.json`, `report.json` and `report.md`.
-  - 3B: `q2-gov-tables.json`, the aggregated `adr-eval p3-q2 --summary` form.
-  - 3B: the two probe sets re-run on the 3B build in Task 11 (`probes-tables-sql-gov-20261120T235517`, `probes-tables-applicability-gov-20261120T235528`, `fr_documents` only).
-  - 3B, Step 9: `probes-tables-leak-gov-20261121T002541`, `probes-tables-equivalence-gov-20261121T002855` and `probes-tables-applicability-gov-20261121T002359` (with the drawbridge tables), plus `tables-7b-checks/checks.json` (the two-pass hashes and the cache counts).
-  - 3B: `tables-11-checks/checks.json`, the aggregate E1, E2, regex, Q2-attribution and T1–T6 figures.
+`run-summaries/` holds, without per-item rows, probe lists, queries or corpus text:
 
-  No committed file names an item. Per-item rows (`results.jsonl`), the full Q1 and Q2 outputs and the probe sets stay local in `runs/`.
-- [`golden/gov-tables/v0.1/`](../../golden/gov-tables/v0.1/) holds the gov-tables items, which are committed like gov v0.1's (US government sources).
-- [`entity-samples.json`](entity-samples.json) holds the entity cluster counts, the largest clusters and the seeded samples of both builds.
-- [`waterway-links.json`](waterway-links.json) holds the linked and unlinked drawbridge titles.
+| Part | Files |
+|---|---|
+| 3A | the two Q1 runs (`gov-p3-typed-test-20261120T200702`, `research-p3-typed-test-20261120T200924`: `config.json`, `compile.json`, `report.json`, `report.md`, and `q1-<baseline>.json` in `p3-q1 --summary` form); the Task 7 probe summaries (`probes-tables-*-20261120T19*`) and `tables-7-checks/checks.json` |
+| 3B | the three gov-tables runs (`gov-tables-*-20261120T23*`); `q2-gov-tables.json` (`p3-q2 --summary`); the Task 11 SQL-guard and applicability summaries (`…T2354*`, `…T2355*`); the Task 7b summaries (`probes-tables-*-20261121T002*`) and `tables-7b-checks/checks.json`; `tables-11-checks/checks.json` (E1, E2, regex, the Q2 attribution, T1–T6) |
+| X1 | the probe summaries of both passes of this task (`probes-tables-*-20261121T004*` and `…T005*` for pass A, `…T010*` for pass B; 9 sets each) and `tables-12-checks/checks.json` (pairs, hashes, table builds, the Phase 2 regression, cache counts) |
+
+No committed file names a golden item. Per-item rows (`results.jsonl`), the full Q1 and Q2 outputs and the probe sets stay local in `runs/`. [`golden/gov-tables/v0.1/`](../../golden/gov-tables/v0.1/) holds the gov-tables items; [`entity-samples.json`](entity-samples.json) and [`waterway-links.json`](waterway-links.json) hold the cluster samples and the link list.
