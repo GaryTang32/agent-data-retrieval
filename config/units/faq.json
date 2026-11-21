@@ -1,0 +1,145 @@
+{
+  "type": "faq",
+  "version": 1,
+  "description": "An explicit question and answer, or a KCS article (§5.3, §10)",
+  "fields": [
+    {
+      "name": "question",
+      "type": "object",
+      "nullable": true,
+      "description": "The question and its span (Q/A markup)",
+      "spec_id": "faq.question@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.question@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.question@1"
+        }
+      ]
+    },
+    {
+      "name": "answer",
+      "type": "object",
+      "nullable": true,
+      "description": "The answer and its span (Q/A markup)",
+      "spec_id": "faq.answer@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.answer@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.answer@1"
+        }
+      ]
+    },
+    {
+      "name": "issue",
+      "type": "object",
+      "nullable": true,
+      "description": "The KCS issue or symptoms section",
+      "spec_id": "faq.issue@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.issue@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.issue@1"
+        }
+      ]
+    },
+    {
+      "name": "environment",
+      "type": "object",
+      "nullable": true,
+      "description": "The KCS environment section",
+      "spec_id": "faq.environment@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.environment@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.environment@1"
+        }
+      ]
+    },
+    {
+      "name": "cause",
+      "type": "object",
+      "nullable": true,
+      "description": "The KCS cause section",
+      "spec_id": "faq.cause@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.cause@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.cause@1"
+        }
+      ]
+    },
+    {
+      "name": "resolution",
+      "type": "object",
+      "nullable": true,
+      "description": "The KCS resolution or workaround section",
+      "spec_id": "faq.resolution@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "faq.resolution@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "faq.resolution@1"
+        }
+      ]
+    }
+  ]
+}

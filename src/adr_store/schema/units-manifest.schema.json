@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "UnitFile": {
+      "additionalProperties": false,
+      "description": "One unit type of a build: the contract it was checked against and its file.",
+      "properties": {
+        "contract_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Contract Sha256",
+          "type": "string"
+        },
+        "contract_version": {
+          "minimum": 1,
+          "title": "Contract Version",
+          "type": "integer"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "rejected": {
+          "minimum": 0,
+          "title": "Rejected",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "type": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Type",
+          "type": "string"
+        },
+        "units": {
+          "minimum": 0,
+          "title": "Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "contract_version",
+        "contract_sha256",
+        "file",
+        "sha256",
+        "units",
+        "rejected"
+      ],
+      "title": "UnitFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The content of `units-<id[:16]>.json`: every unit file of one build.",
+  "properties": {
+    "applicability": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Applicability"
+    },
+    "corpus": {
+      "title": "Corpus",
+      "type": "string"
+    },
+    "format_version": {
+      "const": "0.1",
+      "title": "Format Version",
+      "type": "string"
+    },
+    "passes": {
+      "additionalProperties": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Passes",
+      "type": "object"
+    },
+    "snapshot": {
+      "minLength": 1,
+      "title": "Snapshot",
+      "type": "string"
+    },
+    "tables_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tables Id"
+    },
+    "units": {
+      "items": {
+        "$ref": "#/$defs/UnitFile"
+      },
+      "title": "Units",
+      "type": "array"
+    }
+  },
+  "required": [
+    "format_version",
+    "snapshot",
+    "corpus",
+    "tables_id",
+    "applicability",
+    "passes",
+    "units"
+  ],
+  "title": "UnitsManifest",
+  "type": "object"
+}

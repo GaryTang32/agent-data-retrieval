@@ -102,8 +102,9 @@ def canonical_json(model: BaseModel) -> bytes:
 
 def schemas() -> dict[str, dict]:
     """File name -> JSON Schema for every record model: Phase 1 records, Phase 2 overlays,
-    the ACL directory, policy and snapshot, the tool record and tool snapshot, and the table
-    contract, row and manifest (imported here: those modules import this one)."""
+    the ACL directory, policy and snapshot, the tool record and tool snapshot, the table
+    contract, row and manifest, and the unit contract, unit and units manifest (imported here:
+    those modules import this one)."""
     from adr_store.acl import AclSnapshot, Directory, Policy
     from adr_store.applicability import ApplicabilityOverlay
     from adr_store.dedup import DedupOverlay
@@ -112,6 +113,9 @@ def schemas() -> dict[str, dict]:
     from adr_store.tables.provenance import RowRecord
     from adr_store.tool_catalog import ToolSnapshot
     from adr_store.tool_records import ToolRecord
+    from adr_store.units.contracts import UnitContract
+    from adr_store.units.envelope import Unit
+    from adr_store.units.overlay import UnitsManifest
 
     return {
         "source.schema.json": SourceRecord.model_json_schema(),
@@ -127,6 +131,9 @@ def schemas() -> dict[str, dict]:
         "acl-snapshot.schema.json": AclSnapshot.model_json_schema(),
         "tool-record.schema.json": ToolRecord.model_json_schema(),
         "tool-snapshot.schema.json": ToolSnapshot.model_json_schema(),
+        "unit-contract.schema.json": UnitContract.model_json_schema(),
+        "unit.schema.json": Unit.model_json_schema(),
+        "units-manifest.schema.json": UnitsManifest.model_json_schema(),
     }
 
 

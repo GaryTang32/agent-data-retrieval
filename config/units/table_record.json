@@ -1,0 +1,97 @@
+{
+  "type": "table_record",
+  "version": 1,
+  "description": "A Phase 3 table slice or an in-document table (§5.3, §10)",
+  "fields": [
+    {
+      "name": "caption",
+      "type": "text",
+      "nullable": true,
+      "description": "The table caption, when there is one",
+      "spec_id": "table_record.caption@1"
+    },
+    {
+      "name": "headers",
+      "type": "text[]",
+      "nullable": false,
+      "description": "The column headers",
+      "spec_id": "table_record.headers@1"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "nullable": false,
+      "description": "The deterministic template description",
+      "spec_id": "table_record.description@1"
+    },
+    {
+      "name": "pointer",
+      "type": "object",
+      "nullable": false,
+      "description": "Where the rows are",
+      "spec_id": "table_record.pointer@1",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false,
+          "description": "A Phase 3 table slice or a document span",
+          "spec_id": "table_record.pointer@1",
+          "allowed": [
+            "tables",
+            "span"
+          ]
+        },
+        {
+          "name": "tables_id",
+          "type": "text",
+          "nullable": true,
+          "description": "The tables build (kind tables)",
+          "spec_id": "table_record.pointer@1"
+        },
+        {
+          "name": "table",
+          "type": "text",
+          "nullable": true,
+          "description": "The table name (kind tables)",
+          "spec_id": "table_record.pointer@1"
+        },
+        {
+          "name": "filters",
+          "type": "json",
+          "nullable": true,
+          "description": "The query_table filters of the slice (kind tables)",
+          "spec_id": "table_record.pointer@1"
+        },
+        {
+          "name": "doc_id",
+          "type": "text",
+          "nullable": true,
+          "description": "The document holding the table (kind span)",
+          "spec_id": "table_record.pointer@1"
+        },
+        {
+          "name": "start",
+          "type": "int",
+          "nullable": true,
+          "description": "The table's start offset (kind span)",
+          "spec_id": "table_record.pointer@1"
+        },
+        {
+          "name": "end",
+          "type": "int",
+          "nullable": true,
+          "description": "The table's end offset (kind span)",
+          "spec_id": "table_record.pointer@1"
+        }
+      ]
+    },
+    {
+      "name": "row_count",
+      "type": "int",
+      "nullable": true,
+      "description": "How many rows the pointer reaches",
+      "spec_id": "table_record.row_count@1"
+    }
+  ]
+}

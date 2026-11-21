@@ -166,6 +166,9 @@ def _type_problem(typ: str, v: Any) -> str | None:
     raise AssertionError(typ)
 
 
+type_problem = _type_problem  # public: the unit validator (Phase 4) delegates scalars to it
+
+
 def _value_problems(col: Column, v: Any) -> list[str]:
     """Problems of one non-null value of `col`, each prefixed with the column name."""
     name = col.name

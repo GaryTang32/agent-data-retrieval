@@ -1,0 +1,393 @@
+{
+  "type": "procedure",
+  "version": 1,
+  "description": "A procedure: its steps from explicit structure (§5.3, §9)",
+  "fields": [
+    {
+      "name": "when_to_use",
+      "type": "object",
+      "nullable": true,
+      "description": "When to use the procedure (procedure pass); null before its model pass runs",
+      "spec_id": "procedure.when_to_use@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "text",
+          "nullable": true,
+          "description": "At most 1,024 characters",
+          "spec_id": "procedure.when_to_use@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "procedure.when_to_use@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "procedure.when_to_use@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "procedure.when_to_use@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "procedure.when_to_use@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "not_for",
+      "type": "object",
+      "nullable": true,
+      "description": "What the procedure is not for (procedure pass); null before its model pass runs",
+      "spec_id": "procedure.not_for@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "text",
+          "nullable": true,
+          "description": "Stated only with a quote that says so",
+          "spec_id": "procedure.not_for@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "procedure.not_for@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "procedure.not_for@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "procedure.not_for@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "procedure.not_for@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "trigger_examples",
+      "type": "object",
+      "nullable": true,
+      "description": "Two or three requests it answers (procedure pass); null before its model pass runs",
+      "spec_id": "procedure.trigger_examples@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "text[]",
+          "nullable": true,
+          "description": "The examples",
+          "spec_id": "procedure.trigger_examples@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "procedure.trigger_examples@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "procedure.trigger_examples@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "procedure.trigger_examples@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "procedure.trigger_examples@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "problem_abstractions",
+      "type": "object",
+      "nullable": true,
+      "description": "Up to five problems it solves (procedure pass); null before its model pass runs",
+      "spec_id": "procedure.problem_abstractions@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "text[]",
+          "nullable": true,
+          "description": "The abstractions",
+          "spec_id": "procedure.problem_abstractions@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "procedure.problem_abstractions@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "procedure.problem_abstractions@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "procedure.problem_abstractions@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "procedure.problem_abstractions@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "inputs",
+      "type": "text[]",
+      "nullable": false,
+      "description": "What the procedure needs before it starts",
+      "spec_id": "procedure.inputs@1"
+    },
+    {
+      "name": "preconditions",
+      "type": "text[]",
+      "nullable": false,
+      "description": "What must hold before it starts",
+      "spec_id": "procedure.preconditions@1"
+    },
+    {
+      "name": "steps",
+      "type": "object[]",
+      "nullable": false,
+      "description": "The steps, the first one the start",
+      "spec_id": "procedure.steps@1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "description": "The step id, s1, s2, ...",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "type",
+          "type": "text",
+          "nullable": false,
+          "description": "The step kind",
+          "spec_id": "procedure.steps@1",
+          "allowed": [
+            "instruction",
+            "condition",
+            "tool_call",
+            "subprocedure",
+            "handoff",
+            "wait",
+            "end"
+          ]
+        },
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The step text",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": true,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "tool",
+          "type": "text",
+          "nullable": true,
+          "description": "The system the step uses, e.g. a command code",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "args_schema",
+          "type": "json",
+          "nullable": true,
+          "description": "The tool arguments' JSON schema",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "condition",
+          "type": "text",
+          "nullable": true,
+          "description": "The condition a condition step tests",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "next",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Successor steps",
+          "spec_id": "procedure.steps@1",
+          "fields": [
+            {
+              "name": "to",
+              "type": "text",
+              "nullable": false,
+              "description": "The successor's step id",
+              "spec_id": "procedure.steps@1"
+            },
+            {
+              "name": "guard",
+              "type": "text",
+              "nullable": true,
+              "description": "The guard on the edge, or otherwise",
+              "spec_id": "procedure.steps@1"
+            }
+          ]
+        },
+        {
+          "name": "risk",
+          "type": "text",
+          "nullable": false,
+          "description": "The step's risk",
+          "spec_id": "procedure.steps@1",
+          "allowed": [
+            "unknown",
+            "low",
+            "irreversible"
+          ]
+        },
+        {
+          "name": "requires_approval",
+          "type": "bool",
+          "nullable": false,
+          "description": "Whether the step needs approval",
+          "spec_id": "procedure.steps@1"
+        },
+        {
+          "name": "preconditions",
+          "type": "json",
+          "nullable": false,
+          "description": "Binding DSL expressions that must hold (runtime)",
+          "spec_id": "procedure.steps@1"
+        }
+      ]
+    },
+    {
+      "name": "escalation",
+      "type": "text",
+      "nullable": true,
+      "description": "Where the procedure escalates",
+      "spec_id": "procedure.escalation@1"
+    },
+    {
+      "name": "success_criteria",
+      "type": "text",
+      "nullable": true,
+      "description": "What success looks like",
+      "spec_id": "procedure.success_criteria@1"
+    },
+    {
+      "name": "tests",
+      "type": "json",
+      "nullable": false,
+      "description": "Branch paths: lists of step ids",
+      "spec_id": "procedure.tests@1"
+    },
+    {
+      "name": "ambiguity_flags",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Known weaknesses, e.g. coarse",
+      "spec_id": "procedure.ambiguity_flags@1"
+    },
+    {
+      "name": "source_kind",
+      "type": "text",
+      "nullable": false,
+      "description": "Where the procedure comes from",
+      "spec_id": "procedure.source_kind@1",
+      "allowed": [
+        "irm",
+        "bench",
+        "authored"
+      ]
+    }
+  ]
+}

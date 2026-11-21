@@ -1,0 +1,358 @@
+{
+  "type": "rule_card",
+  "version": 1,
+  "description": "One modal provision paragraph of an eCFR section (§5.3, §8)",
+  "fields": [
+    {
+      "name": "provision_id",
+      "type": "text",
+      "nullable": false,
+      "description": "The provision, e.g. 33 CFR 117.1081(a)(2)",
+      "spec_id": "rule_card.provision_id@1"
+    },
+    {
+      "name": "text",
+      "type": "text",
+      "nullable": false,
+      "description": "The paragraph text, verbatim",
+      "spec_id": "rule_card.text@1"
+    },
+    {
+      "name": "modality",
+      "type": "text",
+      "nullable": false,
+      "description": "The leftmost-longest modal phrase's class",
+      "spec_id": "rule_card.modality@1",
+      "allowed": [
+        "obligation",
+        "prohibition",
+        "permission",
+        "exemption"
+      ]
+    },
+    {
+      "name": "modal_spans",
+      "type": "object[]",
+      "nullable": false,
+      "description": "Every modal phrase of the paragraph",
+      "spec_id": "rule_card.modal_spans@1",
+      "fields": [
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the card text",
+          "spec_id": "rule_card.modal_spans@1"
+        },
+        {
+          "name": "phrase",
+          "type": "text",
+          "nullable": false,
+          "description": "The lexicon phrase matched",
+          "spec_id": "rule_card.modal_spans@1"
+        }
+      ]
+    },
+    {
+      "name": "subject",
+      "type": "object",
+      "nullable": true,
+      "description": "Who the rule binds (enrichment pass); null before its model pass runs",
+      "spec_id": "rule_card.subject@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "text",
+          "nullable": true,
+          "description": "The subject",
+          "spec_id": "rule_card.subject@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "rule_card.subject@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "rule_card.subject@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "rule_card.subject@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "rule_card.subject@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "conditions",
+      "type": "object",
+      "nullable": true,
+      "description": "Typed conditions with quotes (enrichment pass); null before its model pass runs",
+      "spec_id": "rule_card.conditions@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "json",
+          "nullable": true,
+          "description": "The conditions: time window, dates, weekdays, holidays, notice, vessel, signal",
+          "spec_id": "rule_card.conditions@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "rule_card.conditions@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "rule_card.conditions@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "rule_card.conditions@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "rule_card.conditions@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "thresholds",
+      "type": "object",
+      "nullable": true,
+      "description": "Numeric thresholds with quotes (enrichment pass); null before its model pass runs",
+      "spec_id": "rule_card.thresholds@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "json",
+          "nullable": true,
+          "description": "The thresholds",
+          "spec_id": "rule_card.thresholds@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "rule_card.thresholds@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "rule_card.thresholds@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "rule_card.thresholds@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "rule_card.thresholds@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "exceptions",
+      "type": "object",
+      "nullable": true,
+      "description": "Exceptions with quotes (enrichment pass); null before its model pass runs",
+      "spec_id": "rule_card.exceptions@1",
+      "fields": [
+        {
+          "name": "value",
+          "type": "json",
+          "nullable": true,
+          "description": "The exceptions",
+          "spec_id": "rule_card.exceptions@1"
+        },
+        {
+          "name": "quotes",
+          "type": "object[]",
+          "nullable": false,
+          "description": "Supporting quotes, each re-sliced from the source text",
+          "spec_id": "rule_card.exceptions@1",
+          "fields": [
+            {
+              "name": "text",
+              "type": "text",
+              "nullable": false,
+              "description": "The quote, verbatim",
+              "spec_id": "rule_card.exceptions@1"
+            },
+            {
+              "name": "span",
+              "type": "int[]",
+              "nullable": false,
+              "description": "Start and end offsets in the document's canonical text",
+              "spec_id": "rule_card.exceptions@1"
+            }
+          ]
+        },
+        {
+          "name": "null_reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Why the value is null; null when it is set",
+          "spec_id": "rule_card.exceptions@1",
+          "allowed": [
+            "absent",
+            "not_applicable",
+            "unparseable",
+            "ungrounded",
+            "model_error",
+            "not_extracted"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "defined_terms",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Concept unit ids whose labels occur in scope",
+      "spec_id": "rule_card.defined_terms@1"
+    },
+    {
+      "name": "cross_refs",
+      "type": "object[]",
+      "nullable": false,
+      "description": "Explicit references in the paragraph",
+      "spec_id": "rule_card.cross_refs@1",
+      "fields": [
+        {
+          "name": "raw",
+          "type": "text",
+          "nullable": false,
+          "description": "The reference as written",
+          "spec_id": "rule_card.cross_refs@1"
+        },
+        {
+          "name": "target_ref",
+          "type": "text",
+          "nullable": false,
+          "description": "The normalised target, e.g. 33 CFR 117.5",
+          "spec_id": "rule_card.cross_refs@1"
+        },
+        {
+          "name": "target_unit",
+          "type": "text",
+          "nullable": true,
+          "description": "The target's unit id when it is a card",
+          "spec_id": "rule_card.cross_refs@1"
+        },
+        {
+          "name": "resolution",
+          "type": "text",
+          "nullable": false,
+          "description": "Whether the target was found",
+          "spec_id": "rule_card.cross_refs@1",
+          "allowed": [
+            "resolved",
+            "external",
+            "dangling"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "closure",
+      "type": "object[]",
+      "nullable": false,
+      "description": "The citation closure of the card",
+      "spec_id": "rule_card.closure@1",
+      "fields": [
+        {
+          "name": "unit_id",
+          "type": "text",
+          "nullable": false,
+          "description": "The unit reached",
+          "spec_id": "rule_card.closure@1"
+        },
+        {
+          "name": "relation",
+          "type": "text",
+          "nullable": false,
+          "description": "How it is reached",
+          "spec_id": "rule_card.closure@1",
+          "allowed": [
+            "cites",
+            "defines",
+            "exception_of",
+            "context"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bindings",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Binding ids compiled from this card",
+      "spec_id": "rule_card.bindings@1"
+    }
+  ]
+}

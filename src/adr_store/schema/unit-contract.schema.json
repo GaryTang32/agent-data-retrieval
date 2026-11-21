@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "UnitField": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allowed"
+        },
+        "description": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*$",
+          "title": "Description",
+          "type": "string"
+        },
+        "fields": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/UnitField"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fields"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "nullable": {
+          "title": "Nullable",
+          "type": "boolean"
+        },
+        "spec_id": {
+          "pattern": "^[a-z_]+\\.[a-z_]+@\\d+$",
+          "title": "Spec Id",
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "enum": [
+                "text",
+                "int",
+                "real",
+                "bool",
+                "date",
+                "text[]",
+                "real[]"
+              ],
+              "type": "string"
+            },
+            {
+              "enum": [
+                "int[]",
+                "json",
+                "object",
+                "object[]"
+              ],
+              "type": "string"
+            }
+          ],
+          "title": "Type"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "nullable",
+        "description",
+        "spec_id"
+      ],
+      "title": "UnitField",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]*$",
+      "title": "Description",
+      "type": "string"
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/UnitField"
+      },
+      "minItems": 1,
+      "title": "Fields",
+      "type": "array"
+    },
+    "type": {
+      "enum": [
+        "concept",
+        "rule_card",
+        "procedure",
+        "faq",
+        "table_record"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "type",
+    "version",
+    "description",
+    "fields"
+  ],
+  "title": "UnitContract",
+  "type": "object"
+}

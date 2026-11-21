@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>21.4.1 Refund Research | Internal Revenue Service</title>
+</head>
+<body>
+<div class="row">
+<div class="col-md-4">
+<ul class="toc">
+<li><a href="#id1">21.4.1 Refund Research</a>
+<ul>
+<li><a href="#id10">21.4.1.3 Refund Inquiry Research</a>
+<ul>
+<li><a href="#id11">21.4.1.3.1 Missing Refund Research</a></li>
+<li><a href="#id12">21.4.1.3.2 Direct Deposit Rejects</a></li>
+<li><a href="#id13">21.4.1.3.3 Refund Hold Codes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="col-md-8">
+<div class="section" id="id1">
+<div class="sectioninfo maintitle"><h1 class="title">Part 21. Customer Account Services</h1><h1 class="title">Chapter 4. Refund Inquiries</h1><h1 class="title">Section 1. Refund Research</h1><hr></div>
+<h2 class="title"><a class="ck-anchor" id="id2"></a>21.4.1 Refund Research</h2>
+<h4><a class="ck-anchor" id="id3"></a>Manual Transmittal</h4>
+<p>September 02, 2026</p>
+<h4><a class="ck-anchor" id="id4"></a>Purpose</h4>
+<p>(1) This transmits revised IRM 21.4.1, Refund Inquiries, Refund Research.</p>
+<h4><a class="ck-anchor" id="id5"></a>Material Changes</h4>
+<p>(1) IRM 21.4.1.3 - Updated the research steps for refund inquiries and direct deposit rejects.</p>
+<div class="section" id="id10">
+<div class="sectioninfo"><strong>21.4.1.3 (10-01-2026)</strong></div>
+<div class="titlepage"><div><div><h3 class="title"><a class="ck-anchor" id="id10"></a>Refund Inquiry Research</h3></div></div></div>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem"><p>This section gives the procedures for researching a refund inquiry when the taxpayer says the refund was not received.</p></li>
+<li class="listitem"><p>The following acronyms are used in this section:</p>
+<div class="informaltable"><table class="table table-condensed">
+<thead><tr><th><span class="bold"><strong>Acronym</strong></span></th><th><span class="bold"><strong>Definition</strong></span></th></tr></thead>
+<tbody>
+<tr><td>DDIA</td><td>Direct Deposit Indicator Account</td></tr>
+<tr><td>RTN</td><td>Routing Transit Number</td></tr>
+<tr><td>RIU</td><td>Refund Inquiry Unit</td></tr>
+</tbody>
+</table></div>
+</li>
+</ol></div>
+<div class="section" id="id11">
+<div class="sectioninfo"><strong>21.4.1.3.1 (10-01-2026)</strong></div>
+<div class="titlepage"><div><div><h4 class="title"><a class="ck-anchor" id="id11"></a>Missing Refund Research</h4></div></div></div>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem"><p>Research the account with Command Code IMFOLT to find the refund transaction.</p></li>
+<li class="listitem"><p>Request the refund trace with Command Code REQ77 when no TC 846 has posted after 21 days.</p></li>
+<li class="listitem"><p>Follow the chart below to decide the next action:</p>
+<div class="informaltable"><table class="table table-condensed">
+<thead><tr><th><span class="bold"><strong>If</strong></span></th><th><span class="bold"><strong>Then</strong></span></th></tr></thead>
+<tbody>
+<tr><td>If the taxpayer received a paper check that was lost or stolen</td><td>Then start a refund trace with Form 3911 and input TC 971 action code 001.</td></tr>
+<tr><td>If the taxpayer requested a direct deposit and TC 846 shows the RTN on file</td><td>Then advise the taxpayer to contact the bank, and refer to IRM 21.4.1.3.2 if the bank rejected the deposit.</td></tr>
+</tbody>
+</table></div>
+</li>
+<li class="listitem"><p>If the refund is still missing after six weeks, refer the case to the Refund Inquiry Unit.</p></li>
+</ol></div>
+</div>
+<div class="section" id="id12">
+<div class="sectioninfo"><strong>21.4.1.3.2 (10-01-2026)</strong></div>
+<div class="titlepage"><div><div><h4 class="title"><a class="ck-anchor" id="id12"></a>Direct Deposit Rejects</h4></div></div></div>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem"><p>Research the direct deposit reject with Command Code IMFOLT.</p></li>
+<li class="listitem"><p>Use the chart below when the bank rejected the direct deposit:</p>
+<div class="informaltable"><table class="table table-condensed">
+<thead><tr><th><span class="bold"><strong>If</strong></span></th><th><span class="bold"><strong>Then</strong></span></th></tr></thead>
+<tbody>
+<tr><td>If the taxpayer gave an RTN that does not match the bank</td><td>Then tell the taxpayer a paper check will be issued within six weeks.</td></tr>
+</tbody>
+</table></div>
+</li>
+</ol></div>
+</div>
+<div class="section" id="id13">
+<div class="sectioninfo"><strong>21.4.1.3.3 (10-01-2026)</strong></div>
+<div class="titlepage"><div><div><h4 class="title"><a class="ck-anchor" id="id13"></a>Refund Hold Codes</h4></div></div></div>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem"><p>Research the account with Command Code IMFOLT to find the refund transaction.</p></li>
+<li class="listitem"><p>Check the account for a refund hold code before you tell the taxpayer when the refund will issue; a hold releases when its condition is resolved.</p></li>
+</ol></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,390 @@
+{
+  "$defs": {
+    "Aids": {
+      "additionalProperties": false,
+      "description": "Retrieval aids: indexed, never returned in reader text (§11.1).",
+      "properties": {
+        "keywords": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "labels": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Labels",
+          "type": "array"
+        },
+        "problem_abstractions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Problem Abstractions",
+          "type": "array"
+        },
+        "trigger_examples": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Trigger Examples",
+          "type": "array"
+        }
+      },
+      "title": "Aids",
+      "type": "object"
+    },
+    "Governance": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_tier": {
+          "anyOf": [
+            {
+              "maximum": 4,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authority Tier"
+        },
+        "last_verified_at": {
+          "default": null,
+          "title": "Last Verified At",
+          "type": "null"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Owner"
+        },
+        "review_due": {
+          "default": null,
+          "title": "Review Due",
+          "type": "null"
+        },
+        "verifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Verifier"
+        }
+      },
+      "required": [
+        "owner",
+        "verifier",
+        "authority_tier"
+      ],
+      "title": "Governance",
+      "type": "object"
+    },
+    "Lineage": {
+      "additionalProperties": false,
+      "description": "How the unit was made: the compiler, and for model-written fields the prompt version,\nthe served model and the cache key (all null for code-built units).",
+      "properties": {
+        "cache_key_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cache Key Sha256"
+        },
+        "compiler": {
+          "title": "Compiler",
+          "type": "string"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Prompt Version"
+        },
+        "served_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Served Model"
+        }
+      },
+      "required": [
+        "compiler",
+        "prompt_version",
+        "served_model",
+        "cache_key_sha256"
+      ],
+      "title": "Lineage",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "description": "A character span of the unit's document's canonical text, and the spec that read it.",
+      "properties": {
+        "doc_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Doc Id",
+          "type": "string"
+        },
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "spec_id": {
+          "pattern": "^[a-z_]+\\.[a-z_]+@\\d+$",
+          "title": "Spec Id",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "doc_id",
+        "start",
+        "end",
+        "spec_id"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "UnitApplicability": {
+      "additionalProperties": false,
+      "properties": {
+        "audience": {
+          "default": null,
+          "title": "Audience",
+          "type": "null"
+        },
+        "chain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Chain"
+        },
+        "effective_from": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Effective From"
+        },
+        "effective_to": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Effective To"
+        },
+        "jurisdiction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Jurisdiction"
+        },
+        "status": {
+          "enum": [
+            "validated",
+            "superseded",
+            "retired"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "superseded_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Superseded By"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes"
+        }
+      },
+      "required": [
+        "status",
+        "effective_from",
+        "effective_to",
+        "supersedes",
+        "superseded_by",
+        "chain",
+        "jurisdiction"
+      ],
+      "title": "UnitApplicability",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One knowledge unit: the envelope (§5.1) and a body that its type's contract types.",
+  "properties": {
+    "aids": {
+      "$ref": "#/$defs/Aids"
+    },
+    "applicability": {
+      "$ref": "#/$defs/UnitApplicability"
+    },
+    "body": {
+      "additionalProperties": true,
+      "title": "Body",
+      "type": "object"
+    },
+    "canonical_ref": {
+      "minLength": 1,
+      "title": "Canonical Ref",
+      "type": "string"
+    },
+    "contract": {
+      "title": "Contract",
+      "type": "string"
+    },
+    "doc_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "governance": {
+      "$ref": "#/$defs/Governance"
+    },
+    "hashes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Hashes",
+      "type": "object"
+    },
+    "heading_path": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Heading Path",
+      "type": "array"
+    },
+    "lineage": {
+      "$ref": "#/$defs/Lineage"
+    },
+    "source_refs": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Source Refs",
+      "type": "array"
+    },
+    "tables_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Tables Id"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    },
+    "unit_id": {
+      "minLength": 1,
+      "title": "Unit Id",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unit_id",
+    "type",
+    "title",
+    "heading_path",
+    "canonical_ref",
+    "version",
+    "doc_id",
+    "contract",
+    "source_refs",
+    "lineage",
+    "tables_id",
+    "applicability",
+    "governance",
+    "hashes",
+    "aids",
+    "body"
+  ],
+  "title": "Unit",
+  "type": "object"
+}

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "description": "How each corpus fills a unit's jurisdiction, owner and authority tier (Phase 4 spec §5.1). jurisdiction null takes the Phase 2 envelope's value; owner issuer takes the Phase 2 issuer, source_system the bench document's Source line; authority_tier maps the tier_by key of a document (URI family, bench source system or file format) to a tier, and an unlisted key takes the Phase 2 tier.",
+  "corpora": {
+    "bench": {
+      "jurisdiction": "Redwood Inference",
+      "owner": "source_system",
+      "tier_by": "source_system",
+      "authority_tier": {
+        "confluence": 2,
+        "fireflies": 4,
+        "github": 4,
+        "gmail": 4,
+        "google_drive": 2,
+        "hubspot": 4,
+        "jira": 4,
+        "linear": 4,
+        "slack": 4
+      }
+    },
+    "gov": {
+      "jurisdiction": null,
+      "owner": "issuer",
+      "tier_by": "family",
+      "authority_tier": {
+        "ecfr": 1,
+        "irm": 1
+      }
+    },
+    "research": {
+      "jurisdiction": null,
+      "owner": null,
+      "tier_by": "format",
+      "authority_tier": {
+        "md": 3,
+        "pdf": 4
+      }
+    }
+  }
+}

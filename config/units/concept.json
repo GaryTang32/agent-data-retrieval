@@ -1,0 +1,116 @@
+{
+  "type": "concept",
+  "version": 1,
+  "description": "A defined term in one scope of one document (§5.3, §7)",
+  "fields": [
+    {
+      "name": "pref_label",
+      "type": "text",
+      "nullable": false,
+      "description": "The term as the definition states it",
+      "spec_id": "concept.pref_label@1"
+    },
+    {
+      "name": "alt_labels",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Other names: acronyms, long forms, alternate spellings",
+      "spec_id": "concept.alt_labels@1"
+    },
+    {
+      "name": "hidden_labels",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Case-folded, hyphen and plural variants (index only)",
+      "spec_id": "concept.hidden_labels@1"
+    },
+    {
+      "name": "definition",
+      "type": "object",
+      "nullable": false,
+      "description": "The definition statement and its span",
+      "spec_id": "concept.definition@1",
+      "fields": [
+        {
+          "name": "text",
+          "type": "text",
+          "nullable": false,
+          "description": "The verbatim text",
+          "spec_id": "concept.definition@1"
+        },
+        {
+          "name": "span",
+          "type": "int[]",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "concept.definition@1"
+        }
+      ]
+    },
+    {
+      "name": "scope",
+      "type": "object",
+      "nullable": false,
+      "description": "Where the definition applies",
+      "spec_id": "concept.scope@1",
+      "fields": [
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false,
+          "description": "The extent of the scope",
+          "spec_id": "concept.scope@1",
+          "allowed": [
+            "part",
+            "subpart",
+            "section",
+            "paragraph",
+            "document"
+          ]
+        },
+        {
+          "name": "ref",
+          "type": "text",
+          "nullable": false,
+          "description": "The scope's reference, e.g. 33 CFR part 117",
+          "spec_id": "concept.scope@1"
+        }
+      ]
+    },
+    {
+      "name": "scope_note",
+      "type": "text",
+      "nullable": true,
+      "description": "A note on the scope, when the source gives one",
+      "spec_id": "concept.scope_note@1"
+    },
+    {
+      "name": "broader",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Unit ids of the same term in an enclosing scope",
+      "spec_id": "concept.broader@1"
+    },
+    {
+      "name": "narrower",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Unit ids of the same term in an enclosed scope",
+      "spec_id": "concept.narrower@1"
+    },
+    {
+      "name": "related",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Related concept unit ids (empty in Phase 4)",
+      "spec_id": "concept.related@1"
+    },
+    {
+      "name": "exact_match",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Equivalent concepts elsewhere (empty in Phase 4)",
+      "spec_id": "concept.exact_match@1"
+    }
+  ]
+}
