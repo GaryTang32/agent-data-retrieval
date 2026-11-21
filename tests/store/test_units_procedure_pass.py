@@ -377,7 +377,8 @@ def test_a_number_missing_from_every_quote_is_auto_accepted(one_field):         
                                           "quotes": [NUMBER_QUOTE]}), "trigger_examples")
     assert v.status == "auto-accepted"                  # each list item is checked
     v = one_field(reply(when_to_use={"value": "Use when no TC 846 after 21 days",
-                                     "quotes": [REAL_QUOTE, "a quote the text never says"]}))
+                                     "quotes": [REAL_QUOTE,
+                                                "no TC 846 after 21 days, never in the text"]}))
     assert v.status == "auto-accepted"                  # only grounded quotes count
 
 
