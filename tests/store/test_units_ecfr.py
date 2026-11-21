@@ -195,6 +195,30 @@ def test_later_markers_of_a_paragraph_go_deeper():                         # rev
     assert marker_path((), "(a)(1)(i)(A) X") == ("a", "1", "i", "A")
 
 
+def test_plain_subject_headings_before_a_marker():                        # fix round 1b
+    # the 47 CFR 73.99 shape: a capitalised heading of at most 10 words, ". " or "—", then the
+    # marker one level below
+    assert marker_path((), "(e) Procedural Matters. (1) Applications are not required.") == (
+        "e", "1")
+    assert marker_path((), "(a) Rules of the Road—(1) Each vessel shall keep right.") == (
+        "a", "1")
+    assert marker_path(("a",), "(2) Lights and Signals. (i) Each vessel shall show a light.") \
+        == ("a", "2", "i")
+    # not a heading: a cross-reference sentence, a sentence-case clause, a colon, a heading of
+    # eleven words, a marker that is not one level below, a space before the dash
+    for text in ["(e) See paragraph (1) of this section.",
+                 "(e) Applications are not required. (1) Each station shall notify.",
+                 "(e) Technical criteria. (1) Class D stations shall protect.",
+                 "(b) Waivers: (1) The COTP may grant a waiver.",
+                 "(e) One Two Three Four Five Six Seven Eight Nine Ten Eleven. (1) X",
+                 "(e) General. (i) Each station shall notify.",
+                 "(e) General. (A) Each station shall notify.",
+                 "(e) General.(1) X"]:
+        assert marker_path((), text) == (text[1],), text
+    assert marker_path((), "(e) Ten Words Here Are All Capitalised And Of The Right. (1) X") \
+        == ("e", "1")
+
+
 def test_a_top_level_roman_list_gives_siblings():                          # review M5
     assert run_markers(["(i) a", "(ii) b", "(iii) c"]) == [("i",), ("ii",), ("iii",)]
     assert run_markers(["intro", "(i) a", "(ii) b"]) == [("p1",), ("i",), ("ii",)]
@@ -234,6 +258,18 @@ LEVELS_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <P>(ii) <I>Lights.</I></P>
 <P>(L)(<I>1</I>) Each vessel shall show a light.</P>
 <P>(<I>2</I>) Each vessel shall sound a signal.</P>
+<P>(b) <I>Definitions.</I> (1) <I>Captain of the Port</I> means the Commander.</P>
+<P><I>(2) Representative</I> means any Coast Guard officer.</P>
+</DIV8>
+<DIV8 N="73.99" TYPE="SECTION">
+<HEAD>&#xA7; 73.99 Presunrise service authorization.</HEAD>
+<P>(e) Procedural Matters. (1) Applications for PSRA and PSSA operation are not required.
+Instead, the station shall notify the Commission of:</P>
+<P>(i) Licensee name, station call letters and station location,</P>
+<P>(ii) A description of the method of power reduction.</P>
+<P>(2) Upon submission of the required information, such operation may begin.</P>
+<P>(f) Technical criteria. (1) Class D stations shall protect Class A stations.</P>
+<P>(2) Class D stations are required to protect foreign stations.</P>
 </DIV8>
 </DIV5>
 """
@@ -253,7 +289,11 @@ def test_provision_ids_follow_italic_markers_and_roman_lookahead(tmp_path):
         "47 CFR 73.3801(h)(4)(ii)", "47 CFR 73.3801(i)(1)(i)", "47 CFR 73.3801(i)(1)(ii)",
         "47 CFR 73.3801(i)(2)",
         "47 CFR 73.3802(a)", "47 CFR 73.3802(a)(2)", "47 CFR 73.3802(a)(2)(ii)",
-        "47 CFR 73.3802(a)(2)(ii)(L)(1)", "47 CFR 73.3802(a)(2)(ii)(L)(2)"]
+        "47 CFR 73.3802(a)(2)(ii)(L)(1)", "47 CFR 73.3802(a)(2)(ii)(L)(2)",
+        "47 CFR 73.3802(b)(1)", "47 CFR 73.3802(b)(2)",   # 33 CFR 165.562's italic run
+        # fix round 1b: a plain capitalised heading before "(1)"; "criteria" is not
+        "47 CFR 73.99(e)(1)", "47 CFR 73.99(e)(1)(i)", "47 CFR 73.99(e)(1)(ii)",
+        "47 CFR 73.99(e)(2)", "47 CFR 73.99(f)", "47 CFR 73.99(f)(2)"]
     assert not any(skips_a_level(p.path) for p in provisions(store, d)
                    if p.section == "73.3801")
     assert skips_a_level(("d", "iv")) and skips_a_level(("1",))

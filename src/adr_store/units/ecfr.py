@@ -209,12 +209,46 @@ def _level(tok: str, path: tuple[str, ...], italic: bool = False,
     return lv
 
 
+_SMALL_WORDS = frozenset({"and", "or", "of", "the", "for", "to", "in", "on", "a", "an"})
+_PLAIN_HEADING = re.compile(r"\s*([^().\u2014\n]{1,200}?)(?:\. |\u2014)")
+
+
+def _plain_heading_end(text: str, i: int, last: str, last_italic: bool) -> int | None:
+    """Where the marker after a plain subject heading starts, for "(x) <Heading>. (y) …" or
+    "(x) <Heading>—(y) …" read from `i` (just after marker `last`), or None. The heading is
+    at most 10 words, each capitalised apart from small words (and, or, of, the, for, to,
+    in, on, a, an); it ends in ". " or "—"; "(y)" follows at once, one level below (x)."""
+    m = _PLAIN_HEADING.match(text, i)
+    if m is None:
+        return None
+    words = m.group(1).split()
+    if not words or len(words) > 10:
+        return None
+    for w in words:
+        letters = [c for c in w if c.isalpha()]
+        if letters and not letters[0].isupper() and w.lower() not in _SMALL_WORDS:
+            return None
+    y = _TOKEN.match(text, m.end())
+    if y is None or not _token_ok(y.group(1)):
+        return None
+    if not any(ly == lx + 1 for lx in _candidates(last, last_italic)
+               for ly in _candidates(y.group(1), False)):
+        return None
+    return m.end()
+
+
 def _leading_markers(text: str) -> list[str]:
+    """The leading markers of `text`, including those after a plain subject heading
+    (`_plain_heading_end`)."""
     toks, i = [], 0
-    while (m := _TOKEN.match(text, i)) and _token_ok(m.group(1)):
-        toks.append(m.group(1))
-        i = m.end()
-    return toks
+    while True:
+        if (m := _TOKEN.match(text, i)) and _token_ok(m.group(1)):
+            toks.append(m.group(1))
+            i = m.end()
+        elif toks and (k := _plain_heading_end(text, i, toks[-1], False)) is not None:
+            i = k
+        else:
+            return toks
 
 
 def _path_of(prev: tuple[str, ...], toks: list[str], italic: tuple[bool, ...],
@@ -254,7 +288,8 @@ def _element_markers(p: etree._Element) -> tuple[list[str], tuple[bool, ...]]:
     """The leading markers of paragraph element `p` and whether each is italic. A marker may
     be italic ("(<I>1</I>)"), and an italic subject heading after a marker may be followed by
     more markers ("(d) <I>Regulations</I>—(1) <I>Positive control.</I> (i) Except"): the
-    paragraph then starts with all of them."""
+    paragraph then starts with all of them. So may a plain heading
+    (`_plain_heading_end`: "(e) Procedural Matters. (1) Applications …")."""
     text, mask = "", []
     for seg, it in _segments_until_other(p):
         text += seg
@@ -266,12 +301,20 @@ def _element_markers(p: etree._Element) -> tuple[list[str], tuple[bool, ...]]:
         m = _TOKEN.match(text, i)
         if m and _token_ok(m.group(1)):
             toks.append(m.group(1))
-            italic.append(all(mask[m.start(1):m.end(1)]))
+            # an italic marker sets the token, not its parentheses, in italics ("(<I>1</I>)");
+            # "<I>(2) Representative</I>" is an italic run, not a level-5 marker
+            italic.append(all(mask[m.start(1):m.end(1)]) and not mask[m.start()])
             i = m.end()
             continue
-        j = i + len(text[i:]) - len(text[i:].lstrip())
-        if not toks or j >= len(text) or not mask[j] or text[j] == "(":
+        if not toks:
             break
+        j = i + len(text[i:]) - len(text[i:].lstrip())
+        if j >= len(text) or not mask[j] or text[j] == "(":
+            k = _plain_heading_end(text, i, toks[-1], italic[-1])
+            if k is None or any(mask[i:k]):
+                break
+            i = k
+            continue
         k = j
         while k < len(text) and mask[k]:
             k += 1
