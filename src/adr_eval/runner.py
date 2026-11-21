@@ -600,17 +600,19 @@ def run(
                  prices, typed, tables)
         return run_id
 
-    # tables mode: each transport attempt takes a unit and an input rejection is stored as a
-    # failure, which needs a cached client (every real adapter is one); only the built-in
-    # `stub` generator (no model, no retries) is metered per call
-    cached = tables and isinstance(generator, _CachedClient)
+    # tables mode and a typed system (the Q1 path, ruling P21): each transport attempt of a
+    # cached client (every real adapter is one) takes a unit and only an input rejection is
+    # stored as a failure; tables mode refuses any other client but the built-in `stub`
+    # generator (no model, no retries), which is metered per call. A typed system makes no
+    # judge call, so tables mode and a typed system meter no judge.
+    cached = (tables or typed) and isinstance(generator, _CachedClient)
     if tables and not cached and not stub:
         raise RunError(f"a {GOV_TABLES} run counts every transport attempt and caches input "
                        f"rejections, which needs a cached client, not "
                        f"{type(generator).__name__}")
     budget = Budget(max_dollars, max_calls, count_attempts=cached)
     gen_meter = MeteredClient(generator, budget, prices)
-    judge_meter = None if tables else MeteredClient(judge, budget, prices)
+    judge_meter = None if tables or typed else MeteredClient(judge, budget, prices)
     cfg = {
         "run_id": run_id, "metrics_version": METRICS_VERSION,
         "corpus": corpus, "system": system, "split": split,
@@ -640,8 +642,9 @@ def run(
         "status": "running", "started": datetime.now(UTC).isoformat(),
     }
     if tables:
-        cfg.update(golden_set=GOV_TABLES, facts=facts, judge_enabled=False,
-                   count_attempts=budget.count_attempts)
+        cfg.update(golden_set=GOV_TABLES, facts=facts, judge_enabled=False)
+    if tables or typed:
+        cfg["count_attempts"] = budget.count_attempts
     if typed:
         compile_data = {"tables": index.fingerprint, "manifest": index.manifest()}
     else:
@@ -650,7 +653,7 @@ def run(
 
     ctx = Context(index, adapter.records(loaded), schema,
                   _CachingFailures(gen_meter) if cached else gen_meter,
-                  None if tables else Judge(judge_meter, recover=True), groups,
+                  None if judge_meter is None else Judge(judge_meter, recover=True), groups,
                   typed=(index.answer_table if tables else index.answer) if typed else None,
                   mode="tables" if tables else "v0.1", judge_enabled=not tables,
                   table_queries=table_queries)

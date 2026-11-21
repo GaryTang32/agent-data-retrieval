@@ -537,6 +537,27 @@ def _index(a: argparse.Namespace) -> int:
     return 0
 
 
+def _check_typed_v01(a: argparse.Namespace) -> None:
+    """A `p3-typed` run on golden v0.1 (Q1, Phase 3 spec §10.2) reuses the baseline's generated
+    queries from the model cache: it needs --max-calls (every transport attempt counts; Q1 is
+    run with 0), and the query-generation prompt and record schema text must be byte-identical
+    to the baseline's (`phase3.cache_inputs_unchanged`), or every call would be made anew.
+    --stub and --dry-run call no model: they need no cap, and a stub run no cache check."""
+    from adr_eval import phase3
+
+    if a.max_calls is None and not (a.stub or a.dry_run):
+        raise runner.RunError(f"a {a.system} run needs --max-calls (Q1 reads the baseline's "
+                              f"cached queries: pass --max-calls 0; every transport attempt "
+                              f"counts)")
+    problems = [] if a.stub else phase3.cache_inputs_unchanged(a.corpus)
+    if problems:
+        raise runner.RunError("Q1 reuses the baseline's cached queries, keyed by the "
+                              "query-generation prompt and the record schema text; these "
+                              "differ, so every query would be a new model call:\n"
+                              + "\n".join(problems)
+                              + "\nfix: restore the baseline's prompt and schema text")
+
+
 def _run(a: argparse.Namespace) -> int:
     """`adr-eval run`. With `--golden gov-tables` (tables mode, Phase 3 §10.3, §11) the default
     is one repeat (the budget is one query and, for a chunk system, one answer call per item),
@@ -557,6 +578,8 @@ def _run(a: argparse.Namespace) -> int:
     if tables and a.max_calls is None and not (a.stub or a.dry_run):
         raise runner.RunError("a gov-tables run needs --max-calls (its share of the approved "
                               "budget; every transport attempt counts)")
+    if not tables and a.system in systems.P3_NAMES:
+        _check_typed_v01(a)
     repeats = a.repeats if a.repeats is not None else (1 if tables else config["repeats"])
     try:
         run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,

@@ -14,10 +14,11 @@ import pytest
 
 from adr_eval import runner, systems
 from adr_eval.answer._prompts import load_prompt
+from adr_eval.cache import Cache
 from adr_eval.cli import main
 from adr_eval.corpora.gov import GovAdapter
 from adr_eval.golden.records import exec_gold_query
-from adr_eval.llm import Completion, StubClient
+from adr_eval.llm import CachedStubClient, Completion, StubClient
 from adr_eval.models import Answer, Checks, GoldenItem, GoldQuery, Provenance, write_items
 from adr_eval.phase3 import (
     QUERY_GEN_SHA256,
@@ -35,6 +36,7 @@ from tests.store.tables_fixtures import loaded_of
 from tests.store.test_tables_tools import make
 
 QUERY_PROMPT = load_prompt("query_gen")
+PRICED = "claude-sonnet-5-5"   # a model with a price: a profile-built client needs one
 CHUNK_ROWS = json.loads((Path(__file__).parent / "fixtures" / "chunk_path_rows_mini.json")
                         .read_text(encoding="utf-8"))
 BAD = "How many documents have a red colour?"  # its generated query names no column
@@ -295,6 +297,118 @@ def test_p3_typed_needs_a_caller(tables_store_config):
     env["config"]["p2_caller"] = None
     with pytest.raises(RunError, match="p2_caller"):
         typed_run(env, generator())
+
+
+# -- the Q1 path budget (final review I1) --------------------------------------------------------
+
+
+def cached_generator(tmp_path, fn=None, model="stub-gen", **kw) -> CachedStubClient:
+    """`generator()`'s replies behind a real reply cache (a `_CachedClient`, as every real
+    adapter is), so the budget can count its transport attempts."""
+    return CachedStubClient(model, Cache(tmp_path / "llm-gen"), fn or generator().fn, **kw)
+
+
+def test_a_typed_v0_1_run_counts_every_transport_attempt(tables_store_config, tmp_path,
+                                                          monkeypatch):
+    """P21 on the Q1 path: with a cached generator, each transport attempt (a retry included)
+    takes a unit of --max-calls; no judge client is metered (a typed run calls none)."""
+    from adr_eval import llm
+
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    env = tables_store_config
+    state = {"failed": 0}
+    base = generator().fn
+
+    def flaky(system, user, repeat):          # the first transport attempt fails, then replies
+        if state["failed"] == 0:
+            state["failed"] += 1
+            raise llm._Retryable("overloaded")
+        return base(system, user, repeat)
+
+    gen = cached_generator(tmp_path, flaky, max_retries=5)
+    stopped = typed_run(env, gen, max_calls=4)       # 1 retry + 4 replies > 4 units
+    cfg = config_json(stopped)
+    assert cfg["status"] == "stopped_calls" and cfg["calls"] == 4
+    assert cfg["count_attempts"] is True and len(load_rows(stopped)) == 3
+    done = typed_run(env, gen, max_calls=1)          # three replies cached: one attempt left
+    cfg = config_json(done)
+    assert cfg["status"] == "complete" and cfg["calls"] == 1 and gen.calls == 5
+    assert len(load_rows(done)) == 4
+
+
+def test_a_typed_v0_1_run_caches_input_rejections_only(tables_store_config, tmp_path):
+    """P21: an input rejection is stored and replayed with no call; any other model failure
+    is an error row of this run and is never stored, so a rerun calls again."""
+    from adr_eval import llm
+
+    env = tables_store_config
+    base = generator().fn
+    failing = {"How many Rule documents are there?": llm.InputRejected("HTTP 400: too long"),
+               "Which documents affect 33 CFR 117?": llm.RetriesExhausted("usage limit")}
+    mode = {"fail": True}
+
+    def fn(system, user, repeat):
+        question = user.rsplit("Question: ", 1)[1]
+        if mode["fail"] and question in failing:
+            raise failing[question]
+        return base(system, user, repeat)
+
+    gen = cached_generator(tmp_path, fn)
+    rows = {r["item_id"]: r for r in load_rows(typed_run(env, gen, max_calls=10))}
+    assert rows["gov-c1"]["outcome"] == "error" and "HTTP 400" in rows["gov-c1"]["error"]
+    assert rows["gov-c2"]["outcome"] == "error" and "usage limit" in rows["gov-c2"]["error"]
+    mode["fail"] = False
+    before = gen.calls
+    again = {r["item_id"]: r for r in load_rows(typed_run(env, gen, max_calls=10))}
+    assert again["gov-c1"]["outcome"] == "error" and "HTTP 400" in again["gov-c1"]["error"]
+    assert again["gov-c2"]["outcome"] == "correct"
+    assert gen.calls - before == 1                   # only the failure that was not stored
+
+
+def run_typed_cli(env, monkeypatch, capsys, *args) -> tuple[int, str, str]:
+    monkeypatch.setattr(runner, "load_config", lambda path=runner.CONFIG_PATH: env["config"])
+    code = main(["run", "gov", "--system", "p3-typed", "--qtype", "count_filter", "--split",
+                 "test", "--repeats", "1", "--out", str(env["out"]), *map(str, args)])
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_adr_eval_run_p3_typed_needs_max_calls(tables_store_config, tmp_path, monkeypatch,
+                                               capsys):
+    env = tables_store_config
+    made = []
+
+    def make_client(name, profiles, cache, max_retries=5):
+        made.append(name)
+        return cached_generator(tmp_path / name, model=PRICED)
+
+    monkeypatch.setattr(runner, "make_client", make_client)
+    code, out, err = run_typed_cli(env, monkeypatch, capsys)
+    assert code == 2 and "p3-typed run needs --max-calls" in err
+    assert not env["out"].exists() and made == []
+    code, out, err = run_typed_cli(env, monkeypatch, capsys, "--max-calls", 4)
+    assert code == 0, err
+    assert "status complete" in out and "4 rows" in out
+    cfg = config_json(next(env["out"].iterdir()))
+    assert cfg["max_calls"] == 4 and cfg["count_attempts"] is True and cfg["calls"] == 4
+    # --stub and --dry-run call no model: no cap needed
+    assert run_typed_cli(env, monkeypatch, capsys, "--dry-run")[0] == 0
+
+
+def test_adr_eval_run_p3_typed_refuses_changed_cache_inputs(tables_store_config, monkeypatch,
+                                                            capsys):
+    """Q1 reuses the baseline's cached queries (spec §10.2): a query-generation prompt or
+    record schema that is not byte-identical to the baseline's would make every call anew,
+    so the run is refused before anything is built."""
+    from adr_eval.answer import query_gen
+
+    env = tables_store_config
+    monkeypatch.setattr(runner, "make_client", lambda *a, **k: pytest.fail("a client was made"))
+    monkeypatch.setattr(query_gen, "load_prompt", lambda name: QUERY_PROMPT + " ")
+    code, out, err = run_typed_cli(env, monkeypatch, capsys, "--max-calls", 0)
+    assert code == 2 and not env["out"].exists()
+    assert "query-generation prompt has sha256" in err and QUERY_GEN_SHA256[:12] in err
+    assert "Q1 reuses the baseline's cached queries" in err
 
 
 @pytest.mark.slow
