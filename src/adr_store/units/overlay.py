@@ -11,7 +11,8 @@ that names a build (Phase 4 spec §5.2), on the pattern of the Phase 3 table ove
 
 A unit file holds one canonical JSON `Unit` per line; its id is the SHA-256 of the file and is
 in the name, so builds coexist; an existing file with other bytes is refused, never replaced.
-The `.report.json` is not hashed. The manifest lists every unit file of a build and the tables
+The `.report.json` is not hashed, but it is written once too: writing the same unit file again
+with a different report is refused. The manifest lists every unit file of a build and the tables
 id and applicability overlay id it read; its SHA-256 is the **units id**. `HEAD` names the
 current manifest and moves only through the units merge gate (`units/gate.py` calls
 `_set_units_head`). `read_units_head` returns the units id only when that manifest loads,
@@ -31,7 +32,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from adr_store.records import _HEX64, canonical_json
 from adr_store.store import StoreError, write_atomic
 from adr_store.tables.overlay import TablesError, _write_once
-from adr_store.units.contracts import UnitContract, unit_contract_sha256, validate_unit
+from adr_store.units.contracts import (
+    MODEL_FIELD_KEYS,
+    UnitContract,
+    unit_contract_sha256,
+    validate_unit,
+)
 from adr_store.units.envelope import Unit
 
 UNITS_DIR = "units"
@@ -104,26 +110,25 @@ def _write_unit_file(path: Path, data: bytes, what: str) -> None:
 # -- unit files ----------------------------------------------------------------------------------
 
 def _model_fields(unit: Unit) -> dict[str, dict]:
-    """The body's model-written fields (objects holding value, quotes and null_reason)."""
+    """The body's model-written fields (objects holding value, quotes, status and
+    null_reason)."""
     return {k: v for k, v in unit.body.items()
-            if isinstance(v, dict) and set(v) == {"value", "quotes", "null_reason"}}
+            if isinstance(v, dict) and set(v) == MODEL_FIELD_KEYS}
 
 
 def _summaries(units: list[Unit]) -> tuple[dict, dict]:
-    """(null reasons: field -> reason -> count; grounding: field -> units with a value and
-    with a quoted value) over the stored units' model-written fields."""
+    """(null reasons: field -> reason -> count; grounding: field -> value status -> count)
+    over the stored units' model-written fields."""
     nulls: dict[str, dict[str, int]] = {}
     grounding: dict[str, dict[str, int]] = {}
     for u in units:
         for name, f in sorted(_model_fields(u).items()):
             if f["value"] is None:
-                reason = f["null_reason"] or "null"
                 by = nulls.setdefault(name, {})
-                by[reason] = by.get(reason, 0) + 1
+                by[f["null_reason"]] = by.get(f["null_reason"], 0) + 1
             else:
-                g = grounding.setdefault(name, {"values": 0, "quoted": 0})
-                g["values"] += 1
-                g["quoted"] += bool(f["quotes"])
+                g = grounding.setdefault(name, {"auto-accepted": 0, "verified": 0})
+                g[f["status"]] += 1
     return ({k: dict(sorted(v.items())) for k, v in sorted(nulls.items())},
             dict(sorted(grounding.items())))
 
@@ -131,26 +136,29 @@ def _summaries(units: list[Unit]) -> tuple[dict, dict]:
 def write_units(store_path: Path, snapshot: str, c: UnitContract, units: list[Unit],
                 report: dict) -> UnitFile:
     """Validate `units` against `c` and write the valid ones once, sorted by unit id, with a
-    `.report.json` beside them. A unit that fails validation, or repeats the id of another, is
-    rejected and counted, not stored. `report` is filled in place (and written): `type`,
-    `contract_version`, `contract_sha256`, `sha256`, `units`, `rejected` (one entry per
-    rejected unit: `unit_id`, `doc_id`, `problems`), `null_reasons` and `grounding` (over the
-    stored units' model-written fields). An existing file of this id is left as it is when its
-    bytes are the same and refused (UnitsError) when they are not."""
+    `.report.json` beside them. A unit that fails validation is rejected and counted, not
+    stored. Two units with the same id are a compiler error and refused (UnitsError) before
+    anything is written, so the file never depends on input order. `report` is filled in place
+    (and written): `type`, `contract_version`, `contract_sha256`, `sha256`, `units`,
+    `rejected` (one entry per rejected unit: `unit_id`, `doc_id`, `problems`), `null_reasons`
+    and `grounding` (over the stored units' model-written fields). An existing unit file of
+    this id is left as it is when its bytes are the same and refused (UnitsError) when they
+    are not; so is its report."""
     directory = _dir(store_path, snapshot)
+    seen: set[str] = set()
+    for u in units:
+        if u.unit_id in seen:
+            raise UnitsError(f"two {c.type} units have the id {u.unit_id!r}; unit ids must be "
+                             f"unique (one unit per document and source element)")
+        seen.add(u.unit_id)
     rejected: list[dict] = []
-    valid: dict[str, list[tuple[bytes, Unit]]] = {}
+    stored: list[tuple[bytes, Unit]] = []
     for u in units:
         if problems := validate_unit(c, u):
             rejected.append({"unit_id": u.unit_id, "doc_id": u.doc_id, "problems": problems})
         else:
-            valid.setdefault(u.unit_id, []).append((canonical_json(u), u))
-    stored: list[tuple[bytes, Unit]] = []
-    for uid in sorted(valid):
-        first, *repeats = valid[uid]
-        stored.append(first)
-        rejected += [{"unit_id": uid, "doc_id": u.doc_id, "problems": ["duplicate unit id"]}
-                     for _, u in repeats]
+            stored.append((canonical_json(u), u))
+    stored.sort(key=lambda t: t[1].unit_id)
     rejected.sort(key=lambda r: (r["unit_id"], r["doc_id"], r["problems"]))
     data = b"".join(line for line, _ in stored)
     file_id = _sha256(data)
@@ -159,15 +167,19 @@ def write_units(store_path: Path, snapshot: str, c: UnitContract, units: list[Un
                   file=f"{c.type}-v{c.version}-{file_id[:16]}.jsonl", sha256=file_id,
                   units=len(stored), rejected=len(rejected))
     path = directory / uf.file
-    _write_unit_file(path, data, "unit file")
     nulls, grounding = _summaries([u for _, u in stored])
     report.update({"type": c.type, "contract_version": c.version,
                    "contract_sha256": uf.contract_sha256, "sha256": file_id,
                    "units": len(stored), "rejected": rejected, "null_reasons": nulls,
                    "grounding": grounding})
-    write_atomic(path.with_suffix(".report.json"),
-                 (json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False)
-                  + "\n").encode("utf-8"))
+    report_bytes = (json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False)
+                    + "\n").encode("utf-8")
+    report_path = path.with_suffix(".report.json")
+    if path.exists() and report_path.exists() and report_path.read_bytes() != report_bytes:
+        raise UnitsError(f"{report_path} already reports another build of {uf.file} (other "
+                         f"rejections or pass details); it is not replaced")
+    _write_unit_file(path, data, "unit file")
+    _write_unit_file(report_path, report_bytes, "unit report")
     return uf
 
 

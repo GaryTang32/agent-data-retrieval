@@ -6,8 +6,11 @@ closed window, a seasonal notice rule, "paragraph (b) of this section", "§§ 11
 117.31", "33 CFR part 165" and the absent § 117.999), a 33 CFR 165 excerpt ("designated
 representative" defined for the part and again for § 165.T01; "regulated navigation area
 (RNA)"), an IRM chapter excerpt (four `div.section`: an "Acronyms" table, two If/Then
-sections, and § 21.4.1.3.3 whose first own line repeats an earlier line, so the canonical
-text drops it), and three bench documents: a runbook (Confluence), an FAQ (Slack) and a KCS
+sections, and a last section, § 21.4.1.3.3, that the canonical text drops whole: the HTML
+extractor's `favor_precision` trims the trailing block, so its first own line, which also
+repeats § 21.4.1.3.1's, cannot be located after § 21.4.1.3.2 and none of its text survives to
+be merged; unlike the real IRM text, the fixture's canonical text keeps no table of
+contents), and three bench documents: a runbook (Confluence), an FAQ (Slack) and a KCS
 article (Confluence). The older 117 version differs from the newest in § 117.821(b) ("two
 hours notice") and in how § 117.4 marks "Drawtender"; § 117.821(a) is the same in both.
 
@@ -129,23 +132,29 @@ def units_store(tmp_path) -> Store:
 D1, D2 = "1" * 64, "2" * 64
 
 
-def model_field(value=None, *, quotes=(), null_reason: str | None = "not_extracted") -> dict:
-    """A model-written body field: `{value, quotes[], null_reason}` (null reason dropped when a
-    value is given)."""
+def model_field(value=None, *, quotes=(), status: str = "verified",
+                null_reason: str = "not_extracted") -> dict:
+    """A model-written body field `{value, quotes[], status, null_reason}`: with a value, its
+    `status` and no null reason; without one, no status and `null_reason` (by default the
+    canonical not-extracted form of §5.3)."""
+    given = value is not None
     return {"value": value, "quotes": [{"text": t, "span": [a, b]} for t, a, b in quotes],
-            "null_reason": None if value is not None else null_reason}
+            "status": status if given else None, "null_reason": None if given else null_reason}
 
 
 SAMPLE_BODIES: dict[str, dict] = {
     "rule_card": {
         "provision_id": "33 CFR 117.821(a)", "text": "The draw need not open.",
-        "modality": "exemption", "modal_spans": [{"span": [9, 17], "phrase": "need not"}],
+        "modality": "exemption", "modal_spans": [{"span": [109, 117], "phrase": "need not"}],
         "subject": model_field(), "conditions": model_field(), "thresholds": model_field(),
         "exceptions": model_field(), "defined_terms": [],
         "cross_refs": [{"raw": "§ 117.5", "target_ref": "33 CFR 117.5", "target_unit": None,
-                        "resolution": "resolved"}],
-        "closure": [{"unit_id": "rule_card/33 CFR 117.5(p1)/0123456789ab/" + "3" * 16,
-                     "relation": "exception_of"}],
+                        "resolution": "resolved", "span": [130, 137]}],
+        "closure": [{"relation": "exception_of", "ref": "33 CFR 117.5(p1)",
+                     "unit_id": "rule_card/33 CFR 117.5(p1)/0123456789ab/" + "1" * 16,
+                     "doc_id": D1, "span": [40, 90]},
+                    {"relation": "context", "ref": "33 CFR 117.821(c)", "unit_id": None,
+                     "doc_id": D1, "span": [300, 380]}],
         "bindings": []},
     "concept": {
         "pref_label": "drawtender", "alt_labels": [], "hidden_labels": ["drawtender",
@@ -158,7 +167,7 @@ SAMPLE_BODIES: dict[str, dict] = {
         "when_to_use": model_field("Use when a refund is missing.",
                                    quotes=[("refund was not received", 10, 33)]),
         "not_for": model_field(null_reason="absent"), "trigger_examples": model_field(),
-        "problem_abstractions": None, "inputs": [], "preconditions": [],
+        "problem_abstractions": model_field(), "inputs": [], "preconditions": [],
         "steps": [{"id": "s1", "type": "instruction", "text": "Research the account.",
                    "span": [0, 21], "tool": None, "args_schema": None, "condition": None,
                    "next": [{"to": "s2", "guard": None}], "risk": "unknown",

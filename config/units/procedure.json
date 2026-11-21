@@ -6,8 +6,8 @@
     {
       "name": "when_to_use",
       "type": "object",
-      "nullable": true,
-      "description": "When to use the procedure (procedure pass); null before its model pass runs",
+      "nullable": false,
+      "description": "When to use the procedure (procedure pass); null_reason not_extracted before its pass",
       "spec_id": "procedure.when_to_use@1",
       "fields": [
         {
@@ -33,11 +33,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "procedure.when_to_use@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "procedure.when_to_use@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -60,8 +71,8 @@
     {
       "name": "not_for",
       "type": "object",
-      "nullable": true,
-      "description": "What the procedure is not for (procedure pass); null before its model pass runs",
+      "nullable": false,
+      "description": "What the procedure is not for (procedure pass); null_reason not_extracted before its pass",
       "spec_id": "procedure.not_for@1",
       "fields": [
         {
@@ -87,11 +98,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "procedure.not_for@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "procedure.not_for@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -114,8 +136,8 @@
     {
       "name": "trigger_examples",
       "type": "object",
-      "nullable": true,
-      "description": "Two or three requests it answers (procedure pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Two or three requests it answers (procedure pass); null_reason not_extracted before its pass",
       "spec_id": "procedure.trigger_examples@1",
       "fields": [
         {
@@ -141,11 +163,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "procedure.trigger_examples@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "procedure.trigger_examples@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -168,8 +201,8 @@
     {
       "name": "problem_abstractions",
       "type": "object",
-      "nullable": true,
-      "description": "Up to five problems it solves (procedure pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Up to five problems it solves (procedure pass); null_reason not_extracted before its pass",
       "spec_id": "procedure.problem_abstractions@1",
       "fields": [
         {
@@ -195,11 +228,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "procedure.problem_abstractions@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "procedure.problem_abstractions@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -272,7 +316,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": true,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "procedure.steps@1"

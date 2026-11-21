@@ -4,15 +4,19 @@ Each unit type has a committed contract, `config/units/<type>.json`: the fields 
 each with a type, nullability, a one-line description, the extraction `spec_id`
 (`<type>.<field>@1`; a nested field carries the spec id of the top-level field it belongs to)
 and, for text fields, allowed values. The format is the Phase 3 contract's, extended with
-nested fields: `object` (one nested contract) and `object[]` (a list of them), plus `int[]`
-(spans) and `json` (any canonical JSON value up to `MAX_VALUE_BYTES`, whose shape the owning
-pydantic model checks; preflight ruling C7). The Phase 3 `Contract` and `Column` models are
-not touched, because every tables id hashes them; the scalar checks delegate to the Phase 3
-validator (`tables.contracts.type_problem`).
+nested fields: `object` (one nested contract) and `object[]` (a list of them), plus `int[]`,
+`span` (exactly two ints, `0 <= start <= end`, offsets in the unit's document's canonical
+text; every span field has this type) and `json` (any canonical JSON value up to
+`MAX_VALUE_BYTES`, whose shape the owning pydantic model checks; preflight ruling C7). The
+Phase 3 `Contract` and `Column` models are not touched, because every tables id hashes them;
+the scalar checks delegate to the Phase 3 validator (`tables.contracts.type_problem`).
 
 A model-written field (`when_to_use`, a rule card's `subject`, ...) is an `object` holding
-`value`, `quotes[]` (`{text, span}`) and `null_reason` (Phase 3's reasons plus
-`not_extracted`); the object itself is null before its pass has run.
+`value`, `quotes[]` (`{text, span}`), `status` (Phase 3's `verified` or `auto-accepted`) and
+`null_reason` (Phase 3's reasons plus `not_extracted`); a field outside a pass's scope, or
+before its pass runs, is `{value: null, quotes: [], status: null, null_reason:
+"not_extracted"}` (§5.3, §6.4). A value needs at least one quote and a status and no null
+reason; a null value needs a null reason and no status.
 
 `validate_unit` checks a unit's envelope (one document, every source span on it, the contract
 named `<type>@<version>`, the id and hashes consistent, no self-reference) and its body
@@ -43,8 +47,9 @@ if TYPE_CHECKING:
 UNIT_CONTRACT_DIR = REPO_ROOT / "config" / "units"
 UnitType = Literal["concept", "rule_card", "procedure", "faq", "table_record"]
 UNIT_TYPES: tuple[str, ...] = get_args(UnitType)
-FieldType = ColumnType | Literal["int[]", "json", "object", "object[]"]
+FieldType = ColumnType | Literal["int[]", "span", "json", "object", "object[]"]
 _NESTED = ("object", "object[]")
+MODEL_FIELD_KEYS = frozenset({"value", "quotes", "status", "null_reason"})
 _HEX = re.compile(r"^[0-9a-f]+$")
 
 
@@ -137,8 +142,33 @@ def _json_problem(v: Any) -> str | None:
     return "not a JSON value"
 
 
+def _span_problem(v: Any) -> str | None:
+    """Why `v` is no span (a list of two ints, `0 <= start <= end`), or None."""
+    if not isinstance(v, list):
+        return f"expected span, got {_kind(v)}"
+    if len(v) != 2 or any(isinstance(x, bool) or not isinstance(x, int) for x in v):
+        return "a span is [start, end], two ints"
+    if v[0] < 0:
+        return f"span start {v[0]} is negative"
+    if v[0] > v[1]:
+        return f"span start {v[0]} is after its end {v[1]}"
+    return None
+
+
+def _model_field_problems(v: dict, path: str) -> list[str]:
+    """The invariants of a model-written field (its type checks passed)."""
+    if v["value"] is not None:
+        return ([f"{path}: a value needs at least one quote"] if not v["quotes"] else []) + \
+            ([f"{path}: a value needs a status"] if v["status"] is None else []) + \
+            ([f"{path}: a value has no null reason"] if v["null_reason"] is not None else [])
+    return ([f"{path}: a null value needs a null reason"] if v["null_reason"] is None else []) \
+        + ([f"{path}: a null value has no status"] if v["status"] is not None else [])
+
+
 def _value_problems(f: UnitField, v: Any, path: str) -> list[str]:
     """Problems of one non-null value of `f` at `path`."""
+    if f.type == "span":
+        return [] if (p := _span_problem(v)) is None else [f"{path}: {p}"]
     if f.type == "json":
         if _json_problem(v) is not None:
             return [f"{path}: not a JSON value"]
@@ -148,7 +178,10 @@ def _value_problems(f: UnitField, v: Any, path: str) -> list[str]:
     if f.type == "object":
         if not isinstance(v, dict):
             return [f"{path}: expected object, got {_kind(v)}"]
-        return _fields_problems(f.fields, v, path)
+        problems = _fields_problems(f.fields, v, path)
+        if not problems and {g.name for g in f.fields} == MODEL_FIELD_KEYS:
+            problems = _model_field_problems(v, path)
+        return problems
     if f.type == "object[]":
         if not isinstance(v, list):
             return [f"{path}: expected object[], got {_kind(v)}"]
@@ -210,6 +243,8 @@ def _envelope_problems(c: UnitContract, unit: Unit) -> list[str]:
         if r.doc_id != unit.doc_id:
             problems.append(f"source_refs[{i}].doc_id: {r.doc_id[:12]}… is not the unit's "
                             f"document {unit.doc_id[:12]}…")
+        if (p := _span_problem([r.start, r.end])) is not None:
+            problems.append(f"source_refs[{i}]: {p}")
     if sorted(unit.hashes) != ["meta", "text"]:
         problems.append("hashes: expected exactly the keys meta and text")
     else:

@@ -13,7 +13,9 @@ P31).
   value ("US-federal") for gov and the configured company for bench; `owner` is the Phase 2
   issuer (gov) or the source system named on line 3 of a bench document; `authority_tier`
   comes from the configured table (eCFR and IRM 1; bench Confluence and Drive 2, chat, mail
-  and tickets 4; research markdown 3, PDFs 4), else the Phase 2 tier. `verifier` is set only
+  and tickets 4; research markdown 3, PDFs 4), else from the Phase 2 tier through the
+  configured mapping onto the unit scale (Federal Register rules 1, notices 2, proposed
+  rules 4). `verifier` is set only
   on bindings; `review_due` and `last_verified_at` are always null.
 - **Hashes.** `hashes.text` is the SHA-256 of the normalised text; `hashes.meta` is the
   SHA-256 of the canonical JSON of every envelope field (all but `body` and `hashes`).
@@ -28,13 +30,14 @@ import functools
 import hashlib
 import json
 import re
+import threading
 from collections import OrderedDict
 from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adr_eval.golden.verify import normalize_ws
 from adr_store import applicability as ap
@@ -42,7 +45,7 @@ from adr_store.applicability import Applicability
 from adr_store.records import _HEX64
 from adr_store.store import Store
 from adr_store.tables.provenance import SPEC_ID, NullReason
-from adr_store.units.contracts import UNIT_CONTRACT_DIR
+from adr_store.units.contracts import UNIT_CONTRACT_DIR, UnitType
 
 COMPILER_VERSION = "units@1"
 GOVERNANCE_PATH = UNIT_CONTRACT_DIR / "governance.json"
@@ -64,6 +67,12 @@ class SourceRef(BaseModel):
     start: int = Field(ge=0)
     end: int = Field(ge=0)
     spec_id: str = Field(pattern=SPEC_ID)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> SourceRef:
+        if self.end < self.start:
+            raise ValueError(f"end {self.end} < start {self.start}")
+        return self
 
 
 class Lineage(BaseModel):
@@ -118,7 +127,7 @@ class Unit(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, title="Unit")
 
     unit_id: str = Field(min_length=1)
-    type: str
+    type: UnitType
     title: str
     heading_path: list[str]
     canonical_ref: str = Field(min_length=1)
@@ -173,8 +182,10 @@ def _rehashed(unit: Unit) -> Unit:
 class CorpusGovernance(BaseModel):
     """How one corpus fills the governance fields. `jurisdiction` null takes the Phase 2
     value; `owner` names where the owner comes from; `authority_tier` maps the `tier_by` key
-    of a document (its URI family, bench source system or format) to a tier, and an unlisted
-    key takes the Phase 2 tier."""
+    of a document (its URI family, bench source system or format) to a tier of the unit scale
+    (§5.1). A document whose key is not listed takes `phase2_tier[<its Phase 2 tier>]`: the
+    Phase 2 scale (codified 1, final and temporary rules 2, notices and guidance 3, proposed
+    rules 4) is another scale, so it is mapped, never copied; no entry gives no tier."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -182,6 +193,7 @@ class CorpusGovernance(BaseModel):
     owner: Literal["issuer", "source_system"] | None
     tier_by: Literal["family", "source_system", "format"]
     authority_tier: dict[str, int]
+    phase2_tier: dict[Literal["1", "2", "3", "4"], int]
 
 
 class GovernanceConfig(BaseModel):
@@ -198,23 +210,27 @@ def governance_config(path: Path = GOVERNANCE_PATH) -> GovernanceConfig:
 
 
 _DOC_FACTS: OrderedDict[tuple[str, str | None, str], tuple[int, str | None]] = OrderedDict()
+_DOC_FACTS_LOCK = threading.Lock()
 
 
 def _doc_facts(store: Store, doc_id: str) -> tuple[int, str | None]:
     """(length of the canonical text, the bench source system on line 3 or None). Cached by
     store path, snapshot and doc id: a snapshot's documents never change."""
     key = (str(store.path), store.snapshot_id, doc_id)
-    if key in _DOC_FACTS:
-        _DOC_FACTS.move_to_end(key)
-        return _DOC_FACTS[key]
-    text = store.text(doc_id)
+    with _DOC_FACTS_LOCK:
+        if key in _DOC_FACTS:
+            _DOC_FACTS.move_to_end(key)
+            return _DOC_FACTS[key]
+    text = store.text(doc_id)  # outside the lock: reading is slow, and the value is the same
     lines = text.split("\n", 3)
     system = (lines[2].removeprefix("Source: ").strip() or None
               if len(lines) > 2 and lines[2].startswith("Source: ") else None)
-    _DOC_FACTS[key] = (len(text), system)
-    if len(_DOC_FACTS) > 64:
-        _DOC_FACTS.popitem(last=False)
-    return _DOC_FACTS[key]
+    facts = (len(text), system)
+    with _DOC_FACTS_LOCK:
+        _DOC_FACTS[key] = facts
+        if len(_DOC_FACTS) > 64:
+            _DOC_FACTS.popitem(last=False)
+    return facts
 
 
 def doc_envelope(store: Store, overlay: Applicability | None, doc_id: str, corpus: str
@@ -228,8 +244,7 @@ def doc_envelope(store: Store, overlay: Applicability | None, doc_id: str, corpu
     system = _doc_facts(store, doc_id)[1] if cfg is not None and "source_system" in (
         cfg.owner, cfg.tier_by) else None
     jurisdiction = env.jurisdiction if env is not None else None
-    owner = None
-    tier = env.authority_tier if env is not None else None
+    owner = tier = None
     if cfg is not None:
         if cfg.jurisdiction is not None:
             jurisdiction = cfg.jurisdiction
@@ -237,7 +252,10 @@ def doc_envelope(store: Store, overlay: Applicability | None, doc_id: str, corpu
             system if cfg.owner == "source_system" else None)
         key = {"family": ap.family_of(source.uri), "source_system": system,
                "format": source.format}[cfg.tier_by]
-        tier = cfg.authority_tier.get(key, tier) if key is not None else tier
+        if key is not None and key in cfg.authority_tier:
+            tier = cfg.authority_tier[key]
+        elif env is not None and env.authority_tier is not None:
+            tier = cfg.phase2_tier.get(str(env.authority_tier))
     applicability = UnitApplicability(
         status="superseded" if env is not None and env.superseded_by else "validated",
         effective_from=env.valid_from if env is not None else None,

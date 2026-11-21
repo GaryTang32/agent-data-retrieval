@@ -40,7 +40,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "concept.definition@1"

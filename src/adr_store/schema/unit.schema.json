@@ -354,6 +354,13 @@
       "type": "string"
     },
     "type": {
+      "enum": [
+        "concept",
+        "rule_card",
+        "procedure",
+        "faq",
+        "table_record"
+      ],
       "title": "Type",
       "type": "string"
     },

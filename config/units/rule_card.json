@@ -39,9 +39,9 @@
       "fields": [
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
-          "description": "Start and end offsets in the card text",
+          "description": "Start and end offsets in the document's canonical text",
           "spec_id": "rule_card.modal_spans@1"
         },
         {
@@ -56,8 +56,8 @@
     {
       "name": "subject",
       "type": "object",
-      "nullable": true,
-      "description": "Who the rule binds (enrichment pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Who the rule binds (enrichment pass); null_reason not_extracted before its pass",
       "spec_id": "rule_card.subject@1",
       "fields": [
         {
@@ -83,11 +83,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "rule_card.subject@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "rule_card.subject@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -110,8 +121,8 @@
     {
       "name": "conditions",
       "type": "object",
-      "nullable": true,
-      "description": "Typed conditions with quotes (enrichment pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Typed conditions with quotes (enrichment pass); null_reason not_extracted before its pass",
       "spec_id": "rule_card.conditions@1",
       "fields": [
         {
@@ -137,11 +148,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "rule_card.conditions@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "rule_card.conditions@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -164,8 +186,8 @@
     {
       "name": "thresholds",
       "type": "object",
-      "nullable": true,
-      "description": "Numeric thresholds with quotes (enrichment pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Numeric thresholds with quotes (enrichment pass); null_reason not_extracted before its pass",
       "spec_id": "rule_card.thresholds@1",
       "fields": [
         {
@@ -191,11 +213,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "rule_card.thresholds@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "rule_card.thresholds@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -218,8 +251,8 @@
     {
       "name": "exceptions",
       "type": "object",
-      "nullable": true,
-      "description": "Exceptions with quotes (enrichment pass); null before its model pass runs",
+      "nullable": false,
+      "description": "Exceptions with quotes (enrichment pass); null_reason not_extracted before its pass",
       "spec_id": "rule_card.exceptions@1",
       "fields": [
         {
@@ -245,11 +278,22 @@
             },
             {
               "name": "span",
-              "type": "int[]",
+              "type": "span",
               "nullable": false,
               "description": "Start and end offsets in the document's canonical text",
               "spec_id": "rule_card.exceptions@1"
             }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": true,
+          "description": "How far the value was checked; null when it is null",
+          "spec_id": "rule_card.exceptions@1",
+          "allowed": [
+            "verified",
+            "auto-accepted"
           ]
         },
         {
@@ -315,6 +359,13 @@
             "external",
             "dangling"
           ]
+        },
+        {
+          "name": "span",
+          "type": "span",
+          "nullable": true,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "rule_card.cross_refs@1"
         }
       ]
     },
@@ -325,13 +376,6 @@
       "description": "The citation closure of the card",
       "spec_id": "rule_card.closure@1",
       "fields": [
-        {
-          "name": "unit_id",
-          "type": "text",
-          "nullable": false,
-          "description": "The unit reached",
-          "spec_id": "rule_card.closure@1"
-        },
         {
           "name": "relation",
           "type": "text",
@@ -344,6 +388,34 @@
             "exception_of",
             "context"
           ]
+        },
+        {
+          "name": "ref",
+          "type": "text",
+          "nullable": false,
+          "description": "The provision or concept reached, e.g. 33 CFR 117.5(p1)",
+          "spec_id": "rule_card.closure@1"
+        },
+        {
+          "name": "unit_id",
+          "type": "text",
+          "nullable": true,
+          "description": "Its unit id; null for a non-modal provision",
+          "spec_id": "rule_card.closure@1"
+        },
+        {
+          "name": "doc_id",
+          "type": "text",
+          "nullable": false,
+          "description": "The document holding it",
+          "spec_id": "rule_card.closure@1"
+        },
+        {
+          "name": "span",
+          "type": "span",
+          "nullable": false,
+          "description": "Start and end offsets in the document's canonical text",
+          "spec_id": "rule_card.closure@1"
         }
       ]
     },

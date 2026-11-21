@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "How each corpus fills a unit's jurisdiction, owner and authority tier (Phase 4 spec §5.1). jurisdiction null takes the Phase 2 envelope's value; owner issuer takes the Phase 2 issuer, source_system the bench document's Source line; authority_tier maps the tier_by key of a document (URI family, bench source system or file format) to a tier, and an unlisted key takes the Phase 2 tier.",
+  "description": "How each corpus fills a unit's jurisdiction, owner and authority tier (Phase 4 spec §5.1). jurisdiction null takes the Phase 2 envelope's value; owner issuer takes the Phase 2 issuer, source_system the bench document's Source line; authority_tier maps the tier_by key of a document (URI family, bench source system or file format) to a tier of the unit scale (1 regulations and the IRM, 2 bench Confluence and Drive, 3 the repository's reports and notes, 4 PDFs, chat, mail and tickets). A document whose key is not listed takes phase2_tier[its Phase 2 tier], an explicit mapping from the Phase 2 scale (1 codified, 2 final and temporary rules, 3 notices and guidance, 4 proposed rules): Federal Register rules are regulations (1), notices are official but not regulations (2), proposed rules are not in force (4). No entry gives no tier.",
   "corpora": {
     "bench": {
       "jurisdiction": "Redwood Inference",
@@ -16,7 +16,8 @@
         "jira": 4,
         "linear": 4,
         "slack": 4
-      }
+      },
+      "phase2_tier": {}
     },
     "gov": {
       "jurisdiction": null,
@@ -25,6 +26,12 @@
       "authority_tier": {
         "ecfr": 1,
         "irm": 1
+      },
+      "phase2_tier": {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "4": 4
       }
     },
     "research": {
@@ -34,7 +41,8 @@
       "authority_tier": {
         "md": 3,
         "pdf": 4
-      }
+      },
+      "phase2_tier": {}
     }
   }
 }

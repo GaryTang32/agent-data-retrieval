@@ -19,7 +19,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.question@1"
@@ -42,7 +42,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.answer@1"
@@ -65,7 +65,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.issue@1"
@@ -88,7 +88,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.environment@1"
@@ -111,7 +111,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.cause@1"
@@ -134,7 +134,7 @@
         },
         {
           "name": "span",
-          "type": "int[]",
+          "type": "span",
           "nullable": false,
           "description": "Start and end offsets in the document's canonical text",
           "spec_id": "faq.resolution@1"

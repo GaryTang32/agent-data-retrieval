@@ -24,7 +24,10 @@ from adr_store.units.contracts import (
     validate_unit,
 )
 from adr_store.units.envelope import (
+    SourceRef,
+    Unit,
     doc_envelope,
+    governance_config,
     link_versions,
     make_unit,
     meta_sha256,
@@ -53,6 +56,8 @@ from tests.store.units_fixtures import (
     DOC_IRM,
     DOC_RUNBOOK,
     SAMPLE_BODIES,
+    make_units_store,
+    model_field,
     overlay_of,
     sample_unit,
 )
@@ -121,12 +126,14 @@ def test_units_fixture_documents(units_store):
     for cited in ("§§ 117.5 and 117.31", "paragraph (b) of this section", "33 CFR part 165",
                   "§ 117.999"):
         assert cited in new
-    # IRM: § 21.4.1.3.3's first own line repeats § 21.4.1.3.1's, and the canonical text keeps
-    # only the first occurrence, so it is absent after § 21.4.1.3.2 begins
+    # IRM: the extractor's favor_precision trims the trailing block, so the last section,
+    # § 21.4.1.3.3, is dropped whole: its first own line (which repeats § 21.4.1.3.1's) occurs
+    # only before § 21.4.1.3.2, and none of its other text survives
     irm = units_store.text(DOC_IRM)
     repeated = "Research the account with Command Code IMFOLT to find the refund transaction."
     assert irm.count(repeated) == 1
     assert irm.index(repeated) < irm.index("Research the direct deposit reject")
+    assert "refund hold code" not in irm
     assert "Command Code REQ77" in irm and "| Acronym | Definition |" in irm
     assert [units_store.text(d).split("\n")[2] for d in (uf.DOC_RUNBOOK, DOC_FAQ, uf.DOC_KCS)] \
         == ["Source: confluence", "Source: slack", "Source: confluence"]
@@ -172,17 +179,24 @@ def test_validate_unit_reports_nested_problems(patch, problem):
     ("rule_card", {"defined_terms": [1]},
      "body.defined_terms: expected text[], got a list holding int"),
     ("rule_card", {"modal_spans": [{"span": ["9", 17], "phrase": "need not"}]},
-     "body.modal_spans[0].span: expected int[], got a list holding str"),
+     "body.modal_spans[0].span: a span is [start, end], two ints"),
     ("rule_card", {"cross_refs": [{"raw": "x", "target_ref": "y", "target_unit": None,
                                    "resolution": "maybe"}]},
      "body.cross_refs[0].resolution: 'maybe' is not an allowed value"),
-    ("rule_card", {"conditions": {"value": {1, 2}, "quotes": [], "null_reason": None}},
+    ("rule_card", {"conditions": {**model_field("x", quotes=[("x", 0, 1)]), "value": {1, 2}}},
      "body.conditions.value: not a JSON value"),
-    ("rule_card", {"conditions": {"value": "x" * MAX_VALUE_BYTES, "quotes": [],
-                                  "null_reason": None}},
+    ("rule_card", {"conditions": model_field("x" * MAX_VALUE_BYTES, quotes=[("x", 0, 1)])},
      f"body.conditions.value: value over {MAX_VALUE_BYTES} bytes"),
-    ("rule_card", {"subject": {"value": None, "quotes": [], "null_reason": "forgotten"}},
+    ("rule_card", {"subject": model_field(null_reason="forgotten")},
      "body.subject.null_reason: 'forgotten' is not an allowed value"),
+    ("rule_card", {"subject": {**model_field("x", quotes=[("x", 0, 1)]), "status": "maybe"}},
+     "body.subject.status: 'maybe' is not an allowed value"),
+    ("rule_card", {"subject": None}, "body.subject: null in a non-nullable field"),
+    ("rule_card", {"closure": [{"relation": "cites", "ref": "33 CFR 117.5", "unit_id": None,
+                                "doc_id": D1}]}, "body.closure[0].span: missing"),
+    ("rule_card", {"cross_refs": [{**SAMPLE_BODIES["rule_card"]["cross_refs"][0],
+                                   "span": [7]}]},
+     "body.cross_refs[0].span: a span is [start, end], two ints"),
     ("procedure", {"steps": ["s1"]}, "body.steps[0]: expected object, got str"),
     ("procedure", {"steps": [{**SAMPLE_BODIES["procedure"]["steps"][0], "next": [{"to": 2}]}]},
      "body.steps[0].next[0].to: expected text, got int"),
@@ -191,6 +205,74 @@ def test_validate_unit_reports_nested_problems(patch, problem):
 ])
 def test_validate_unit_types_every_field_kind(type_, patch, problem):
     assert problem in validate_unit(CONTRACTS[type_], with_body(sample_unit(type_), patch))
+
+
+@pytest.mark.parametrize("span,problem", [
+    ([], "a span is [start, end], two ints"),
+    ([5], "a span is [start, end], two ints"),
+    ([9, 3], "span start 9 is after its end 3"),
+    ([1, 2, 3], "a span is [start, end], two ints"),
+    ([-4, -1], "span start -4 is negative"),
+    ([0, True], "a span is [start, end], two ints"),
+    ("0-5", "expected span, got str"),
+])
+def test_spans_are_two_ordered_non_negative_ints(span, problem):            # C7, I1
+    patch = {"definition": {"text": "Drawtender means", "span": span}}
+    assert validate_unit(CONTRACTS["concept"], with_body(sample_unit("concept"), patch)) == [
+        f"body.definition.span: {problem}"]
+
+    def span_types(fields, path):
+        for f in fields:
+            if f.name == "span":
+                yield f"{path}.span", f.type
+            yield from span_types(f.fields or [], f"{path}.{f.name}")
+
+    for t, c in CONTRACTS.items():  # every span field of every contract is a span
+        assert {typ for _, typ in span_types(c.fields, t)} <= {"span"}, t
+
+
+def test_source_refs_are_ordered_spans():
+    with pytest.raises(ValidationError, match="end 3 < start 50"):
+        SourceRef(doc_id=D1, start=50, end=3, spec_id="rule_card.text@1")
+    with pytest.raises(ValidationError):
+        SourceRef(doc_id=D1, start=-1, end=3, spec_id="rule_card.text@1")
+    u = sample_unit()
+    reversed_ = u.model_copy(update={"source_refs": [  # model_copy does not validate
+        u.source_refs[0].model_copy(update={"start": 50, "end": 3})]})
+    reversed_ = reversed_.model_copy(update={"hashes": {**u.hashes,
+                                                        "meta": meta_sha256(reversed_)}})
+    assert validate_unit(RULE_CONTRACT, reversed_) == [
+        "source_refs[0]: span start 50 is after its end 3"]
+
+
+@pytest.mark.parametrize("field,problems", [
+    (model_field(), []),                                                    # not extracted
+    (model_field(null_reason="absent"), []),
+    (model_field("the owner", quotes=[("The owner", 0, 9)]), []),
+    (model_field("the owner", quotes=[("The owner", 0, 9)], status="auto-accepted"), []),
+    (model_field("the owner"), ["a value needs at least one quote"]),
+    ({**model_field("the owner", quotes=[("The owner", 0, 9)]), "status": None},
+     ["a value needs a status"]),
+    ({**model_field("the owner", quotes=[("The owner", 0, 9)]), "null_reason": "absent"},
+     ["a value has no null reason"]),
+    ({**model_field(), "null_reason": None}, ["a null value needs a null reason"]),
+    ({**model_field(), "status": "verified"}, ["a null value has no status"]),
+])
+def test_model_written_fields_keep_their_invariants(field, problems):       # I3, M1
+    u = with_body(sample_unit(), {"subject": field})
+    assert validate_unit(RULE_CONTRACT, u) == [f"body.subject: {p}" for p in problems]
+
+
+def test_closure_entries_carry_ref_document_and_span():                    # I2
+    closure = SAMPLE_BODIES["rule_card"]["closure"]
+    assert [e["unit_id"] is None for e in closure] == [False, True]   # a non-modal provision
+    assert all(set(e) == {"relation", "ref", "unit_id", "doc_id", "span"} for e in closure)
+    assert validate_unit(RULE_CONTRACT, sample_unit()) == []
+
+
+def test_unit_type_is_one_of_the_five():                                   # M8
+    with pytest.raises(ValidationError):
+        Unit.model_validate({**sample_unit().model_dump(), "type": "binding"})
 
 
 def test_validate_unit_checks_the_envelope():
@@ -319,6 +401,25 @@ def test_envelope_from_phase2(units_store):
         "validated", None, None, 1)
 
 
+def test_phase2_tiers_are_mapped_onto_the_unit_scale(tmp_path):         # controller ruling
+    from tests.store.tables_fixtures import fr_doc
+
+    docs = [fr_doc("2024-00001"),                                            # final rule
+            fr_doc("2024-00008", action="Notification of enforcement of regulation."),
+            fr_doc("2024-00002", type_="Proposed Rule",
+                   action="Notice of proposed rulemaking.")]
+    store = make_units_store(tmp_path / "fr", docs)
+    ov = overlay_of(store)
+    tiers = [(ov.records[d.doc_id].status, ov.records[d.doc_id].authority_tier,
+              doc_envelope(store, ov, d.doc_id, "gov")[1].authority_tier) for d, _ in docs]
+    assert tiers == [("final_rule", 2, 1), ("notice", 3, 2), ("proposed_rule", 4, 4)]
+    cfg = governance_config().corpora
+    assert cfg["gov"].phase2_tier == {"1": 1, "2": 1, "3": 2, "4": 4}
+    assert cfg["bench"].phase2_tier == cfg["research"].phase2_tier == {}
+    # a corpus without governance never copies the Phase 2 tier (another scale)
+    assert doc_envelope(store, ov, docs[0][0].doc_id, "mini")[1].authority_tier is None
+
+
 def test_make_unit_refuses_a_span_outside_the_document(units_store):
     n = len(units_store.text(DOC_117_NEW))
     with pytest.raises(ValueError, match="outside"):
@@ -354,12 +455,28 @@ def test_invalid_units_are_rejected_and_counted(tmp_path):
         ".jsonl", ".report.json")).read_text())
     assert stored["rejected"] == report["rejected"] and stored["units"] == len(UNITS)
     assert report["null_reasons"]["subject"] == {"not_extracted": len(UNITS)}
+    assert report["grounding"] == {}
+    graded = [with_body(u, {"subject": model_field("x", quotes=[("x", 0, 1)], status=s)})
+              for u, s in zip(UNITS, ["verified", "verified", "auto-accepted", "verified"],
+                              strict=True)]
+    write_units(tmp_path / "g", SNAP, RULE_CONTRACT, graded, report := {})
+    assert report["grounding"] == {"subject": {"auto-accepted": 1, "verified": 3}}
 
 
-def test_a_repeated_unit_id_is_rejected_not_stored_twice(tmp_path):      # N15
-    uf_ = write_units(tmp_path, SNAP, RULE_CONTRACT, [*UNITS, UNITS[0]], report := {})
-    assert (uf_.units, uf_.rejected) == (len(UNITS), 1)
-    assert report["rejected"][0]["problems"] == ["duplicate unit id"]
+def test_a_repeated_unit_id_is_refused_and_nothing_is_written(tmp_path):  # N15, M3
+    with pytest.raises(UnitsError, match="two rule_card units have the id"):
+        write_units(tmp_path, SNAP, RULE_CONTRACT, [*UNITS, UNITS[0]], {})
+    assert not (tmp_path / UNITS_DIR).exists()
+
+
+def test_a_unit_file_written_again_keeps_its_report(tmp_path):              # M5
+    first = write_units(tmp_path, SNAP, RULE_CONTRACT, [*UNITS, BAD], {})
+    report_path = tmp_path / UNITS_DIR / SNAP / first.file.replace(".jsonl", ".report.json")
+    before = report_path.read_bytes()
+    assert write_units(tmp_path, SNAP, RULE_CONTRACT, [*UNITS, BAD], {}) == first
+    with pytest.raises(UnitsError, match="already reports another build"):
+        write_units(tmp_path, SNAP, RULE_CONTRACT, UNITS, {})   # same file, no rejection
+    assert report_path.read_bytes() == before
 
 
 def _manifest(tmp_path, *files) -> UnitsManifest:
