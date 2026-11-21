@@ -43,7 +43,7 @@ import math
 import re
 from collections import Counter
 from collections.abc import Callable, Iterable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from importlib import resources
 from pathlib import Path
@@ -463,12 +463,21 @@ def extract_unit(unit: Unit, client, cfg: ExtractionConfig, contracts: dict[str,
 
 
 def _map(fn: Callable, items: list, workers: int) -> list:
-    """`fn` over `items` in order, on `workers` threads; the first exception stops the rest."""
+    """`fn` over `items`, results in item order, on `workers` threads. The first exception to
+    happen stops the rest at once: no queued item starts after it (the items in flight end;
+    their replies are cached), and it is raised (ruling P21: a failure stops the run)."""
     if workers <= 1:
         return [fn(x) for x in items]
     with ThreadPoolExecutor(workers) as pool:
         futures = [pool.submit(fn, x) for x in items]
         try:
+            done, pending = wait(futures, return_when=FIRST_EXCEPTION)
+            for f in pending:
+                f.cancel()
+            failed = next((f for f in futures if f in done and f.exception() is not None),
+                          None)
+            if failed is not None:
+                failed.result()                # raises its exception
             return [f.result() for f in futures]
         except BaseException:
             for f in futures:

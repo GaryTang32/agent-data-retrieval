@@ -316,6 +316,41 @@ def test_a_failure_that_is_no_input_rejection_stops_the_run(ecfr_store, tmp_path
     assert all(g.calls == {"main": "reply"} for g in done)
 
 
+def test_a_failure_stops_queued_units_at_once(ecfr_store, tmp_path):            # M1, P21
+    """Concurrent extraction: once a unit fails for a reason that is not cached, no queued unit
+    starts. Unit 0 (first in order) is still running when unit 1 fails; the worker that ran
+    unit 1 may already hold unit 2 (both wait for the release), so at most `workers`
+    attempts are in flight after the failure and nothing after unit 2 ever starts."""
+    import threading
+
+    workers = 2
+    us = units(ecfr_store)
+    assert len(us) > workers + 2
+    release = threading.Event()
+    started: list[int] = []
+    lock = threading.Lock()
+
+    def fn(system, user, repeat):
+        i = next(k for k, u in enumerate(us) if u.text in user)
+        with lock:
+            started.append(i)
+        if i == 1:
+            raise ModelError("HTTP 401: authentication")      # not an input rejection
+        release.wait(timeout=10)
+        return fixture_reply(system, user, repeat)
+
+    timer = threading.Timer(0.5, release.set)
+    timer.start()
+    try:
+        with pytest.raises(ModelError, match="HTTP 401"):
+            extract_all(ecfr_store, stub_of(tmp_path, fn), CFG, CONTRACTS, workers=workers)
+    finally:
+        timer.cancel()
+        release.set()
+    assert set(started) <= {0, 1, 2}, sorted(started)
+    assert len(set(started) - {1}) <= workers and len(started) == len(set(started))
+
+
 def test_the_unparseable_retry_takes_its_own_budget_unit(ecfr_store, tmp_path):
     def flaky(system, user, repeat):
         return "not json" if repeat == 0 else fixture_reply(system, user, repeat)
