@@ -1,0 +1,197 @@
+{"field": null, "filters": {"mile__gte": 2.24, "notice_hours__gte": 3, "notice_hours__lte": 12}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "state": "Florida"}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"notice_hours__isnull": true, "waterway": "Inner Harbor Navigation Canal, New Orleans"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state": "New Jersey"}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"opens_on_signal": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"bridge__isnull": false, "notice_hours__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true, "waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"state": "Louisiana", "waterway": "Little (Petit) Caillou Bayou"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"bridge__isnull": false, "opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "opens_on_signal": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"opens_on_signal__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__isnull": false, "opens_on_signal": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"state": "New Jersey", "waterway": "Oldmans Creek"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"waterway__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"opens_on_signal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state__isnull": false, "waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"seasonal": true, "vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"opens_on_signal__isnull": false, "state": "South Carolina"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"seasonal__isnull": true, "waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__isnull": false, "opens_on_signal": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"vhf_channel__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "state__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "seasonal", "filters": {"owner_or_agency__isnull": true, "vhf_channel__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "seasonal", "filters": {"owner_or_agency__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "seasonal__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"mile__gte": 1.1, "opens_on_signal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__isnull": false, "notice_hours__gte": 8}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__lte": 1.0}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"bridge__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state__isnull": false, "vhf_channel__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__lte": 4}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__gte": 2}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": false, "seasonal__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 0.9, "mile__lte": 19.4}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "seasonal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"mile__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"opens_on_signal__isnull": false, "state": "Florida"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "state": "Louisiana"}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 0.1}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"notice_hours__isnull": false, "waterway": "Lafourche Bayou"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"notice_hours__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"opens_on_signal": true, "state": "Louisiana"}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"opens_on_signal": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "mile__gte": 6.8, "mile__lte": 106.5}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"bridge__isnull": false, "opens_on_signal": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": false, "state__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "seasonal", "filters": {"waterway__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"vhf_channel__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"state__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__gte": 10, "notice_hours__lte": 24}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"opens_on_signal": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "opens_on_signal__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__gte": 2.8, "notice_hours__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "state": "New Jersey"}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true, "state__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"mile__gte": 2.59, "mile__lte": 8.8}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__isnull": false, "opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 0.0}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "seasonal__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours": 12}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"state": "Texas"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"bridge__isnull": false, "opens_on_signal": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"bridge__isnull": false, "waterway": "Milwaukee, Menomonee, and Kinnickinnic Rivers and South Menomonee and Burnham Canals"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours": 4, "waterway": "Harlem River"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "vhf_channel", "filters": {"owner_or_agency__isnull": false, "waterway__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__gte": 6, "notice_hours__lte": 12}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"vhf_channel__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__gte": 1, "notice_hours__lte": 8}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__isnull": false, "waterway": "Charles River and its tributaries"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__gte": 10.0, "mile__lte": 18.7, "notice_hours__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"state": "Delaware"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__isnull": false, "state": "California"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__isnull": true, "opens_on_signal": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__lte": 27.6, "notice_hours": 4}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"closed_periods__contains": "4 p.m. to 6:30 p.m."}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "vhf_channel", "filters": {"seasonal__isnull": true, "state": "Virginia"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "notice_hours", "filters": {"opens_on_signal": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state": "New Jersey"}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"mile__gte": 0.0, "mile__lte": 5.5, "state": "Massachusetts"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"state": "Oregon"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"bridge__isnull": false, "waterway": "Milwaukee, Menomonee, and Kinnickinnic Rivers and South Menomonee and Burnham Canals"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 0.7}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "notice_hours", "filters": {"mile__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true, "vhf_channel__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "notice_hours", "filters": {"opens_on_signal__isnull": false, "state": "New Jersey"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "mile__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"closed_periods__contains": "From April 15 through November 1, between the hours of 6:30 a.m. and 7 p.m., Monday through Friday, except federal holidays"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"state": "Wisconsin"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__gte": 2, "notice_hours__lte": 5}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__isnull": false, "state": "Louisiana"}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true, "waterway__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "notice_hours", "filters": {"mile__gte": 12.1, "opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state__isnull": false, "vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"bridge__isnull": false, "notice_hours__gte": 4, "notice_hours__lte": 480}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"bridge__isnull": false, "waterway": "Long Island, New York Inland Waterway from East Rockaway Inlet to Shinnecock Canal"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__lte": 0.29, "opens_on_signal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": false, "waterway__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"notice_hours__gte": 6, "notice_hours__lte": 12}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 32.0, "mile__lte": 1012.6, "notice_hours__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "state": "New Jersey"}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__gte": 2.0, "mile__lte": 53.0}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"waterway": "Canaveral Barge Canal"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true, "state__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"mile__isnull": false, "notice_hours__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__lte": 27.8}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"bridge__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours__gte": 10, "notice_hours__lte": 12}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"bridge__isnull": false, "opens_on_signal__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"mile__lte": 7.1}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__gte": 2, "notice_hours__lte": 3}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__gte": 2, "notice_hours__lte": 144}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"state": "Virginia", "vhf_channel__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "opens_on_signal__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__gte": 24}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"state": "Wisconsin"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state": "New York"}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state": "Louisiana"}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "seasonal", "filters": {"state": "Washington"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "seasonal", "filters": {"state__isnull": false, "waterway__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__isnull": false, "opens_on_signal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours__gte": 24, "notice_hours__lte": 336, "state": "Louisiana"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"bridge__isnull": false, "mile__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"state": "Florida"}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "opens_on_signal__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal": true, "waterway__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"bridge__isnull": false, "state": "South Dakota"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "notice_hours", "filters": {"mile__gte": 3.9, "mile__lte": 175.0}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "opens_on_signal": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"closed_periods__contains": "At all other times"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"opens_on_signal__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true, "state__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": null, "filters": {"state__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": false, "state__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"waterway": "Terrebonne Bayou"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__gte": 3.88, "mile__lte": 50.4}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__lte": 4}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"owner_or_agency__isnull": false, "vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"mile__gte": 0.2, "mile__lte": 40.7, "notice_hours": 4}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "opens_on_signal", "filters": {"notice_hours__gte": 12}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"notice_hours__isnull": false, "opens_on_signal": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"state": "Florida"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__lte": 360}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"state": "Michigan"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__lte": 72}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"state": "North Carolina", "vhf_channel__isnull": true}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "vhf_channel", "filters": {"seasonal__isnull": true, "state": "Texas"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"owner_or_agency__isnull": true, "state__isnull": false}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"vhf_channel__isnull": true, "waterway__isnull": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"notice_hours__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"waterway": "Mystic River"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"seasonal__isnull": true, "vhf_channel__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"opens_on_signal": true, "state": "New York"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"waterway__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_sections"}
+{"field": "mile", "filters": {"notice_hours": 1}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"bridge__isnull": false, "notice_hours__isnull": true}, "op": "list", "reason": "list over 25", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours__gte": 48, "notice_hours__lte": 168}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": null, "filters": {"mile__isnull": false, "notice_hours__isnull": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"owner_or_agency__isnull": false, "state__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": "opens_on_signal", "filters": {"waterway": "New Jersey Intracoastal Waterway"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}
+{"field": "seasonal", "filters": {"state__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"opens_on_signal": false}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "vhf_channel", "filters": {"seasonal__isnull": true, "waterway__isnull": false}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_sections"}
+{"field": null, "filters": {"notice_hours__isnull": true, "opens_on_signal": true}, "op": "count", "reason": "count over 50", "table": "drawbridge_bridges"}
+{"field": "mile", "filters": {"notice_hours": 12, "state": "California"}, "op": "lookup", "reason": "lookup matches more than one row", "table": "drawbridge_bridges"}

@@ -1,0 +1,99 @@
+{
+  "calls": 0,
+  "concurrency": 4,
+  "corpus": "research",
+  "fingerprint": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a",
+  "finished": "2026-11-20T20:09:27.996399+00:00",
+  "generator": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-sonnet-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_sonnet",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-sonnet-5-5"
+    ]
+  },
+  "golden": "golden/research/v0.1/items.jsonl",
+  "golden_sha256": "fdebe3f0b207df3278c6d44b2aba1060fd7fab5beec7dae22c2d978df6dd5dd4",
+  "judge": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-opus-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_opus",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": []
+  },
+  "max_calls": 0,
+  "max_dollars": null,
+  "metrics_version": 2,
+  "n_items": 27,
+  "n_rows": 27,
+  "price_table_as_of": {
+    "claude-opus-5-5": "2026-11-09",
+    "claude-sonnet-5-5": "2026-11-09"
+  },
+  "prompt_hashes": {
+    "answer": "291ed9cc8d09274d0cfcce9f29ba16f7f61b33eac2eb10c9f0f9f082457d2943",
+    "judge": "fc9ac3a40405d5fbdacdb950026fae35cb79c4fbcfe7737020a95e8508c3d7f2",
+    "query_gen": "249b0449466325d45b4c05813b8fbff7bf108070bb816feaf72cffc88d5997c6"
+  },
+  "qtypes": [
+    "count_filter"
+  ],
+  "repeats": 1,
+  "retrieval": {
+    "acl": {
+      "acl_snapshot": "6b4d68836f4e1fed48a3ffea1ab7cc6ad8819554fe30167d0a2c56fe1b41b58e",
+      "principals": [
+        "group:acme/0",
+        "group:acme/1",
+        "group:acme/2",
+        "group:acme/3",
+        "group:globex/0",
+        "group:globex/1",
+        "group:globex/2",
+        "group:globex/3",
+        "group:initech/0",
+        "group:initech/1",
+        "group:initech/2",
+        "group:initech/3",
+        "public",
+        "tenant:acme",
+        "tenant:globex",
+        "tenant:initech",
+        "user:auditor"
+      ],
+      "sequence": 22,
+      "store_docs": 245,
+      "synced_at": "2026-11-20T20:06:42.094254+00:00",
+      "view": "b5d21cd6560795dacf5044523378ebd1f9e734c112fd1ed0514f9884872608ac",
+      "visible_docs": 245
+    },
+    "caller": "user:auditor",
+    "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "store": ".cache/store-p2/research",
+    "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+  },
+  "run_id": "research-p3-typed-test-20261120T200924",
+  "same_family_judge": true,
+  "seed": 20261108,
+  "served_model_mismatch": false,
+  "snapshot": "23ad670175b7fa58f4ba5464842f512adabc53821b44d86a3cb9426dc74099d1",
+  "spent_usd": 0.0,
+  "split": "test",
+  "started": "2026-11-20T20:09:24.827972+00:00",
+  "status": "complete",
+  "stub": false,
+  "system": "p3-typed",
+  "t_values": [
+    0.5,
+    0.75,
+    0.9
+  ],
+  "w": null
+}

@@ -1,0 +1,127 @@
+{
+  "table": "fr_documents",
+  "version": 1,
+  "kind": "data",
+  "description": "Federal Register documents: one row per document.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Federal Register document number, e.g. 2023-01707.",
+      "spec_id": "fr.id@1"
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "nullable": false,
+      "description": "Document type.",
+      "spec_id": "fr.type@1",
+      "allowed": [
+        "Rule",
+        "Proposed Rule",
+        "Notice",
+        "Presidential Document"
+      ]
+    },
+    {
+      "name": "agency",
+      "type": "text",
+      "nullable": true,
+      "description": "Most specific issuing agency, e.g. Coast Guard.",
+      "spec_id": "fr.agency@1"
+    },
+    {
+      "name": "publication_date",
+      "type": "date",
+      "nullable": false,
+      "description": "Date the document was published (ISO).",
+      "spec_id": "fr.publication_date@1"
+    },
+    {
+      "name": "year",
+      "type": "int",
+      "nullable": false,
+      "description": "Publication year.",
+      "spec_id": "fr.year@1"
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "nullable": true,
+      "description": "Document title.",
+      "spec_id": "fr.title@1"
+    },
+    {
+      "name": "cfr_parts",
+      "type": "text[]",
+      "nullable": false,
+      "description": "CFR parts the document affects, e.g. 33 CFR 117.",
+      "spec_id": "fr.cfr_parts@1"
+    },
+    {
+      "name": "action",
+      "type": "text",
+      "nullable": true,
+      "description": "The action the document takes, as the agency states it.",
+      "spec_id": "fr.action@1"
+    },
+    {
+      "name": "effective_on",
+      "type": "date",
+      "nullable": true,
+      "description": "Date the document takes effect (ISO).",
+      "spec_id": "fr.effective_on@1"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": true,
+      "description": "Applicability status derived from the document (Phase 2 envelope).",
+      "spec_id": "fr.status@1",
+      "allowed": [
+        "codified",
+        "final_rule",
+        "temporary_rule",
+        "proposed_rule",
+        "notice",
+        "guidance",
+        "unknown"
+      ]
+    },
+    {
+      "name": "other_ids",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Identifiers in docket_ids that are not dockets, e.g. FCC 19-123.",
+      "spec_id": "fr.other_ids@1"
+    },
+    {
+      "name": "title_state",
+      "type": "text",
+      "nullable": true,
+      "description": "State a drawbridge title names by its USPS code, e.g. Florida; null for other titles.",
+      "spec_id": "fr.title_state@1"
+    },
+    {
+      "name": "title_waterway_keys",
+      "type": "text[]",
+      "nullable": false,
+      "description": "Waterway keys of a drawbridge title's comma parts, in order.",
+      "spec_id": "fr.title_waterway_keys@1"
+    }
+  ],
+  "key": [
+    "id"
+  ],
+  "order": [
+    "id"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "gov",
+    "selector": "fr",
+    "loader": "metadata"
+  },
+  "entities": {}
+}

@@ -17,7 +17,7 @@ from typing import Literal
 from adr_eval.answer._prompts import load_prompt
 from adr_eval.answer.answerer import answer_question
 from adr_eval.answer.answerer import prompt_hash as answer_prompt_hash
-from adr_eval.answer.query_gen import generate_query
+from adr_eval.answer.query_gen import generate_query, generate_table_query
 from adr_eval.cache import Cache
 from adr_eval.corpora import REPO_ROOT
 from adr_eval.corpora.base import LoadedCorpus, load_corpus
@@ -27,8 +27,10 @@ from adr_eval.llm import (
     ClaudeCodeClient,
     Completion,
     ModelClient,
+    ModelError,
     OpenAICompatibleClient,
     StubClient,
+    _CachedClient,
     is_subscription,
     load_prices,
     price_entry,
@@ -36,6 +38,7 @@ from adr_eval.llm import (
 from adr_eval.models import Evidence, GoldenItem, load_items
 from adr_eval.pipeline import (
     Budget,
+    BudgetExceeded,
     Context,
     MeteredClient,
     estimate_tokens,
@@ -43,6 +46,7 @@ from adr_eval.pipeline import (
     price_usd,
     process_item,
     retrieval_scores,
+    stop_status,
 )
 from adr_eval.retrieval.chunker import Chunk, chunk_document
 from adr_eval.retrieval.dense import DenseIndex
@@ -125,6 +129,47 @@ def load_golden(corpus: str, loaded: LoadedCorpus) -> list[GoldenItem]:
             f"fix: regenerate with `adr-eval golden {corpus} --gen`, or restore the manifest "
             f"the golden set was built from")
     return items
+
+
+GOV_TABLES = "gov-tables"
+GOLDEN_SETS = ("v0.1", GOV_TABLES)
+TABLES_OF_GOV_TABLES = ("drawbridge_bridges", "drawbridge_sections")   # what its queries read
+
+
+def load_tables_golden(loaded: LoadedCorpus) -> tuple[Path, list]:
+    """(path, items) of the gov-tables v0.1 set (`golden.tables.GOLDEN_DIR`), refused when it
+    is missing or an evidence span does not re-slice in the loaded gov corpus (the set was
+    made from other documents)."""
+    from adr_eval.golden import tables
+    from adr_eval.golden.verify import check_spans
+
+    path = tables.GOLDEN_DIR / "items.jsonl"
+    fix = ("adr-eval golden tables --gen --store <store> --facts <facts id> --generator "
+           "<profile> --max-calls N")
+    if not path.is_file():
+        raise RunError(f"{path}: golden set not found; run `{fix}`")
+    items = tables.load_items(path)
+    stale = sorted(i.id for i in items if not check_spans(i.as_golden(), loaded.docs))
+    if stale:
+        raise RunError(
+            f"{path}: {len(stale)} item(s) have evidence that does not re-slice in the gov "
+            f"corpus: {', '.join(stale[:5])}\nfix: regenerate with `{fix}`, or restore the "
+            f"corpus the golden set was built from")
+    return path, items
+
+
+class _CachingFailures:
+    """A client whose every call stores an input rejection as a failure
+    (`cache_failures=True`, ruling P21): the tables mode's generator."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.name, self.family, self.model = inner.name, inner.family, model_id(inner)
+
+    def complete(self, system: str, user: str, *, max_tokens: int, repeat: int = 0
+                 ) -> Completion:
+        return self.inner.complete(system, user, max_tokens=max_tokens, repeat=repeat,
+                                   cache_failures=True)
 
 
 def _all_chunks(corpus: LoadedCorpus) -> list[Chunk]:
@@ -260,20 +305,24 @@ def _question_key(user: str) -> tuple[str | None, str | None]:
 
 
 def stub_clients(
-    items: list[GoldenItem], chunks: dict[str, Chunk]
+    items: list[GoldenItem], chunks: dict[str, Chunk], table_queries: dict | None = None
 ) -> tuple[StubClient, StubClient]:
     """Deterministic generator and judge for tests and demos (family "stub").
 
     The generator looks the item up by question text (and as-of date): it returns the
-    gold query, and answers with the gold value citing the passages that overlap gold
-    evidence. The judge says "correct" iff the candidate equals the gold value or a variant
-    after normalization.
+    gold query (to the table prompt, the item's `table_queries` entry), and answers with the
+    gold value citing the passages that overlap gold evidence. The judge says "correct" iff
+    the candidate equals the gold value or a variant after normalization.
     """
     by_q = {(i.question, i.as_of.isoformat() if i.as_of else None): i for i in items}
     query_prompt = load_prompt("query_gen")
+    table_prompt = load_prompt("query_gen_tables")
 
     def generate(system: str, user: str, repeat: int) -> str:
         item = by_q.get(_question_key(user))
+        if system == table_prompt:
+            q = (table_queries or {}).get(item.id) if item else None
+            return q.model_dump_json() if q is not None else "{}"
         if system == query_prompt:
             return json.dumps(item.gold_query.model_dump(mode="json") if item else {})
         if item is None or item.answer.kind == "abstain":
@@ -326,18 +375,32 @@ class _Recorder:
 
 
 def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index,
-             schema: dict, gen_model: tuple[str, str], judge_model: tuple[str, str],
-             prices: dict) -> None:
-    """`gen_model` / `judge_model` are (model, provider) pairs for the price lookup."""
+             schema: dict, gen_model: tuple[str, str], judge_model: tuple[str, str] | None,
+             prices: dict, typed: bool = False, tables: bool = False) -> None:
+    """`gen_model` / `judge_model` are (model, provider) pairs for the price lookup; a typed
+    system (`typed`) makes the query-generation calls only. In tables mode (`tables`) the
+    query is a table query and no judge call is made (`judge_model` None)."""
+    from adr_eval.golden.tables import describe_text
+
     gen = _Recorder(json.dumps(_ABSTAIN), gen_model[0])
-    jrec = _Recorder('{"label": "correct", "reason": ""}', judge_model[0])
-    providers = {"generator": gen_model[1], "judge": judge_model[1]}
-    judge = Judge(jrec)
+    roles = [("generator", gen, gen_model[1])]
+    judge = None
+    if judge_model is not None:
+        jrec = _Recorder('{"label": "correct", "reason": ""}', judge_model[0])
+        roles.append(("judge", jrec, judge_model[1]))
+        judge = Judge(jrec)
     for item in items:
         for repeat, hits in enumerate(retrieved[item.id]):
-            generate_query(item.question, item.as_of, schema, gen, repeat)
+            if tables:
+                generate_table_query(item.question, describe_text(), gen, repeat)
+            else:
+                generate_query(item.question, item.as_of, schema, gen, repeat)
+            if typed:
+                continue
             answer_question(item.question, item.as_of, [index.chunks[c] for c, _ in hits],
                             gen, repeat)
+            if judge is None:
+                continue
             judged = item.answer.kind == "text" or (
                 repeat == 0 and item.answer.kind in ("number", "set", "id"))
             if judged:
@@ -347,15 +410,16 @@ def _dry_run(run_id: str, items: list[GoldenItem], retrieved: dict, index,
     total = 0.0
     print(f"dry run {run_id}: {len(items)} items x {len(next(iter(retrieved.values())))} "
           f"repeats (estimates: prompt chars/4 tokens in, max_tokens out)")
-    for role, rec in (("generator", gen), ("judge", jrec)):
-        usd = price_usd(rec.model, rec.tokens_in, rec.tokens_out, prices, providers[role])
+    for role, rec, provider in roles:
+        usd = price_usd(rec.model, rec.tokens_in, rec.tokens_out, prices, provider)
         total += usd
         billed = " (subscription)" if is_subscription(
-            price_entry(rec.model, prices, providers[role])) else ""
+            price_entry(rec.model, prices, provider)) else ""
         print(f"  {role} {rec.model}: {rec.calls} calls, ~{rec.tokens_in} tokens in, "
               f"<= {rec.tokens_out} tokens out, ~${usd:.4f}{billed}")
-    print(f"  total: ~${total:.4f} (calls are an upper bound, since abstentions skip judge "
-          f"calls; token counts and cost are estimates)")
+    note = ("calls are exact for a fully uncached run, cached calls are free" if judge is None
+            else "calls are an upper bound, since abstentions skip judge calls")
+    print(f"  total: ~${total:.4f} ({note}; token counts and cost are estimates)")
 
 
 # -- the run ----------------------------------------------------------------------------
@@ -428,6 +492,18 @@ def _check_system(system: str) -> None:
         raise RunError(f"unknown system {system!r}; expected one of {', '.join(names)}")
 
 
+TYPED_QTYPES = ("count_filter",)
+
+
+def _check_qtypes(system: str, qtypes: tuple[str, ...] | None) -> None:
+    """A typed system (`p3-typed`) answers count_filter items only, so its run must name that
+    question type alone (Phase 3 spec §10.1): it never falls back to answering from chunks."""
+    from adr_eval import systems
+
+    if system in systems.P3_NAMES and tuple(qtypes or ()) != TYPED_QTYPES:
+        raise RunError(f"{system} answers count_filter items only; pass --qtype count_filter")
+
+
 def run(
     corpus: str,
     system: str,
@@ -442,35 +518,72 @@ def run(
     generator: ModelClient | None = None,
     judge: ModelClient | None = None,
     max_calls: int | None = None,
+    qtypes: tuple[str, ...] | None = None,
+    golden: Literal["v0.1", "gov-tables"] = "v0.1",
 ) -> str:
     """Run `system` over the `split` items; returns the run id (the run directory's name).
 
     `config["generator"]` / `config["judge"]` name profiles in config/models.json;
-    `generator` / `judge` override the clients built from them (tests).
+    `generator` / `judge` override the clients built from them (tests). `qtypes` keeps only
+    the items of those question types (None: every item); a typed system (`p3-typed`) needs
+    exactly ("count_filter",). A typed system answers with the generated query alone
+    (`Context.typed`; no answer or judge call) and its compile.json names its tables.
+
+    `golden="gov-tables"` (Phase 3 spec §10.3, §11; corpus gov) runs the gov-tables v0.1 items
+    (`golden.tables.load_items`, as `as_golden()` items) in tables mode: one table-query prompt
+    for every system, no judge client and no judge call, and a budget that counts every
+    transport attempt of a cached client (ruling P21). Its run directory is written only when
+    the run completes: a stop at `max_calls` (BudgetExceeded) or a model failure that is no
+    input rejection (ModelError) propagates and writes nothing, and a rerun reads the completed
+    calls from the cache.
     """
     from adr_eval import systems
 
+    if golden not in GOLDEN_SETS:
+        raise RunError(f"unknown golden set {golden!r}; expected one of {', '.join(GOLDEN_SETS)}")
+    tables = golden == GOV_TABLES
+    if tables and corpus != "gov":
+        raise RunError(f"{GOV_TABLES} is a golden set of the gov corpus, not {corpus}")
     _check_system(system)
+    _check_qtypes(system, qtypes)
     stub = bool(config.get("stub"))
-    clients, names, specs = _role_clients(config, {"generator": generator, "judge": judge},
-                                          stub, dry_run)
-    generator, judge = clients["generator"], clients["judge"]
+    roles = {"generator": generator} if tables else {"generator": generator, "judge": judge}
+    clients, names, specs = _role_clients(config, roles, stub, dry_run)
+    generator, judge = clients["generator"], clients.get("judge")
     loaded = load_checked_corpus(corpus)
-    all_items = load_golden(corpus, loaded)
-    items = sorted((i for i in all_items if i.split == split), key=lambda i: i.id)
+    table_queries: dict = {}
+    facts: list[str] = []
+    if tables:
+        golden_path, titems = load_tables_golden(loaded)
+        all_items = [t.as_golden() for t in titems]
+        table_queries = {t.id: t.query for t in titems}
+        facts = sorted({t.facts for t in titems})
+    else:
+        golden_path, all_items = golden_items_path(corpus), load_golden(corpus, loaded)
+    items = sorted((i for i in all_items if i.split == split
+                    and (qtypes is None or i.qtype in qtypes)), key=lambda i: i.id)
     if not items:
-        raise RunError(f"{golden_items_path(corpus)}: no items in split {split!r}")
+        kinds = "" if qtypes is None else f" of question type {', '.join(qtypes)}"
+        raise RunError(f"{golden_path}: no items in split {split!r}{kinds}")
     groups = evidence_groups.build_all(all_items, loaded.docs)
     index = systems.build(system, corpus, loaded, all_items, groups, config, rebuild=rebuild)
+    typed = bool(getattr(index, "answers_typed", False))
+    if tables and typed:
+        held = {t["table"] for t in index.manifest()["tables"]}
+        missing = sorted(set(TABLES_OF_GOV_TABLES) - held)
+        if missing:
+            raise RunError(f"{system}: tables {index.fingerprint[:12]} have no "
+                           f"{', '.join(missing)}\nfix: build the drawbridge tables (`adr tables "
+                           f"build --with-extraction`) and promote them with `adr tables gate`")
     source, w = index.source, index.w
     retrieved = {i.id: [retrieve_item(index, i) for _ in range(repeats)] for i in items}
     prices = load_prices(_repo_path(config.get("prices", "config/prices.json")))
-    if stub and (generator is None or judge is None):
-        sg, sj = stub_clients(all_items, index.chunks)
-        generator, judge = generator or sg, judge or sj
+    if stub and (generator is None or (judge is None and not tables)):
+        sg, sj = stub_clients(all_items, index.chunks, table_queries)
+        generator, judge = generator or sg, judge or (None if tables else sj)
     pricing = {}  # role -> (model, provider) for profile-built clients
     for role, client in (("generator", generator), ("judge", judge)):
-        spec = specs[role]
+        spec = specs.get(role)
         if spec is not None:
             model, provider = pricing[role] = (
                 (model_id(client), client.name) if client else (spec["model"], spec["adapter"]))
@@ -478,56 +591,94 @@ def run(
                 raise RunError(f"{config.get('prices', 'config/prices.json')}: no price for "
                                f"{role} model {model!r} (profile {names[role]!r}); "
                                f"add it before a real run")
-    run_id = f"{corpus}-{system}-{split}-{datetime.now(UTC):%Y%m%dT%H%M%S}"
+    label = GOV_TABLES if tables else corpus
+    run_id = f"{label}-{system}-{split}-{datetime.now(UTC):%Y%m%dT%H%M%S}"
     adapter = get_adapter(corpus)
     schema = adapter.record_schema()
     if dry_run:
         _dry_run(run_id, items, retrieved, index, schema,
                  pricing.get("generator") or (model_id(generator), generator.name),
-                 pricing.get("judge") or (model_id(judge), judge.name), prices)
+                 None if tables else (pricing.get("judge") or (model_id(judge), judge.name)),
+                 prices, typed, tables)
         return run_id
 
-    run_dir = _new_run_dir(Path(out_root), run_id)
-    budget = Budget(max_dollars, max_calls)
-    gen_meter, judge_meter = (MeteredClient(generator, budget, prices),
-                              MeteredClient(judge, budget, prices))
-    judge_ = Judge(judge_meter, recover=True)
+    # tables mode and a typed system (the Q1 path, ruling P21): each transport attempt of a
+    # cached client (every real adapter is one) takes a unit and only an input rejection is
+    # stored as a failure; tables mode refuses any other client but the built-in `stub`
+    # generator (no model, no retries), which is metered per call. A typed system makes no
+    # judge call, so tables mode and a typed system meter no judge.
+    cached = (tables or typed) and isinstance(generator, _CachedClient)
+    if tables and not cached and not stub:
+        raise RunError(f"a {GOV_TABLES} run counts every transport attempt and caches input "
+                       f"rejections, which needs a cached client, not "
+                       f"{type(generator).__name__}")
+    budget = Budget(max_dollars, max_calls, count_attempts=cached)
+    gen_meter = MeteredClient(generator, budget, prices)
+    judge_meter = None if tables or typed else MeteredClient(judge, budget, prices)
     cfg = {
-        "run_id": run_dir.name, "metrics_version": METRICS_VERSION,
+        "run_id": run_id, "metrics_version": METRICS_VERSION,
         "corpus": corpus, "system": system, "split": split,
         "repeats": repeats, "n_items": len(items), "stub": stub,
+        "qtypes": None if qtypes is None else list(qtypes),
         "generator": _client_info(generator, prices, names["generator"], specs["generator"]),
-        "judge": _client_info(judge, prices, names["judge"], specs["judge"]),
-        "same_family_judge": Judge(judge).same_family_as(generator),
-        "prompt_hashes": {"answer": answer_prompt_hash("answer"),
-                          "query_gen": answer_prompt_hash("query_gen"),
-                          "judge": judge_prompt_hash()},
+        "judge": ({"enabled": False} if tables
+                  else _client_info(judge, prices, names["judge"], specs["judge"])),
+        "same_family_judge": None if tables else Judge(judge).same_family_as(generator),
+        "prompt_hashes": ({"answer": answer_prompt_hash("answer"),
+                           "query_gen_tables": answer_prompt_hash("query_gen_tables")}
+                          if tables else
+                          {"answer": answer_prompt_hash("answer"),
+                           "query_gen": answer_prompt_hash("query_gen"),
+                           "judge": judge_prompt_hash()}),
         "snapshot": loaded.manifest.snapshot(), "fingerprint": index.fingerprint,
-        "golden": _display_path(golden_items_path(corpus)),
-        "golden_sha256": hashlib.sha256(golden_items_path(corpus).read_bytes()).hexdigest(),
+        "golden": _display_path(golden_path),
+        "golden_sha256": hashlib.sha256(golden_path.read_bytes()).hexdigest(),
         "retrieval": index.run_config(),
         "seed": config.get("seed"),
         "price_table_as_of": {model_id(c): e.get("as_of") for c in (generator, judge)
-                              if (e := price_entry(model_id(c), prices, c.name)) is not None},
+                              if c is not None
+                              and (e := price_entry(model_id(c), prices, c.name)) is not None},
         "w": w, "t_values": config.get("t_values", [0.5, 0.75, 0.9]),
         "concurrency": config.get("concurrency", 4), "max_dollars": max_dollars,
         "max_calls": max_calls,
         "status": "running", "started": datetime.now(UTC).isoformat(),
     }
-    _write_json(run_dir / "config.json", cfg)
-    copies = evidence_groups.copy_stats(groups[i.id] for i in items)
-    _write_json(run_dir / "compile.json",
-                compile_report(all_items, loaded, index, source, copies))
+    if tables:
+        cfg.update(golden_set=GOV_TABLES, facts=facts, judge_enabled=False)
+    if tables or typed:
+        cfg["count_attempts"] = budget.count_attempts
+    if typed:
+        compile_data = {"tables": index.fingerprint, "manifest": index.manifest()}
+    else:
+        copies = evidence_groups.copy_stats(groups[i.id] for i in items)
+        compile_data = compile_report(all_items, loaded, index, source, copies)
 
     ctx = Context(index, adapter.records(loaded), schema,
-                  gen_meter, judge_, groups)
+                  _CachingFailures(gen_meter) if cached else gen_meter,
+                  None if judge_meter is None else Judge(judge_meter, recover=True), groups,
+                  typed=(index.answer_table if tables else index.answer) if typed else None,
+                  mode="tables" if tables else "v0.1", judge_enabled=not tables,
+                  table_queries=table_queries)
+    if tables:
+        try:
+            rows = _run_whole(items, retrieved, ctx, cfg["concurrency"], budget)
+        except (BudgetExceeded, ModelError) as e:
+            e.budget = budget       # for the stop status (`pipeline.stop_status`)
+            raise
+        run_dir = _new_run_dir(Path(out_root), run_id)
+        cfg["run_id"] = run_dir.name
+        _write_json(run_dir / "compile.json", compile_data)
+        _write_rows(run_dir / "results.jsonl", rows)
+        _finish(cfg, rows, budget, gen_meter, judge_meter)
+        _write_json(run_dir / "config.json", cfg)
+        return run_dir.name
+
+    run_dir = _new_run_dir(Path(out_root), run_id)
+    cfg["run_id"] = run_dir.name
+    _write_json(run_dir / "config.json", cfg)
+    _write_json(run_dir / "compile.json", compile_data)
     results = run_dir / "results.jsonl"
     rows: list[dict] = []
-
-    def write_sorted_rows() -> None:
-        rows.sort(key=lambda r: (r["item_id"], r["repeat"]))
-        results.write_text("".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n"
-                                   for r in rows), encoding="utf-8")
 
     try:
         with results.open("w", encoding="utf-8") as f, \
@@ -543,22 +694,54 @@ def run(
                 pool.shutdown(wait=True, cancel_futures=True)  # drop queued items
                 raise
     except BaseException as e:  # budget stops are handled per item; anything else fails
-        write_sorted_rows()
+        _write_rows(results, rows)
         cfg.update(status="failed", error=f"{type(e).__name__}: {e}",
                    finished=datetime.now(UTC).isoformat(), n_rows=len(rows),
                    spent_usd=budget.spent, calls=budget.calls)
         _write_json(run_dir / "config.json", cfg)
         raise
-    write_sorted_rows()
+    _write_rows(results, rows)
+    _finish(cfg, rows, budget, gen_meter, judge_meter)
+    _write_json(run_dir / "config.json", cfg)
+    return run_dir.name
+
+
+def _write_rows(path: Path, rows: list[dict]) -> None:
+    """The rows sorted by (item, repeat), one JSON object per line."""
+    rows.sort(key=lambda r: (r["item_id"], r["repeat"]))
+    path.write_text("".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n"
+                            for r in rows), encoding="utf-8")
+
+
+def _finish(cfg: dict, rows: list[dict], budget: Budget, gen_meter: MeteredClient,
+            judge_meter: MeteredClient | None) -> None:
+    """The end status, counts and served models of a run that was not interrupted."""
     status = {"budget": "stopped_budget", "calls": "stopped_calls"}.get(
         budget.stop_reason, "complete")
-    for role, meter in (("generator", gen_meter), ("judge", judge_meter)):
+    meters = [("generator", gen_meter)] + ([("judge", judge_meter)] if judge_meter else [])
+    for role, meter in meters:
         cfg[role]["served_models"] = sorted(meter.served_models)
     cfg.update(status=status, finished=datetime.now(UTC).isoformat(), n_rows=len(rows),
                spent_usd=budget.spent, calls=budget.calls,
-               served_model_mismatch=any(_served_mismatch(cfg[r]) for r in ("generator", "judge")))
-    _write_json(run_dir / "config.json", cfg)
-    return run_dir.name
+               served_model_mismatch=any(_served_mismatch(cfg[r]) for r, _ in meters))
+
+
+def _run_whole(items: list[GoldenItem], retrieved: dict, ctx: Context, concurrency: int,
+               budget: Budget) -> list[dict]:
+    """Every row of a tables-mode run, or nothing: a budget stop raises BudgetExceeded (after
+    the calls in flight end; their replies are cached) and a model failure propagates."""
+    rows: list[dict] = []
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = [pool.submit(process_item, i, retrieved[i.id], ctx) for i in items]
+        try:
+            for fut in as_completed(futures):
+                rows.extend(fut.result())
+        except BaseException:
+            pool.shutdown(wait=True, cancel_futures=True)  # drop queued items
+            raise
+    if budget.stopped:
+        raise BudgetExceeded(stop_status(budget).removeprefix("status: "))
+    return rows
 
 
 # -- the retrieval track ----------------------------------------------------------------

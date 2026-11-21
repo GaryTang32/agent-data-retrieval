@@ -1,0 +1,7 @@
+research,topic,also_in,type,title,authors,year,venue,url,pdf_url,arxiv_id,doi,license,status,local_file,relevance
+Report one,01_surveys,02_agents;03_data,paper,A Survey of Things,"A. Smith, B. Jones, et al.",2025,arXiv preprint,https://arxiv.org/abs/2501.00001,https://arxiv.org/pdf/2501.00001,2501.00001,,CC-BY-4.0,downloaded,papers/01_surveys/2025_smith_survey_2501.00001.pdf,Broad survey.
+Report two,02_agents,,paper,A Survey of Things (v2),"Ann Lee,  Bo Chen.",,arXiv,https://arxiv.org/abs/2501.00001v2,,2501.00001,,CC BY 4.0,no_pdf_link,,Same arXiv id as the row above.
+Report one,03_data,01_surveys,paper,"He said ""hi"": a study","Dr ""Bob"" Smith, C. Doe",2026,arXiv preprint (2026),https://doi.org/10.1000/x,,,10.1000/x,CC-BY-4.0,downloaded,papers/03_data/x.pdf,"Line one
+line two, with a comma."
+Report two,03_data,,web,A web page,,n.d.,arXiv 2026,https://example.org/page,,,,unknown,no_pdf_link,,A page with no id.
+Report two,02_agents,  01_surveys ; ;03_data,paper,Only et al.,et al.,2024,Journal of Things,https://example.org/j,,,10.1000/y,MIT,downloaded,papers/02_agents/y.pdf,

@@ -1,0 +1,114 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "acl_sequence": 23,
+    "acl_snapshot": "c94f2c47f2396f1f9408f5e1e2d7e4b15fabd6196e6f3b9036468ab7d09184b7",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-applicability",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tables": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230",
+    "tables_probed": [
+      "fr_documents",
+      "drawbridge_sections",
+      "drawbridge_bridges"
+    ]
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 459,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 459,
+        "decisions": {
+          "allowed": 459
+        },
+        "lines": 459,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 153,
+        "sql_text_lines": 0,
+        "table_lines": 459,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 306,
+          "sql": 153
+        }
+      }
+    },
+    "statements_checked": 3,
+    "total": {
+      "allowed": 459,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 459,
+      "decisions": {
+        "allowed": 459
+      },
+      "lines": 459,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 153,
+      "sql_text_lines": 0,
+      "table_lines": 459,
+      "tables_missing": 0,
+      "tools": {
+        "query_table": 306,
+        "sql": 153
+      }
+    }
+  },
+  "summary": {
+    "by_table": {
+      "drawbridge_bridges": {
+        "as_of": 50,
+        "as_of_with_rows": 14,
+        "max_versions": 1,
+        "n": 51,
+        "outside": 0,
+        "passed": 51
+      },
+      "drawbridge_sections": {
+        "as_of": 50,
+        "as_of_with_rows": 14,
+        "max_versions": 1,
+        "n": 51,
+        "outside": 0,
+        "passed": 51
+      },
+      "fr_documents": {
+        "as_of": 50,
+        "as_of_with_rows": 50,
+        "max_versions": 0,
+        "n": 51,
+        "outside": 0,
+        "passed": 51
+      }
+    },
+    "tables": [
+      "drawbridge_bridges",
+      "drawbridge_sections",
+      "fr_documents"
+    ],
+    "total": {
+      "as_of": 150,
+      "dates": 56,
+      "default": 3,
+      "n": 153,
+      "outside": 0,
+      "passed": 153
+    }
+  }
+}

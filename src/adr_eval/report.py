@@ -82,7 +82,9 @@ def _g2(rows: list[dict]) -> dict:
         "n": len(scored),
         "route_accuracy": _mean(routed), "route_n": len(routed),
         "entity_f1": _mean(entities), "entity_n": len(entities),
-        "per_field": {f: _mean(r["gold_query_field_hits"][f] for r in scored) for f in G2_FIELDS},
+        # a gov-tables row scores the parts of a table query (table, op, filters, field)
+        "per_field": {f: _mean(r["gold_query_field_hits"][f] for r in scored)
+                      for f in (scored[0]["gold_query_field_hits"] if scored else G2_FIELDS)},
         "exact": _mean(r["query_exact"] for r in scored),
         "exec_match": _mean(executable), "exec_n": len(executable),
     }
@@ -238,23 +240,30 @@ def build_report(run_dir: Path) -> dict:
     t_values = cfg.get("t_values", [0.5, 0.75, 0.9])
     det = _determinism(rows, cfg.get("repeats", 0))
     violation = det["retrieval_identity_rate"] is not None and det["retrieval_identity_rate"] < 1.0
+    g1 = _read_json(run_dir / "compile.json")
     rep = {
         **{k: cfg.get(k) for k in ("run_id", "corpus", "system", "split", "repeats", "status",
-                                   "stub", "w", "snapshot", "n_items")},
+                                   "stub", "w", "snapshot", "n_items", "qtypes")},
+        # a typed system's compile.json names its tables (Phase 3 `p3-typed`): no retrieval,
+        # no answer or judge call
+        "tables": g1.get("tables"),
         "generator_model": cfg.get("generator", {}).get("model"),
         "metrics_version": cfg.get("metrics_version", 1),
         "n_rows": len(rows),
-        "g1": _read_json(run_dir / "compile.json"),
+        "g1": g1,
         "g2": _g2(rows), "g3": _g3(rows),
         "determinism": det, "determinism_violation": violation,
         "end_to_end": _end_to_end(rows, t_values, cfg.get("spent_usd")),
         "judge": _judge(rows, cfg),
+        # a gov-tables run (Phase 3 §10.3) calls no judge: every answer is scored exactly
+        "golden_set": cfg.get("golden_set", "v0.1"),
+        "judge_enabled": cfg.get("judge_enabled", True),
     }
     warnings = []
     if violation:
         warnings.append(f"determinism check failed: retrieval identity rate "
                         f"{det['retrieval_identity_rate']:.3f} < 1.0 (expected 1.0; this is a bug)")
-    if rep["judge"]["same_family_judge"]:
+    if rep["judge"]["same_family_judge"] and rep["tables"] is None:
         warnings.append("judge and generator share a model family")
     if cfg.get("status") == "stopped_budget":
         warnings.append("run stopped at the --max-dollars budget; rows are incomplete")
@@ -318,6 +327,18 @@ def _table(header: list[str], rows: list[list]) -> list[str]:
             *("| " + " | ".join(_fmt(c) for c in row) + " |" for row in rows), ""]
 
 
+def _g3_section(g3: dict) -> list[str]:
+    return ["## G3 retrieval (excluding `insufficient`)", "",
+            *_table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "coverage@10", "tokens@10",
+                     "full coverage"],
+                    [[k, v["n"], *(_with_ci(v.get(m), v["ci"].get(m)) for m in G3_KEYS),
+                      v.get("tokens@10"), v["full_coverage"]]
+                     for k, v in [("pooled", g3["pooled"]),
+                                  *((f"rarity {k}", v) for k, v in g3["by_rarity"].items()),
+                                  *((f"qtype {k}", v) for k, v in g3["by_qtype"].items()),
+                                  *g3["by_rarity_qtype"].items()]])]
+
+
 def render_markdown(report: dict) -> str:
     r, e2e, g1, g2, g3, det, j = (report, report["end_to_end"], report["g1"], report["g2"],
                                   report["g3"], report["determinism"], report["judge"])
@@ -325,16 +346,26 @@ def render_markdown(report: dict) -> str:
     out = [f"# Report: {r['run_id']}", "",
            f"Corpus `{r['corpus']}`, system `{r['system']}`, split `{r['split']}`, "
            f"{r['repeats']} repeats, {r['n_rows']} rows, status `{r['status']}`. "
-           f"Generator `{r['generator_model']}`, judge `{j['model']}`"
+           f"Generator `{r['generator_model']}`, "
+           + (f"judge `{j['model']}`" if r.get("judge_enabled", True) else "no judge")
            + (f", linear w = {r['w']}" if r.get("w") is not None else "")
            + f". Metrics version {r.get('metrics_version', 1)}.", ""]
+    if r.get("qtypes"):
+        out += [f"Question types: {', '.join(r['qtypes'])} only.", ""]
+    if r.get("golden_set", "v0.1") != "v0.1":
+        out += [f"Golden set `{r['golden_set']}`: generated table queries, no judge call, "
+                f"exact scoring.", ""]
+    if r.get("tables"):
+        out += [f"Answers from the typed tables `{r['tables']}` with the generated query: "
+                f"no retrieval, no answer or judge call, exact scoring.", ""]
     for w in r["warnings"]:
         out += [f"> **Warning:** {w}", ""]
     out += ["Values in brackets are 95% CIs (percentile bootstrap, 10,000 resamples). "
             "End to end: cluster bootstrap over items of the statistic shown, using every "
             "repeat (items are resampled with all their rows); none where fewer than 2 items "
-            "contribute. G3 retrieval: bootstrap of the mean over items at repeat 0 (retrieval "
-            "is deterministic); none where n < 2.", ""]
+            "contribute."
+            + ("" if r.get("tables") else " G3 retrieval: bootstrap of the mean over items at "
+               "repeat 0 (retrieval is deterministic); none where n < 2."), ""]
     out += ["## End to end", ""]
     out += _table(["n", "accuracy", "error", "abstained", "partial",
                    *[f"penalised t={t}" for t in ts]],
@@ -361,15 +392,8 @@ def render_markdown(report: dict) -> str:
         out += [f"JSON recovered (a reply held several objects or prose; the last object "
                 f"with the required keys was used) in {e2e['json_recovered_rows']} row(s): "
                 f"{stages}.", ""]
-    out += ["## G3 retrieval (excluding `insufficient`)", ""]
-    out += _table(["stratum", "n", "Recall@10", "nDCG@10", "MRR", "coverage@10", "tokens@10",
-                   "full coverage"],
-                  [[k, v["n"], *(_with_ci(v.get(m), v["ci"].get(m)) for m in G3_KEYS),
-                    v.get("tokens@10"), v["full_coverage"]]
-                   for k, v in [("pooled", g3["pooled"]),
-                                *((f"rarity {k}", v) for k, v in g3["by_rarity"].items()),
-                                *((f"qtype {k}", v) for k, v in g3["by_qtype"].items()),
-                                *g3["by_rarity_qtype"].items()]])
+    if not r.get("tables"):  # a typed run retrieves nothing
+        out += _g3_section(g3)
     if det["k"] < 2:
         det_line = (f"Retrieval identity: not measured ({det['k']} repeat); answer agreement: "
                     f"not measured; pass^{det['k']} {_fmt(det['pass^k'])}.")
@@ -385,11 +409,21 @@ def render_markdown(report: dict) -> str:
     out += _table(["route accuracy", "n", "record match", "n", "entity F1", "n"],
                   [[g2["route_accuracy"], g2["route_n"], g2["exec_match"], g2["exec_n"],
                     g2["entity_f1"], g2["entity_n"]]])
+    if r.get("tables"):
+        n_tables = len((g1.get("manifest") or {}).get("tables", []))
+        out += ["## G1 compile", "",
+                f"Tables `{r['tables']}` ({n_tables} tables; the manifest is in "
+                f"compile.json).", ""]
+        out += ["## Judge", "", "No judge call: every answer is scored exactly.", ""]
+        return "\n".join(out)
     tf = g1.get("text_fidelity") or {}
     out += ["## G1 compile", "",
             f"Span containment {_fmt(g1.get('span_containment'))}; text fidelity "
             f"{_fmt(tf.get('share'))}; empty documents {len(g1.get('empty_docs', []))}; "
             f"index fingerprint `{g1.get('fingerprint')}`.", ""]
+    if not r.get("judge_enabled", True):
+        out += ["## Judge", "", "No judge call: every answer is scored exactly.", ""]
+        return "\n".join(out)
     out += ["## Judge", "",
             f"Proxy κ {_fmt(j['proxy_kappa'])} "
             f"(n = {j['proxy_kappa_n']}; {j['proxy_kappa_note']}); raw agreement "

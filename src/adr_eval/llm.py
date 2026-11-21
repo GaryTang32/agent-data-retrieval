@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Collection
@@ -20,6 +21,9 @@ import httpx
 from adr_eval.cache import Cache
 
 BACKOFF_SECONDS = (1, 2, 4, 8, 16)
+# HTTP statuses that reject the request's input (malformed, too large, unprocessable): the
+# only failures an adapter raises as InputRejected. 401/403/404 and the rest are configuration.
+INPUT_REJECTED_STATUSES = (400, 413, 422)
 USAGE_LIMIT_BACKOFF_SECONDS = (60, 120, 240, 480, 900)
 
 
@@ -44,6 +48,22 @@ class ModelOutputError(ModelError):
     pass
 
 
+class InputRejected(ModelError):
+    """The provider refused the request because of its input (HTTP 400, 413 or 422): the same
+    input fails again, so it is the one failure `cache_failures=True` stores."""
+
+
+class RetriesExhausted(ModelError):
+    """Every attempt failed with a retryable error (a transport error, an overload, the
+    subscription usage limit); chains the last one. Never cached: a later run retries."""
+
+
+class CachedFailure(ModelError):
+    """An input rejection (InputRejected) stored in the cache by a call with
+    `cache_failures=True`, raised for it and again on every later call with the same key,
+    without a call."""
+
+
 class ModelClient(Protocol):
     name: str
     family: str
@@ -65,10 +85,16 @@ class RateLimitedError(_Retryable):
     backoff = USAGE_LIMIT_BACKOFF_SECONDS
 
 
-def _with_retries(attempt: Callable[[], Completion], max_retries: int) -> Completion:
+def _with_retries(attempt: Callable[[], Completion], max_retries: int,
+                  before_attempt: Callable[[], None] | None = None) -> Completion:
+    """Run `attempt`, retrying a retryable failure up to `max_retries` times with backoff.
+    `before_attempt` runs before every attempt, retries included; whatever it raises (a budget
+    stop) propagates at once."""
     last: Exception | None = None
     waits: Counter = Counter()  # each backoff schedule advances on its own failures
     for i in range(max_retries + 1):
+        if before_attempt is not None:
+            before_attempt()
         try:
             return attempt()
         except _Retryable as e:
@@ -77,10 +103,22 @@ def _with_retries(attempt: Callable[[], Completion], max_retries: int) -> Comple
                 n = waits[e.backoff]
                 waits[e.backoff] += 1
                 time.sleep(e.backoff[min(n, len(e.backoff) - 1)])
-    raise ModelError(f"giving up after {max_retries} retries: {last}") from last
+    raise RetriesExhausted(f"giving up after {max_retries} retries: {last}") from last
 
 
 class _CachedClient:
+    """A client whose replies are cached by (adapter, model, system, user, max tokens, repeat).
+
+    `complete(..., cache_failures=True)` also stores a call the provider rejected for its input
+    (InputRejected) at `Cache.key("failure", key)` and raises it as CachedFailure, then and on
+    every later call with that key, without a call (ruling P21). Every other failure (retries
+    exhausted, the usage limit, authentication or configuration errors, a missing binary, a
+    malformed response) is raised as it is and never stored, so a later run retries it. The
+    default stores nothing on failure (Phase 0). `before_attempt` runs before each transport
+    attempt, retries included (a per-attempt budget); what it raises propagates and is never
+    cached.
+    """
+
     name: str
     family: str
     model: str
@@ -93,21 +131,46 @@ class _CachedClient:
     def _call(self, system: str, user: str, max_tokens: int) -> Completion:
         raise NotImplementedError
 
+    def _attempt(self, system: str, user: str, max_tokens: int, repeat: int) -> Completion:
+        """One transport attempt (the repeat index only enters the cache key)."""
+        return self._call(system, user, max_tokens)
+
     def _key(self, system: str, user: str, max_tokens: int, repeat: int) -> str:
         return Cache.key(self.name, self.model, system, user, max_tokens, repeat)
 
-    def is_cached(self, system: str, user: str, *, max_tokens: int, repeat: int = 0) -> bool:
-        """Whether `complete` with these arguments would be answered from the cache."""
-        return self.cache.get(self._key(system, user, max_tokens, repeat)) is not None
+    @staticmethod
+    def _failure_key(key: str) -> str:
+        return Cache.key("failure", key)
+
+    def is_cached(self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
+                  cache_failures: bool = False) -> bool:
+        """Whether `complete` with these arguments would be answered from the cache (with a
+        reply, or with a stored failure when `cache_failures`)."""
+        key = self._key(system, user, max_tokens, repeat)
+        if self.cache.get(key) is not None:
+            return True
+        return cache_failures and self.cache.get(self._failure_key(key)) is not None
 
     def complete(
-        self, system: str, user: str, *, max_tokens: int, repeat: int = 0
+        self, system: str, user: str, *, max_tokens: int, repeat: int = 0,
+        cache_failures: bool = False, before_attempt: Callable[[], None] | None = None,
     ) -> Completion:
         key = self._key(system, user, max_tokens, repeat)
         hit = self.cache.get(key)
         if hit is not None:
             return Completion(**{"provider": self.name, **hit, "cached": True})
-        c = _with_retries(lambda: self._call(system, user, max_tokens), self.max_retries)
+        if cache_failures:
+            failed = self.cache.get(self._failure_key(key))
+            if failed is not None:
+                raise CachedFailure(failed["error"])
+        try:
+            c = _with_retries(lambda: self._attempt(system, user, max_tokens, repeat),
+                              self.max_retries, before_attempt)
+        except InputRejected as e:
+            if not cache_failures:
+                raise
+            self.cache.put(self._failure_key(key), {"error": str(e)})
+            raise CachedFailure(str(e)) from e
         c = replace(c, provider=self.name)
         self.cache.put(key, {**c.__dict__, "cached": False})
         return c
@@ -145,6 +208,8 @@ class AnthropicClient(_CachedClient):
         except anthropic.APIStatusError as e:
             if e.status_code == 429 or e.status_code >= 500:
                 raise _Retryable(f"HTTP {e.status_code}") from e
+            if e.status_code in INPUT_REJECTED_STATUSES:
+                raise InputRejected(f"HTTP {e.status_code}: {e}") from e
             raise ModelError(f"HTTP {e.status_code}: {e}") from e
         text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
         return Completion(
@@ -194,6 +259,8 @@ class OpenAICompatibleClient(_CachedClient):
             raise _Retryable(str(e)) from e
         if r.status_code == 429 or r.status_code >= 500:
             raise _Retryable(f"HTTP {r.status_code}")
+        if r.status_code in INPUT_REJECTED_STATUSES:
+            raise InputRejected(f"HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code >= 400:
             raise ModelError(f"HTTP {r.status_code}: {r.text[:200]}")
         try:
@@ -240,7 +307,9 @@ class ClaudeCodeClient(_CachedClient):
     reply comes from the model alone. The CLI has no max-tokens or temperature flag:
     `max_tokens` only enters the cache key, and sampling is the CLI's default. The default
     runner strips Anthropic API credentials from the CLI's environment so that it always
-    uses the subscription login.
+    uses the subscription login. It raises no InputRejected: the CLI's exit status and error
+    text do not reliably tell an input rejection from other failures, so none of its
+    failures is cached (ruling P21).
     """
 
     name = "claude_code"
@@ -316,6 +385,32 @@ class StubClient:
             text, (len(system) + len(user)) // 4, len(text) // 4, "stub",
             time.monotonic() - t0, False, provider="stub",
         )
+
+
+class CachedStubClient(_CachedClient):
+    """A deterministic model behind the reply cache, for tests: `fn(system, user, repeat)`
+    gives the reply text, or raises (`_Retryable` for a transport failure that is retried,
+    ModelError for one that is not). `calls` counts the attempts that reached `fn`."""
+
+    name = "stub"
+    family = "stub"
+
+    def __init__(self, model: str, cache: Cache, fn: Callable[[str, str, int], str],
+                 max_retries: int = 0):
+        super().__init__(cache)
+        self.model = model
+        self.fn = fn
+        self.max_retries = max_retries
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def _attempt(self, system: str, user: str, max_tokens: int, repeat: int) -> Completion:
+        with self._lock:
+            self.calls += 1
+        t0 = time.monotonic()
+        text = self.fn(system, user, repeat)
+        return Completion(text, (len(system) + len(user)) // 4, len(text) // 4, self.model,
+                          time.monotonic() - t0, False)
 
 
 _FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL)

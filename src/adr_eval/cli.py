@@ -1,6 +1,7 @@
 """`adr-eval` command line: fetch, tools-fetch, golden, index, run, retrieval,
-retrieval-compare, retrieval-identical, p2-compare, probes (temporal, acl, equivalence),
-tools-retrieval, tools-probes, mcp-probes, report, doctor."""
+retrieval-compare, retrieval-identical, p2-compare, p3-q1, p3-q2, probes (temporal, acl,
+equivalence; the table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
+tables-applicability, tables-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import tempfile
 import time
 from collections import Counter
 from pathlib import Path
+from typing import get_args
 
 from pydantic import ValidationError
 
@@ -27,7 +29,7 @@ from adr_eval.corpora.registry import (
     get_adapter,
 )
 from adr_eval.corpora.toolret import ToolRetMissing
-from adr_eval.models import GoldenItem, jsonl_lines, write_items
+from adr_eval.models import GoldenItem, QType, jsonl_lines, write_items
 from adr_eval.report import (
     compare,
     compare_retrieval,
@@ -369,6 +371,8 @@ def _exclusions(corpus: str) -> dict[str, str]:
 
 
 def _golden_gen(a: argparse.Namespace) -> int:
+    if a.corpus == TABLES_GOLDEN:
+        return _golden_tables_gen(a)
     items = runner.golden_dir(a.corpus) / "items.jsonl"
     if items.exists() and not a.overwrite:  # checked before any client is made or call sent
         print(f"error: {items} exists and is frozen (golden sets are data, not regenerated "
@@ -427,6 +431,54 @@ def _golden_gen_logged(a: argparse.Namespace) -> int:
     return 0
 
 
+TABLES_GOLDEN = "tables"   # `adr-eval golden tables`: the gov-tables v0.1 set (Phase 3 §10.3)
+
+
+def _golden_tables_gen(a: argparse.Namespace) -> int:
+    """`adr-eval golden tables --gen --store S --facts ID --generator P --max-calls N`: the
+    gov-tables v0.1 items from the second-pass facts `ID` of store `S`, phrased by profile `P`
+    under `N` budget units (every transport attempt counts). A stop at the cap or on a model
+    failure that is no input rejection exits 1 and writes nothing; a rerun reads the completed
+    calls from the cache."""
+    from adr_eval.golden import tables
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.tables.extract import metered_client
+    from adr_store.tables.overlay import TablesError
+
+    out = tables.GOLDEN_DIR
+    if (out / "items.jsonl").exists() and not a.overwrite:  # before any client or call
+        print(f"error: {out / 'items.jsonl'} exists and is frozen (a regenerated set is a new "
+              f"version); pass --overwrite to replace it", file=sys.stderr)
+        return 2
+    try:
+        meter = metered_client(a.max_calls, profile=a.generator)
+    except runner.ProfileError as e:
+        raise runner.RunError(str(e)) from e
+    try:
+        res = tables.generate_all(a.store, a.facts, meter, n=tables.N_ITEMS)
+    except TablesError as e:
+        raise runner.RunError(str(e)) from e
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
+        return 1
+    tables.write_items(out, res.items, res.rejected)
+    dev = sum(i.split == "dev" for i in res.items)
+    ops = Counter(i.qtype for i in res.items)
+    c, calls = res.counts, res.counts["calls"]
+    reasons = Counter(r["reason"] for r in res.rejected)
+    print(f"{out}: {len(res.items)} items ({dev} dev, {len(res.items) - dev} test); per op "
+          f"{dict(sorted(ops.items()))}; facts {a.facts[:12]}")
+    print(f"  {c['draws']} draws: {c['duplicates']} repeats, {c['unusable']} unusable, "
+          f"{len(res.rejected)} rejected {dict(sorted(reasons.items()))}")
+    print(f"status: complete; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {', '.join(sorted(meter.served_models)) or 'none reported'}")
+    if len(res.items) < tables.N_ITEMS:
+        print(f"  short of {tables.N_ITEMS} items: the draws ran out (reported, not padded)")
+    return 0
+
+
 def _golden_verify(a: argparse.Namespace) -> int:
     from adr_eval.golden.verify import verify_items
 
@@ -468,17 +520,61 @@ def _index(a: argparse.Namespace) -> int:
     return 0
 
 
+def _check_typed_v01(a: argparse.Namespace) -> None:
+    """A `p3-typed` run on golden v0.1 (Q1, Phase 3 spec §10.2) reuses the baseline's generated
+    queries from the model cache: it needs --max-calls (every transport attempt counts; Q1 is
+    run with 0), and the query-generation prompt and record schema text must be byte-identical
+    to the baseline's (`phase3.cache_inputs_unchanged`), or every call would be made anew.
+    --stub and --dry-run call no model: they need no cap, and a stub run no cache check."""
+    from adr_eval import phase3
+
+    if a.max_calls is None and not (a.stub or a.dry_run):
+        raise runner.RunError(f"a {a.system} run needs --max-calls (Q1 reads the baseline's "
+                              f"cached queries: pass --max-calls 0; every transport attempt "
+                              f"counts)")
+    problems = [] if a.stub else phase3.cache_inputs_unchanged(a.corpus)
+    if problems:
+        raise runner.RunError("Q1 reuses the baseline's cached queries, keyed by the "
+                              "query-generation prompt and the record schema text; these "
+                              "differ, so every query would be a new model call:\n"
+                              + "\n".join(problems)
+                              + "\nfix: restore the baseline's prompt and schema text")
+
+
 def _run(a: argparse.Namespace) -> int:
+    """`adr-eval run`. With `--golden gov-tables` (tables mode, Phase 3 §10.3, §11) the default
+    is one repeat (the budget is one query and, for a chunk system, one answer call per item),
+    and a stop at the call cap or on a model failure that is no input rejection exits 1 with
+    nothing written."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+
     config = runner.load_config()
     if a.stub:
         config["stub"] = True
     for role in ("generator", "judge"):
         if getattr(a, role):
             config[role] = getattr(a, role)
-    repeats = a.repeats if a.repeats is not None else config["repeats"]
-    run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
-                        max_dollars=a.max_dollars, dry_run=a.dry_run, rebuild=a.rebuild,
-                        max_calls=a.max_calls)
+    tables = a.golden == runner.GOV_TABLES
+    if tables and a.judge:
+        raise runner.RunError("a gov-tables run makes no judge call; remove --judge")
+    if tables and a.max_calls is None and not (a.stub or a.dry_run):
+        raise runner.RunError("a gov-tables run needs --max-calls (its share of the approved "
+                              "budget; every transport attempt counts)")
+    if not tables and a.system in systems.P3_NAMES:
+        _check_typed_v01(a)
+    repeats = a.repeats if a.repeats is not None else (1 if tables else config["repeats"])
+    try:
+        run_id = runner.run(a.corpus, a.system, a.split, repeats, config, out_root=a.out,
+                            max_dollars=a.max_dollars, dry_run=a.dry_run, rebuild=a.rebuild,
+                            max_calls=a.max_calls,
+                            qtypes=None if a.qtype is None else tuple(a.qtype),
+                            golden=a.golden)
+    except (BudgetExceeded, ModelError) as e:
+        # tables mode only (v0.1 runs stop per item, and a stored input rejection is a row):
+        # the runner attaches the run's budget
+        print(stop_status(getattr(e, "budget", None), e))
+        return 1
     if a.dry_run:
         return 0
     run_dir = a.out / run_id
@@ -555,7 +651,58 @@ def _p2_compare(a: argparse.Namespace) -> int:
     return 0
 
 
+def _p3_q1(a: argparse.Namespace) -> int:
+    """`adr-eval p3-q1 TYPED_RUN BASELINE_RUN`: Q1 (`phase3.q1_compare`) with the `also_in`
+    readings of the corpus's golden items; printed and written to
+    `<typed run>/q1-<baseline run>.json` (it names items: keep it in runs/). With
+    `--summary OUT` the committed form (`phase3.q1_summary`, no item id or filter value) is
+    written to OUT too."""
+    from adr_eval import phase3
+
+    typed, base = Path(a.typed_run), Path(a.baseline_run)
+    c = phase3.q1_compare(typed, base)
+    loaded = runner.load_checked_corpus(c["corpus"])
+    c["also_in"] = phase3.also_in_readings(runner.load_golden(c["corpus"], loaded),
+                                           get_adapter(c["corpus"]).records(loaded))
+    text = json.dumps(c, indent=2, sort_keys=True) + "\n"
+    (typed / f"q1-{base.name}.json").write_text(text, encoding="utf-8")
+    if a.summary is not None:
+        a.summary.parent.mkdir(parents=True, exist_ok=True)
+        a.summary.write_text(json.dumps(phase3.q1_summary(c), indent=2, sort_keys=True) + "\n",
+                             encoding="utf-8")
+    print(text, end="")
+    return 0
+
+
+def _p3_q2(a: argparse.Namespace) -> int:
+    """`adr-eval p3-q2 TYPED_RUN BASELINE_RUN`: Q2 (`phase3.q2_compare`, spec §12), printed and
+    written to `<typed run>/q2-<baseline run>.json` (it names items: keep it in runs/); with
+    `--summary OUT` the committed form (`phase3.q2_summary`) is written to OUT too."""
+    from adr_eval import phase3
+
+    typed, base = Path(a.typed_run), Path(a.baseline_run)
+    c = phase3.q2_compare(typed, base)
+    text = json.dumps(c, indent=2, sort_keys=True) + "\n"
+    (typed / f"q2-{base.name}.json").write_text(text, encoding="utf-8")
+    if a.summary is not None:
+        a.summary.parent.mkdir(parents=True, exist_ok=True)
+        a.summary.write_text(json.dumps(phase3.q2_summary(c), indent=2, sort_keys=True) + "\n",
+                             encoding="utf-8")
+    d = c["difference"]
+    print(text, end="")
+    print(f"Q2 {'pass' if c['passed'] else 'fail'}: p3-typed {c['typed']['accuracy']:.3f} "
+          f"(>= {phase3.Q2_MIN_ACCURACY}: {c['accuracy_ok']}), baseline-linear "
+          f"{c['baseline']['accuracy']:.3f}; difference {d['mean']:+.3f} [{d['ci95'][0]:+.3f}, "
+          f"{d['ci95'][1]:+.3f}] (lower bound > +{phase3.Q2_MARGIN}: {c['margin_ok']}); "
+          f"McNemar b={c['b']} c={c['c']} p={c['mcnemar_p']:.4g}; n={c['n']}")
+    return 0
+
+
 def _probes(a: argparse.Namespace) -> int:
+    if a.kind.startswith("tables-"):
+        return _probes_tables(a)
+    if a.corpus == "tools":
+        raise runner.RunError(f"the {a.kind} probes take a content corpus, not tools")
     if a.kind == "temporal":
         if a.corpus != "gov":
             raise runner.RunError(f"the temporal probes are for gov, not {a.corpus}")
@@ -714,9 +861,9 @@ def _write_probe_run(a, kind: str, started, files: dict, md: str) -> Path:
 
     out = probes.OUT_ROOT if a.out is None else a.out
     d = runner._new_run_dir(Path(out), f"probes-{kind}-{a.corpus}-{started:%Y%m%dT%H%M%S}")
-    for name, data in files.items():
+    for name, data in files.items():   # a lone surrogate (a probe statement) as its \u escape
         (d / name).write_text(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False)
-                              + "\n", encoding="utf-8")
+                              + "\n", encoding="utf-8", errors="backslashreplace")
     (d / "summary.md").write_text(md, encoding="utf-8")
     return d
 
@@ -900,6 +1047,303 @@ def _probes_acl(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+TABLE_KINDS = ("tables-leak", "tables-sql", "tables-equivalence", "tables-failclosed",
+               "tables-applicability", "tables-mcp")
+
+
+def _tables_config(a: argparse.Namespace, path: Path, label: str) -> dict:
+    """What a table probe run read of one store: snapshot, tables id, ACL snapshot."""
+    from adr_store import acl as acl_mod
+    from adr_store import handles
+    from adr_store.store import Store
+
+    store = Store.open(path)
+    sid, snap = acl_mod.read_head(path)
+    return {"corpus": label, "store": runner._display_path(Path(path)),
+            "snapshot": store.snapshot_id,
+            "tables": handles.tables_head(path, store.snapshot_id), "acl_snapshot": sid,
+            "acl_sequence": snap.sequence, "acl_entries_sha256": snap.entries_sha256,
+            "directory_sha256": snap.directory_sha256, "policy_sha256": snap.policy_sha256}
+
+
+def _tables_fresh(path: Path) -> None:
+    """Refuse a store whose ACL does not resolve for the auditor now (stale, not for HEAD)."""
+    from adr_store.tools import AccessDenied, Tools
+
+    try:
+        Tools(path, acl=True, caller="user:auditor")._access()
+    except AccessDenied as e:
+        raise runner.RunError(f"{path}: {e}\nfix: run `adr acl sync --store {path}`") from e
+
+
+def _probes_tables(a: argparse.Namespace) -> int:
+    """`adr-eval probes tables-<kind> <corpus> --store S` (Phase 3 spec §10.4; S1, S2, S3 and
+    the MCP leg of D1): the table probes of `adr_eval.probes.tables`, through `Tools` with the
+    ACL layer (tables-mcp: through `adr mcp` servers), against reference stores of each view
+    built or reused under --views (removed unless --keep-views). Writes
+    <out>/probes-<kind>-<corpus>-<time>/: probes.json, results.json (per-item rows),
+    summary.json and summary.md (counts only)."""
+    from datetime import UTC, datetime
+
+    from adr_eval.probes import tables as tp
+
+    if a.corpus not in tp.TABLE_CORPORA and a.kind != "tables-equivalence":
+        raise runner.RunError(f"{a.kind} needs a store with tables (gov or research), not "
+                              f"{a.corpus}; bench and tools are checked empty by "
+                              f"tables-equivalence")
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    emb = runner.REPO_ROOT / config.get("embedding_cache_dir", ".cache/emb")
+    p2 = runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2")
+    _tables_fresh(a.store)
+    kw = {"directory": a.directory, "policy": a.policy, "emb_cache": emb}
+    root = Path(a.views) if a.views is not None else p2 / "views-tables" / a.corpus
+    ctx = tp.table_context(a.store)
+    refs = tp.References(ctx, root, generator=a.generator, **kw)
+    cfg = {**_tables_config(a, a.store, a.corpus), "kind": a.kind, "seed": tp.SEED3}
+    if a.kind in ("tables-leak", "tables-equivalence") \
+            and ctx.manifest is not None and ctx.manifest.extraction is not None:
+        # the references' extraction tables come from this profile's cached replies
+        cfg["generator"] = a.generator or config["generator"]
+    store_log = tp.log_path(a.store)
+    offset, calls0 = tp.log_size(store_log), tp.table_calls(store_log)
+    statements: list[str] = []
+    extra_logs: dict = {}
+    probe_set: dict = {"seed": tp.SEED3}
+    if a.kind == "tables-leak":
+        sizes = None if a.per_family is None else dict.fromkeys(tp.LEAK_SIZES[a.corpus],
+                                                                a.per_family)
+        probes = tp.leak_probes(a.store, a.corpus, sizes=sizes)
+        results = tp.run_leaks(probes, a.store, root, refs=refs, **kw)
+        statements = [c["args"]["statement"] for p in probes for c in p.call["calls"]
+                      if c["tool"] == "sql"]
+        summary = tp.summarize_leaks(results)
+        summary["targets_by_table"] = dict(sorted(Counter(p.target["table"]
+                                                          for p in probes).items()))
+        cfg["sizes"] = sizes or tp.LEAK_SIZES[a.corpus]
+        probe_set["leak"] = [p.to_dict() for p in probes]
+        rows = [r.to_dict() for r in results]
+        ok = summary["total"]["leaks"] == 0 and summary["total"]["invalid"] == 0
+        head = f"{summary['total']['n']} leak probes, {summary['total']['leaks']} leaks, " \
+               f"{summary['total']['invalid']} invalid; {summary['total']['compared']} " \
+               f"compared with a reference store, {summary['total']['ghost']} as user:ghost " \
+               f"(denied F4: no directory user has a hidden row)"
+        table = ("| family | probes | leaks | invalid | callers | outcomes |\n"
+                 "|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['leaks']} | {b['invalid']} | {b['callers']} | "
+                     f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                     for n, b in summary["families"].items()))
+    elif a.kind == "tables-sql":
+        rows = tp.sql_guard(a.store, a.as_user or "user:auditor")
+        statements = [r["statement"] for r in rows]
+        summary = tp.summarize_guard(rows)
+        cfg["caller"] = a.as_user or "user:auditor"
+        probe_set["cases"] = [{"category": c, "statement": s} for c, s in tp.SQL_GUARD_CASES]
+        ok = summary["total"]["passed"] == summary["total"]["n"]
+        head = f"{summary['total']['n']} statements, {summary['total']['passed']} refused " \
+               f"with a fixed message or bounded, {summary['total']['intact']} with the " \
+               f"database intact afterwards"
+        table = ("| category | cases | passed | outcomes |\n|---|---|---|---|\n" + "".join(
+            f"| {n} | {b['n']} | {b['passed']} | "
+            f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+            for n, b in summary["categories"].items()))
+    elif a.kind == "tables-equivalence":
+        gold = None
+        if a.corpus in tp.TABLE_CORPORA:
+            gold = Path(a.gold) if a.gold is not None else runner.golden_dir(a.corpus)
+            gold = gold / "items.jsonl" if gold.is_dir() else gold
+            cfg["gold_sha256"] = hashlib.sha256(gold.read_bytes()).hexdigest()
+        rows = tp.equivalence(a.store, a.corpus, root, a.queries, gold=gold, refs=refs, **kw)
+        statements = list(tp.EQUIVALENCE_SQL.get(a.corpus, ()))
+        summary = tp.summarize_equivalence(rows)
+        cfg["queries"] = a.queries
+        if a.corpus in tp.TABLE_CORPORA:
+            pool, sql = tp.equivalence_queries(ctx, gold)
+            probe_set["query_table"] = pool
+            probe_set["sql"] = sql
+        ok = summary["differing"] == 0 and \
+            summary["empty_checks"]["identical"] == summary["empty_checks"]["n"]
+        head = (f"{summary['identical']} of {summary['n']} identical over "
+                f"{summary['views']} views" if summary["n"] else
+                f"no tables: {summary['empty_checks']['identical']} of "
+                f"{summary['empty_checks']['n']} table tool calls refused alike on the store "
+                f"and the reference ({summary['views']} views; not counted)")
+        table = ("| tool | calls | identical | refused |\n|---|---|---|---|\n" + "".join(
+            f"| {n} | {b['n']} | {b['identical']} | {b['refused']} |\n"
+            for n, b in summary["by_tool"].items()))
+    elif a.kind == "tables-failclosed":
+        clones = Path(a.clones) if a.clones is not None else p2 / "clones" / a.corpus
+        rows = tp.failclosed(a.store, clones, a.corpus, logs=extra_logs, **kw)
+        extra_logs.pop("store", None)   # the store's log is scanned below
+        probe_set["target"] = rows[0]["target"]
+        summary = tp.summarize_failclosed(rows)
+        cfg["failclosed_callers"] = sorted({r["caller"] for r in rows
+                                            if r["family"] == "no_entry"})
+        ok = summary["total"]["passed"] == summary["total"]["n"]
+        head = f"{summary['total']['n']} probes, {summary['total']['passed']} passed, " \
+               f"{summary['total']['content']} with content; target document " \
+               f"`{rows[0]['target']['doc_id'][:12]}` ({rows[0]['target']['table']})"
+        table = ("| condition | probes | passed | with content | outcomes |\n"
+                 "|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['passed']} | {b['content']} | "
+                     f"{', '.join(f'{k} {v}' for k, v in b['outcomes'].items())} |\n"
+                     for n, b in summary["conditions"].items()))
+    elif a.kind == "tables-applicability":
+        probed = tuple(a.tables) if a.tables else tp.applicability_tables(ctx)
+        try:
+            rows = tp.applicability_probes(a.store, probed, n=a.n or 50)
+        except ValueError as e:
+            raise runner.RunError(str(e)) from e
+        statements = [tp.applicability_statement(t) for t in sorted({r["table"] for r in rows})]
+        summary = tp.summarize_applicability(rows)
+        cfg["tables_probed"] = list(probed)
+        ok = summary["total"]["passed"] == summary["total"]["n"]
+        head = (f"{summary['total']['n']} probes on {', '.join(summary['tables'])} "
+                f"({summary['total']['default']} default, {summary['total']['as_of']} as_of "
+                f"over {summary['total']['dates']} dates), {summary['total']['passed']} passed, "
+                f"{summary['total']['outside']} rows of documents not in force")
+        table = ("| table | probes | passed | as_of | as_of with rows | rows outside | "
+                 "most versions returned |\n|---|---|---|---|---|---|---|\n" + "".join(
+                     f"| {n} | {b['n']} | {b['passed']} | {b['as_of']} | "
+                     f"{b['as_of_with_rows']} | {b['outside']} | {b['max_versions']} |\n"
+                     for n, b in summary["by_table"].items()))
+    else:   # tables-mcp
+        return _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb)
+    # each table call on a store must have its log line, as the MCP leg's `calls_match` asks
+    scans = {"store": tp.scan_table_log(store_log, offset, statements,
+                                        calls=tp.table_calls(store_log) - calls0),
+             **{f"reference/{k}": v for k, v in refs.log_scans(statements).items()},
+             **extra_logs}
+    logs = {"total": tp.total_table_scan(scans), "by_store": scans,
+            "statements_checked": len({x for x in statements
+                                       if len(x) >= tp.MIN_STATEMENT})}
+    ok = ok and logs["total"]["complete"]
+    if a.kind in ("tables-leak", "tables-equivalence"):   # the kinds that use them
+        cfg["views"] = refs.info
+        cfg["views_removed"] = [] if a.keep_views else [
+            runner._display_path(Path(p)) for p in refs.remove()]
+    lt = logs["total"]
+    md = (f"# Table probes: {a.kind[len('tables-'):]} ({a.corpus})\n\nStore `{cfg['store']}` "
+          f"(snapshot `{cfg['snapshot'][:12]}`, tables "
+          f"`{(cfg['tables'] or 'none')[:12]}`, ACL snapshot `{cfg['acl_snapshot'][:12]}` "
+          f"sequence {cfg['acl_sequence']}). Seed {tp.SEED3}. No model calls.\n\n{head}.\n\n"
+          + table + f"\n## Log fields\n\n{lt['lines']} log lines ({lt['table_lines']} of the "
+          f"table tools, for {lt['table_calls']} table calls; {lt['calls_mismatch']} log(s) "
+          f"whose count differs, {lt['logs_missing']} missing), {lt['complete_lines']} with "
+          f"caller, principals, acl_snapshot and acl_decision; {lt['tables_missing']} without "
+          f"`tables`; {lt['allowed']} allowed, "
+          f"{lt['allowed_unresolved']} of them with a null resolved field or tables id; "
+          f"{lt['sql_text_lines']} with statement text. Complete: {lt['complete']}.\n")
+    d = _write_probe_run(a, a.kind, started,
+                         {"probes.json": probe_set, "results.json": {"results": rows},
+                          "summary.json": {"config": cfg, "summary": summary, "logs": logs}},
+                         md)
+    print(md)
+    print(f"{d}: {a.kind}; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0 if ok else 1
+
+
+def _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb) -> int:
+    """`adr-eval probes tables-mcp <corpus> --store S [--also LABEL=PATH]`: the seeded --n (60)
+    of the leak probes of the stores, each through an `adr mcp` server of its caller, judged
+    against the Python API's reference stores, every result replayed with its handle."""
+    from adr_store import tools as store_tools
+    from adr_store.mcp_client import McpTools
+
+    stores = {a.corpus: Path(a.store)}
+    for spec in a.also or []:
+        label, sep, path = spec.partition("=")
+        if not sep or label not in tp.TABLE_CORPORA or label in stores:
+            raise runner.RunError(f"--also takes CORPUS=PATH with another corpus of "
+                                  f"{', '.join(tp.TABLE_CORPORA)}, got {spec!r}")
+        _tables_fresh(Path(path))
+        stores[label] = Path(path)
+    contexts = {a.corpus: ctx}
+    references = {a.corpus: refs}
+    universe = []
+    cfg_stores = {}
+    for label, path in stores.items():
+        if label not in contexts:
+            contexts[label] = tp.table_context(path)
+            references[label] = tp.References(contexts[label], root.parent / label,
+                                              generator=a.generator, **kw)
+        cfg_stores[label] = _tables_config(a, path, label)
+        universe += [(label, p) for p in tp.leak_probes(path, label)]
+    selected = tp.select_mcp(universe, a.n or tp.MCP_SUBSET)
+    logs_of = {label: tp.log_path(path) for label, path in stores.items()}
+    offsets = {label: tp.log_size(log) for label, log in logs_of.items()}
+    made: dict = {}
+
+    def reference_for(label, caller):
+        path = references[label].path_for(caller)
+        if path is None:
+            return None
+        if (label, caller) not in made:
+            made[(label, caller)] = store_tools.Tools(path, emb_cache=emb, acl=True,
+                                                      caller=caller)
+        return made[(label, caller)]
+
+    def make_server(label, caller):
+        tp.keep_fresh(stores[label], a.directory, a.policy, tp.acl.utc_now)
+        return McpTools(stores[label], caller, emb_cache=emb, env={"HF_HUB_OFFLINE": "1"},
+                        cwd=runner.REPO_ROOT, timeout=a.timeout)
+
+    results, replays, calls = tp.run_mcp(selected, contexts=contexts,
+                                         reference_for=reference_for, make_server=make_server)
+    statements = [c["args"]["statement"] for _, p in selected for c in p.call["calls"]
+                  if c["tool"] == "sql"]
+    mcp_scans = {label: tp.scan_table_log(log, offsets[label], statements)
+                 for label, log in logs_of.items()}
+    ref_scans = {f"{label}/{k}": v for label, r in references.items()
+                 for k, v in r.log_scans(statements).items()}
+    n_calls = {label: sum(c.values()) for label, c in calls.items()}
+    logs = {"mcp": {"total": tp.total_table_scan(mcp_scans), "by_store": mcp_scans,
+                    "calls": calls},
+            "reference": {"total": tp.total_table_scan(ref_scans), "by_store": ref_scans},
+            "total": tp.total_table_scan({**mcp_scans, **ref_scans})}
+    summary = tp.summarize_mcp(results, replays)
+    removed = [] if a.keep_views else [runner._display_path(Path(p))
+                                       for r in references.values() for p in r.remove()]
+    cfg = {"kind": a.kind, "seed": tp.SEED3, "n": a.n or tp.MCP_SUBSET,
+           "universe": len(universe), "stores": cfg_stores,
+           "selected": dict(sorted(Counter(f"{lb}/{p.family}" for lb, p in selected).items())),
+           "server_env": {"HF_HUB_OFFLINE": "1"},
+           "views": {label: r.info for label, r in references.items()},
+           "views_removed": removed}
+    if any(c.manifest is not None and c.manifest.extraction is not None
+           for c in contexts.values()):
+        # the references' extraction tables come from this profile's cached replies
+        cfg["generator"] = a.generator or runner.load_config()["generator"]
+    calls_match = all(mcp_scans[label]["lines"] == n_calls.get(label, 0) for label in stores)
+    t = summary["total"]
+    rp = summary["replays"]
+    ok = (t["leaks"] == 0 and t["invalid"] == 0 and rp["identical"] == rp["n"]
+          and rp["handle_tables"] == rp["n"] and logs["total"]["complete"] and calls_match)
+    md = (f"# Table probes through MCP (D1)\n\nThe {cfg['n']} of {len(universe)} table leak "
+          f"probes with the lowest SHA-256 of `<seed>:<store>/<probe id>` (seed {tp.SEED3}), "
+          f"each through an `adr mcp` server of its caller. No model calls.\n\n"
+          f"{t['n']} probes, {t['leaks']} leaks, {t['invalid']} invalid ({t['ghost']} as "
+          f"user:ghost, denied F4). Handle replays: {rp['identical']} of {rp['n']} identical, "
+          f"{rp['handle_tables']} handles naming the tables.\n\n| store | probes | leaks | "
+          f"invalid |\n|---|---|---|---|\n" + "".join(
+              f"| {lb} | {b['n']} | {b['leaks']} | {b['invalid']} |\n"
+              for lb, b in summary["stores"].items())
+          + f"\n## Log fields\n\n{sum(n_calls.values())} calls through MCP; "
+            f"{logs['mcp']['total']['lines']} log lines in the probed stores (equal per store: "
+            f"{calls_match}). Complete (MCP and reference logs): {logs['total']['complete']}.\n")
+    d = _write_probe_run(a, a.kind, started, {
+        "probes.json": {"seed": tp.SEED3, "selected": [
+            {"store": lb, **p.to_dict()} for lb, p in selected]},
+        "results.json": {"results": [{"store": lb, **r.to_dict()} for lb, r in results],
+                         "replays": replays},
+        "summary.json": {"config": cfg, "summary": summary, "logs": logs}}, md)
+    print(md)
+    print(f"{d}: {len(selected)} probes through MCP; wall-clock "
+          f"{time.perf_counter() - t0:.1f} s")
+    return 0 if ok else 1
+
+
 def _run_dir(name: str, out: Path) -> Path:
     d = Path(name) if Path(name).is_dir() else out / name
     if not (d / "results.jsonl").is_file():
@@ -967,13 +1411,21 @@ def _parser() -> argparse.ArgumentParser:
                    help="data directory (default data/tools)")
     p.set_defaults(fn=_tools_fetch)
 
-    p = sub.add_parser("golden", help="generate or verify the golden set")
-    p.add_argument("corpus", choices=NAMES)
+    p = sub.add_parser("golden", help="generate or verify the golden set; `golden tables --gen` "
+                                      "generates gov-tables v0.1 (3B drawbridge questions)")
+    p.add_argument("corpus", choices=(*NAMES, TABLES_GOLDEN),
+                   help=f"a corpus, or {TABLES_GOLDEN!r} for gov-tables v0.1 (--gen only, with "
+                        f"--store, --facts, --generator and --max-calls)")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--gen", action="store_const", const=_golden_gen, dest="fn")
     mode.add_argument("--verify", action="store_const", const=_golden_verify, dest="fn")
     p.add_argument("--overwrite", action="store_true",
                    help="with --gen: replace an existing (frozen) items.jsonl")
+    p.add_argument("--store", type=Path, default=None,
+                   help="golden tables: the store holding the second-pass facts")
+    p.add_argument("--facts", default=None, metavar="ID",
+                   help="golden tables: the second-pass facts id (`adr tables extract "
+                        "--second-pass` prints it)")
     _profile_args(p, judge=True)
 
     p = sub.add_parser("index", help="build (or check) the saved hybrid index")
@@ -994,6 +1446,13 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=Path("runs"), help="run output root")
     p.add_argument("--stub", action="store_true",
                    help="deterministic stub generator and judge (tests and demos)")
+    p.add_argument("--qtype", action="append", default=None, choices=get_args(QType),
+                   help="run only the items of this question type (repeatable); p3-typed "
+                        "needs --qtype count_filter")
+    p.add_argument("--golden", choices=runner.GOLDEN_SETS, default="v0.1",
+                   help="golden set: the corpus's v0.1 set, or gov-tables (corpus gov; no "
+                        "judge; default one repeat; every transport attempt counts against "
+                        "--max-calls; a stop writes nothing)")
     _profile_args(p, judge=True)
     p.set_defaults(fn=_run)
 
@@ -1042,31 +1501,58 @@ def _parser() -> argparse.ArgumentParser:
                    help="run output root (default runs); writes p2-compare-<a>--<b>/")
     p.set_defaults(fn=_p2_compare)
 
-    p = sub.add_parser("probes", help="Phase 2 probe sets (no model calls): temporal (gov), "
-                                      "acl (leak and fail-closed), equivalence (B2)")
-    p.add_argument("kind", choices=("temporal", "acl", "equivalence"))
-    p.add_argument("corpus", choices=NAMES)
+    p = sub.add_parser("p3-q2",
+                       help="Phase 3 Q2: a p3-typed gov-tables test run against a "
+                            "baseline-linear one (accuracies, paired bootstrap interval, pass "
+                            "flags, McNemar, misses); writes <typed run>/q2-<baseline run>.json")
+    p.add_argument("typed_run", help="the p3-typed gov-tables run directory")
+    p.add_argument("baseline_run", help="the baseline-linear gov-tables run directory")
+    p.add_argument("--summary", type=Path, default=None, metavar="OUT",
+                   help="also write the committed form (no item id, filter value or answer) "
+                        "to OUT")
+    p.set_defaults(fn=_p3_q2)
+
+    p = sub.add_parser("p3-q1",
+                       help="Phase 3 Q1: a p3-typed run against a baseline run on their "
+                            "common count_filter items (accuracy, McNemar, misses, also_in "
+                            "readings); writes <typed run>/q1-<baseline run>.json")
+    p.add_argument("typed_run", help="the p3-typed run directory")
+    p.add_argument("baseline_run", help="the baseline run directory")
+    p.add_argument("--summary", type=Path, default=None, metavar="OUT",
+                   help="also write the committed form (no item id or filter value) to OUT")
+    p.set_defaults(fn=_p3_q1)
+
+    p = sub.add_parser("probes", help="probe sets (no model calls): Phase 2 temporal (gov), "
+                                      "acl (leak and fail-closed), equivalence (B2); Phase 3 "
+                                      "tables-leak, tables-sql, tables-equivalence, "
+                                      "tables-failclosed, tables-applicability, tables-mcp")
+    p.add_argument("kind", choices=("temporal", "acl", "equivalence", *TABLE_KINDS))
+    p.add_argument("corpus", choices=(*NAMES, "tools"),
+                   help="the store's corpus (tools: the tool store, tables-equivalence only)")
     p.add_argument("--store", type=Path, required=True,
                    help="the store to probe (its active index and overlays)")
     p.add_argument("--views", type=Path, default=None, metavar="DIR",
-                   help="acl, equivalence: where the reference stores are built or reused "
-                        "(default <p2_store_dir>/views/<corpus>)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: where "
+                        "the reference stores are built or reused (default "
+                        "<p2_store_dir>/views/<corpus>; tables-*: views-tables/<corpus>)")
     p.add_argument("--keep-views", action="store_true",
-                   help="acl, equivalence: keep the reference stores (default: removed)")
+                   help="acl, equivalence, tables-leak, tables-equivalence, tables-mcp: keep "
+                        "the reference stores (default: removed)")
     p.add_argument("--clones", type=Path, default=None, metavar="DIR",
-                   help="acl: where the fail-closed clones go (default "
+                   help="acl, tables-failclosed: where the fail-closed clones go (default "
                         "<p2_store_dir>/clones/<corpus>; removed)")
     acl_config = runner.REPO_ROOT / "config" / "acl"
     p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
-                   help="acl, equivalence: the directory the reference stores and clones sync "
-                        "from (default config/acl/directory.json)")
+                   help="acl, equivalence and the tables-* kinds: the directory the reference "
+                        "stores and clones sync from (default config/acl/directory.json)")
     p.add_argument("--policy", type=Path, default=acl_config / "policy.json",
-                   help="acl, equivalence: the policy (default config/acl/policy.json)")
+                   help="acl, equivalence and the tables-* kinds: the policy (default "
+                        "config/acl/policy.json)")
     p.add_argument("--questions", type=int, default=50, metavar="N",
                    help="equivalence: golden questions per view (default 50)")
     p.add_argument("--per-family", type=int, default=None, metavar="N",
-                   help="acl: N leak probes per family instead of the spec's counts (a quick "
-                        "check; recorded in the output)")
+                   help="acl, tables-leak: N leak probes per family instead of the spec's "
+                        "counts (a quick check; recorded in the output)")
     p.add_argument("--as", dest="as_user", default=None, metavar="USER",
                    help="search as this caller (needs the ACL layer of Phase 2B)")
     p.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=True,
@@ -1074,6 +1560,28 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-other-index", action="store_true",
                    help="probe an active index that is not p1-struct-bc with a recorded "
                         "Phase 1 fingerprint (recorded in the output)")
+    p.add_argument("--queries", type=int, default=25, metavar="N",
+                   help="tables-equivalence: calls per view (default 25: 15 query_table, "
+                        "10 sql)")
+    p.add_argument("--gold", type=Path, default=None, metavar="PATH",
+                   help="tables-equivalence: the golden set whose count_filter gold queries "
+                        "are drawn (default golden/<corpus>/v0.1)")
+    p.add_argument("--n", type=int, default=None, metavar="N",
+                   help="tables-applicability: as_of dates per table (default 50); "
+                        "tables-mcp: probes through MCP (default 60)")
+    p.add_argument("--tables", nargs="+", default=None, metavar="TABLE",
+                   help="tables-applicability: the tables to probe (default fr_documents and "
+                        "whichever of drawbridge_sections and drawbridge_bridges the store's "
+                        "current tables hold)")
+    p.add_argument("--generator", metavar="PROFILE", default=None,
+                   help="tables-leak, tables-equivalence, tables-mcp on a store with "
+                        "extraction tables: the model profile whose cached replies build the "
+                        "reference stores' extraction tables, with zero calls (default: config "
+                        "generator)")
+    p.add_argument("--also", action="append", default=None, metavar="CORPUS=PATH",
+                   help="tables-mcp: another store whose leak probes join the universe")
+    p.add_argument("--timeout", type=float, default=300.0,
+                   help="tables-mcp: seconds to wait for a server's reply")
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-<kind>-<corpus>-<ts>/")
     p.set_defaults(fn=_probes)
@@ -1173,6 +1681,20 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     ap = _parser()
     a = ap.parse_args(argv)
+    if a.command == "golden" and a.corpus == TABLES_GOLDEN:
+        if a.fn is not _golden_gen:
+            ap.error("golden tables takes --gen only")
+        missing = [f for f, v in (("--store", a.store), ("--facts", a.facts),
+                                  ("--generator", a.generator), ("--max-calls", a.max_calls))
+                   if v is None]
+        if missing:
+            ap.error(f"golden tables --gen needs {', '.join(missing)}")
+        if a.judge is not None:
+            ap.error("golden tables makes no judge call; remove --judge")
+        if a.max_calls < 0:
+            ap.error("--max-calls must not be negative")
+    elif a.command == "golden" and (a.store is not None or a.facts is not None):
+        ap.error("--store and --facts are options of `golden tables` only")
     if a.command == "golden" and a.fn is _golden_verify:
         given = [f for f, v in (("--generator", a.generator), ("--judge", a.judge),
                                 ("--max-calls", a.max_calls),

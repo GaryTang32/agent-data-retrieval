@@ -532,7 +532,7 @@ def p2config(config, tmp_path, monkeypatch):
 
 def test_the_phase2_systems_are_registered_apart_from_phase1():
     assert systems.P2_NAMES == P2
-    assert systems.ALL_NAMES == (*systems.NAMES, *P2)
+    assert systems.ALL_NAMES == (*systems.NAMES, *P2, *systems.P3_NAMES)
     assert set(systems.P2_SPECS) == set(P2)
     f = {n: systems.P2_SPECS[n].filters for n in P2}
     assert f["p2-identity"].include_superseded and f["p2-dedup"].include_superseded

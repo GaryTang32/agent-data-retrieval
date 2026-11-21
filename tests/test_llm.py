@@ -192,3 +192,210 @@ def test_recovering_raises_without_usable_object(text):
 def test_recovering_ignores_undecodable_brace_before_chosen_object():
     text = 'Draft {"label": "corr\nFinal: {"label": "correct"}'
     assert parse_json_recovering(text, REQ) == ({"label": "correct"}, True)
+
+
+# -- failure caching, the cached stub and per-attempt budget (Phase 3 task 9) -----------------
+
+def _raises(exc: Exception):
+    def fn(system, user, repeat):
+        raise exc
+    return fn
+
+
+def test_failures_are_cached_only_when_asked(tmp_path):
+    from adr_eval.llm import CachedFailure, CachedStubClient
+
+    cache = Cache(tmp_path / "llm")
+    stub = CachedStubClient("stub-m", cache, _raises(llm.InputRejected("HTTP 400: bad")))
+    # the default (Phase 0): the error is raised as it is and nothing is stored
+    with pytest.raises(ModelError) as e:
+        stub.complete("s", "u", max_tokens=10)
+    assert not isinstance(e.value, CachedFailure)
+    assert not stub.is_cached("s", "u", max_tokens=10, cache_failures=True)
+    assert not (tmp_path / "llm").exists() or not any((tmp_path / "llm").rglob("*.json"))
+    with pytest.raises(ModelError):
+        stub.complete("s", "u", max_tokens=10)
+    assert stub.calls == 2
+    # asked: the failure is stored and raised as CachedFailure, then again with no call
+    with pytest.raises(CachedFailure, match="bad"):
+        stub.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert stub.calls == 3
+    assert stub.is_cached("s", "u", max_tokens=10, cache_failures=True)
+    assert not stub.is_cached("s", "u", max_tokens=10)   # a failure is no reply
+    with pytest.raises(CachedFailure, match="bad"):
+        stub.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert stub.calls == 3
+    assert issubclass(CachedFailure, ModelError)
+    # the failure is stored under its own key: a call without failure caching still runs
+    with pytest.raises(ModelError):
+        stub.complete("s", "u", max_tokens=10)
+    assert stub.calls == 4
+
+
+def test_cached_stub_client_caches_replies_and_counts_real_calls(tmp_path):
+    from adr_eval.llm import CachedStubClient
+
+    stub = CachedStubClient("stub-m", Cache(tmp_path), lambda s, u, r: f"{u}@{r}")
+    a = stub.complete("s", "u", max_tokens=10)
+    b = stub.complete("s", "u", max_tokens=10)
+    c = stub.complete("s", "u", max_tokens=10, repeat=1)
+    assert (a.text, a.cached, b.text, b.cached, c.text) == ("u@0", False, "u@0", True, "u@1")
+    assert stub.calls == 2 and stub.name == "stub" and a.model == "stub-m"
+    assert a.provider == "stub"
+    # another model is another cache key
+    other = CachedStubClient("stub-other", Cache(tmp_path), lambda s, u, r: "x")
+    assert not other.complete("s", "u", max_tokens=10).cached
+
+
+def _flaky(fails: int, text: str = "ok"):
+    """A transport that fails `fails` times (retryable), then answers."""
+    seen = {"n": 0}
+
+    def fn(system, user, repeat):
+        seen["n"] += 1
+        if seen["n"] <= fails:
+            raise llm._Retryable("connection reset")
+        return text
+    return fn
+
+
+def test_each_transport_attempt_reserves_budget(tmp_path, sleeps):
+    from adr_eval.llm import CachedStubClient
+    from adr_eval.pipeline import Budget, BudgetExceeded, MeteredClient
+
+    # two failures then a reply: three attempts, three units
+    stub = CachedStubClient("stub-m", Cache(tmp_path / "a"), _flaky(2), max_retries=5)
+    budget = Budget(None, 3, count_attempts=True)
+    c = MeteredClient(stub, budget, {}).complete("s", "u", max_tokens=10)
+    assert c.text == "ok" and budget.calls == 3 and stub.calls == 3
+    # a budget of 2 stops before the third attempt runs
+    stub = CachedStubClient("stub-m", Cache(tmp_path / "b"), _flaky(2), max_retries=5)
+    budget = Budget(None, 2, count_attempts=True)
+    with pytest.raises(BudgetExceeded):
+        MeteredClient(stub, budget, {}).complete("s", "u", max_tokens=10,
+                                                 cache_failures=True)
+    assert stub.calls == 2 and budget.calls == 2 and budget.stop_reason == "calls"
+    # the cap, not the transport, stopped it: nothing is cached as a failure
+    assert not stub.is_cached("s", "u", max_tokens=10, cache_failures=True)
+    again = MeteredClient(stub, Budget(None, 5, count_attempts=True), {})
+    assert again.complete("s", "u", max_tokens=10, cache_failures=True).text == "ok"
+    # Phase 0 counting (the default): one unit per call, whatever its retries
+    stub = CachedStubClient("stub-m", Cache(tmp_path / "c"), _flaky(2), max_retries=5)
+    budget = Budget(None, 1)
+    assert MeteredClient(stub, budget, {}).complete("s", "u", max_tokens=10).text == "ok"
+    assert budget.calls == 1 and stub.calls == 3
+
+
+def test_a_metered_cached_failure_reserves_nothing(tmp_path):
+    from adr_eval.llm import CachedFailure, CachedStubClient
+    from adr_eval.pipeline import Budget, MeteredClient
+
+    rejected = _raises(llm.InputRejected("HTTP 400: input rejected"))
+    stub = CachedStubClient("stub-m", Cache(tmp_path), rejected)
+    budget = Budget(None, 1, count_attempts=True)
+    meter = MeteredClient(stub, budget, {})
+    with pytest.raises(CachedFailure):
+        meter.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert budget.calls == 1
+    zero = Budget(None, 0, count_attempts=True)          # a zero-call rerun reproduces it
+    with pytest.raises(CachedFailure):
+        MeteredClient(stub, zero, {}).complete("s", "u", max_tokens=10, cache_failures=True)
+    assert zero.calls == 0 and not zero.stopped and stub.calls == 1
+
+
+# -- P21: only input rejections are cached as failures -----------------------------------------
+
+@pytest.mark.parametrize("make_error", [
+    lambda: llm._Retryable("connection reset"),               # retries exhausted
+    lambda: llm.RateLimitedError("usage limit: resets at 5pm"),
+])
+def test_exhausted_retries_are_never_cached_and_the_next_call_retries(tmp_path, sleeps,
+                                                                      make_error):
+    from adr_eval.llm import CachedFailure, CachedStubClient, RetriesExhausted
+
+    def fn(system, user, repeat):
+        raise make_error()
+
+    stub = CachedStubClient("stub-m", Cache(tmp_path), fn, max_retries=2)
+    with pytest.raises(RetriesExhausted) as e:
+        stub.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert not isinstance(e.value, CachedFailure) and isinstance(e.value, ModelError)
+    assert isinstance(e.value.__cause__, llm._Retryable) and "giving up" in str(e.value)
+    assert stub.calls == 3
+    assert not stub.is_cached("s", "u", max_tokens=10, cache_failures=True)
+    assert not any(tmp_path.rglob("*.json"))
+    with pytest.raises(RetriesExhausted):
+        stub.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert stub.calls == 6                                       # retried, not replayed
+
+
+def test_other_model_errors_are_never_cached(tmp_path):
+    from adr_eval.llm import CachedFailure, CachedStubClient
+
+    stub = CachedStubClient("stub-m", Cache(tmp_path), _raises(ModelError("HTTP 401: key")))
+    for _ in range(2):
+        with pytest.raises(ModelError) as e:
+            stub.complete("s", "u", max_tokens=10, cache_failures=True)
+        assert not isinstance(e.value, CachedFailure)
+    assert stub.calls == 2 and not stub.is_cached("s", "u", max_tokens=10, cache_failures=True)
+
+
+@pytest.mark.parametrize("status,rejected", [(400, True), (413, True), (422, True),
+                                             (401, False), (403, False), (404, False),
+                                             (409, False)])
+def test_openai_compatible_input_rejections(tmp_path, sleeps, status, rejected):
+    cl = _client(lambda req: httpx.Response(status, text="no"), tmp_path)
+    with pytest.raises(ModelError) as e:
+        cl.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert isinstance(e.value, llm.CachedFailure) is rejected
+    assert isinstance(e.value.__cause__, llm.InputRejected) is rejected
+    assert cl.is_cached("s", "u", max_tokens=10, cache_failures=True) is rejected
+    with pytest.raises(ModelError) as e:                         # Phase 0: raised as it is
+        _client(lambda req: httpx.Response(status, text="no"), tmp_path / "p0").complete(
+            "s", "u", max_tokens=10)
+    assert isinstance(e.value, llm.InputRejected) is rejected
+    assert f"HTTP {status}" in str(e.value)
+
+
+def test_openai_compatible_malformed_response_is_not_cached(tmp_path):
+    cl = _client(lambda req: httpx.Response(200, json={"choices": []}), tmp_path)
+    with pytest.raises(ModelError) as e:
+        cl.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert not isinstance(e.value, (llm.CachedFailure, llm.InputRejected))
+    assert not cl.is_cached("s", "u", max_tokens=10, cache_failures=True)
+
+
+@pytest.mark.parametrize("status,rejected", [(400, True), (413, True), (422, True),
+                                             (401, False), (403, False), (404, False)])
+def test_anthropic_input_rejections(tmp_path, status, rejected):
+    req = httpx.Request("POST", "http://x")
+
+    def create(**kw):
+        raise anthropic.APIStatusError("no", response=httpx.Response(status, request=req),
+                                       body=None)
+
+    sdk = SimpleNamespace(messages=SimpleNamespace(create=create))
+    cl = AnthropicClient("m", Cache(tmp_path), sdk_client=sdk)
+    with pytest.raises(ModelError) as e:
+        cl.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert isinstance(e.value, llm.CachedFailure) is rejected
+    assert cl.is_cached("s", "u", max_tokens=10, cache_failures=True) is rejected
+
+
+def test_claude_code_missing_binary_is_not_cached(tmp_path):
+    def missing(argv, stdin, timeout):
+        raise FileNotFoundError("claude")
+
+    cl = llm.ClaudeCodeClient("m", Cache(tmp_path), max_retries=0, runner=missing)
+    with pytest.raises(ModelError) as e:
+        cl.complete("s", "u", max_tokens=10, cache_failures=True)
+    assert not isinstance(e.value, (llm.CachedFailure, llm.InputRejected))
+    assert not cl.is_cached("s", "u", max_tokens=10, cache_failures=True)
+
+
+def test_count_attempts_refuses_a_client_without_attempt_hooks():
+    from adr_eval.pipeline import Budget, MeteredClient
+
+    with pytest.raises(TypeError, match="attempt"):
+        MeteredClient(StubClient(lambda s, u, r: "x"), Budget(None, 3, count_attempts=True), {})
+    MeteredClient(StubClient(lambda s, u, r: "x"), Budget(None, 3), {})   # Phase 0 counting

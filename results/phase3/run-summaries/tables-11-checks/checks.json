@@ -1,0 +1,350 @@
+{
+  "E1": {
+    "columns": {
+      "bridge": {
+        "grounded": 1239,
+        "non_null": 1239,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      },
+      "closed_periods": {
+        "grounded": 365,
+        "non_null": 406,
+        "pass": false,
+        "share": 0.8990147783251231,
+        "type_failed": 24,
+        "ungrounded": 17
+      },
+      "mile": {
+        "grounded": 1213,
+        "non_null": 1213,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      },
+      "notice_hours": {
+        "grounded": 722,
+        "non_null": 723,
+        "pass": true,
+        "share": 0.9986168741355463,
+        "type_failed": 0,
+        "ungrounded": 1
+      },
+      "opens_on_signal": {
+        "grounded": 1018,
+        "non_null": 1018,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      },
+      "owner_or_agency": {
+        "grounded": 145,
+        "non_null": 145,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      },
+      "seasonal": {
+        "grounded": 157,
+        "non_null": 166,
+        "pass": false,
+        "share": 0.9457831325301205,
+        "type_failed": 0,
+        "ungrounded": 9
+      },
+      "vhf_channel": {
+        "grounded": 39,
+        "non_null": 39,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      },
+      "waterway": {
+        "grounded": 503,
+        "non_null": 503,
+        "pass": true,
+        "share": 1.0,
+        "type_failed": 0,
+        "ungrounded": 0
+      }
+    },
+    "overall": {
+      "grounded": 5401,
+      "non_null": 5452,
+      "share": 0.9906456346294937
+    },
+    "source": "extraction-report.json (first pass), grounded / non_null per column",
+    "target": 0.95
+  },
+  "E2": {
+    "columns": {
+      "bridge": {
+        "agree": 491,
+        "compared": 533,
+        "pass": true,
+        "required": true,
+        "share": 0.9212007504690432
+      },
+      "closed_periods": {
+        "agree": 859,
+        "compared": 1215,
+        "pass": null,
+        "required": false,
+        "share": 0.7069958847736626
+      },
+      "mile": {
+        "agree": 1212,
+        "compared": 1215,
+        "pass": null,
+        "required": false,
+        "share": 0.9975308641975309
+      },
+      "notice_hours": {
+        "agree": 1154,
+        "compared": 1215,
+        "pass": true,
+        "required": true,
+        "share": 0.9497942386831276
+      },
+      "opens_on_signal": {
+        "agree": 1161,
+        "compared": 1215,
+        "pass": true,
+        "required": true,
+        "share": 0.9555555555555556
+      },
+      "owner_or_agency": {
+        "agree": 425,
+        "compared": 533,
+        "pass": null,
+        "required": false,
+        "share": 0.797373358348968
+      },
+      "seasonal": {
+        "agree": 518,
+        "compared": 533,
+        "pass": null,
+        "required": false,
+        "share": 0.9718574108818011
+      },
+      "vhf_channel": {
+        "agree": 529,
+        "compared": 533,
+        "pass": null,
+        "required": false,
+        "share": 0.9924953095684803
+      },
+      "waterway": {
+        "agree": 522,
+        "compared": 533,
+        "pass": true,
+        "required": true,
+        "share": 0.9793621013133208
+      }
+    },
+    "draws": {
+      "first_only": 24,
+      "matched": 1215,
+      "second_only": 9
+    },
+    "first_pass_rebuilt": {
+      "budget_units": 0,
+      "calls": {
+        "cached": 533,
+        "failed": 0,
+        "made": 0
+      },
+      "columns_equal_stored_report": true
+    },
+    "required": [
+      "waterway",
+      "bridge",
+      "notice_hours",
+      "opens_on_signal"
+    ],
+    "source": "adr_store.tables.extract.agreement(first pass from the cache, load_facts(second pass))",
+    "threshold": 0.85,
+    "units": {
+      "compared": 533,
+      "first_only": 0,
+      "second_only": 0
+    }
+  },
+  "Q2_value_misses_by_column": {
+    "n": 26,
+    "note": "the 26 p3-typed test misses whose generated query equals the gold query, attributed by running each column's clauses (and a lookup's field) on the HEAD tables and on the second-pass facts, version in force; a miss counts under every column whose result differs",
+    "per_column": {
+      "bridge": 1,
+      "closed_periods": 9,
+      "draw set (state clause on drawbridge_bridges)": 1,
+      "lookup matched no row in the table": 1,
+      "mile": 2,
+      "notice_hours": 5,
+      "opens_on_signal": 5,
+      "owner_or_agency": 6,
+      "seasonal": 4,
+      "vhf_channel": 2,
+      "waterway": 1
+    },
+    "single_column": 15,
+    "two_columns": 11
+  },
+  "T1": {
+    "how": "cp -a of .cache/store-p2/gov, adr tables build --tables-for gov --with-extraction --max-calls 0 in a fresh process",
+    "pass": true,
+    "snapshot_dir_files_unchanged": true,
+    "tables_id": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230",
+    "variant_with_3B_files_deleted": {
+      "manifest_sha256": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230",
+      "regenerated_identical": true
+    }
+  },
+  "T2": {
+    "against_the_original_q2_runs": "rows equal except notional_cost_usd (and latency_s for baseline-linear), which a cache hit records as 0 and null",
+    "not_run": "tables-leak, tables-equivalence, tables-failclosed and tables-mcp on the 3B HEAD (Step 9 blocked: reference stores are built without the extraction tables)",
+    "pairs": [
+      {
+        "file": "results.jsonl",
+        "first": "gov-tables-p3-typed-test-20261120T234725",
+        "identical": true,
+        "second": "gov-tables-p3-typed-test-20261120T234749",
+        "sha256": "8ba3928973e1f03a288f1418d933cb3745a415f8427c788ba8a870b1fca0bc27"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "gov-tables-p3-typed-dev-20261120T234737",
+        "identical": true,
+        "second": "gov-tables-p3-typed-dev-20261120T234801",
+        "sha256": "ab2cce85e864c88657befa54c2165a0be380e505b64473e41e9d251530e2c2a6"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "gov-tables-baseline-linear-test-20261120T234651",
+        "identical": true,
+        "second": "gov-tables-baseline-linear-test-20261120T234709",
+        "sha256": "f13dc2ca7ef6d19e203b76a3f6cff2010153936549945335f477f0155d691cfa"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "gov-p3-typed-test-20261120T234858",
+        "identical": true,
+        "second": "gov-p3-typed-test-20261120T235123",
+        "sha256": "2a93b8cc082ef6533a34d5839112a7d14e258a20e4c1ca1e1d02f859568c82cf"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "research-p3-typed-test-20261120T235106",
+        "identical": true,
+        "second": "research-p3-typed-test-20261120T235331",
+        "sha256": "519b8b376d85c0c3d1056fbc39dd722db4aa78fcede3339f77f5508276afc2a7"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "gov-p3-typed-test-20261120T200702",
+        "identical": true,
+        "second": "gov-p3-typed-test-20261120T234858",
+        "sha256": "2a93b8cc082ef6533a34d5839112a7d14e258a20e4c1ca1e1d02f859568c82cf"
+      },
+      {
+        "file": "results.jsonl",
+        "first": "research-p3-typed-test-20261120T200924",
+        "identical": true,
+        "second": "research-p3-typed-test-20261120T235106",
+        "sha256": "519b8b376d85c0c3d1056fbc39dd722db4aa78fcede3339f77f5508276afc2a7"
+      },
+      {
+        "file": "results.json",
+        "first": "probes-tables-sql-gov-20261120T235431",
+        "identical": true,
+        "second": "probes-tables-sql-gov-20261120T235517",
+        "sha256": "0904bf30f856ad1875f7d77d4924810821b9c7ce48e6c97d32056661576974bf"
+      },
+      {
+        "file": "results.json",
+        "first": "probes-tables-applicability-gov-20261120T235443",
+        "identical": true,
+        "second": "probes-tables-applicability-gov-20261120T235528",
+        "sha256": "dc6258e814cc29f899dcc1d36c6f354c9763cbe8ddba13acf36e2bc9e467a40b"
+      }
+    ]
+  },
+  "T3": {
+    "model_reslice_ok": 15162,
+    "model_spans": 15162,
+    "pass": true,
+    "reslice_ok": 32889,
+    "spans": 32889
+  },
+  "T4": {
+    "non_null_without_span": 22121,
+    "pass": true,
+    "values": 60295,
+    "with_spec_id": 60295
+  },
+  "T5": {
+    "pass": true,
+    "test": "tests/store/test_tables_extract.py::test_a_spec_change_reextracts_only_its_group"
+  },
+  "T6": {
+    "pass": true,
+    "test": "tests/store/test_tables_gate.py::test_gate_refuses_too_many_flips_and_keeps_head"
+  },
+  "facts_id": "541f4c587ee9a271068604a4a12fbe5584cc74392ff431f29e7683b45916707b",
+  "golden_regenerated_from_cache": {
+    "cached": 120,
+    "calls_made": 0,
+    "identical": true,
+    "items_sha256": "08c41d3a51007c69f1d1779dc25510764e1da8b3c9871260ec89624b664690d2",
+    "rejected_sha256": "0ba507b1352cc3f7bcf144c910ca8c51163d7a692b2e0093975274bed86a8f5e"
+  },
+  "note": "Task 11 (3B): aggregate checks, no model calls (every command --max-calls 0, .cache/llm 12,010 files before and after). Per-item rows stay local in runs/.",
+  "regex_agreement": {
+    "first_pass": {
+      "mile": {
+        "agree": 1191,
+        "disagree": 15,
+        "none": 7,
+        "share": 0.9875621890547264
+      },
+      "notice_hours": {
+        "agree": 278,
+        "disagree": 116,
+        "none": 328,
+        "share": 0.7055837563451777
+      },
+      "vhf_channel": {
+        "agree": 37,
+        "disagree": 0,
+        "none": 2,
+        "share": 1.0
+      }
+    },
+    "second_pass": {
+      "mile": {
+        "agree": 1186,
+        "disagree": 17,
+        "none": 7,
+        "share": 0.9858686616791354
+      },
+      "notice_hours": {
+        "agree": 283,
+        "disagree": 110,
+        "none": 322,
+        "share": 0.7201017811704835
+      },
+      "vhf_channel": {
+        "agree": 37,
+        "disagree": 0,
+        "none": 1,
+        "share": 1.0
+      }
+    }
+  },
+  "tables_id": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230"
+}

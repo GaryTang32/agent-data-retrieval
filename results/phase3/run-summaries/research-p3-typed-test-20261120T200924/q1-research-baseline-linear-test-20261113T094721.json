@@ -1,0 +1,107 @@
+{
+  "also_in": [
+    {
+      "differs": true,
+      "membership": 3,
+      "op": "count",
+      "split": "test",
+      "string": 1,
+      "wording": "value"
+    },
+    {
+      "differs": false,
+      "membership": 2,
+      "op": "list",
+      "split": "test",
+      "string": 2,
+      "wording": "value"
+    },
+    {
+      "differs": true,
+      "membership": 22,
+      "op": "count",
+      "split": "dev",
+      "string": 14,
+      "wording": "membership"
+    },
+    {
+      "differs": false,
+      "membership": 2,
+      "op": "count",
+      "split": "test",
+      "string": 2,
+      "wording": "membership"
+    },
+    {
+      "differs": true,
+      "membership": 23,
+      "op": "list",
+      "split": "test",
+      "string": 14,
+      "wording": "membership"
+    },
+    {
+      "differs": true,
+      "membership": 8,
+      "op": "count",
+      "split": "dev",
+      "string": 2,
+      "wording": "membership"
+    }
+  ],
+  "b": 10,
+  "baseline": {
+    "accuracy": 0.5925925925925926,
+    "correct": 16,
+    "n_run": 27,
+    "system": "baseline-linear"
+  },
+  "baseline_misses": [
+    {
+      "cause": "the answer from retrieved chunks",
+      "n": 1,
+      "outcome": "wrong",
+      "query_exec_match": false
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "n": 10,
+      "outcome": "wrong",
+      "query_exec_match": true
+    }
+  ],
+  "baseline_run": "research-baseline-linear-test-20261113T094721",
+  "c": 0,
+  "corpus": "research",
+  "mcnemar_p": 0.001953125,
+  "misses": [
+    {
+      "cause": "the generated query's result differs from the gold query's under the records semantics (the model's reading of the question)",
+      "outcome": "wrong",
+      "query": {
+        "filter_keys": [
+          "also_in__contains",
+          "status"
+        ],
+        "op": "list",
+        "store": "typed_db"
+      },
+      "query_exec_match": false,
+      "typed_error": null,
+      "value": {
+        "n": 23
+      }
+    }
+  ],
+  "n": 27,
+  "only_baseline": 0,
+  "only_typed": 0,
+  "split": "test",
+  "typed": {
+    "accuracy": 0.9629629629629629,
+    "correct": 26,
+    "n_run": 27,
+    "system": "p3-typed"
+  },
+  "typed_run": "research-p3-typed-test-20261120T200924"
+}

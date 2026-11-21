@@ -1,0 +1,829 @@
+{
+  "config": {
+    "acl_entries_sha256": "e1ca0a6ae0f15080b25bb7c6357c41805c7ad7f733cb33aa4efbc96a9bc255f2",
+    "acl_sequence": 19,
+    "acl_snapshot": "efd582bdbdeed2af9cbaf80bfc27f8796eff914779b82e98be78d69499cdea56",
+    "corpus": "bench",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-equivalence",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "queries": 25,
+    "seed": 20261120,
+    "snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
+    "store": ".cache/store-p2/bench",
+    "tables": null,
+    "views": [
+      {
+        "caller": "user:acme-0",
+        "documents": 895,
+        "how": "built",
+        "path": "0303a54a7583",
+        "tables": null,
+        "users": [
+          "user:acme-0"
+        ],
+        "view": "0303a54a7583074ebc0cf0da95c86f3e95a33854947f98565ca5faa9beaeb46c"
+      },
+      {
+        "caller": "user:acme-1",
+        "documents": 903,
+        "how": "built",
+        "path": "be3b823b4f7a",
+        "tables": null,
+        "users": [
+          "user:acme-1"
+        ],
+        "view": "be3b823b4f7a507822ee2b479e2a9dfe5cd1850e35a4dfee532e0b870e408710"
+      },
+      {
+        "caller": "user:acme-2",
+        "documents": 902,
+        "how": "built",
+        "path": "37229981e7a6",
+        "tables": null,
+        "users": [
+          "user:acme-2"
+        ],
+        "view": "37229981e7a601f3ca2cf6295e24ffc08aa071384d123957460fedf4da9bcc6a"
+      },
+      {
+        "caller": "user:acme-3",
+        "documents": 899,
+        "how": "built",
+        "path": "c41b5f3a1c20",
+        "tables": null,
+        "users": [
+          "user:acme-3"
+        ],
+        "view": "c41b5f3a1c209e5f4532b2f5cdb73719e259f7e62ec0ed0875d3737a176f701a"
+      },
+      {
+        "caller": "user:acme-4",
+        "documents": 938,
+        "how": "built",
+        "path": "563543a47520",
+        "tables": null,
+        "users": [
+          "user:acme-4"
+        ],
+        "view": "563543a47520960a58825cfdaf96eec8d54ab9692f2f92c499d6f7568f65aa65"
+      },
+      {
+        "caller": "user:acme-5",
+        "documents": 945,
+        "how": "built",
+        "path": "3717286ad181",
+        "tables": null,
+        "users": [
+          "user:acme-5"
+        ],
+        "view": "3717286ad1819f1709c75c5a227829e23fe3d6cdd338bfd245803dff695b186a"
+      },
+      {
+        "caller": "user:auditor",
+        "documents": 2000,
+        "how": "built",
+        "path": "94f2892b5860",
+        "tables": null,
+        "users": [
+          "user:auditor"
+        ],
+        "view": "94f2892b586073a6db3adbb5de111cf8f8870dbd12634e5e0fa33d6fd6ed0f05"
+      },
+      {
+        "caller": "user:globex-0",
+        "documents": 901,
+        "how": "built",
+        "path": "c266be946d60",
+        "tables": null,
+        "users": [
+          "user:globex-0"
+        ],
+        "view": "c266be946d60d2fd2d55afd86412ea897284992ce5e0d5be0dfb1c433fb8fc4c"
+      },
+      {
+        "caller": "user:globex-1",
+        "documents": 907,
+        "how": "built",
+        "path": "f9afb114ffa8",
+        "tables": null,
+        "users": [
+          "user:globex-1"
+        ],
+        "view": "f9afb114ffa866ab05bf246e439727043640babe0eaf7e91eba6e7dc4c277cdc"
+      },
+      {
+        "caller": "user:globex-2",
+        "documents": 900,
+        "how": "built",
+        "path": "1fbea2c67261",
+        "tables": null,
+        "users": [
+          "user:globex-2"
+        ],
+        "view": "1fbea2c672618c90677e9d9c0ac01be1aaaf373c8da54532bc9e255488f9f245"
+      },
+      {
+        "caller": "user:globex-3",
+        "documents": 901,
+        "how": "built",
+        "path": "c4d30101ab90",
+        "tables": null,
+        "users": [
+          "user:globex-3"
+        ],
+        "view": "c4d30101ab90c62a072e5bf66d7c5d5eec1d208161530362023ec4869aa04a39"
+      },
+      {
+        "caller": "user:globex-4",
+        "documents": 946,
+        "how": "built",
+        "path": "15ba51b9ce3a",
+        "tables": null,
+        "users": [
+          "user:globex-4"
+        ],
+        "view": "15ba51b9ce3a7fb06c25bb125a48d7d4178c0e6532780bc3f029e71d87c388f9"
+      },
+      {
+        "caller": "user:globex-5",
+        "documents": 945,
+        "how": "built",
+        "path": "be67494bcaa8",
+        "tables": null,
+        "users": [
+          "user:globex-5"
+        ],
+        "view": "be67494bcaa8c78c31e0c3a7b00976958763263d75d898a29e948733658c74b7"
+      },
+      {
+        "caller": "user:initech-0",
+        "documents": 923,
+        "how": "built",
+        "path": "a502ee3ca25e",
+        "tables": null,
+        "users": [
+          "user:initech-0"
+        ],
+        "view": "a502ee3ca25e898963bce45f9eb61dfeb2d799fdec261900c0a3b8200cad1b35"
+      },
+      {
+        "caller": "user:initech-1",
+        "documents": 927,
+        "how": "built",
+        "path": "24e9a7039a55",
+        "tables": null,
+        "users": [
+          "user:initech-1"
+        ],
+        "view": "24e9a7039a55db01408ebd7813a3b37856effdf4ad1067c1c9c904cbca66b19a"
+      },
+      {
+        "caller": "user:initech-2",
+        "documents": 944,
+        "how": "built",
+        "path": "c3cc80ae6fd6",
+        "tables": null,
+        "users": [
+          "user:initech-2"
+        ],
+        "view": "c3cc80ae6fd64c07a496d5c197959b2146d759b77c3ff54bc21a7f49369b71f0"
+      },
+      {
+        "caller": "user:initech-3",
+        "documents": 937,
+        "how": "built",
+        "path": "1982f8456a41",
+        "tables": null,
+        "users": [
+          "user:initech-3"
+        ],
+        "view": "1982f8456a412b62d42a542294f4360d5f6ff1c6e1f97d72628b56e413c926a6"
+      },
+      {
+        "caller": "user:initech-4",
+        "documents": 954,
+        "how": "built",
+        "path": "bd3d844579c4",
+        "tables": null,
+        "users": [
+          "user:initech-4"
+        ],
+        "view": "bd3d844579c4f5e5df8a6cc772a2a1b6b5119b4a75dda3ac1ab0e11b09b924be"
+      },
+      {
+        "caller": "user:initech-5",
+        "documents": 975,
+        "how": "built",
+        "path": "e03f2714edd6",
+        "tables": null,
+        "users": [
+          "user:initech-5"
+        ],
+        "view": "e03f2714edd62e63f89c425d41a5d28c854a6a7d8f2bbcc85208a97dc3226f5f"
+      },
+      {
+        "caller": "user:outsider",
+        "documents": 436,
+        "how": "built",
+        "path": "8ef800eff786",
+        "tables": null,
+        "users": [
+          "user:outsider"
+        ],
+        "view": "8ef800eff7865fa0fc689966b0282e93bec8d619734d8ed693e24231fedc2a87"
+      }
+    ],
+    "views_removed": [
+      ".cache/store-p2/views-tables/bench/0303a54a7583",
+      ".cache/store-p2/views-tables/bench/15ba51b9ce3a",
+      ".cache/store-p2/views-tables/bench/1982f8456a41",
+      ".cache/store-p2/views-tables/bench/1fbea2c67261",
+      ".cache/store-p2/views-tables/bench/24e9a7039a55",
+      ".cache/store-p2/views-tables/bench/3717286ad181",
+      ".cache/store-p2/views-tables/bench/37229981e7a6",
+      ".cache/store-p2/views-tables/bench/563543a47520",
+      ".cache/store-p2/views-tables/bench/8ef800eff786",
+      ".cache/store-p2/views-tables/bench/94f2892b5860",
+      ".cache/store-p2/views-tables/bench/a502ee3ca25e",
+      ".cache/store-p2/views-tables/bench/bd3d844579c4",
+      ".cache/store-p2/views-tables/bench/be3b823b4f7a",
+      ".cache/store-p2/views-tables/bench/be67494bcaa8",
+      ".cache/store-p2/views-tables/bench/c266be946d60",
+      ".cache/store-p2/views-tables/bench/c3cc80ae6fd6",
+      ".cache/store-p2/views-tables/bench/c41b5f3a1c20",
+      ".cache/store-p2/views-tables/bench/c4d30101ab90",
+      ".cache/store-p2/views-tables/bench/e03f2714edd6",
+      ".cache/store-p2/views-tables/bench/f9afb114ffa8"
+    ]
+  },
+  "logs": {
+    "by_store": {
+      "reference/0303a54a7583": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/15ba51b9ce3a": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/1982f8456a41": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/1fbea2c67261": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/24e9a7039a55": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/3717286ad181": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/37229981e7a6": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/563543a47520": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/8ef800eff786": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/94f2892b5860": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/a502ee3ca25e": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/bd3d844579c4": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/be3b823b4f7a": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/be67494bcaa8": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/c266be946d60": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/c3cc80ae6fd6": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/c41b5f3a1c20": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/c4d30101ab90": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/e03f2714edd6": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "reference/f9afb114ffa8": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "store": {
+        "allowed": 60,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 60,
+        "decisions": {
+          "allowed": 60
+        },
+        "lines": 60,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 20,
+        "sql_text_lines": 0,
+        "table_lines": 60,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 20,
+          "query_table": 20,
+          "sql": 20
+        }
+      }
+    },
+    "total": {
+      "allowed": 120,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 120,
+      "decisions": {
+        "allowed": 120
+      },
+      "lines": 120,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 40,
+      "sql_text_lines": 0,
+      "table_lines": 120,
+      "tables_missing": 0,
+      "tools": {
+        "describe_tables": 40,
+        "query_table": 40,
+        "sql": 40
+      }
+    }
+  },
+  "summary": {
+    "by_tool": {},
+    "differing": 0,
+    "empty_checks": {
+      "identical": 60,
+      "n": 60
+    },
+    "identical": 0,
+    "n": 0,
+    "total": {
+      "n": 0,
+      "passed": 0
+    },
+    "views": 20
+  }
+}

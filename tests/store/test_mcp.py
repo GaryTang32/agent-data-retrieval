@@ -2,7 +2,7 @@
 subprocess and driven with `mcp.Client(StdioServerParameters(...))` (`adr_store.mcp_client`)
 on the fixture store of `tests/store/test_handles.py` (the gov-shaped permissions fixture, the
 mini corpus and the fixture tool catalog; lexical-only indexes; store, caches and the
-servers' embedding cache under `tmp_path`): `tools/list` gives exactly the five tools with
+servers' embedding cache under `tmp_path`): `tools/list` gives exactly the eight tools with
 input and output schemas; 100 fixed calls equal the Python API's results; every result has a
 handle and a replay with it is identical; a handle whose index directory was deleted fails
 explicitly; a handle naming an older content snapshot is judged against the current ACL;
@@ -84,9 +84,9 @@ def text(res) -> str:
 
 # -- tools/list ---------------------------------------------------------------------------------
 
-def test_tools_list_is_the_five_tools_with_input_and_output_schemas(store, servers):
+def test_tools_list_is_the_tools_with_input_and_output_schemas(store, servers):
     listed = {t.name: t for t in servers(store).list_tools().tools}
-    assert set(listed) == set(mcp_server.TOOL_NAMES) and len(listed) == 5
+    assert set(listed) == set(mcp_server.TOOL_NAMES) and len(listed) == 8
     for name, t in listed.items():
         ins, outs = t.input_schema, t.output_schema
         assert ins["type"] == "object" and ins["additionalProperties"] is False

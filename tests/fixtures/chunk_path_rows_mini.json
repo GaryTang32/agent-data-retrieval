@@ -1,0 +1,664 @@
+[
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4"
+   ],
+   "confidence": 1.0,
+   "kind": "text",
+   "value": "45 days"
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": 1.0,
+  "error": null,
+  "generated_query": {
+   "as_of": "2024-06-01",
+   "entities": [
+    "section 12 filing deadline"
+   ],
+   "filters": {},
+   "op": "lookup",
+   "store": "knowledge"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-asof-b",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "self_consistency",
+   "reason": "stub match"
+  },
+  "judge_label": "correct",
+  "judge_reason": "stub match",
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 1,
+   "ndcg@10": 1.0,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "policy_asof",
+  "query_exact": true,
+  "query_exec_match": null,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    1.0
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.981882
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.14841
+   ],
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    0.112737
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.087021
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.00033
+   ],
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 2069,
+   "out": 91
+  }
+ },
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26"
+   ],
+   "confidence": 1.0,
+   "kind": "number",
+   "value": 2.0
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": null,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [],
+   "filters": {
+    "type": "grant",
+    "year__lte": 2021
+   },
+   "op": "count",
+   "store": "typed_db"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-count-1",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "proxy",
+   "reason": "stub match"
+  },
+  "judge_label": null,
+  "judge_reason": null,
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 2,
+   "ndcg@10": 0.6131471927654584,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "count_filter",
+  "query_exact": true,
+  "query_exec_match": true,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    1.0
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.225102
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.202352
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.14206
+   ],
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    0.116037
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.088401
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 1778,
+   "out": 78
+  }
+ },
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0"
+   ],
+   "confidence": 1.0,
+   "kind": "text",
+   "value": "30 days"
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": 1.0,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [
+    "refund"
+   ],
+   "filters": {},
+   "op": "lookup",
+   "store": "knowledge"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-factoid-1",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "self_consistency",
+   "reason": "stub match"
+  },
+  "judge_label": "correct",
+  "judge_reason": "stub match",
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 1,
+   "ndcg@10": 1.0,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "factoid",
+  "query_exact": true,
+  "query_exec_match": null,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    1.0
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.49675
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.490392
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.485783
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.386156
+   ],
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    0.142967
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 2058,
+   "out": 84
+  }
+ },
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26"
+   ],
+   "confidence": 1.0,
+   "kind": "text",
+   "value": "Flood Preparedness Fund"
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": 1.0,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [
+    "REC-005"
+   ],
+   "filters": {
+    "_field": "title",
+    "id": "REC-005"
+   },
+   "op": "lookup",
+   "store": "typed_db"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-id-1",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "self_consistency",
+   "reason": "stub match"
+  },
+  "judge_label": "correct",
+  "judge_reason": "stub match",
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 1,
+   "ndcg@10": 1.0,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "id_lookup",
+  "query_exact": true,
+  "query_exec_match": true,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    1.0
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.290246
+   ],
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    0.24839
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.191124
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.127607
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.091744
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 2027,
+   "out": 96
+  }
+ },
+ {
+  "answer": {
+   "abstain": true,
+   "citations": [],
+   "confidence": 0.0,
+   "kind": "abstain",
+   "value": null
+  },
+  "citation": null,
+  "cost_usd": 0.0,
+  "entity_f1": null,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [
+    "fraudulent refund claim penalty"
+   ],
+   "filters": {},
+   "op": "abstain",
+   "store": "raw"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-insufficient-1",
+  "json_recovered": [],
+  "judge_check": null,
+  "judge_label": null,
+  "judge_reason": null,
+  "metrics": null,
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "insufficient",
+  "query_exact": true,
+  "query_exec_match": null,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    1.0
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.687577
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.644612
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.517726
+   ],
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    0.408491
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.156843
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.0
+   ]
+  ],
+  "route_ok": null,
+  "served_models": [],
+  "tokens": {
+   "in": 1522,
+   "out": 50
+  }
+ },
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff"
+   ],
+   "confidence": 1.0,
+   "kind": "text",
+   "value": "How quickly the Bureau answers written enquiries and how complaints can be lodged."
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": 1.0,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [
+    "service charter"
+   ],
+   "filters": {},
+   "op": "explain",
+   "store": "knowledge"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-overview-1",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "self_consistency",
+   "reason": "stub match"
+  },
+  "judge_label": "correct",
+  "judge_reason": "stub match",
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 2,
+   "ndcg@10": 0.6131471927654584,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "overview",
+  "query_exact": true,
+  "query_exec_match": null,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    1.0
+   ],
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    0.86416
+   ],
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    0.328203
+   ],
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    0.24873
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.220765
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.195079
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 2087,
+   "out": 105
+  }
+ },
+ {
+  "answer": {
+   "abstain": false,
+   "citations": [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5"
+   ],
+   "confidence": 1.0,
+   "kind": "set",
+   "value": [
+    "Record the case number and a short summary.",
+    "Assign the case to the Tier 2 queue.",
+    "Notify the customer that a specialist will reply within 3 business days."
+   ]
+  },
+  "citation": {
+   "evidence_cited": true,
+   "precision": 1.0
+  },
+  "cost_usd": 0.0,
+  "entity_f1": 1.0,
+  "error": null,
+  "generated_query": {
+   "as_of": null,
+   "entities": [
+    "escalation"
+   ],
+   "filters": {},
+   "op": "procedure",
+   "store": "knowledge"
+  },
+  "gold_query_field_hits": {
+   "as_of": true,
+   "entities": true,
+   "filters": true,
+   "op": true,
+   "store": true
+  },
+  "item_id": "mini-procedure-1",
+  "json_recovered": [],
+  "judge_check": {
+   "error": null,
+   "label": "correct",
+   "purpose": "proxy",
+   "reason": "stub match"
+  },
+  "judge_label": null,
+  "judge_reason": null,
+  "metrics": {
+   "coverage@10": 1.0,
+   "full_coverage": true,
+   "mrr": 1.0,
+   "n_spans": 1,
+   "ndcg@10": 1.0,
+   "recall@10": 1.0,
+   "tokens@10": 376
+  },
+  "notional_cost_usd": null,
+  "outcome": "correct",
+  "qtype": "procedure",
+  "query_exact": true,
+  "query_exec_match": null,
+  "rarity": null,
+  "repeat": 0,
+  "retrieved": [
+   [
+    "be85cd4963287f6929c8dbec4adf6b0a7bbfe6c1815fc67dd51f57e7584e5bf5",
+    1.0
+   ],
+   [
+    "06daa0579810a99c7da9c16cf5c1398aca7cf399124dcc8cb010e3f7720ee5a4",
+    0.246356
+   ],
+   [
+    "d9d04a31469c55df3b1a255c5843333b32c4a6d41e9856797c341f3831bc52e3",
+    0.235635
+   ],
+   [
+    "776946df9c086b3efaf99b3100e46327830488317a967db3a5fc5944ef5798ff",
+    0.113301
+   ],
+   [
+    "019f4d1ec4a2e27c828519c97dd841b4066b4b5994dbc75bfbae585b03f7af53",
+    0.110324
+   ],
+   [
+    "197f4b2038664925b910c931a2f95886a0b57c5dc219ec9b7920af66f7514c26",
+    0.108672
+   ],
+   [
+    "01aeac3d678e2b3988a7bf12c0d8b82f61b89b6f2a644f56cf9ee78dcb78b5b0",
+    0.0
+   ]
+  ],
+  "route_ok": true,
+  "served_models": [],
+  "tokens": {
+   "in": 1840,
+   "out": 112
+  }
+ }
+]

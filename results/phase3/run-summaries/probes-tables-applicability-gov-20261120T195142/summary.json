@@ -1,0 +1,81 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "acl_sequence": 19,
+    "acl_snapshot": "7099c7abca47cf65aedee5c2ad2913cddcdb07904f433232a7a628f73e31123f",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-applicability",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tables": "2678b8da96338df9f72e3be98aa66d24b24164c290a422bb177f7095a9e1d5f8"
+  },
+  "logs": {
+    "by_store": {
+      "store": {
+        "allowed": 153,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 153,
+        "decisions": {
+          "allowed": 153
+        },
+        "lines": 153,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 51,
+        "sql_text_lines": 0,
+        "table_lines": 153,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 102,
+          "sql": 51
+        }
+      }
+    },
+    "statements_checked": 1,
+    "total": {
+      "allowed": 153,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 153,
+      "decisions": {
+        "allowed": 153
+      },
+      "lines": 153,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 51,
+      "sql_text_lines": 0,
+      "table_lines": 153,
+      "tables_missing": 0,
+      "tools": {
+        "query_table": 102,
+        "sql": 51
+      }
+    }
+  },
+  "summary": {
+    "tables": [
+      "fr_documents"
+    ],
+    "total": {
+      "as_of": 50,
+      "dates": 50,
+      "default": 1,
+      "n": 51,
+      "outside": 0,
+      "passed": 51
+    }
+  }
+}

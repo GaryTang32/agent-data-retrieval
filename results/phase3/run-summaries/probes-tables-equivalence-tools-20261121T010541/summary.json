@@ -1,0 +1,146 @@
+{
+  "config": {
+    "acl_entries_sha256": "3906197e26ef9174147db7ec845f790ca2039e6168d587b5a9e352fc9a5104a2",
+    "acl_sequence": 16,
+    "acl_snapshot": "fd7e41d8b7fae452bc968195734e60785eacddc47b3389b8fc28e26a5cfc57ff",
+    "corpus": "tools",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "kind": "tables-equivalence",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "queries": 25,
+    "seed": 20261120,
+    "snapshot": "de13b4a8eeacd4641764198953e8aafb5e8ca94db80915f9734f30ba7d128205",
+    "store": ".cache/store-p2/toolret",
+    "tables": null,
+    "views": [
+      {
+        "caller": "user:acme-0",
+        "documents": 0,
+        "how": "built",
+        "path": "e3b0c44298fc",
+        "tables": null,
+        "users": [
+          "user:acme-0",
+          "user:acme-1",
+          "user:acme-2",
+          "user:acme-3",
+          "user:acme-4",
+          "user:acme-5",
+          "user:auditor",
+          "user:globex-0",
+          "user:globex-1",
+          "user:globex-2",
+          "user:globex-3",
+          "user:globex-4",
+          "user:globex-5",
+          "user:initech-0",
+          "user:initech-1",
+          "user:initech-2",
+          "user:initech-3",
+          "user:initech-4",
+          "user:initech-5",
+          "user:outsider"
+        ],
+        "view": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "views_removed": [
+      ".cache/store-p2/views-tables/tools/e3b0c44298fc"
+    ]
+  },
+  "logs": {
+    "by_store": {
+      "reference/e3b0c44298fc": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      },
+      "store": {
+        "allowed": 3,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 3,
+        "decisions": {
+          "allowed": 3
+        },
+        "lines": 3,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 1,
+        "sql_text_lines": 0,
+        "table_lines": 3,
+        "tables_missing": 0,
+        "tools": {
+          "describe_tables": 1,
+          "query_table": 1,
+          "sql": 1
+        }
+      }
+    },
+    "statements_checked": 0,
+    "total": {
+      "allowed": 6,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 6,
+      "decisions": {
+        "allowed": 6
+      },
+      "lines": 6,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 2,
+      "sql_text_lines": 0,
+      "table_lines": 6,
+      "tables_missing": 0,
+      "tools": {
+        "describe_tables": 2,
+        "query_table": 2,
+        "sql": 2
+      }
+    }
+  },
+  "summary": {
+    "by_tool": {},
+    "differing": 0,
+    "empty_checks": {
+      "identical": 3,
+      "n": 3
+    },
+    "identical": 0,
+    "n": 0,
+    "total": {
+      "n": 0,
+      "passed": 0
+    },
+    "views": 1
+  }
+}

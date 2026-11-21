@@ -42,7 +42,12 @@ packages = ["src/adr_eval", "src/adr_store"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = ["slow: downloads the embedding model"]
+# realdata tests are opt-in: `pytest -m realdata` runs them (a later -m replaces this one)
+addopts = "-m 'not realdata'"
+markers = [
+    "slow: downloads the embedding model",
+    "realdata: reads the scratch stores under .cache/store-p2 (skipped when absent)",
+]
 
 [tool.ruff]
 line-length = 100

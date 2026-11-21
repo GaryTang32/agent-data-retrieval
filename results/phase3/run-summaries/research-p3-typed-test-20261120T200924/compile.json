@@ -1,0 +1,62 @@
+{
+  "manifest": {
+    "applicability": null,
+    "corpus": "research",
+    "extraction": null,
+    "format_version": "0.1",
+    "snapshot": "97c415b1aa7164780daa516a3b170457d3386b870fbc85d34f0f333d31b4d6a6",
+    "tables": [
+      {
+        "contract_sha256": "dba12b9c7a80b7bd646b4bda2af5178458e407a6331a8f091cfe68f5cb60c8ed",
+        "contract_version": 1,
+        "file": "authors-v1-83a332be92bce656.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 7417,
+        "sha256": "83a332be92bce656184672787c69ed8d985913d9d2621d68276317d94f9cb42c",
+        "table": "authors"
+      },
+      {
+        "contract_sha256": "f6d05fd223dd444cb1414c07ab420c0c03318fac2141ea2e4b7d8fdc63772d95",
+        "contract_version": 1,
+        "file": "licences-v1-24c5dd909ecc4c87.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 34,
+        "sha256": "24c5dd909ecc4c878c5fce07edfffee7e3a14553d8105c395680421c2448ac5a",
+        "table": "licences"
+      },
+      {
+        "contract_sha256": "f30f70b5aa0ea0ff6a9d61b6f53817ec4764c122881aa24e284c448c27bc889b",
+        "contract_version": 1,
+        "file": "paper_authors-v1-4447fdfff1dfebe7.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 9683,
+        "sha256": "4447fdfff1dfebe7af9ff7410e05004d2b45849b863b737e3d2efa64ee0198d5",
+        "table": "paper_authors"
+      },
+      {
+        "contract_sha256": "a85744ab89450ac0c3ec4d7376d16ba1e5619a7ddddaec86e173b8a5d95388c4",
+        "contract_version": 1,
+        "file": "papers-v1-3bfc8d1f9068dc74.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 2570,
+        "sha256": "3bfc8d1f9068dc7438228286aae56e433ad1d5b9dda4ac5095a1b14418359077",
+        "table": "papers"
+      },
+      {
+        "contract_sha256": "24d8350d2d29ddd780915e9aa922fc14b19e2e54c6b9661f6ac7ff4bcfdb1fb3",
+        "contract_version": 1,
+        "file": "venues-v1-4c7a0b3f3358db3c.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 1098,
+        "sha256": "4c7a0b3f3358db3cf63ed00b38b8354472ae7f4e8fa197059f2835fbb7c2b301",
+        "table": "venues"
+      }
+    ]
+  },
+  "tables": "62604e913378c76bbb41921faba17478584fe519870c7b54e53f48910dafd41a"
+}

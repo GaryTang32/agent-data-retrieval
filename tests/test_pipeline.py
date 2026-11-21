@@ -176,3 +176,31 @@ def test_row_with_no_generated_query_scores_wrong():
     assert row["route_ok"] is False and row["entity_f1"] == 0.0
     row = _q_row("mini-count-1", "not json")
     assert row["route_ok"] is False and row["entity_f1"] is None
+
+
+def test_stop_status_reports_budget_units():
+    """One stop line for every command that calls a model (final review M5): the cap or the
+    failure, then the budget units used (every transport attempt counts), nothing written."""
+    from adr_eval.llm import RetriesExhausted
+    from adr_eval.pipeline import Budget, BudgetExceeded, stop_status
+
+    tail = "; nothing written. Completed calls are cached: rerun to continue."
+    budget = Budget(None, 3, count_attempts=True)
+    for _ in range(3):
+        budget.attempt()
+    with pytest.raises(BudgetExceeded) as e:
+        budget.attempt()
+    assert stop_status(budget) == stop_status(budget, e.value) == \
+        "status: stopped at --max-calls 3 (3 budget unit(s) used)" + tail
+    assert stop_status(Budget(None, 5), RetriesExhausted("giving up\n after 5 retries")) == \
+        "status: stopped: giving up after 5 retries (0 budget unit(s) used)" + tail
+    dollars = Budget(0.01, None)
+    with pytest.raises(BudgetExceeded):
+        dollars.reserve(1.0)
+    assert stop_status(dollars).startswith("status: stopped at --max-dollars 0.01 (0 budget")
+
+
+def test_stop_status_without_a_budget_names_the_failure():
+    from adr_eval.pipeline import stop_status
+    line = stop_status(None, RuntimeError("transport  down"))
+    assert line == "status: stopped: transport down; nothing written."

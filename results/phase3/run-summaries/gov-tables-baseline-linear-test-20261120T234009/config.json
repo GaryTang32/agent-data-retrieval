@@ -1,0 +1,70 @@
+{
+  "calls": 97,
+  "concurrency": 4,
+  "corpus": "gov",
+  "count_attempts": true,
+  "facts": [
+    "541f4c587ee9a271068604a4a12fbe5584cc74392ff431f29e7683b45916707b"
+  ],
+  "fingerprint": "fe978fc9c5ee87b300444934f7eee83288df0ee18af70a1e8a21fd6faf17119a",
+  "finished": "2026-11-20T23:42:40.334093+00:00",
+  "generator": {
+    "adapter": "claude_code",
+    "billing": "subscription",
+    "family": "anthropic",
+    "model": "claude-sonnet-5-5",
+    "name": "claude_code",
+    "profile": "claude_code_sonnet",
+    "sampling": "cli-default (temperature not pinned)",
+    "served_models": [
+      "claude-sonnet-5-5"
+    ]
+  },
+  "golden": "golden/gov-tables/v0.1/items.jsonl",
+  "golden_set": "gov-tables",
+  "golden_sha256": "08c41d3a51007c69f1d1779dc25510764e1da8b3c9871260ec89624b664690d2",
+  "judge": {
+    "enabled": false
+  },
+  "judge_enabled": false,
+  "max_calls": 100,
+  "max_dollars": null,
+  "metrics_version": 2,
+  "n_items": 97,
+  "n_rows": 97,
+  "price_table_as_of": {
+    "claude-sonnet-5-5": "2026-11-09"
+  },
+  "prompt_hashes": {
+    "answer": "291ed9cc8d09274d0cfcce9f29ba16f7f61b33eac2eb10c9f0f9f082457d2943",
+    "query_gen_tables": "c6807021aa8db44cb2b21fcd685533cc2677f5f0f5167257e741c782f4e11292"
+  },
+  "qtypes": [
+    "count_filter"
+  ],
+  "repeats": 1,
+  "retrieval": {
+    "channel_k": 100,
+    "fusion": "linear",
+    "linear_w": 1.0,
+    "rrf_k": null,
+    "top_n": 10
+  },
+  "run_id": "gov-tables-baseline-linear-test-20261120T234009",
+  "same_family_judge": null,
+  "seed": 20261108,
+  "served_model_mismatch": false,
+  "snapshot": "2ad8a136abbc0ae6f25f0570d74bc2a185fc3b99795054dfe59dddab5a26b532",
+  "spent_usd": 0.0,
+  "split": "test",
+  "started": "2026-11-20T23:40:09.040374+00:00",
+  "status": "complete",
+  "stub": false,
+  "system": "baseline-linear",
+  "t_values": [
+    0.5,
+    0.75,
+    0.9
+  ],
+  "w": 1.0
+}

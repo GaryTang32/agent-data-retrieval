@@ -1,0 +1,74 @@
+{
+  "table": "fr_agencies",
+  "version": 1,
+  "kind": "data",
+  "description": "Agencies of Federal Register documents: one row per document and agency.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Federal Register document number.",
+      "spec_id": "fr.id@1"
+    },
+    {
+      "name": "position",
+      "type": "int",
+      "nullable": false,
+      "description": "Position of the agency in the document's agency list, from 0.",
+      "spec_id": "fr.agency_position@1"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "nullable": false,
+      "description": "Agency name as the document lists it.",
+      "spec_id": "fr.agency_name@1"
+    },
+    {
+      "name": "fr_agency_id",
+      "type": "int",
+      "nullable": true,
+      "description": "The Federal Register's numeric agency id.",
+      "spec_id": "fr.fr_agency_id@1"
+    },
+    {
+      "name": "parent_id",
+      "type": "int",
+      "nullable": true,
+      "description": "The Federal Register's id of the parent agency.",
+      "spec_id": "fr.agency_parent_id@1"
+    },
+    {
+      "name": "specific",
+      "type": "bool",
+      "nullable": false,
+      "description": "True for the document's most specific agency.",
+      "spec_id": "fr.agency_specific@1"
+    },
+    {
+      "name": "agency_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the agency (SHA-256 of its normalisation key).",
+      "spec_id": "fr.agency_id@1"
+    }
+  ],
+  "key": [
+    "id",
+    "position"
+  ],
+  "order": [
+    "id",
+    "position"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "gov",
+    "selector": "fr",
+    "loader": "metadata"
+  },
+  "entities": {
+    "agency_id": "agencies"
+  }
+}

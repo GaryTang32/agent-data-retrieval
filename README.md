@@ -2,9 +2,11 @@
 
 > **Status: work in progress.** This repository is under active development and is not
 > ready for use. So far it contains the research, the design, the Phase 0 evaluation
-> harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, and Phase 2:
-> applicability filters, permissions, tools as data and an MCP server. Phases 3–6 are not built
-> yet. Interfaces, file formats and results may change without notice.
+> harness, a recorded baseline, the Phase 1 evidence store with its `adr` tools, Phase 2:
+> applicability filters, permissions, tools as data and an MCP server, and Phase 3, the typed
+> database, which is built and measured on its branch but not merged: 13 of its 15 exit criteria
+> pass, and two (Q2 and E1) fail. Phases 4–6 are not started. Interfaces, file formats and
+> results may change without notice.
 
 An all-in-one toolkit that turns unstructured documents and tools into a data lake that AI
 agents can retrieve from deterministically, built on schema engineering and graph
@@ -46,8 +48,8 @@ Two terms are used precisely:
 flowchart LR
     P0["Phase 0<br/>Evaluation first<br/>✅ merged"]
     P1["Phase 1<br/>Evidence store<br/>✅ built and measured<br/>baseline kept"]
-    P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ built and measured"]
-    P3["Phase 3<br/>Typed database"]
+    P2["Phase 2<br/>Permissions and<br/>applicability<br/>✅ merged"]
+    P3["Phase 3<br/>Typed database<br/>🟡 built and measured<br/>13 of 15 criteria pass"]
     P4["Phase 4<br/>Knowledge units"]
     P5["Phase 5<br/>Graph and<br/>navigation"]
     P6["Phase 6<br/>Closed loop and<br/>governance"]
@@ -59,15 +61,16 @@ flowchart LR
     classDef active fill:#fff1cc,stroke:#a86b00,color:#4a3000
     classDef todo fill:#eef0f4,stroke:#8a93a6,color:#3a4152
     class P0,P1,P2 done
-    class P3,P4,P5,P6 todo
+    class P3 active
+    class P4,P5,P6 todo
 ```
 
 | Phase | What it delivers | Status | Steps done | Progress |
 |---|---|---|---|---|
 | 0. Evaluation first | Golden question sets, the evaluation harness, a recorded baseline | ✅ Merged | 12 of 12 | `██████████` |
 | 1. Evidence store | Record format, content-addressed store, structure-led chunks, hybrid search tools | ✅ Built and measured ([results](results/phase1/README.md)) | 6 of 6 | `██████████` |
-| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Built and measured ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
-| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | Not started | – | `░░░░░░░░░░` |
+| 2. Permissions and applicability | Access control on every record, version and validity filters, tools as data, an MCP server | ✅ Merged (#7) ([results](results/phase2/README.md)) | 13 of 13 | `██████████` |
+| 3. Typed database | Grounded extraction into typed tables, guarded SQL, identical rebuilds | 🟡 Built and measured on the branch, not merged ([results](results/phase3/README.md)): 13 of 15 criteria pass; Q2 and E1 fail | 12 of 12 | `██████████` |
 | 4. Knowledge units | Rules, procedures and concepts as searchable records with citations | Not started | – | `░░░░░░░░░░` |
 | 5. Graph and navigation | Statement graph and navigation tree, kept only if they beat Phases 1–4 | Not started | – | `░░░░░░░░░░` |
 | 6. Closed loop and governance | Audits, gap mining, exporters, a public harness | Not started | – | `░░░░░░░░░░` |
@@ -111,6 +114,30 @@ Plan: [`docs/superpowers/plans/2026-11-13-phase1-evidence-store.md`](docs/superp
 Design: [`docs/superpowers/specs/2026-11-16-phase2-design.md`](docs/superpowers/specs/2026-11-16-phase2-design.md).
 Plan: [`docs/superpowers/plans/2026-11-16-phase2.md`](docs/superpowers/plans/2026-11-16-phase2.md).
 
+### Phase 3 steps
+
+Part 3A builds typed tables from metadata the corpora already hold, with no model call; part 3B
+extracts drawbridge facts from 33 CFR part 117 with a model, inside a budget of 1,500 calls the
+user approved.
+
+| # | Step | Purpose | Status |
+|---|---|---|---|
+| 1 | Contracts, provenance, validator, table overlay | Every value typed, traced to a spec and to a span, in write-once files named by their hash | ✅ Built |
+| 2 | 3A loaders for the Federal Register and the papers manifest | Tables from the metadata the corpora already hold | ✅ Built |
+| 3 | Entity resolution, eCFR structure, waterway links | Agencies, dockets, CFR parts, waterways, authors, venues and licences as entities, by exact normalised keys | ✅ Built |
+| 4 | Query engine and merge gate | `query_table` reproduces the gold record semantics exactly; a new build is promoted only with no regressions | ✅ Built (`adr tables build`, `adr tables gate`) |
+| 5 | Guarded SQL and the semantic layer | One read-only, bounded `SELECT` with fixed error messages; `describe_tables` | ✅ Built (`adr sql`) |
+| 6 | The three tools under the ACL, with applicability and handles; MCP | Rows inherit document access; hidden equals nonexistent; replayable results | ✅ Built (`adr query`, `adr sql`, `adr mcp`) |
+| 7 | Table probes S1–S3 and the MCP leg of D1 | No leak, no write, fail closed, equal to an allowed-only store | ✅ All pass ([access](results/phase3/README.md#access-s1s3-and-d1)) |
+| 8 | `p3-typed` in the harness; Q1 with no model call | Answer the frozen count questions from the tables | ✅ Q1 passes: gov 27 of 27, research 26 of 27 ([3A](results/phase3/README.md#3a-metadata-tables-and-q1)) |
+| 9 | The 3B extractor, tested with a stub model | Grounded extraction with span checks, a second independent pass, draw matching | ✅ Built (`adr tables extract`) |
+| 10 | gov-tables golden generator and the harness's tables mode | New drawbridge questions answered by code from the second pass | ✅ Built (`adr-eval golden tables`) |
+| 11 | The 3B run, gov-tables v0.1, Q2, E1, E2, T1–T6 | Measure extraction and the typed answers, 1,411 of 1,500 calls | 🟡 Measured: Q2 fails on accuracy (0.680 < 0.80), E1 fails on two columns; E2 and T1–T6 pass ([3B](results/phase3/README.md#3b-extraction-from-33-cfr-117-and-q2)) |
+| 12 | Determinism, the write-up, README and status page | X1 and the Phase 3 results | ✅ X1 passes ([`results/phase3/README.md`](results/phase3/README.md)) |
+
+Design: [`docs/superpowers/specs/2026-11-20-phase3-design.md`](docs/superpowers/specs/2026-11-20-phase3-design.md).
+Plan: [`docs/superpowers/plans/2026-11-20-phase3.md`](docs/superpowers/plans/2026-11-20-phase3.md).
+
 ## Plan
 
 The roadmap runs from Phase 0 to Phase 6, and each phase is gated. The order follows one principle: build what is hard to
@@ -121,8 +148,8 @@ design targets taken from the research, not results.
 |---|---|---|
 | **0. Evaluation first** | Golden question sets over three corpora, an evaluation harness with five tracks (compile, query understanding, retrieval, determinism, end-to-end), and a recorded flat hybrid baseline (BM25 + dense). | **Merged**; three exit items still need outside input (see below) |
 | **1. Evidence store and spec core** | Record spec with conformance tests, content-hash registry, per-page parse routing, structure-led chunks, hybrid search with reranking, `search` / `read` / `grep` tools, snapshot-tied indexes. | **Built and measured.** Three exit criteria met, one partly (no bounding boxes), one deferred (parse routing needs layout models), one not applicable. Retrieval is level with the baseline, which stays the reference ([results](results/phase1/README.md)) |
-| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Built and measured.** All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
-| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | Not started |
+| **2. Permissions, applicability and tools as data** | Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records ingested from MCP and OpenAPI. | **Merged** (#7). All 16 exit criteria pass, with synthetic tenants and a stdio-only MCP server ([results](results/phase2/README.md)) |
+| **3. Typed deterministic database** | Schema contracts, grounded extraction with span checks, entity resolution, a semantic layer with guarded SQL, zero-call rebuilds with identical checksums. | **Built and measured on its branch, not merged.** 13 of 15 exit criteria pass; Q2 (accuracy on new drawbridge questions) and E1 (grounding of two columns) fail ([results](results/phase3/README.md)) |
 | **4. Knowledge units and enforcement** | Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings behind review and tests. | Not started |
 | **5. Graph and navigation layers** | Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy. Each layer is kept only if it beats the earlier phases on accuracy or tokens. | Not started |
 | **6. Closed loop, interoperability and governance** | Gap mining and audits, spec v1.0, exporters to external catalogs and graph stores, a public neutral harness. | Not started |
@@ -185,6 +212,25 @@ margins fixed before any result:
 The permissions are synthetic (3 tenants, 12 groups, 20 users), the MCP server is stdio only,
 and eCFR dates come from pinned snapshots; the write-up lists every limit.
 
+### Phase 3 results
+
+Measured on the branch, not yet merged ([`results/phase3/README.md`](results/phase3/README.md)).
+Part 3A made no model call; part 3B made 1,411 of the 1,500 calls the user approved. 13 of the
+15 exit criteria pass, with thresholds fixed before any result:
+
+| Question | Answer |
+|---|---|
+| Do typed tables answer the frozen count questions? | Yes: gov 27 of 27 and research 26 of 27, against the baseline's 2 and 16 (McNemar p 6.0 × 10⁻⁸ on gov). But this was close to certain by construction: the queries were the baseline's own, read from the cache |
+| Do they answer new questions about drawbridge rules? | Not well enough: 0.680 on 97 test questions, below the 0.80 bar, though far above the baseline's 0.237 (+0.443 [+0.330, +0.557]). In 26 of the 31 misses the query was right and the two model extraction passes disagree on the value; which is right is not known |
+| Is the extraction grounded in the text? | 99.1% of values overall, but two columns fall below the 95% bar: `seasonal` 94.6% and `closed_periods` 89.9% |
+| Does it agree with an independent second pass? | Yes on the four required columns (0.921–0.979); less on `owner_or_agency` (0.797) and `closed_periods` (0.707) |
+| Can a caller see rows they should not? | No leak in 700 table leak probes, 60 of them re-run through MCP per build; the table tools equal an allowed-only store in 1,500 of 1,500 calls; 120 of 120 SQL attacks per corpus refused or bounded; every fail-closed case returned nothing |
+| Do tables rebuild exactly? | Yes: every table rebuilt from the cache with zero calls is byte-identical, every one of 32,889 spans re-slices, and every run and probe set repeats exactly. Phase 2 retrieval is unchanged |
+
+The gold for the drawbridge questions is a model's reading that no person checked, errors both
+passes share are invisible, the tenants are synthetic, and the research tables are all-or-nothing
+for access; the write-up lists every limit.
+
 ## What is in the repository
 
 | Path | Contents |
@@ -192,13 +238,13 @@ and eCFR dates come from pinned snapshots; the write-up lists every limit.
 | `reports/` | Five research reports, two methods catalogs, a combined summary and an HTML brief. |
 | `research_notes/` | Working notes behind the reports. |
 | `papers/` | Catalog of about 2,570 sources (`README.md`, `manifest.csv`). The PDFs are kept local only; rebuild them with `scripts/download_papers.py` (see the warning below). |
-| `docs/superpowers/` | The design specs and implementation plans of Phases 0, 1 and 2. |
+| `docs/superpowers/` | The design specs and implementation plans of Phases 0, 1, 2 and 3. |
 | `src/adr_eval/`, `tests/` | The evaluation harness and its tests. |
-| `src/adr_store/` | The evidence store: record format, structure parsers, content-addressed store, structure-led chunks, retrieval and the `adr` tools (Phase 1); applicability and dedup overlays, the ACL snapshot and its enforcement, tool records and the tool index, snapshot handles and the MCP server (Phase 2). |
-| `config/` | Run settings, model profiles and price table; the synthetic ACL directory and policy (`config/acl/`). No API keys are stored here. |
+| `src/adr_store/` | The evidence store: record format, structure parsers, content-addressed store, structure-led chunks, retrieval and the `adr` tools (Phase 1); applicability and dedup overlays, the ACL snapshot and its enforcement, tool records and the tool index, snapshot handles and the MCP server (Phase 2); typed tables, entity resolution, the query engine, guarded SQL, the merge gate and the grounded extractor (`src/adr_store/tables/`, Phase 3). |
+| `config/` | Run settings, model profiles and price table; the synthetic ACL directory and policy (`config/acl/`); the table contracts and the extraction specs (`config/tables/`). No API keys are stored here. |
 | `corpora/` | Pinned manifests (SHA-256 per file) and notes for the three corpora and the ToolRet tool catalog (`corpora/tools/`). Corpus files download into `data/`, which is not committed. |
-| `golden/` | Golden question sets: `gov` committed; `research` and `bench` items local only, with READMEs that pin their hashes and counts. |
-| `results/` | Recorded baseline runs and their summary; Phase 1 results in `results/phase1/`, Phase 2 results in `results/phase2/`. |
+| `golden/` | Golden question sets: `gov` and `gov-tables` (Phase 3's drawbridge questions) committed; `research` and `bench` items local only, with READMEs that pin their hashes and counts. |
+| `results/` | Recorded baseline runs and their summary; Phase 1 results in `results/phase1/`, Phase 2 results in `results/phase2/`, Phase 3 results in `results/phase3/`. |
 
 ## Evaluation harness
 
@@ -296,6 +342,20 @@ adr tools ingest --toolret                      # the ToolRet tool catalog (loca
 adr search-tools "<task>" --store <store> --as user:acme-0
 adr mcp --store <store> --as user:acme-0        # the five tools over MCP (stdio); needs the [mcp] extra
 ```
+
+Phase 3 adds typed tables for a store (`gov` or `research`):
+
+```bash
+adr tables build --store <store>                # a candidate build (no model call)
+adr tables gate --store <store> --candidate <tables id> --gold golden/gov/v0.1 --max-flips 0
+adr tables show --store <store>                 # the manifest and the semantic layer
+adr query --store <store> --as user:acme-0 --table fr_documents --filters '{"type": "Rule"}' --op count
+adr sql --store <store> --as user:acme-0 "SELECT type, count(*) FROM fr_documents GROUP BY type"
+adr tables extract --store <store> --generator <profile> --max-calls N   # 3B: calls a model
+```
+
+The MCP server gains the three table tools (`describe_tables`, `query_table`, `sql`); rows
+inherit their document's access, and a hidden row behaves exactly like a missing one.
 
 Search hides superseded versions by default; `--include-superseded` restores the Phase 1 view.
 `--as` enforces the caller's view and fails closed when the ACL snapshot is missing, stale or

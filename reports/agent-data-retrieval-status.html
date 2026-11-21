@@ -414,6 +414,7 @@
         <li><a href="#rs-base"><svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg><span><i>2.6</i> Baseline results</span></a></li>
         <li><a href="#rs-phase1"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg><span><i>2.7</i> Phase 1: evidence store</span></a></li>
         <li><a href="#rs-phase2"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span><i>2.8</i> Phase 2: permissions and applicability</span></a></li>
+        <li><a href="#rs-phase3"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg><span><i>2.9</i> Phase 3: typed database</span></a></li>
       </ol>
     </li>
     <li class="sn-part sn-p3" data-name="03 Pending"><a href="#td"><svg class="ic sn-ic" aria-hidden="true"><use href="#i-flag"/></svg><span><b>03</b> Pending</span></a>
@@ -439,15 +440,19 @@
   <!-- =================== HEADER =================== -->
   <header id="top">
     <div class="hero">
-      <p class="eyebrow">Project status · 16 November 2026</p>
+      <p class="eyebrow">Project status · 21 November 2026</p>
       <h1>Agent Data Retrieval Status</h1>
       <p class="dek">What the repository is for, the plan, what is done, what is pending, and the purpose of every step so far.</p>
-      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 merged</span><span>Phase 1 merged (#6)</span><span>Phase 2 built and measured: 16 of 16 criteria pass</span><span>Baseline stays the reference</span><span>Metric definitions version 2</span><span>CI: one CPU-dependent test fixed in 66307a7</span><span>All work pushed</span></p>
+      <p class="hero-meta"><span>garytang32/agent-data-retrieval</span><span>Branch claude/magical-lamport-n94rs3</span><span>Phase 0 merged</span><span>Phase 1 merged (#6)</span><span>Phase 2 merged (#7): 16 of 16 criteria pass</span><span>Phase 3 built and measured on the branch, not merged: 13 of 15 criteria pass (Q2 and E1 fail)</span><span>Baseline stays the reference</span><span>Metric definitions version 2</span><span>CI green on Python 3.12 and 3.13</span><span>All work pushed</span></p>
     </div>
     <div class="brief">
       <span class="k"><svg class="ic" aria-hidden="true"><use href="#i-brief"/></svg>Key points</span>
       <ul class="plain">
-        <li><strong>The repository is still work in progress.</strong> Phase 0, the evaluation harness and its baseline, is merged. Phase 1, the evidence store, is merged to <code>main</code> (#6). Phase 2 is built and measured on the working branch; Phases 3–6 are not started.</li>
+        <li><strong>The repository is still work in progress.</strong> Phase 0, the evaluation harness and its baseline, is merged. Phase 1, the evidence store, is merged to <code>main</code> (#6). Phase 2, permissions and applicability, is merged too (#7). Phase 3, the typed database, is complete on its branch: all 12 tasks are done and reviewed, and it is measured, but it is not merged and has no pull request yet. Phases 4–6 are not started.</li>
+        <li><strong>Phase 3: 13 of 15 exit criteria pass; Q2 and E1 fail</strong> (<a href="#rs-phase3">section 2.9</a>). Every table rebuilds byte for byte from the cache with zero model calls, every stored value re-slices to its quote and names its spec, and every run and probe set repeats exactly.</li>
+        <li><strong>Counting questions: exact, but by construction.</strong> On the frozen count questions the metadata tables score gov 27 of 27 and research 26 of 27, against the baseline's 2 and 16 (McNemar p 6&times;10<sup>-8</sup> on gov), with no model call. The queries were the baseline's own, so this mainly shows the tables reproduce the gold semantics.</li>
+        <li><strong>New drawbridge questions: Q2 fails on accuracy.</strong> On 97 test questions over facts extracted from 33 CFR 117, the tables score 0.680, below the 0.80 bar, though far above the baseline's 0.237 (+0.443 [+0.330, +0.557], so the margin passes). In 26 of the 31 misses the query was right and the two extraction passes disagree on the value; which pass is right is not known. Extraction grounding (E1) is 99.1% overall but below 95% on two columns: <code>seasonal</code> 94.6% and <code>closed_periods</code> 89.9%.</li>
+        <li><strong>No leak through the tables.</strong> 700 table leak probes, 60 of them re-run through MCP on each build, found no leak; <code>query_table</code> and <code>sql</code> equal an allowed-only store in 1,500 of 1,500 calls; 120 of 120 SQL attacks per corpus were refused or bounded. 3B used 1,411 of the 1,500 model calls the user approved.</li>
         <li><strong>Phase 2 passes all 16 of its exit criteria</strong>, with every threshold fixed before any result (<a href="#rs-phase2">section 2.8</a>). It adds applicability filters, permissions, tools as data and an MCP server, and makes no model calls.</li>
         <li><strong>Dated questions are served much better.</strong> Searching gov as of the question's date lifts nDCG@10 on the 34 dated test questions from 0.567 to 0.820; default search shows no superseded version, where Phase 1 filled 52.9% of gov top-10 slots with them.</li>
         <li><strong>No leak.</strong> 1,403 leak and fail-closed probes over the five tools through the Python API, and 300 of the leak probes re-run through the MCP server, found no leak and no content under a broken ACL. Filtering equals an index of the caller's documents alone in 12,000 of 12,000 checks.</li>
@@ -455,16 +460,16 @@
         <li><strong>Everything repeats exactly.</strong> Every configuration, tool system and probe set gave identical results when run again in fresh processes, and matched the runs recorded in its own task.</li>
         <li><strong>Phase 1 still stands as measured.</strong> As a retriever it is level with the baseline, which stays the reference for answers; Phase 2 builds on its store and tools.</li>
       </ul>
-      <p class="rec"><strong>Next:</strong> review and merge Phase 2, then Phases 3 and 4 on top of its store, ACL and handles. The open items carry forward (<a href="#td-next">section 3.2</a>).</p>
+      <p class="rec"><strong>Next:</strong> the final review of Phase 3 and a pull request (none yet), stating Q2 and E1 as failed. Then Phase 4, which can start now on the Phase 2 base. The open items, Phase 3's included, carry forward (<a href="#td-next">section 3.2</a>).</p>
     </div>
 
     <div class="stats six" aria-label="Project status in numbers">
-      <div class="stat"><span class="num">1,730</span><span class="lbl">Automated tests, all passing with warnings as errors</span></div>
+      <div class="stat"><span class="num">2,533</span><span class="lbl">Automated tests, all passing with warnings as errors</span></div>
       <div class="stat"><span class="num">1,300</span><span class="lbl">Verified golden questions across three corpora</span></div>
       <div class="stat"><span class="num">2,425</span><span class="lbl">Documents in the evidence store, all round-tripping losslessly</span></div>
       <div class="stat"><span class="num">0 of 1,403</span><span class="lbl">Leak and fail-closed probes that leaked or returned content (Phase 2)</span></div>
       <div class="stat"><span class="num">99.8%</span><span class="lbl">Less tool context than loading the 14,059-tool catalog (target: at least 80%)</span></div>
-      <div class="stat"><span class="num">16 of 16</span><span class="lbl">Phase 2 exit criteria passed; Phases 0 and 1 merged</span></div>
+      <div class="stat"><span class="num">13 of 15</span><span class="lbl">Phase 3 exit criteria passed (Q2 and E1 fail); Phase 2 passed 16 of 16</span></div>
     </div>
 
     <nav class="toc" aria-label="Contents">
@@ -481,7 +486,7 @@
       <div>
         <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Part 2 · Done</span>
         <a class="ttl" href="#rs">What is done</a>
-        <span class="gist">Each finished step with its purpose, the baseline, and the Phase 1 and Phase 2 results</span>
+        <span class="gist">Each finished step with its purpose, the baseline, and the Phase 1, 2 and 3 results</span>
         <ol>
           <li><span>2.1</span><a href="#rs-research">Research and design</a></li>
           <li><span>2.2</span><a href="#rs-harness">Evaluation harness</a></li>
@@ -491,12 +496,13 @@
           <li><span>2.6</span><a href="#rs-base">Baseline results</a></li>
           <li><span>2.7</span><a href="#rs-phase1">Phase 1: evidence store</a></li>
           <li><span>2.8</span><a href="#rs-phase2">Phase 2: permissions and applicability</a></li>
+          <li><span>2.9</span><a href="#rs-phase3">Phase 3: typed database</a></li>
         </ol>
       </div>
       <div>
         <span class="part"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · Pending</span>
         <a class="ttl" href="#td">What is pending</a>
-        <span class="gist">The Phase 2 merge, Phases 3 and 4, the carried-over items and the limits</span>
+        <span class="gist">Merging Phase 3, Phase 4, the carried-over items and the limits</span>
         <ol>
           <li><span>3.1</span><a href="#td-decide">Optional: the 5-repeat run</a></li>
           <li><span>3.2</span><a href="#td-next">Next steps and carry-overs</a></li>
@@ -552,8 +558,8 @@
         <tbody>
           <tr><th scope="row">0 Evaluation first</th><td>Golden question sets over three corpora, a five-track evaluation harness, a recorded flat hybrid baseline (BM25 + dense)</td><td>Build the yardstick before the toolkit, so every later piece has to prove it beats a known baseline</td><td><span class="str str-strong">Merged</span></td></tr>
           <tr><th scope="row">1 Evidence store and spec core</th><td>Record spec with conformance tests, content-hash registry, parse routing, structure-led chunks, hybrid search with reranking, <code>search</code> / <code>read</code> / <code>grep</code> tools</td><td>The lossless, hash-pinned foundation that every answer cites</td><td><span class="str str-outcome">Merged</span><span class="sub">#6; retrieval level with the baseline, which stays the reference</span></td></tr>
-          <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records from MCP and OpenAPI</td><td>Permissions and currency are hard to add later, so they come early</td><td><span class="str str-strong">Built and measured</span><span class="sub">All 16 exit criteria pass; on the working branch</span></td></tr>
-          <tr><th scope="row">3 Typed deterministic database</th><td>Schema contracts, grounded extraction with span checks, entity resolution, semantic layer with guarded SQL</td><td>Exact answers for count, filter and lookup questions, rebuilt with identical checksums</td><td><span class="str str-na">Not started</span></td></tr>
+          <tr><th scope="row">2 Permissions, applicability, tools as data</th><td>Access-control principals on every row, version chains, validity and jurisdiction filters, deduplication, tool records from MCP and OpenAPI</td><td>Permissions and currency are hard to add later, so they come early</td><td><span class="str str-strong">Merged (#7)</span><span class="sub">All 16 exit criteria pass</span></td></tr>
+          <tr><th scope="row">3 Typed deterministic database</th><td>Schema contracts, grounded extraction with span checks, entity resolution, semantic layer with guarded SQL</td><td>Exact answers for count, filter and lookup questions, rebuilt with identical checksums</td><td><span class="str str-qual">Built and measured, not merged</span><span class="sub">13 of 15 exit criteria pass; Q2 and E1 fail</span></td></tr>
           <tr><th scope="row">4 Knowledge units and enforcement</th><td>Concepts, rule cards with citations, procedure records, FAQ and table records, executable rule bindings</td><td>Make domain knowledge, rules and procedures searchable as typed units</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">5 Graph and navigation layers</th><td>Bitemporal statement graph with typed graph tools, markdown navigation tree, facet taxonomy</td><td>Multi-hop and overview questions; each layer is kept only if it beats the earlier phases</td><td><span class="str str-na">Not started</span></td></tr>
           <tr><th scope="row">6 Closed loop, interop, governance</th><td>Gap mining and audits, spec v1.0, exporters to external catalogs and graph stores, a public harness</td><td>Keep quality improving after launch and work with other platforms</td><td><span class="str str-na">Not started</span></td></tr>
@@ -1003,11 +1009,56 @@
     <p class="note">Limits: the tenants, groups and users are synthetic (20 views); the eCFR versions are pinned snapshots, so a date between two of them gets the earlier one; the IRM pages are current pages; the MCP server is stdio only, one caller per process, and a handle is a request for a snapshot, not an attestation; 197 of the 14,059 tools have no stated licence (NOASSERTION); ToolRet, research and bench data stay local. The full write-up is in <code>results/phase2/README.md</code>, with run summaries in <code>results/phase2/run-summaries/</code>.</p>
   </section>
 
+  <section id="rs-phase3" aria-labelledby="h-rs9">
+    <h3 id="h-rs9"><svg class="ic hic" aria-hidden="true"><use href="#i-db"/></svg><span class="no">2.9</span>Phase 3: the typed deterministic database (built and measured, not merged)</h3>
+    <p class="lead-in">Phase 3 turns what the corpora say into typed tables that answer count, filter and lookup questions exactly, with every value traced to a quote and a spec. Part 3A builds tables from metadata the corpora already hold, with no model call. Part 3B extracts drawbridge rules from 33 CFR part 117 with a model, in two independent passes, using 1,411 of the 1,500 calls the user approved. It was measured on 20 and 21 November against thresholds fixed in the design before any result. It is complete on its branch and not merged.</p>
+    <ol class="flow">
+      <li class="done"><strong>3A Metadata tables</strong><span>FR and papers tables, entities, the merge gate; Q1 with no model call</span><span class="str str-strong">Q1 passes</span></li>
+      <li class="wait"><strong>3B Extraction</strong><span>Two passes over 533 section texts; drawbridge tables; 120 new questions</span><span class="str str-none">Q2 and E1 fail</span></li>
+      <li class="done"><strong>Access</strong><span>Three table tools under the ACL; guarded SQL; MCP with handles</span><span class="str str-strong">S1–S3, D1 pass</span></li>
+      <li class="done"><strong>Rebuilds</strong><span>Zero-call rebuilds, re-slicing, specs, the gate</span><span class="str str-strong">T1–T6 pass</span></li>
+      <li class="done"><strong>Determinism</strong><span>Everything run twice in fresh processes; tables built twice</span><span class="str str-strong">X1 passes</span></li>
+    </ol>
+    <h4>Exit criteria (design §12)</h4>
+    <div class="tbl-wrap">
+      <table style="min-width:900px">
+        <thead><tr><th>#</th><th>Criterion</th><th>Result</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">T1</th><td>Zero-call rebuild: byte-identical files and tables id</td><td>gov 3A and 3B and research rebuilt twice from scratch: identical files and ids</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">T2</th><td>Every suite and probe set identical twice</td><td>5 of 5 question runs and 12 of 12 probe sets</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">T3</th><td>Every stored value re-slices</td><td>32,889 of 32,889 spans, 15,162 of them model quotes</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">T4</th><td>Every value traces to a spec</td><td>60,295 of 60,295 values</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">T5</th><td>A spec change re-extracts only its group</td><td>Fixture test passes</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">T6</th><td>The merge gate blocks regressions</td><td>Fixture test passes; three real promotions with 0 flips</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">Q1</th><td>Frozen count questions: ≥ 0.90 each corpus; McNemar p &lt; 0.05 on gov</td><td>gov 27/27 against 2/27 (p 6.0&times;10<sup>-8</sup>); research 26/27 against 16/27</td><td><span class="str str-strong">Pass</span><span class="sub">By construction</span></td></tr>
+          <tr><th scope="row">Q2</th><td>Drawbridge questions: ≥ 0.80 accuracy and lower bound &gt; +0.02</td><td>0.680 on 97 items; against the baseline's 0.237: +0.443 [+0.330, +0.557]</td><td><span class="str str-none">Fail</span><span class="sub">Accuracy fails, margin passes</span></td></tr>
+          <tr><th scope="row">E1</th><td>≥ 95% of model values grounded (per column, §7.3)</td><td>99.1% overall; <code>seasonal</code> 94.6%, <code>closed_periods</code> 89.9%</td><td><span class="str str-none">Fail</span><span class="sub">Two of nine columns</span></td></tr>
+          <tr><th scope="row">E2</th><td>Agreement with an independent pass ≥ 0.85 on four columns</td><td><code>waterway</code> 0.979, <code>bridge</code> 0.921, <code>notice_hours</code> 0.950, <code>opens_on_signal</code> 0.956</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">S1</th><td>No leak; 1,000 of 1,000 equivalent</td><td>0 leaks in 700 probes over both builds; 1,000 of 1,000 equivalent (and 500 of 500 on the 3B build)</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">S2</th><td>SQL read-only and bounded</td><td>120 of 120 per corpus refused or bounded, the database intact</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">S3</th><td>Fail closed and logged</td><td>90 of 90 per corpus with no content; applicability 153 of 153 on the 3B build; every log line complete</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">D1</th><td>Over MCP with handles</td><td>MCP tests pass; 60 leak probes through MCP per build, 0 leaks, every replay identical</td><td><span class="str str-strong">Pass</span></td></tr>
+          <tr><th scope="row">X1</th><td>Determinism</td><td>Every run and probe set identical twice; tables, entity tables included, built twice: identical</td><td><span class="str str-strong">Pass</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h4>What Phase 3 shows</h4>
+    <div class="cards">
+      <div><strong>Tables that rebuild exactly</strong><p>Every table rebuilds byte for byte from the model cache with zero calls; every one of 32,889 spans re-slices to its stored quote, and every value names the spec that produced it. A new build is promoted only through the merge gate.</p></div>
+      <div><strong>Counting questions answered exactly, by construction</strong><p>gov 27 of 27 and research 26 of 27, against the baseline's 2 and 16. The queries were the baseline's own, so this shows the tables reproduce the gold semantics. The one miss is a question worded for the other reading of a field.</p></div>
+      <div><strong>Q2 fails, and the reason is the gold's as much as the table's</strong><p>0.680 against a bar of 0.80. In 26 of 31 misses the generated query equals the gold query: the table (first pass) and the gold (second pass) disagree on the value. With the second pass's values the score would be 0.948. Which pass is right is not known.</p></div>
+      <div><strong>Grounding: high overall, two weak columns</strong><p>99.1% of model values quote the section text, but <code>closed_periods</code> (89.9%) and <code>seasonal</code> (94.6%) miss the 95% bar. <code>closed_periods</code> is also the least agreed column (0.707) and behind 9 of the 26 value misses.</p></div>
+      <div><strong>No leak through the tables</strong><p>Rows inherit their document's access. 700 leak probes, 65 of them on hidden drawbridge rows and 60 of them re-run through MCP per build, found nothing; the tools equal an allowed-only store in 1,500 of 1,500 calls; 120 of 120 SQL attacks per corpus were refused or bounded.</p></div>
+      <div><strong>Within the approved budget</strong><p>1,411 of the 1,500 approved calls, every transport attempt counted. No call failed. 3 calls went on a check whose prompt was then changed (ruling P22). Every later check ran from the cache with zero calls, and Phase 2 retrieval is unchanged.</p></div>
+    </div>
+    <p class="note">Limits: the drawbridge gold is a model's reading that no person checked, and errors both passes share are invisible; Q1 holds by construction; the tenants are synthetic and the research tables are all-or-nothing for access; tables keep raw columns beside normalised ones; drawbridge coverage is thin in the equivalence and <code>as_of</code> probes. The full write-up is in <code>results/phase3/README.md</code>, with run summaries in <code>results/phase3/run-summaries/</code>.</p>
+  </section>
+
   <!-- =================== PART 3: PENDING =================== -->
   <div class="banner" id="td" data-pn="03">
     <span class="tag"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg>Part 3 · Pending</span>
     <h2>What is pending, and what each step is for</h2>
-    <div class="meta"><span>Nothing is running</span><span>Phase 2 measured, awaiting review and merge</span><span>Three items need outside input</span></div>
+    <div class="meta"><span>Phase 3 complete on the branch; no pull request yet</span><span>Phase 2 merged (#7)</span><span>Three items need outside input</span></div>
   </div>
 
   <section id="td-decide" aria-labelledby="h-td1">
@@ -1048,12 +1099,14 @@
 
   <section id="td-next" aria-labelledby="h-td2">
     <h3 id="h-td2"><svg class="ic hic" aria-hidden="true"><use href="#i-list"/></svg><span class="no">3.2</span>Next steps and items carried forward</h3>
-    <p class="lead-in">Phase 2 is complete on the working branch. What comes next is its review and merge, then Phases 3 and 4; the other items were found in Phases 0–2 and carry forward.</p>
+    <p class="lead-in">Phase 2 is merged and Phase 3 is complete on its branch. What comes next is Phase 3's review and merge, then Phase 4; the other items were found in Phases 0–3 and carry forward.</p>
     <ol class="todo">
-      <li><strong>Review and merge Phase 2</strong><p>Applicability, permissions, tools as data and the MCP server are built and measured on the working branch; all 16 exit criteria pass. Purpose: put the access and currency layer on <code>main</code> before Phases 3 and 4 build on it.</p><span class="meta"><span>Phase 2</span><span class="str str-qual">Awaiting review</span></span></li>
-      <li><strong>Phases 3 and 4: typed database and knowledge units</strong><p>They can run in parallel, both on top of the Phase 2 store, its ACL and its handles. Purpose: exact answers for count and lookup questions, and rules and procedures as typed units.</p><span class="meta"><span>Next</span><span class="str str-na">Not started</span></span></li>
+      <li><strong>Phase 3: final review and pull request</strong><p>All 12 tasks are done and measured on <code>claude/magical-lamport-n94rs3</code>: 13 of 15 exit criteria pass, Q2 and E1 fail. Purpose: land the typed tables, guarded SQL and the extractor on <code>main</code>, with the two failures stated, as Phase 1's level result was. The branch holds old item-level Q1 files in one commit's history, so it should be squash-merged.</p><span class="meta"><span>Next</span><span class="str str-qual">Complete, not merged; no PR yet</span></span></li>
+      <li><strong>Settle which extraction pass is right</strong><p>Q2's 26 value misses are disagreements between the two model passes. A person checking a sample of them, starting with <code>closed_periods</code> and <code>owner_or_agency</code>, would show whether the table, the gold or neither is right, and whether Q2's failure is the table's. Purpose: a gold the drawbridge questions can rest on.</p><span class="meta"><span>Carried over from Phase 3</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Ground the two weak columns</strong><p><code>closed_periods</code> fails E1 at 89.9% (24 values not readable as its type, 17 quotes not in the text) and <code>seasonal</code> at 94.6%. Purpose: a column spec or prompt change for each, re-extracting only its group (T5), within a new approved budget.</p><span class="meta"><span>Carried over from Phase 3</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Phase 4: knowledge units</strong><p>Concepts, rule cards with citations and procedure records; it can run in parallel with Phase 3, on the same Phase 2 base. Purpose: rules and procedures searchable as typed units.</p><span class="meta"><span>Next</span><span class="str str-na">Not started</span></span></li>
       <li><strong>Dates for the 21 superseded-only gov questions</strong><p>Their evidence exists only in superseded versions and they carry no date, so default search rightly returns none of it; Phase 2 reports them apart. Purpose: score them fairly in golden set v0.2.</p><span class="meta"><span>Carried over from Phase 2</span><span class="str str-na">To do</span></span></li>
-      <li><strong>Real principals and an authenticated transport</strong><p>Phase 2 uses synthetic tenants (20 views) and serves MCP over stdio, one caller per process. Purpose: a real organisation's directory, and HTTP with OAuth for multi-user serving.</p><span class="meta"><span>Carried over from Phase 2</span><span class="str str-na">To do</span></span></li>
+      <li><strong>Real principals and an authenticated transport</strong><p>Phase 2 uses synthetic tenants (20 views) and serves MCP over stdio, one caller per process; Phase 3's research tables come from one public document, so their access test is all-or-nothing. Purpose: a real organisation's directory, and HTTP with OAuth for multi-user serving.</p><span class="meta"><span>Carried over from Phase 2</span><span class="str str-na">To do</span></span></li>
       <li><strong>Improve the golden sets (v0.2)</strong><p>Check every "not in the corpus" question against the corpus, require questions to name what they ask about, keep policy pairs in one split, and drop questions drawn from catalogue rows. Also fix the evidence bias Phase 1 found: overview and procedure evidence is exactly one baseline chunk, which favours the baseline chunker. Purpose: fair questions for every chunker.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
       <li><strong>Harden the reply parser</strong><p>Three rare cases remain: a JSON example quoted after the answer, a cut-off reply with a nested object, and a reply that is a list. Purpose: a recovered reply should always be the one the model meant.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
       <li><strong>Add a layout parser</strong><p>Bounding boxes for born-digital elements, and routed parsing across several backends. Purpose: the two Phase 1 exit criteria still open (one partly met, one deferred). Needs layout models.</p><span class="meta"><span>Carried over</span><span class="str str-na">To do</span></span></li>
@@ -1081,6 +1134,15 @@
 
   <section id="td-limits" aria-labelledby="h-td4">
     <h3 id="h-td4"><svg class="ic hic" aria-hidden="true"><use href="#i-shield"/></svg><span class="no">3.4</span>Known limits to keep in mind</h3>
+    <h4>Phase 3 measurement</h4>
+    <div class="cards">
+      <div><strong>The drawbridge gold is a model's reading</strong><p>It comes from the second extraction pass; no person checked either pass. Where the passes disagree nobody knows which is right, and errors both share are invisible.</p></div>
+      <div><strong>Q1 is by construction</strong><p>Its queries were the baseline's own, read from the cache, and already returned the gold records. It tests the tables' record semantics, not query understanding.</p></div>
+      <div><strong>Research access is all-or-nothing</strong><p>The research tables come from one public manifest, so its leak probes can only be ghost denials. Gov carries the leak measurement; the tenants are synthetic.</p></div>
+      <div><strong>Raw and normalised columns</strong><p>Tables keep raw values (such as <code>also_in</code>) beside normalised ones, so the frozen gold reproduces; three research count questions are worded for the other reading.</p></div>
+      <div><strong>Thin drawbridge coverage in two probes</strong><p>Only 9 of 500 equivalence calls touch drawbridge rows a view can see, and 36 of the 50 <code>as_of</code> dates per drawbridge table fall before the first eCFR version.</p></div>
+      <div><strong>3 calls lost to a prompt change</strong><p>A 3-call check found the model writing <code>false</code> with no quote; the prompts were changed (ruling P22) and those replies are not used.</p></div>
+    </div>
     <h4>Phase 2 measurement</h4>
     <div class="cards">
       <div><strong>Synthetic permissions</strong><p>Three tenants, twelve groups and twenty users give 20 views per corpus. That is not a real organisation's shape, and says nothing about very many views.</p></div>
@@ -1123,18 +1185,18 @@
       <table style="min-width:680px">
         <thead><tr><th>Path</th><th>Contents</th></tr></thead>
         <tbody>
-          <tr><th scope="row"><code>README.md</code></th><td>Work-in-progress notice, vision, objectives, the progress diagram and tables, Phase 0 status and the Phase 1 and Phase 2 results in brief</td></tr>
+          <tr><th scope="row"><code>README.md</code></th><td>Work-in-progress notice, vision, objectives, the progress diagram and tables, Phase 0 status and the Phase 1, 2 and 3 results in brief</td></tr>
           <tr><th scope="row"><code>reports/</code></th><td>Research reports, methods catalogs, the combined summary, the research brief and this status page</td></tr>
           <tr><th scope="row"><code>papers/</code></th><td>Source catalog (<code>manifest.csv</code>, <code>README.md</code>); PDFs are local only</td></tr>
-          <tr><th scope="row"><code>docs/superpowers/</code></th><td>Design specs and implementation plans for Phase 0, the metric definitions version 2, Phase 1 and Phase 2</td></tr>
+          <tr><th scope="row"><code>docs/superpowers/</code></th><td>Design specs and implementation plans for Phase 0, the metric definitions version 2, Phase 1, Phase 2 and Phase 3</td></tr>
           <tr><th scope="row"><code>docs/eval/providers.md</code></th><td>How to set up each model provider</td></tr>
           <tr><th scope="row"><code>src/adr_eval/</code></th><td>The evaluation harness, with its system registry and retrieval-only track</td></tr>
-          <tr><th scope="row"><code>src/adr_store/</code></th><td>The evidence store: record format, structure parsers, store, structure-led chunks, retrieval and the <code>adr</code> tools (Phase 1); applicability and dedup overlays, the ACL snapshot and its enforcement, tool records and the tool index, snapshot handles and the MCP server (Phase 2)</td></tr>
-          <tr><th scope="row"><code>tests/</code></th><td>1,730 tests for the harness and the store</td></tr>
-          <tr><th scope="row"><code>config/</code></th><td>Run settings, model profiles and the price table; the synthetic ACL directory and policy in <code>config/acl/</code>; no keys</td></tr>
+          <tr><th scope="row"><code>src/adr_store/</code></th><td>The evidence store: record format, structure parsers, store, structure-led chunks, retrieval and the <code>adr</code> tools (Phase 1); applicability and dedup overlays, the ACL snapshot and its enforcement, tool records and the tool index, snapshot handles and the MCP server (Phase 2); typed tables, entity resolution, the query engine, guarded SQL, the merge gate and the extractor in <code>tables/</code> (Phase 3)</td></tr>
+          <tr><th scope="row"><code>tests/</code></th><td>2,533 tests for the harness and the store</td></tr>
+          <tr><th scope="row"><code>config/</code></th><td>Run settings, model profiles and the price table; the synthetic ACL directory and policy in <code>config/acl/</code>; table contracts and extraction specs in <code>config/tables/</code>; no keys</td></tr>
           <tr><th scope="row"><code>corpora/</code></th><td>Pinned manifests for gov, research, bench and the ToolRet tool catalog; files download into <code>data/</code>, which is not committed</td></tr>
-          <tr><th scope="row"><code>golden/</code></th><td>Golden sets v0.1: gov items and its review exclusions; hash-pinned READMEs for research and bench</td></tr>
-          <tr><th scope="row"><code>results/</code></th><td>The six recorded baseline runs and their summary; the Phase 1 and Phase 2 results and run summaries in <code>results/phase1/</code> and <code>results/phase2/</code></td></tr>
+          <tr><th scope="row"><code>golden/</code></th><td>Golden sets v0.1: gov items and its review exclusions; hash-pinned READMEs for research and bench; gov-tables v0.1, Phase 3's 120 drawbridge questions</td></tr>
+          <tr><th scope="row"><code>results/</code></th><td>The six recorded baseline runs and their summary; the Phase 1, 2 and 3 results and run summaries in <code>results/phase1/</code>, <code>results/phase2/</code> and <code>results/phase3/</code></td></tr>
         </tbody>
       </table>
     </div>
@@ -1166,10 +1228,18 @@ adr tools ingest --toolret
 adr search-tools "&lt;task&gt;" --store &lt;store&gt; --as user:acme-0
 adr mcp --store &lt;store&gt; --as user:acme-0</code></pre>
     <p class="note"><code>adr</code> is not a security boundary; the enforcement point is the Tools API, served over MCP with one caller per server process. <code>adr mcp</code> needs the <code>[mcp]</code> extra. The Phase 2 measurements run with <code>adr-eval probes</code>, <code>p2-compare</code>, <code>tools-retrieval</code>, <code>tools-probes</code> and <code>mcp-probes</code>, with no model calls.</p>
+    <p>Phase 3 adds typed tables, built as a candidate and promoted through the merge gate, and the two table tools:</p>
+    <pre class="cmd" tabindex="0" aria-label="Phase 3 commands"><code>adr tables build --store &lt;store&gt;
+adr tables gate --store &lt;store&gt; --candidate &lt;tables id&gt; --gold golden/gov/v0.1 --max-flips 0
+adr tables show --store &lt;store&gt;
+adr query --store &lt;store&gt; --as user:acme-0 --table fr_documents --filters '{"type": "Rule"}' --op count
+adr sql --store &lt;store&gt; --as user:acme-0 "SELECT type, count(*) FROM fr_documents GROUP BY type"
+adr tables extract --store &lt;store&gt; --generator &lt;profile&gt; --max-calls N</code></pre>
+    <p class="note"><code>adr tables build</code> and <code>gate</code> make no model call; <code>adr tables extract</code> does, and counts every transport attempt against <code>--max-calls</code>. The MCP server gains <code>describe_tables</code>, <code>query_table</code> and <code>sql</code>. The Phase 3 measurements run with <code>adr-eval run --system p3-typed</code>, <code>p3-q1</code>, <code>p3-q2</code> and the <code>tables-*</code> kinds of <code>adr-eval probes</code>.</p>
   </section>
 
   <section id="sr-commits" aria-labelledby="h-sr3">
-    <h3 id="h-sr3"><svg class="ic hic" aria-hidden="true"><use href="#i-audit"/></svg><span class="no">4.3</span>Commit trail for Phases 0, 1 and 2</h3>
+    <h3 id="h-sr3"><svg class="ic hic" aria-hidden="true"><use href="#i-audit"/></svg><span class="no">4.3</span>Commit trail for Phases 0 to 3</h3>
     <div class="tbl-wrap">
       <table style="min-width:760px">
         <thead><tr><th>Commit</th><th>What it added</th><th>Purpose</th></tr></thead>
@@ -1217,6 +1287,15 @@ adr mcp --store &lt;store&gt; --as user:acme-0</code></pre>
           <tr><td class="n">bd25287 · b9ea5fa · 2f5bd0d</td><th scope="row">Tool-retrieval harness, tool probes, Phase 2C results</th><td>C1–C3 pass; B1, B3, B4 for the tool tools</td></tr>
           <tr><td class="n">694641a · 01bf4ee · ff63c19</td><th scope="row">Snapshot handles and cursors; <code>adr mcp</code> with its tests and the revocation MCP leg</th><td>Replayable results; the five tools over MCP, one caller per server</td></tr>
           <tr><td class="n">326bc59 · 818575c · a080bf6</td><th scope="row">Per-file ToolRet licence; <code>adr-eval mcp-probes</code>; 2C on the re-ingested store</th><td>No licence asserted where none is stated; B1 through MCP</td></tr>
+          <tr><td class="n">a5d8377 · 3136a89</td><th scope="row">CI fix for HTML extraction under warnings-as-errors; Phase 2 merged (#7)</th><td>CI green on a fresh install; Phase 2 on <code>main</code></td></tr>
+          <tr><td class="n">4687ff6 · 457da3b · 6451c52 · f74ef17</td><th scope="row">Phase 3 design and plan</th><td>Agree the tables, the extraction budget and every threshold before building</td></tr>
+          <tr><td class="n">9eba446 · 0483474 · 72e8e98 · 0fd8473</td><th scope="row">Table contracts and overlay; FR and papers loaders; entity resolution and waterway links</th><td>Typed, traced, write-once tables from the corpora's metadata</td></tr>
+          <tr><td class="n">48ce847 · dfdfebc · 07fa8b7 · 30673ef · 4d8fa6c</td><th scope="row">Query engine and merge gate; guarded SQL and the semantic layer, with four review rounds</th><td>Exact record semantics; one read-only, bounded statement</td></tr>
+          <tr><td class="n">f5c6b7b · 8fbd216 · abbaec3</td><th scope="row">The three table tools under the ACL, MCP and CLI; table probes</th><td>Rows inherit document access; S1–S3 and the MCP leg pass</td></tr>
+          <tr><td class="n">3ba0241 · 0bbc0ab</td><th scope="row"><code>p3-typed</code> and Q1 from cached queries; 3A write-up</th><td>Q1 passes with no model call</td></tr>
+          <tr><td class="n">8ba36cf · 24882db · e6e6b10 · 2273dbd</td><th scope="row">Grounded extractor and second pass; gov-tables generator and the tables mode (stub-tested)</th><td>Everything 3B needs, tested before any model call</td></tr>
+          <tr><td class="n">dfa8434 · 3f0e497 · 679e985</td><th scope="row">P22; the 3B run, gov-tables v0.1, Q2, E1, E2, T1–T6</th><td>1,411 of 1,500 approved calls; Q2 and E1 fail, the rest pass</td></tr>
+          <tr><td class="n">d33c5fe · 51b0849</td><th scope="row">Probe references with the extraction tables; probes on the 3B build; then X1 and the Phase 3 write-up (the branch's latest commit)</th><td>No leak on the 3B build; determinism; the Phase 3 verdict</td></tr>
         </tbody>
       </table>
     </div>
@@ -1226,8 +1305,9 @@ adr mcp --store &lt;store&gt; --as user:acme-0</code></pre>
     <h2 id="h-concl"><svg class="ic hic" aria-hidden="true"><use href="#i-check"/></svg>Conclusion</h2>
     <p>Phase 0 is merged: the harness, three verified golden sets covering 1,300 questions, and a baseline recorded under version 2 of the metric definitions. Phase 1, the evidence store, is built, measured and merged. As a store it does what it was designed to do: every one of 2,425 documents round-trips losslessly, every leaf carries a span, a 1% edit re-embeds at most 0.55% of chunks, 100 PDFs are searchable in 8.4 minutes, and rankings repeat exactly.</p>
     <p>As a retriever it is level with the baseline, not better. The one gain, gov Recall@10 from 0.771 to 0.802, is fragile; answer accuracy shows no significant difference on any corpus; and the reranker made things worse and is switched off. So <code>baseline-linear</code> stays the reference for answers, and the store, its spans and its tools became the base for later phases. Phase 1 is merged (#6).</p>
-    <p>Phase 2 is built and measured on the working branch, and all 16 of its exit criteria pass with thresholds fixed in advance. Default search no longer shows superseded versions, and <code>as_of</code> serves dated questions much better (gov nDCG@10 +0.254 on dated questions). Each caller sees only their view: no leak in 1,403 probes through the Python API or in 300 of them re-run through the MCP server, and filtering equals an allowed-only index exactly. Tools are stored and searched as data with 99.8% less context, and every result carries a replayable snapshot handle. The limits are real: synthetic tenants, dates that come from snapshots, a stdio-only server, a thin tool-search margin, and 21 gov questions that need dates in golden set v0.2. Next come its review and merge, then Phases 3 and 4.</p>
-    <p class="note">Status as of 16 November 2026: <code>main</code> at commit <code>842a3fc</code> (Phase 1, #6); Phase 2 on branch <code>claude/magical-lamport-n94rs3</code>. Baseline and Phase 1 figures are from the test split with one repeat under metric definitions version 2; Phase 2 figures are retrieval and probe measurements with no model calls (<code>results/phase2/README.md</code>).</p>
+    <p>Phase 2 is built, measured and merged (#7), and all 16 of its exit criteria pass with thresholds fixed in advance. Default search no longer shows superseded versions, and <code>as_of</code> serves dated questions much better (gov nDCG@10 +0.254 on dated questions). Each caller sees only their view: no leak in 1,403 probes through the Python API or in 300 of them re-run through the MCP server, and filtering equals an allowed-only index exactly. Tools are stored and searched as data with 99.8% less context, and every result carries a replayable snapshot handle. The limits are real: synthetic tenants, dates that come from snapshots, a stdio-only server, a thin tool-search margin, and 21 gov questions that need dates in golden set v0.2. </p>
+    <p>Phase 3, the typed database, is complete on its branch and measured, not yet merged: 13 of its 15 exit criteria pass. Its tables rebuild byte for byte from the cache with zero calls, every value re-slices to its quote and names its spec, no table probe leaked, and every run repeats exactly. The metadata tables answer the frozen counting questions exactly, by construction. On new drawbridge questions the typed answers reach 0.680 against the baseline's 0.237, short of the 0.80 bar, so Q2 fails; most misses are disagreements between the two model extraction passes, and which is right is not known. Extraction grounding fails its bar on two of nine columns (E1).</p>
+    <p class="note">Status as of 21 November 2026: <code>main</code> at commit <code>3136a89</code> (Phase 2, #7); Phase 3 on <code>claude/magical-lamport-n94rs3</code>. Baseline and Phase 1 figures are from the test split with one repeat under metric definitions version 2; Phase 2 figures are retrieval and probe measurements with no model calls (<code>results/phase2/README.md</code>); Phase 3 figures are in <code>results/phase3/README.md</code>.</p>
   </section>
 </main>
 </div>

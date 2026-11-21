@@ -52,7 +52,7 @@ def writable_state(tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_writable_state(writable_state, monkeypatch):
+def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     """Keep tests from writing the repo's .cache/: the shipped config's index, LLM cache, store
     and embedding cache dirs and DenseIndex's default embedding cache point at the session
     directory instead.
@@ -66,6 +66,8 @@ def _isolate_writable_state(writable_state, monkeypatch):
     directory (`data/tools`) and manifest (`corpora/tools/manifest.json`) that
     `adr-eval tools-fetch` writes, go there too, and so does the default output root of
     `adr-eval tools-retrieval`.
+    The gov-tables golden directory (`golden.tables.GOLDEN_DIR`, which `adr-eval golden tables
+    --gen` writes and gov-tables runs read) is a fresh empty directory per test.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -106,6 +108,10 @@ def _isolate_writable_state(writable_state, monkeypatch):
     from adr_eval import tools_eval
 
     monkeypatch.setattr(tools_eval, "OUT_ROOT", writable_state / "runs")
+    from adr_eval.golden import tables as golden_tables
+
+    monkeypatch.setattr(golden_tables, "GOLDEN_DIR",
+                        tmp_path_factory.mktemp("golden-gov-tables") / "v0.1")
 
 
 @pytest.fixture

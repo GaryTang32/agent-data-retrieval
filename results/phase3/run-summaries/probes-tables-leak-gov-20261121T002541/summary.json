@@ -1,0 +1,900 @@
+{
+  "config": {
+    "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "acl_sequence": 23,
+    "acl_snapshot": "c94f2c47f2396f1f9408f5e1e2d7e4b15fabd6196e6f3b9036468ab7d09184b7",
+    "corpus": "gov",
+    "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
+    "generator": "claude_code_sonnet",
+    "kind": "tables-leak",
+    "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
+    "seed": 20261120,
+    "sizes": {
+      "by-aggregate": 60,
+      "by-error": 20,
+      "by-filter": 80,
+      "by-group": 40,
+      "by-key": 100
+    },
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "store": ".cache/store-p2/gov",
+    "tables": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230",
+    "views": [
+      {
+        "caller": "user:acme-0",
+        "documents": 88,
+        "how": "built, tables built with extraction from the cache",
+        "path": "0e09ae6e7c74",
+        "tables": "d45d4d5a05ee07afa32571f81f079d2c3191b53e649cdb465bc89b0983c6e8c8",
+        "users": [
+          "user:acme-0"
+        ],
+        "view": "0e09ae6e7c7441275c07f7b0ce582bf3a0388c6dadb96ef7490fc0cc35a51441"
+      },
+      {
+        "caller": "user:acme-1",
+        "documents": 88,
+        "how": "built, tables built with extraction from the cache",
+        "path": "892f63f0a090",
+        "tables": "892e35ab1dded396acc4fa811bf87e5919cd9acfff645ebe506cd3ad864b9e06",
+        "users": [
+          "user:acme-1"
+        ],
+        "view": "892f63f0a090a7d1615cbfe0264d4cc3498e3610cb27e317acc99d9ad77a5c83"
+      },
+      {
+        "caller": "user:acme-2",
+        "documents": 88,
+        "how": "built, tables built with extraction from the cache",
+        "path": "b30abb0676be",
+        "tables": "867a5e183a98f9be0a1001693a3887348984c16870e361b132599b769ba7a7f3",
+        "users": [
+          "user:acme-2"
+        ],
+        "view": "b30abb0676bed0a4bfa9e46af9d7bcf5286c31f77a30f5c6dbbf86d6fc85c4ee"
+      },
+      {
+        "caller": "user:acme-3",
+        "documents": 85,
+        "how": "built, tables built with extraction from the cache",
+        "path": "c127e9c8da8b",
+        "tables": "ae236ab6d1d016f3d8689259718cf1ba219ac024552b355ce8c9b487b4654444",
+        "users": [
+          "user:acme-3"
+        ],
+        "view": "c127e9c8da8bdf9b7ee56104ae9a15b6cd94896d54fe42d2fdb0b32489634158"
+      },
+      {
+        "caller": "user:acme-4",
+        "documents": 93,
+        "how": "built, tables built with extraction from the cache",
+        "path": "bb1445f0f103",
+        "tables": "0031f9e4c0a87ce04f7ad67184d8d7572649c5af4f9bb6fa9ccf0d0348b3d539",
+        "users": [
+          "user:acme-4"
+        ],
+        "view": "bb1445f0f10399872efb72c7bf1c315c109ef0aa19a70b9a3b84b218f33133c9"
+      },
+      {
+        "caller": "user:acme-5",
+        "documents": 93,
+        "how": "built, tables built with extraction from the cache",
+        "path": "f7914abd432b",
+        "tables": "de4a49bbb6294a56b03d86325046e7bc28083099de31d6ba2030d4f37a2c9856",
+        "users": [
+          "user:acme-5"
+        ],
+        "view": "f7914abd432b25c2660392497e3e38bc5186b16446510bf36fcb689cda1c365e"
+      },
+      {
+        "caller": "user:globex-0",
+        "documents": 79,
+        "how": "built, tables built with extraction from the cache",
+        "path": "596f526de1a8",
+        "tables": "62be321c977bc61cea2aa213cb4989a1ab8e59d6da688916e3eaaebe45b3d200",
+        "users": [
+          "user:globex-0"
+        ],
+        "view": "596f526de1a8c598f5741138f60e16dd8827c9f940845a1067a9ccbba51a14c7"
+      },
+      {
+        "caller": "user:globex-1",
+        "documents": 80,
+        "how": "built, tables built with extraction from the cache",
+        "path": "1b66796bc4f0",
+        "tables": "db9c830e24e567eb159291e105a38755f6265575792eda6e85b3fb8836c33a29",
+        "users": [
+          "user:globex-1"
+        ],
+        "view": "1b66796bc4f09eb6bb730439e0d19854747787e74fa8c9f83ccc8b95312a3b4a"
+      },
+      {
+        "caller": "user:globex-2",
+        "documents": 79,
+        "how": "built, tables built with extraction from the cache",
+        "path": "9a736e45e75c",
+        "tables": "56af1f0ded4d085f92aaf10e890e9c5d1a2a466cc7cc016fe3665de95156a585",
+        "users": [
+          "user:globex-2"
+        ],
+        "view": "9a736e45e75c7d485bbac1302c5a77b60f88a2176eb7ba5cdbedb1c9fd0b8477"
+      },
+      {
+        "caller": "user:globex-3",
+        "documents": 80,
+        "how": "built, tables built with extraction from the cache",
+        "path": "2e0e37977b8e",
+        "tables": "8e9e153ad6b5c04ee1ac91c9ec3e8a069a350263b190d88a1c198130ba1966aa",
+        "users": [
+          "user:globex-3"
+        ],
+        "view": "2e0e37977b8e0bf3a41c3957215e1af61dc13fd5579da656f47859f883888a84"
+      },
+      {
+        "caller": "user:globex-4",
+        "documents": 81,
+        "how": "built, tables built with extraction from the cache",
+        "path": "49b770ae9ad9",
+        "tables": "2ba0e47ccbbbbd6f82a1af451a7289985ad75f1dd4a73216f81bba47fcd6a548",
+        "users": [
+          "user:globex-4"
+        ],
+        "view": "49b770ae9ad9f5b33504680b432a4bdc4340485f48ebe5d661482ded4c6df901"
+      },
+      {
+        "caller": "user:globex-5",
+        "documents": 81,
+        "how": "built, tables built with extraction from the cache",
+        "path": "23837e39e574",
+        "tables": "1be691e16001527f9bb0e09b6881c21e69f2f81313aec2ea20bb3467092cf4cf",
+        "users": [
+          "user:globex-5"
+        ],
+        "view": "23837e39e57413d86989633273b32f2fe74a4b7b934f8dcbc6db1949ca99a15f"
+      },
+      {
+        "caller": "user:initech-0",
+        "documents": 86,
+        "how": "built, tables built with extraction from the cache",
+        "path": "ba24cbed2c4f",
+        "tables": "7ae6432b74a4fade128f1f8ae43b2c7795036708b1b3fd8c37ff173a47aac1b9",
+        "users": [
+          "user:initech-0"
+        ],
+        "view": "ba24cbed2c4f721e07980e6100bc9c160ddbdc5e64154886059917916329d0b4"
+      },
+      {
+        "caller": "user:initech-1",
+        "documents": 83,
+        "how": "built, tables built with extraction from the cache",
+        "path": "34acf4c9af1d",
+        "tables": "8443f741e930b224ad4a5f4a42a5c31100822f9a47553d448a090912dfe8bbea",
+        "users": [
+          "user:initech-1"
+        ],
+        "view": "34acf4c9af1d5b31ba6ef53b00dea43b56eb8b11cd898be7ded6c4cfeeb9640e"
+      },
+      {
+        "caller": "user:initech-2",
+        "documents": 84,
+        "how": "built, tables built with extraction from the cache",
+        "path": "973c55c7a6c9",
+        "tables": "9bcb331439cce683d5772c4b6089488bdce9f22f327ae8493aaab0e712aac516",
+        "users": [
+          "user:initech-2"
+        ],
+        "view": "973c55c7a6c91ce865c8098bc71d12f5024e7d4f865d5a2f3aa9b026e71ec3d3"
+      },
+      {
+        "caller": "user:initech-3",
+        "documents": 87,
+        "how": "built, tables built with extraction from the cache",
+        "path": "7f0549a3bf0c",
+        "tables": "09ab80167ef2b0bfade01f12e11ab6ddb94b9e5073c91a6672e679bf96c1ec91",
+        "users": [
+          "user:initech-3"
+        ],
+        "view": "7f0549a3bf0cd9fdc211dff06959aede4175254fe02dc5b80a77731c564f34f1"
+      },
+      {
+        "caller": "user:initech-4",
+        "documents": 87,
+        "how": "built, tables built with extraction from the cache",
+        "path": "0d3e6fbe0674",
+        "tables": "92e91aa0dd8d6dc8a979550afda9c44f41b2b54275a8791be23c4f1190f70f33",
+        "users": [
+          "user:initech-4"
+        ],
+        "view": "0d3e6fbe0674482c17b50dc1bc2ab60ecc075c41810f35cfaf27a3f7355e5317"
+      },
+      {
+        "caller": "user:initech-5",
+        "documents": 85,
+        "how": "built, tables built with extraction from the cache",
+        "path": "7725c0807189",
+        "tables": "d00a7a5fc12cc6603ef28bbb869aff0e151105f8c9ca56a6977337f7c51914f5",
+        "users": [
+          "user:initech-5"
+        ],
+        "view": "7725c0807189168352c939405fd1388457ca01f3b6bd787997d3717b0824f1eb"
+      },
+      {
+        "caller": "user:outsider",
+        "documents": 40,
+        "how": "built, tables built with extraction from the cache",
+        "path": "ae740a69a400",
+        "tables": "bf2ba890165e5ce25dc732816393c048b6ce3a00b3fbe3533ea2b7bac938b623",
+        "users": [
+          "user:outsider"
+        ],
+        "view": "ae740a69a400e0cbadc672187299069b02d805abbe90dac9ccb537b793172889"
+      }
+    ],
+    "views_removed": []
+  },
+  "logs": {
+    "by_store": {
+      "reference/0d3e6fbe0674": {
+        "allowed": 19,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 19,
+        "decisions": {
+          "allowed": 19
+        },
+        "lines": 19,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 8,
+        "sql_text_lines": 0,
+        "table_lines": 19,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 11,
+          "sql": 8
+        }
+      },
+      "reference/0e09ae6e7c74": {
+        "allowed": 15,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 15,
+        "decisions": {
+          "allowed": 15
+        },
+        "lines": 15,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 8,
+        "sql_text_lines": 0,
+        "table_lines": 15,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 7,
+          "sql": 8
+        }
+      },
+      "reference/1b66796bc4f0": {
+        "allowed": 14,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 14,
+        "decisions": {
+          "allowed": 14
+        },
+        "lines": 14,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 4,
+        "sql_text_lines": 0,
+        "table_lines": 14,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 10,
+          "sql": 4
+        }
+      },
+      "reference/23837e39e574": {
+        "allowed": 18,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 18,
+        "decisions": {
+          "allowed": 18
+        },
+        "lines": 18,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 6,
+        "sql_text_lines": 0,
+        "table_lines": 18,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 12,
+          "sql": 6
+        }
+      },
+      "reference/2e0e37977b8e": {
+        "allowed": 19,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 19,
+        "decisions": {
+          "allowed": 19
+        },
+        "lines": 19,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 4,
+        "sql_text_lines": 0,
+        "table_lines": 19,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 15,
+          "sql": 4
+        }
+      },
+      "reference/34acf4c9af1d": {
+        "allowed": 14,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 14,
+        "decisions": {
+          "allowed": 14
+        },
+        "lines": 14,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 4,
+        "sql_text_lines": 0,
+        "table_lines": 14,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 10,
+          "sql": 4
+        }
+      },
+      "reference/49b770ae9ad9": {
+        "allowed": 15,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 15,
+        "decisions": {
+          "allowed": 15
+        },
+        "lines": 15,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 6,
+        "sql_text_lines": 0,
+        "table_lines": 15,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 9,
+          "sql": 6
+        }
+      },
+      "reference/596f526de1a8": {
+        "allowed": 18,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 18,
+        "decisions": {
+          "allowed": 18
+        },
+        "lines": 18,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 7,
+        "sql_text_lines": 0,
+        "table_lines": 18,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 11,
+          "sql": 7
+        }
+      },
+      "reference/7725c0807189": {
+        "allowed": 20,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 20,
+        "decisions": {
+          "allowed": 20
+        },
+        "lines": 20,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 3,
+        "sql_text_lines": 0,
+        "table_lines": 20,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 17,
+          "sql": 3
+        }
+      },
+      "reference/7f0549a3bf0c": {
+        "allowed": 26,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 26,
+        "decisions": {
+          "allowed": 26
+        },
+        "lines": 26,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 10,
+        "sql_text_lines": 0,
+        "table_lines": 26,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 16,
+          "sql": 10
+        }
+      },
+      "reference/892f63f0a090": {
+        "allowed": 14,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 14,
+        "decisions": {
+          "allowed": 14
+        },
+        "lines": 14,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 6,
+        "sql_text_lines": 0,
+        "table_lines": 14,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 8,
+          "sql": 6
+        }
+      },
+      "reference/973c55c7a6c9": {
+        "allowed": 27,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 27,
+        "decisions": {
+          "allowed": 27
+        },
+        "lines": 27,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 7,
+        "sql_text_lines": 0,
+        "table_lines": 27,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 20,
+          "sql": 7
+        }
+      },
+      "reference/9a736e45e75c": {
+        "allowed": 22,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 22,
+        "decisions": {
+          "allowed": 22
+        },
+        "lines": 22,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 5,
+        "sql_text_lines": 0,
+        "table_lines": 22,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 17,
+          "sql": 5
+        }
+      },
+      "reference/ae740a69a400": {
+        "allowed": 23,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 23,
+        "decisions": {
+          "allowed": 23
+        },
+        "lines": 23,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 8,
+        "sql_text_lines": 0,
+        "table_lines": 23,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 15,
+          "sql": 8
+        }
+      },
+      "reference/b30abb0676be": {
+        "allowed": 13,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 13,
+        "decisions": {
+          "allowed": 13
+        },
+        "lines": 13,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 3,
+        "sql_text_lines": 0,
+        "table_lines": 13,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 10,
+          "sql": 3
+        }
+      },
+      "reference/ba24cbed2c4f": {
+        "allowed": 19,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 19,
+        "decisions": {
+          "allowed": 19
+        },
+        "lines": 19,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 4,
+        "sql_text_lines": 0,
+        "table_lines": 19,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 15,
+          "sql": 4
+        }
+      },
+      "reference/bb1445f0f103": {
+        "allowed": 12,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 12,
+        "decisions": {
+          "allowed": 12
+        },
+        "lines": 12,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 0,
+        "sql_text_lines": 0,
+        "table_lines": 12,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 12
+        }
+      },
+      "reference/c127e9c8da8b": {
+        "allowed": 14,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 14,
+        "decisions": {
+          "allowed": 14
+        },
+        "lines": 14,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 3,
+        "sql_text_lines": 0,
+        "table_lines": 14,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 11,
+          "sql": 3
+        }
+      },
+      "reference/f7914abd432b": {
+        "allowed": 18,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 18,
+        "decisions": {
+          "allowed": 18
+        },
+        "lines": 18,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 4,
+        "sql_text_lines": 0,
+        "table_lines": 18,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 14,
+          "sql": 4
+        }
+      },
+      "store": {
+        "allowed": 340,
+        "allowed_unresolved": 0,
+        "complete": true,
+        "complete_lines": 340,
+        "decisions": {
+          "allowed": 340
+        },
+        "lines": 340,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "sql_lines": 100,
+        "sql_text_lines": 0,
+        "table_lines": 340,
+        "tables_missing": 0,
+        "tools": {
+          "query_table": 240,
+          "sql": 100
+        }
+      }
+    },
+    "statements_checked": 97,
+    "total": {
+      "allowed": 680,
+      "allowed_unresolved": 0,
+      "complete": true,
+      "complete_lines": 680,
+      "decisions": {
+        "allowed": 680
+      },
+      "lines": 680,
+      "missing": {
+        "acl_decision": 0,
+        "acl_snapshot": 0,
+        "caller": 0,
+        "principals": 0
+      },
+      "sql_lines": 200,
+      "sql_text_lines": 0,
+      "table_lines": 680,
+      "tables_missing": 0,
+      "tools": {
+        "query_table": 480,
+        "sql": 200
+      }
+    }
+  },
+  "summary": {
+    "families": {
+      "by-aggregate": {
+        "callers": 18,
+        "checked_kinds": {
+          "count_differs": 60,
+          "error_differs": 60,
+          "hidden_value": 60,
+          "id_outside_view": 60,
+          "rows_differ": 60
+        },
+        "ghost": false,
+        "invalid": 0,
+        "leak_kinds": {
+          "count_differs": 0,
+          "error_differs": 0,
+          "hidden_value": 0,
+          "id_outside_view": 0,
+          "rows_differ": 0
+        },
+        "leaks": 0,
+        "n": 60,
+        "outcomes": {
+          "ok": 60
+        }
+      },
+      "by-error": {
+        "callers": 13,
+        "checked_kinds": {
+          "count_differs": 20,
+          "error_differs": 20,
+          "hidden_value": 20,
+          "id_outside_view": 20,
+          "rows_differ": 20
+        },
+        "ghost": false,
+        "invalid": 0,
+        "leak_kinds": {
+          "count_differs": 0,
+          "error_differs": 0,
+          "hidden_value": 0,
+          "id_outside_view": 0,
+          "rows_differ": 0
+        },
+        "leaks": 0,
+        "n": 20,
+        "outcomes": {
+          "refused,refused,ok": 20
+        }
+      },
+      "by-filter": {
+        "callers": 19,
+        "checked_kinds": {
+          "count_differs": 80,
+          "error_differs": 80,
+          "hidden_value": 80,
+          "id_outside_view": 80,
+          "rows_differ": 80
+        },
+        "ghost": false,
+        "invalid": 0,
+        "leak_kinds": {
+          "count_differs": 0,
+          "error_differs": 0,
+          "hidden_value": 0,
+          "id_outside_view": 0,
+          "rows_differ": 0
+        },
+        "leaks": 0,
+        "n": 80,
+        "outcomes": {
+          "ok": 80
+        }
+      },
+      "by-group": {
+        "callers": 17,
+        "checked_kinds": {
+          "count_differs": 40,
+          "error_differs": 40,
+          "hidden_value": 40,
+          "id_outside_view": 40,
+          "rows_differ": 40
+        },
+        "ghost": false,
+        "invalid": 0,
+        "leak_kinds": {
+          "count_differs": 0,
+          "error_differs": 0,
+          "hidden_value": 0,
+          "id_outside_view": 0,
+          "rows_differ": 0
+        },
+        "leaks": 0,
+        "n": 40,
+        "outcomes": {
+          "ok": 40
+        }
+      },
+      "by-key": {
+        "callers": 19,
+        "checked_kinds": {
+          "count_differs": 100,
+          "error_differs": 100,
+          "hidden_value": 100,
+          "id_outside_view": 100,
+          "rows_differ": 100
+        },
+        "ghost": false,
+        "invalid": 0,
+        "leak_kinds": {
+          "count_differs": 0,
+          "error_differs": 0,
+          "hidden_value": 0,
+          "id_outside_view": 0,
+          "rows_differ": 0
+        },
+        "leaks": 0,
+        "n": 100,
+        "outcomes": {
+          "ok": 100
+        }
+      }
+    },
+    "targets_by_table": {
+      "agencies": 6,
+      "cfr_parts": 22,
+      "dockets": 27,
+      "drawbridge_bridges": 31,
+      "drawbridge_sections": 34,
+      "fr_agencies": 12,
+      "fr_cfr_refs": 39,
+      "fr_dockets": 41,
+      "fr_documents": 39,
+      "waterways": 49
+    },
+    "total": {
+      "checked_kinds": {
+        "count_differs": 300,
+        "error_differs": 300,
+        "hidden_value": 300,
+        "id_outside_view": 300,
+        "rows_differ": 300
+      },
+      "compared": 300,
+      "ghost": 0,
+      "invalid": 0,
+      "leak_kinds": {
+        "count_differs": 0,
+        "error_differs": 0,
+        "hidden_value": 0,
+        "id_outside_view": 0,
+        "rows_differ": 0
+      },
+      "leaks": 0,
+      "n": 300
+    }
+  }
+}

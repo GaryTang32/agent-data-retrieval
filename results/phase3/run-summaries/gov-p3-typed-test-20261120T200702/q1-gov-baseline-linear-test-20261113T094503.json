@@ -1,0 +1,40 @@
+{
+  "also_in": [],
+  "b": 25,
+  "baseline": {
+    "accuracy": 0.07407407407407407,
+    "correct": 2,
+    "n_run": 27,
+    "system": "baseline-linear"
+  },
+  "baseline_misses": [
+    {
+      "cause": "abstained",
+      "n": 4,
+      "outcome": "abstained",
+      "query_exec_match": true
+    },
+    {
+      "cause": "the answer from retrieved chunks",
+      "n": 21,
+      "outcome": "wrong",
+      "query_exec_match": true
+    }
+  ],
+  "baseline_run": "gov-baseline-linear-test-20261113T094503",
+  "c": 0,
+  "corpus": "gov",
+  "mcnemar_p": 5.960464477539063e-08,
+  "misses": [],
+  "n": 27,
+  "only_baseline": 0,
+  "only_typed": 0,
+  "split": "test",
+  "typed": {
+    "accuracy": 1.0,
+    "correct": 27,
+    "n_run": 27,
+    "system": "p3-typed"
+  },
+  "typed_run": "gov-p3-typed-test-20261120T200702"
+}

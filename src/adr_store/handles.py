@@ -6,9 +6,10 @@ so a later call can run on exactly the same ones.
      "applicability": <applicability overlay id> | null,
      "dedup": <dedup overlay id> | null,
      "tools": <tool snapshot id> | null,
-     "tool_index": "<tool index fingerprint>:<w>" | null}
+     "tool_index": "<tool index fingerprint>:<w>" | null,
+     "tables": <tables id> | null}
 
-Every result of the five tool calls (`adr_store.tools`) carries one, and every tool call takes
+Every result of the tool calls (`adr_store.tools`) carries one, and every tool call takes
 one (`handle`). A handle names the parts of the store, not the call: the handle of a `read`
 can be given to a `search` or a `search_tools`.
 
@@ -21,7 +22,9 @@ Components (planner's calls, Task 12):
 - `tool_index` is the active tool index's fingerprint and its fusion weight, for the same
   reason (`w_name` is in the fingerprint), so tool search replays exactly.
 - `applicability` and `dedup` are the SHA-256 of the overlay files (their ids), `tools` the
-  tool snapshot id.
+  tool snapshot id, `tables` the tables id (the SHA-256 of a build manifest of the typed
+  tables, `adr_store.tables.overlay`; Phase 3 spec §9.3). `tables` is optional (default
+  null), so a handle saved before it existed still validates; the other parts are required.
 - The ACL snapshot is never part of a handle (ruling R15): every call is judged against the
   current ACL, whatever its handle names (`adr_store.tools`).
 - A handle's parameters (the system label and the weights) are what the client asks for, not
@@ -35,15 +38,17 @@ Components (planner's calls, Task 12):
 
 `resolve(store_path, None)` is the store as it is now (`current`): HEAD, the active index when
 `index/active.json` names a saved index of that snapshot, the overlays of that snapshot (of
-that index's chunks for dedup), `tools/HEAD` and the active tool index of that tool snapshot;
-a part that is missing or does not belong to the others is null. `resolve(store_path,
-handle)` checks that every part the handle names still exists, byte for byte (a file that no
-longer hashes to its id, or a deleted index directory, is gone), and refuses with
-"handle no longer available: <component>" otherwise; parts that do not belong together (an
-index of another snapshot, a dedup overlay without an index, a tool index of another tool
-snapshot, a weight that contradicts the index) are a "bad handle". There is no fallback to
-HEAD. Resolving writes nothing and keeps no state: caches here are keyed by file versions
-(`_stat_key`) or by immutable ids, so they never change an answer.
+that index's chunks for dedup), `tools/HEAD` and the active tool index of that tool snapshot,
+and `tables/HEAD` when its manifest is of that content snapshot and loads (every table file as
+the manifest lists it); a part that is missing or does not belong to the others is null.
+`resolve(store_path, handle)` checks that every part the handle names still exists, byte for
+byte (a file that no longer hashes to its id, or a deleted index directory, is gone), and
+refuses with "handle no longer available: <component>" otherwise; parts that do not belong
+together (an index of another snapshot, a dedup overlay without an index, a tool index of
+another tool snapshot, a weight that contradicts the index, tables of another content
+snapshot) are a "bad handle". There is no fallback to HEAD. Resolving writes nothing and
+keeps no state: caches here are keyed by file versions (`_stat_key`) or by immutable ids, so
+they never change an answer.
 """
 
 from __future__ import annotations
@@ -64,13 +69,15 @@ from adr_store import applicability as ap
 from adr_store import dedup as dedup_mod
 from adr_store.retrieval.index import chunk_content_sha256
 from adr_store.store import Store, StoreError
+from adr_store.tables import overlay as tables_overlay
 
 HEX64 = r"^[0-9a-f]{64}$"
 _HEX64 = re.compile(HEX64)
 _INDEX = re.compile(r"^([0-9a-f]{64}):([a-z0-9][a-z0-9-]*):(.+)$")
 _TOOL_INDEX = re.compile(r"^([0-9a-f]{64}):(.+)$")
 UNAVAILABLE = "handle no longer available: {}"
-COMPONENTS = ("snapshot", "index", "applicability", "dedup", "tools", "tool_index")
+COMPONENTS = ("snapshot", "index", "applicability", "dedup", "tools", "tool_index", "tables")
+REQUIRED = COMPONENTS[:6]  # the bad-handle message lists these, so its text is unchanged
 
 
 def _tool_error(message: str) -> Exception:
@@ -125,7 +132,8 @@ def check_tool_index(v: str) -> str:
 
 
 class Handle(BaseModel):
-    """A snapshot handle. Every field is required (null: the store had no such part)."""
+    """A snapshot handle. Every field but `tables` is required (null: the store had no such
+    part); `tables` defaults to null, so a handle saved before Phase 3 still validates."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, title="Handle")
 
@@ -136,6 +144,7 @@ class Handle(BaseModel):
     dedup: str | None = Field(pattern=HEX64, description="dedup overlay id")
     tools: str | None = Field(pattern=HEX64, description="tool snapshot id")
     tool_index: str | None = Field(description="'<tool index fingerprint>:<w>'")
+    tables: str | None = Field(None, pattern=HEX64, description="tables id (typed tables)")
 
     @field_validator("index")
     @classmethod
@@ -166,7 +175,7 @@ def parse(handle: object) -> Handle:
     if isinstance(handle, Handle):
         return handle
     if not isinstance(handle, dict):
-        raise bad(f"expected an object with the fields {', '.join(COMPONENTS)}, got "
+        raise bad(f"expected an object with the fields {', '.join(REQUIRED)}, got "
                   f"{type(handle).__name__}")
     try:
         return Handle.model_validate(handle)
@@ -188,6 +197,7 @@ class Resolved:
     dedup: str | None
     tools: str | None
     tool_index: dict | None  # tool_snapshot, fingerprint, w_name, lexical_only, w
+    tables: str | None = None  # the tables id, its manifest checked
 
 
 # -- file versions and immutable parts ---------------------------------------------------------
@@ -318,6 +328,53 @@ def tool_snapshot_ok(store_path: Path, sid: str) -> bool:
         Path(store_path) / "tools" / "snapshots" / f"{sid}.json") == sid
 
 
+_TABLES: OrderedDict[str, tuple[tuple, tables_overlay.Manifest]] = OrderedDict()
+
+
+def tables_manifest(store_path: Path, tables_id: object) -> tables_overlay.Manifest | None:
+    """The build manifest whose SHA-256 is `tables_id`, checked as `overlay.load_manifest`
+    checks it (every table file there with its hash and row count), or None when it is gone or
+    damaged. A check is reused while the manifest file and every table file it lists keep the
+    version they had when it was made (`_stat_key`)."""
+    if not isinstance(tables_id, str) or _HEX64.fullmatch(tables_id) is None:
+        return None
+    store_path = Path(store_path)
+    path = tables_overlay.manifest_path(store_path, tables_id)
+    if path is None:
+        return None
+    key = str(path)
+    with _LOCK:
+        hit = _TABLES.get(key)
+        if hit is not None:
+            _TABLES.move_to_end(key)
+    if hit is not None:
+        state, m = hit
+        if state == _tables_state(path, m):
+            return m
+    try:
+        m = tables_overlay.load_manifest(store_path, tables_id)
+    except (tables_overlay.TablesError, OSError):
+        return None
+    state = _tables_state(path, m)
+    return m if None in state else _remember(_TABLES, key, (state, m))[1]
+
+
+def _tables_state(path: Path, m: tables_overlay.Manifest) -> tuple:
+    return (_stat_key(path), *(_stat_key(path.parent / t.file) for t in m.tables))
+
+
+def tables_head(store_path: Path, snapshot: str) -> str | None:
+    """The tables id in `tables/HEAD` when its manifest loads and is of content snapshot
+    `snapshot`, else None."""
+    try:
+        tables_id = (Path(store_path) / tables_overlay.TABLES_DIR / "HEAD").read_text(
+            encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    m = tables_manifest(store_path, tables_id)
+    return tables_id if m is not None and m.snapshot == snapshot else None
+
+
 # -- the store now ---------------------------------------------------------------------------
 
 _UNSET = object()
@@ -369,7 +426,7 @@ def tool_head(store_path: Path) -> str | None:
 
 
 def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNSET,
-            dedup=_UNSET, tools=_UNSET, tool_index=_UNSET) -> Handle:
+            dedup=_UNSET, tools=_UNSET, tool_index=_UNSET, tables=_UNSET) -> Handle:
     """The handle of the store as it is now, at content snapshot `snapshot` (HEAD, as the
     caller read it). A component the caller already knows (what its call used: an active
     record, an overlay id, a tool snapshot id) is given and taken as is; the others are
@@ -391,7 +448,9 @@ def current(store_path: Path, snapshot: str, *, index=_UNSET, applicability=_UNS
         tool_index = _active_tool_index(store_path, tools)
     ti = None if tools is None else _valid(check_tool_index, lambda: encode_tool_index(
         tool_index["fingerprint"], tool_index["w"]))
-    parts = {"applicability": applicability, "dedup": dedup, "tools": tools}
+    if tables is _UNSET:
+        tables = tables_head(store_path, snapshot)
+    parts = {"applicability": applicability, "dedup": dedup, "tools": tools, "tables": tables}
     parts = {k: v if isinstance(v, str) and _HEX64.fullmatch(v) else None
              for k, v in parts.items()}
     if parts["tools"] is None:
@@ -489,5 +548,11 @@ def resolve(store_path: Path, handle: Handle | dict | None) -> Resolved:
                       f"weight {json.dumps(w)}")
         tool_index = {"tool_snapshot": handle.tools, "fingerprint": fp,
                       "w_name": meta["w_name"], "lexical_only": not meta["dense"], "w": w}
+    if handle.tables is not None:
+        m = tables_manifest(store_path, handle.tables)
+        if m is None:
+            raise unavailable("tables")
+        if m.snapshot != snap:
+            raise bad(f"tables {handle.tables[:12]} is for snapshot {m.snapshot[:12]}")
     return Resolved(handle, store, index, handle.applicability, handle.dedup, handle.tools,
-                    tool_index)
+                    tool_index, handle.tables)

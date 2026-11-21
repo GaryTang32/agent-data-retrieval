@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allowed"
+        },
+        "computed": {
+          "anyOf": [
+            {
+              "const": "display_name",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Computed"
+        },
+        "description": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*$",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "nullable": {
+          "title": "Nullable",
+          "type": "boolean"
+        },
+        "spec_id": {
+          "pattern": "^[a-z_]+\\.[a-z_]+@\\d+$",
+          "title": "Spec Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "int",
+            "real",
+            "bool",
+            "date",
+            "text[]",
+            "real[]"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "nullable",
+        "description",
+        "spec_id"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "corpus": {
+          "enum": [
+            "gov",
+            "research"
+          ],
+          "title": "Corpus",
+          "type": "string"
+        },
+        "loader": {
+          "enum": [
+            "metadata",
+            "extraction",
+            "entities"
+          ],
+          "title": "Loader",
+          "type": "string"
+        },
+        "selector": {
+          "enum": [
+            "fr",
+            "papers_manifest",
+            "ecfr:33:117",
+            "entities"
+          ],
+          "title": "Selector",
+          "type": "string"
+        }
+      },
+      "required": [
+        "corpus",
+        "selector",
+        "loader"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "columns": {
+      "items": {
+        "$ref": "#/$defs/Column"
+      },
+      "minItems": 1,
+      "title": "Columns",
+      "type": "array"
+    },
+    "description": {
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]*$",
+      "title": "Description",
+      "type": "string"
+    },
+    "entities": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Entities",
+      "type": "object"
+    },
+    "key": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Key",
+      "type": "array"
+    },
+    "kind": {
+      "enum": [
+        "data",
+        "entity"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "list_column": {
+      "title": "List Column",
+      "type": "string"
+    },
+    "order": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Order",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "table": {
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Table",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "table",
+    "version",
+    "kind",
+    "description",
+    "columns",
+    "key",
+    "order",
+    "list_column",
+    "source"
+  ],
+  "title": "Contract",
+  "type": "object"
+}

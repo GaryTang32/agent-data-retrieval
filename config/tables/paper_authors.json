@@ -1,0 +1,74 @@
+{
+  "table": "paper_authors",
+  "version": 1,
+  "kind": "data",
+  "description": "Authors of research sources: one row per paper row and author position.",
+  "columns": [
+    {
+      "name": "id",
+      "type": "text",
+      "nullable": false,
+      "description": "Paper id.",
+      "spec_id": "papers.id@1"
+    },
+    {
+      "name": "row",
+      "type": "int",
+      "nullable": false,
+      "description": "Row number of the paper in the manifest, from 1.",
+      "spec_id": "papers.row@1"
+    },
+    {
+      "name": "position",
+      "type": "int",
+      "nullable": false,
+      "description": "Position of the author in the authors string, from 0.",
+      "spec_id": "papers.author_position@1"
+    },
+    {
+      "name": "raw",
+      "type": "text",
+      "nullable": false,
+      "description": "The author string as written, without et al.",
+      "spec_id": "papers.author_raw@1"
+    },
+    {
+      "name": "name_key",
+      "type": "text",
+      "nullable": false,
+      "description": "The author's normalised name key (the authors entity key).",
+      "spec_id": "papers.author_key@1"
+    },
+    {
+      "name": "et_al",
+      "type": "bool",
+      "nullable": false,
+      "description": "True when the authors string ends with et al.",
+      "spec_id": "papers.author_et_al@1"
+    },
+    {
+      "name": "author_id",
+      "type": "text",
+      "nullable": true,
+      "description": "Entity id of the author (SHA-256 of the name key).",
+      "spec_id": "papers.author_id@1"
+    }
+  ],
+  "key": [
+    "row",
+    "position"
+  ],
+  "order": [
+    "row",
+    "position"
+  ],
+  "list_column": "id",
+  "source": {
+    "corpus": "research",
+    "selector": "papers_manifest",
+    "loader": "metadata"
+  },
+  "entities": {
+    "author_id": "authors"
+  }
+}

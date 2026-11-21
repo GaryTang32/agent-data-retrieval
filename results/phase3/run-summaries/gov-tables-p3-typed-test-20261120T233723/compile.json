@@ -1,0 +1,141 @@
+{
+  "manifest": {
+    "applicability": "4c81d25fe905c0939e9e380d6c507ab8f6919768c34774dc6666062676792c3c",
+    "corpus": "gov",
+    "extraction": {
+      "adapter": "claude_code",
+      "groups": {
+        "main": [
+          "waterway",
+          "seasonal",
+          "owner_or_agency",
+          "vhf_channel",
+          "bridge",
+          "mile",
+          "notice_hours",
+          "opens_on_signal",
+          "closed_periods"
+        ]
+      },
+      "max_tokens": 4000,
+      "model": "claude-sonnet-5-5",
+      "prompt_version": "drawbridge-extract@2",
+      "specs": {
+        "bridge": "bridge.bridge@1",
+        "closed_periods": "bridge.closed_periods@1",
+        "mile": "bridge.mile@1",
+        "notice_hours": "bridge.notice_hours@1",
+        "opens_on_signal": "bridge.opens_on_signal@1",
+        "owner_or_agency": "bridge.owner_or_agency@1",
+        "seasonal": "bridge.seasonal@1",
+        "vhf_channel": "bridge.vhf_channel@1",
+        "waterway": "bridge.waterway@1"
+      }
+    },
+    "format_version": "0.1",
+    "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
+    "tables": [
+      {
+        "contract_sha256": "15cff9c34ecbf81650db4c58a9026f4a8f0315db75e2ce8d79ead1e147df4c0a",
+        "contract_version": 1,
+        "file": "agencies-v1-3e057ea8ffc88ed1.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 278,
+        "sha256": "3e057ea8ffc88ed1af3f2411eefc482ecd95ea34f41825aa7ff749c2bae9ae19",
+        "table": "agencies"
+      },
+      {
+        "contract_sha256": "9acc077e1638ef9906e75abb94daa1f27518f4bdc0bba264cc236f79a430f96b",
+        "contract_version": 1,
+        "file": "cfr_parts-v1-2bfca69792c6bc0d.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 221,
+        "sha256": "2bfca69792c6bc0d2250975f945b6c84c716edfc604f042847d21b222c735e0a",
+        "table": "cfr_parts"
+      },
+      {
+        "contract_sha256": "44a4c6525c7d224489e5d56971d5f18aee8c32f9f8e13e492600fe0dbf825b3c",
+        "contract_version": 1,
+        "file": "dockets-v1-95bef43429e96cc6.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 171,
+        "sha256": "95bef43429e96cc6deb495b8f9c730d05564073cff236e30fc60697ed2ee0e53",
+        "table": "dockets"
+      },
+      {
+        "contract_sha256": "9d818d27d177352770550c4c748b302dd36f9503230727bce71d024807254f73",
+        "contract_version": 1,
+        "file": "drawbridge_bridges-v1-a8a85f49ec9b003e.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 2706,
+        "sha256": "a8a85f49ec9b003e235bedd0fdba1334cfbe4ae883559a0df91132857eec3cd4",
+        "table": "drawbridge_bridges"
+      },
+      {
+        "contract_sha256": "b33810c67890a01d2841ea46d9bdfe17adb36497b272580e6945083554330700",
+        "contract_version": 1,
+        "file": "drawbridge_sections-v1-5d7fbd07d5f36fd3.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 1386,
+        "sha256": "5d7fbd07d5f36fd320c1851b5474214257b8892e01a4eab7c88ad9160bc3da87",
+        "table": "drawbridge_sections"
+      },
+      {
+        "contract_sha256": "fe83edc0ea496aae87b60fb9e71e90239626326d1fd72de8ac437d1eede8c1e0",
+        "contract_version": 1,
+        "file": "fr_agencies-v1-1dfbcebd2414ba60.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 278,
+        "sha256": "1dfbcebd2414ba6069152cf37c961117917618d443e2befa37b786fdf7850e25",
+        "table": "fr_agencies"
+      },
+      {
+        "contract_sha256": "2628a8c939bee9a3c3acd34ec34694356d862d26f9a6dd10158465555ea1e42c",
+        "contract_version": 1,
+        "file": "fr_cfr_refs-v1-9cf55d63cf1bcdeb.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 221,
+        "sha256": "9cf55d63cf1bcdebc646f596669a734c6f4d9604ff4bf8f649558f46022f90ec",
+        "table": "fr_cfr_refs"
+      },
+      {
+        "contract_sha256": "1aaccae81c8a73c5f744ba3658040b82aa1d4ab2bd741a4ffa592ae486529cd8",
+        "contract_version": 1,
+        "file": "fr_dockets-v1-f8bf12bf472f2782.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 171,
+        "sha256": "f8bf12bf472f278257d43c637f931197574827c66ef895fe031c6c7977e188f8",
+        "table": "fr_dockets"
+      },
+      {
+        "contract_sha256": "5d832ea69c5a79f3a4afe09a419083b44c6e58707eed762f766ffc092aebdd89",
+        "contract_version": 1,
+        "file": "fr_documents-v1-5d8ac3b971b8366e.jsonl",
+        "kind": "data",
+        "rejected": 0,
+        "rows": 167,
+        "sha256": "5d8ac3b971b8366e872204f31150b091ddb659e50917c3670cc39f0a4e779ca8",
+        "table": "fr_documents"
+      },
+      {
+        "contract_sha256": "aab90a46e42e8b22a0ebd6f0ab4abd2fd4ac0b66fdbabc68243dad685a83fc8f",
+        "contract_version": 1,
+        "file": "waterways-v1-c3dc9b238d6ce15c.jsonl",
+        "kind": "entity",
+        "rejected": 0,
+        "rows": 1320,
+        "sha256": "c3dc9b238d6ce15cb70aef853adefd659d97432381bdc23eda7ae8697850292c",
+        "table": "waterways"
+      }
+    ]
+  },
+  "tables": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230"
+}

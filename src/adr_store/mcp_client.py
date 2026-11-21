@@ -1,5 +1,5 @@
 """A blocking client of an `adr mcp` server process, shaped like `adr_store.tools.Tools` (the
-five tool methods, the same result dataclasses, the same exceptions), so code written against
+eight tool methods, the same result dataclasses, the same exceptions), so code written against
 the Python API (the tests, the leak probes of `adr_eval.probes.acl`) can run through MCP
 unchanged.
 
@@ -40,7 +40,9 @@ def result_of(name: str, d: dict):
     if name == "search_tools":
         return tools.SearchToolsResult(**{**d, "hits": [tools.ToolHit(**h)
                                                         for h in d["hits"]]})
-    return {"read": tools.ReadResult, "load_tool": tools.LoadToolResult}[name](**d)
+    return {"read": tools.ReadResult, "load_tool": tools.LoadToolResult,
+            "describe_tables": tools.DescribeResult, "query_table": tools.QueryResult,
+            "sql": tools.SqlResult}[name](**d)
 
 
 def error_of(text: str) -> tools.ToolError:
@@ -65,7 +67,7 @@ def server_parameters(store: Path, caller: str | None, *, emb_cache: Path | None
 
 
 class McpTools:
-    """The five tools of one `adr mcp` server process (module docstring). Close it (or use
+    """The eight tools of one `adr mcp` server process (module docstring). Close it (or use
     it as a context manager) to stop the server."""
 
     def __init__(self, store: Path, caller: str | None, *, emb_cache: Path | None = None,
@@ -133,3 +135,15 @@ class McpTools:
 
     def load_tool(self, tool_id, *, handle=None):
         return self._run("load_tool", tool_id=tool_id, handle=handle)
+
+    def describe_tables(self, table=None, *, handle=None):
+        return self._run("describe_tables", table=table, handle=handle)
+
+    def query_table(self, table, filters=None, op=None, *, fields=None, order=None, limit=None,
+                    applicability=None, handle=None):
+        return self._run("query_table", table=table, filters=filters, op=op, fields=fields,
+                         order=order, limit=limit, applicability=applicability, handle=handle)
+
+    def sql(self, statement, *, applicability=None, handle=None):
+        return self._run("sql", statement=statement, applicability=applicability,
+                         handle=handle)

@@ -1,0 +1,40 @@
+{
+ "llm_cache_files": {
+  "after": 12010,
+  "after_first_pass": 12010,
+  "before": 12010
+ },
+ "model_cli_invocations": 0,
+ "note": "Task 7b: Step 9 on the promoted 3B build (tables fec2a2b12e318fcb...), .cache/store-p2/gov, after a fresh ACL sync; each set run twice in fresh processes; per-item probes.json and results.json compared byte for byte (not committed: runs/). The reference stores' extraction tables were built from the cached first-pass replies with max_calls=0 (the generator profile of config/eval.json).",
+ "pairs": {
+  "applicability-gov": {
+   "first": "probes-tables-applicability-gov-20261121T001752",
+   "probes_identical": true,
+   "probes_sha256": "deaa430b7af8dec8c2f8e3d7808b9923edc1afaf4932d43557a64e90a8000b13",
+   "results_identical": true,
+   "results_sha256": "ee270a1bbae186ab4ac4bc894ab3e800f08602a4db3b86ecc95219a3fbe59905",
+   "second": "probes-tables-applicability-gov-20261121T002359",
+   "summary_identical": true
+  },
+  "equivalence-gov": {
+   "first": "probes-tables-equivalence-gov-20261121T002241",
+   "probes_identical": true,
+   "probes_sha256": "230bf9eb0931e9b64c2b37b75af1a20a92f2af8ef6f8e4f729ab23112ba3f36a",
+   "results_identical": true,
+   "results_sha256": "3269c9400ba623df2c6a9bbe9338dcbcdc05b5a42feaf6f65bd94f25657dc344",
+   "second": "probes-tables-equivalence-gov-20261121T002855",
+   "summary_identical": true
+  },
+  "leak-gov": {
+   "first": "probes-tables-leak-gov-20261121T001929",
+   "probes_identical": true,
+   "probes_sha256": "cf92edf8a8526ea541dd78f98af990d02e000a966e19cb5a0398f7eef21a86d8",
+   "results_identical": true,
+   "results_sha256": "faab73aff94c9e34601ae327422a2e5c8297804a9fb330e34be306d40d974549",
+   "second": "probes-tables-leak-gov-20261121T002541",
+   "summary_identical": true
+  }
+ },
+ "real_store_and_index_unchanged": true,
+ "tables_id": "fec2a2b12e318fcba0c350edac2e61acdbcc3bdccaad8f8d08c9290014270230"
+}
