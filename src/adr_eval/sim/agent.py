@@ -33,11 +33,10 @@ failure leaves complete rounds for every arm (the stopped round's trial director
 removed; a rerun replays the cached calls). Any other failure (an environment that does not
 start, a monitor error) is handled the same way, with status `failed: <type>`, and is then
 raised again. `canary` runs trial 0 of the first task in each
-arm and stops. The run refuses up front, before any call or file: an unknown arm, the
-`gate-runtime` arm until Task 21 wires the procedure runtime (`RUNTIME_NOT_WIRED`; it is never
-run as `gate`), a store with no bindings (`NO_BINDINGS`) and tasks drawn from other bindings
-than `bindings/HEAD`. **The ACL is kept fresh** with `probes.tables.keep_fresh` before every
-trial (so at least every round, N28): it re-syncs the store's ACL only when it is within 15
+arm and stops. The run refuses up front, before any call or file: an unknown arm, a store
+with no bindings (`NO_BINDINGS`) and tasks drawn from other bindings than `bindings/HEAD`.
+**The ACL is kept fresh** with `probes.tables.keep_fresh` before every trial (so at least
+every round, N28): it re-syncs the store's ACL only when it is within 15
 minutes of the freshness limit, so a long run is never denied F3 midway. That check, and the
 timestamp in the run directory's name (`adr-eval sim drawbridge`, P38), are the run's only
 clock inputs; nothing in the run directory depends on the clock.
@@ -49,7 +48,11 @@ gate's log, `transcript.json`). `summary.json` holds totals only (`score.public`
 transcript or text.
 
 **The environment** of a trial is its own process by default (`adapters.ProcessEnv`);
-`adapters.LocalEnv` runs the same `Env` in-process (tests).
+`adapters.LocalEnv` runs the same `Env` in-process (tests). The procedure runtime of arm
+`gate-runtime` (Task 21) runs inside the environment, so in the environment process and never
+in this loop (N13); this loop only sees its refusals, as it sees the gate's. The run gives the
+environments no profile, so arms `no-gate`, `prompt` and `gate` run without the runtime
+whatever `config/runtime.json` says (builder note 19).
 """
 
 from __future__ import annotations
@@ -69,20 +72,17 @@ from adr_eval.pipeline import BudgetExceeded
 from adr_eval.sim import env as env_mod
 from adr_eval.sim import monitor, score
 from adr_eval.sim.adapters import (
-    RUNTIME_NOT_WIRED,
-    RUNTIME_WIRED,
     LocalEnv,
     ProcessEnv,
     local_env_factory,
     process_env_factory,
-    refuse_unwired,
     trial_dir,
 )
 from adr_eval.sim.tasks import SimError, SimTask, canonical, reference_draws
 from adr_store import acl
 
 __all__ = ["AGENT_PROMPT_VERSION", "ARMS", "K", "MAX_CALLS", "MAX_TOKENS", "MAX_TOOL_CALLS",
-           "OUT_ROOT", "PROMPT_SECTIONS", "RUNTIME_NOT_WIRED", "RUNTIME_WIRED", "SUMMARY_FORMAT",
+           "OUT_ROOT", "PROMPT_SECTIONS", "SUMMARY_FORMAT",
            "LocalEnv", "ProcessEnv", "check_bindings", "local_env_factory", "parse_turn",
            "process_env_factory", "render_transcript", "run_rounds", "run_trial",
            "system_prompt", "tool_list"]
@@ -395,8 +395,6 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
     if unknown or not arms or len(set(arms)) != len(arms):
         raise ValueError(f"unknown arm(s) {', '.join(unknown) or '(none or repeated)'}; arms "
                          f"are {', '.join(ARMS)}")
-    for arm in arms:
-        refuse_unwired(arm)
     if trials < 1 or not tasks:
         raise ValueError("a run needs at least one task and one trial")
     store_path = _store_path(store)

@@ -353,34 +353,35 @@ def test_canary_runs_trial_0_of_the_first_task_in_each_arm(sim_store, tasks,  # 
     assert summary["status"] == "canary" and summary["summary"]["arms"]["gate"]["tasks"] == 1
 
 
-def test_run_rounds_refuses_gate_runtime_until_task_21(sim_store, tasks, tmp_path):  # noqa: F811
-    client = stub_agent(tmp_path / "llm", oracle_script, tasks)
-    for arms in (("gate-runtime",), ("no-gate", "gate-runtime")):
-        with pytest.raises(SimError, match=re.escape("runtime not wired (Task 21)")):
-            _rounds(sim_store, tasks[:1], arms, client, tmp_path / "run")
-    assert client.calls == 0 and not (tmp_path / "run").exists()
-    for make in (local_env_factory, agent.process_env_factory):
-        with pytest.raises(SimError, match=re.escape("runtime not wired (Task 21)")):
-            make(sim_store.path, tmp_path / "x")(tasks[0], "gate-runtime", 0)
-    with pytest.raises(ValueError, match="unknown arm"):
-        _rounds(sim_store, tasks[:1], ("gated",), client, tmp_path / "run")
-    # the agent loop itself runs the arm, with the gate's prompt (§13.5), once an
-    # environment for it is given (Task 21 wires the runtime into the environment)
+def test_run_rounds_runs_gate_runtime_with_the_runtime_in_the_env(sim_store, tasks,  # noqa: F811
+                                                                  tmp_path):
+    # Task 21 wired the runtime: the arm runs in rounds and through both factories, with the
+    # gate's prompt (§13.5), and the runtime in the environment refuses the oracle's
+    # off-procedure side effect (the oracle never reads the request first)
     seen = []
-
-    def runtime_env(task, arm, trial):
-        from adr_eval.sim.agent import LocalEnv
-
-        return LocalEnv(sim_store.path, task, arm, tmp_path / "rt")
 
     def script(t, turn, repeat, system, user):
         seen.append(system)
         return oracle_script(t, turn, repeat, system, user)
 
-    row = run_trial(tasks[1], "gate-runtime", 0, stub_agent(tmp_path / "l2", script, tasks),
-                    runtime_env)
-    assert row["arm"] == "gate-runtime" and success(row, tasks[1])
+    client = stub_agent(tmp_path / "llm", script, tasks)
+    out = _rounds(sim_store, tasks[1:2], ("gate-runtime",), client, tmp_path / "run",
+                  trials=1)
+    assert out["status"] == "complete" and out["order"] == [(tasks[1].task_id,
+                                                             "gate-runtime", 0)]
+    (row,) = out["rows"]
+    assert row["arm"] == "gate-runtime" and not success(row, tasks[1])
     assert seen[0] == system_prompt("gate", tasks[1], sim_store.path)
+    for make in (local_env_factory, agent.process_env_factory):
+        e = make(sim_store.path, tmp_path / make.__name__)(tasks[0], "gate-runtime", 0)
+        try:
+            out = e.call(oracle_action(tasks[0])["tool"], oracle_action(tasks[0])["args"])
+        finally:
+            e.close()
+        assert not out["ok"] and out["refusal"]["rule_ids"] == [["adr.runtime.refused@1", "1"]]
+        assert e.log_lines()[0]["runtime"]["source"] == "arm"
+    with pytest.raises(ValueError, match="unknown arm"):
+        _rounds(sim_store, tasks[:1], ("gated",), client, tmp_path / "run2")
 
 
 def test_the_bindings_guard_refuses_the_whole_run_up_front(sim_store, tasks,  # noqa: F811
@@ -641,9 +642,7 @@ def test_cli_drawbridge_refuses_before_any_call(sim_store, tasks, tmp_path,  # n
     monkeypatch.setattr(agent, "OUT_ROOT", tmp_path / "runs")
     path = tmp_path / "tasks.jsonl"
     write_tasks(tasks[:2], path)
-    cases = [("gate-runtime", path, "runtime not wired (Task 21)"),
-             ("no-gate,gate-runtime", path, "runtime not wired (Task 21)"),
-             ("no-gate,gated", path, "--arms takes distinct arms"),
+    cases = [("no-gate,gated", path, "--arms takes distinct arms"),
              ("no-gate,no-gate", path, "--arms takes distinct arms"),
              ("no-gate", tmp_path / "missing.jsonl", "no tasks file")]
     for arms, p, msg in cases:

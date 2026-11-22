@@ -1944,16 +1944,17 @@ def _sim_tasks(a: argparse.Namespace) -> int:
 
 def _sim_drawbridge(a: argparse.Namespace) -> int:
     """`adr-eval sim drawbridge --store S --tasks PATH --arms LIST --generator P --max-calls N
-    [--canary] [--trials 4]`: the simulation (§13.3, §13.5) in rounds by trial index (P28) under
-    `N` budget units (every transport attempt counts), written to `<out>/sim-<arms>-<time>/`
-    (local: rows, transcripts and logs; `summary.json` holds totals only, P30). It refuses
-    (exit 2) before any call: an unknown arm, `gate-runtime` until Task 21 wires the runtime, a
-    store with no bindings (`NO_BINDINGS`), no tasks file, and tasks drawn from other bindings
-    than `bindings/HEAD`. The store's ACL is kept fresh before every trial (`keep_fresh`,
-    N28). A budget stop or a model failure that is no input rejection keeps the complete rounds
-    and exits 1 (a rerun replays the cached calls); any other failure does the same with status
-    `failed: <type>`; a served model other than the profile's (`meter.served_models`, every
-    call) writes the outputs and exits 1."""
+    [--canary] [--trials 4]`: the simulation (§13.3, §13.5) in rounds by trial index (P28) under `N`
+    budget units (every transport attempt counts), written to `<out>/sim-<arms>-<time>/` (local:
+    rows, transcripts and logs; `summary.json` holds totals only, P30). It refuses (exit 2) before
+    any call: an unknown arm, a store with no bindings (`NO_BINDINGS`), no tasks file, and tasks
+    drawn from other bindings than `bindings/HEAD`. The store's ACL is kept fresh before every trial
+    (`keep_fresh`, N28). A budget stop or a model failure that is no input rejection keeps the
+    complete rounds and exits 1 (a rerun replays the cached calls); any other failure does the same
+    with status `failed: <type>`; a served model other than the profile's (`meter.served_models`,
+    every call) writes the outputs and exits 1. Arm `gate-runtime` runs the procedure runtime in
+    each trial's environment process (Task 21); the environments get no profile, so the other arms
+    run without it whatever `config/runtime.json` says (builder note 19)."""
     from datetime import UTC, datetime
 
     from adr_eval.sim import agent
@@ -1966,12 +1967,6 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
     if unknown or not arms or len(set(arms)) != len(arms):
         print(f"error: --arms takes distinct arms of {', '.join(agent.ARMS)}, got {a.arms!r}",
               file=sys.stderr)
-        return 2
-    try:
-        for arm in arms:
-            agent.refuse_unwired(arm)
-    except sim_tasks.SimError as e:
-        print(f"error: {e}", file=sys.stderr)
         return 2
     if a.trials < 1 or a.max_calls < 0:
         print("error: --trials must be at least 1 and --max-calls not negative",
@@ -2035,40 +2030,44 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
     return 1 if other or res["stop"] is not None else 0
 
 
+def _sim_runs(runs: list[str]) -> tuple[list, list[dict], dict, bytes]:
+    """(tasks, rows, the first run's config, the tasks file's bytes) of simulation runs,
+    merged; SimError when one is no run, or they ran other tasks, bindings or models."""
+    from adr_eval.sim.tasks import SimError, SimTask
+
+    tasks_bytes, first, rows = None, None, []
+    for run in runs:
+        d = Path(run)
+        if not all((d / f).is_file() for f in ("rows.jsonl", "tasks.jsonl", "config.json")):
+            raise SimError(f"{d}: not a simulation run (no rows.jsonl, tasks.jsonl or "
+                           f"config.json)")
+        data = (d / "tasks.jsonl").read_bytes()
+        config = json.loads((d / "config.json").read_text(encoding="utf-8"))
+        if tasks_bytes is not None and data != tasks_bytes:
+            raise SimError(f"{d} ran other tasks than {runs[0]}")
+        for key in ("bindings_id", "model"):
+            if first is not None and config.get(key) != first.get(key):
+                raise SimError(f"{d} ran under {key} {config.get(key)!r}, {runs[0]} under "
+                               f"{first.get(key)!r}: runs merge only under the same {key}")
+        tasks_bytes, first = data, first or config
+        rows += [json.loads(x) for x in (d / "rows.jsonl").read_text(
+            encoding="utf-8").splitlines() if x.strip()]
+    tasks = [SimTask.model_validate_json(x) for x in tasks_bytes.splitlines() if x.strip()]
+    return tasks, rows, first, tasks_bytes
+
+
 def _sim_score(a: argparse.Namespace) -> int:
     """`adr-eval sim score RUN [RUN ...]`: the totals and the §17 comparisons of one or more
     simulation runs (their rows, merged), printed as JSON (and written to `--out`): totals only,
     no task id or text (P30). Runs merge only when they ran the same tasks file, under the same
     bindings id and the same model (`config.json`)."""
     from adr_eval.sim import score
+    from adr_eval.sim.tasks import SimError
 
-    tasks_bytes, first, rows = None, None, []
-    for run in a.runs:
-        d = Path(run)
-        if not all((d / f).is_file() for f in ("rows.jsonl", "tasks.jsonl", "config.json")):
-            print(f"error: {d}: not a simulation run (no rows.jsonl, tasks.jsonl or "
-                  f"config.json)", file=sys.stderr)
-            return 2
-        data = (d / "tasks.jsonl").read_bytes()
-        config = json.loads((d / "config.json").read_text(encoding="utf-8"))
-        if tasks_bytes is not None and data != tasks_bytes:
-            print(f"error: {d} ran other tasks than {a.runs[0]}", file=sys.stderr)
-            return 2
-        for key in ("bindings_id", "model"):
-            if first is not None and config.get(key) != first.get(key):
-                print(f"error: {d} ran under {key} {config.get(key)!r}, {a.runs[0]} under "
-                      f"{first.get(key)!r}: runs merge only under the same {key}",
-                      file=sys.stderr)
-                return 2
-        tasks_bytes, first = data, first or config
-        rows += [json.loads(x) for x in (d / "rows.jsonl").read_text(
-            encoding="utf-8").splitlines() if x.strip()]
-    from adr_eval.sim.tasks import SimTask
-
-    tasks = [SimTask.model_validate_json(x) for x in tasks_bytes.splitlines() if x.strip()]
     try:
+        tasks, rows, _, _ = _sim_runs(a.runs)
         summary = score.summarize(rows, tasks)
-    except ValueError as e:
+    except (SimError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     out = {"runs": len(a.runs), "tasks": len(tasks), "summary": score.public(summary),
@@ -2077,6 +2076,51 @@ def _sim_score(a: argparse.Namespace) -> int:
     if a.out:
         a.out.write_text(text, encoding="utf-8")
     print(text, end="")
+    return 0
+
+
+def _sim_runtime_check(a: argparse.Namespace) -> int:
+    """`adr-eval sim runtime-check RUN [RUN ...] --profile P [--config PATH]`: the discipline
+    check of §9.3 on the merged runs (they hold the gate and gate-runtime arms; no canary run,
+    which runs one task), written as profile P's entry of `--config` (default
+    `config/runtime.json`, the only writer of that file; builder note 19): `{"enabled",
+    "check"}`, the check holding totals only (P30). The runs must have been made by P's model:
+    their `model` and every served model. No model call. Exit 2 on a refusal, nothing written."""
+    from adr_eval.sim import runtime, score
+    from adr_eval.sim.tasks import SimError
+
+    config = runner.load_config()
+    profiles = runner.load_profiles(runner.REPO_ROOT / config.get("models", runner.MODELS_PATH))
+    try:
+        if a.profile not in profiles:
+            raise SimError(f"unknown profile {a.profile!r} in {runner.MODELS_PATH}")
+        tasks, rows, first, tasks_bytes = _sim_runs(a.runs)
+        model = profiles[a.profile].get("model")
+        served = set()
+        for run in a.runs:
+            d = Path(run)
+            if json.loads((d / "config.json").read_text(encoding="utf-8")).get("canary"):
+                raise SimError(f"{d} is a canary run: the check needs every task")
+            if (d / "summary.json").is_file():
+                served |= set(json.loads((d / "summary.json").read_text(
+                    encoding="utf-8")).get("served_models", []))
+        if first.get("model") != model or served - {model}:
+            raise SimError(f"the runs ran under model {first.get('model')!r} (served "
+                           f"{', '.join(sorted(served)) or 'none reported'}), not profile "
+                           f"{a.profile}'s {model!r}")
+        arms = score.public(score.summarize(rows, tasks))["arms"]
+        result = runtime.discipline_check(arms, a.profile)
+    except (SimError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    check = {**result["check"], "model": model, "bindings_id": first.get("bindings_id"),
+             "tasks_sha256": hashlib.sha256(tasks_bytes).hexdigest(), "runs": len(a.runs)}
+    runtime.write_runtime_entry(a.profile, {"enabled": result["enabled"], "check": check},
+                                a.config)
+    g, gr = check["gate"]["pass^1"], check["gate-runtime"]["pass^1"]
+    print(f"{a.profile}: {'enabled' if result['enabled'] else 'disabled'}: pass^1 "
+          f"gate-runtime {gr:.3f} against gate {g:.3f} - {runtime.DISCIPLINE_MARGIN} = "
+          f"{check['floor']:.3f} -> {a.config or runtime.RUNTIME_CONFIG}")
     return 0
 
 
@@ -2460,7 +2504,8 @@ def _parser() -> argparse.ArgumentParser:
     p = sub.add_parser("sim", help="the drawbridge simulation (Phase 4 §13): `sim tasks --gen` "
                                    "draws the 18 tasks of sim-drawbridge v0.1 from a store's "
                                    "signed-off bindings (no model call); `sim drawbridge` "
-                                   "runs the agent in its arms; `sim score` totals runs")
+                                   "runs the agent in its arms; `sim score` totals runs; "
+                                   "`sim runtime-check` sets a profile's runtime flag")
     sim_sub = p.add_subparsers(dest="sim_command", required=True)
     q = sim_sub.add_parser("tasks", help="generate the simulation tasks (no model call)")
     q.add_argument("--gen", action="store_true", help="generate (required)")
@@ -2485,7 +2530,7 @@ def _parser() -> argparse.ArgumentParser:
                    help="the tasks file (default golden/sim-drawbridge/v0.1/tasks.jsonl)")
     q.add_argument("--arms", required=True,
                    help="comma-separated arms of no-gate, prompt, gate, gate-runtime "
-                        "(gate-runtime is refused until Task 21 wires the runtime)")
+                        "(gate-runtime runs the procedure runtime in the environment)")
     q.add_argument("--generator", default="claude_code_sonnet",
                    help="the agent's model profile (default claude_code_sonnet)")
     q.add_argument("--max-calls", type=int, required=True,
@@ -2504,6 +2549,16 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("runs", nargs="+", help="run directories (sim-<arms>-<time>)")
     q.add_argument("--out", type=Path, default=None, help="also write the JSON here")
     q.set_defaults(fn=_sim_score)
+    q = sim_sub.add_parser(
+        "runtime-check", help="the discipline check of the procedure runtime (no model call): "
+                              "pass^1 of gate-runtime against gate - 0.05 over the runs, "
+                              "written as the profile's entry of config/runtime.json")
+    q.add_argument("runs", nargs="+", help="run directories holding the gate and gate-runtime "
+                                           "arms (merged)")
+    q.add_argument("--profile", required=True, help="the model profile the runs were made by")
+    q.add_argument("--config", type=Path, default=None,
+                   help="the per-profile flags to write (default config/runtime.json)")
+    q.set_defaults(fn=_sim_runtime_check)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

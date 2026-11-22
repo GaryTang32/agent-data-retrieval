@@ -1,0 +1,427 @@
+{
+  "id": "desk-request@1",
+  "title": "Desk request",
+  "body": {
+    "when_to_use": {
+      "value": "Use for every request to open a drawbridge at the operations desk: read the request, check the rules on the requested opening, then schedule it, offer the earliest allowed time, deny it or escalate it, and reply.",
+      "quotes": [],
+      "status": null,
+      "null_reason": null
+    },
+    "not_for": {
+      "value": null,
+      "quotes": [],
+      "status": null,
+      "null_reason": "not_applicable"
+    },
+    "trigger_examples": {
+      "value": null,
+      "quotes": [],
+      "status": null,
+      "null_reason": "not_applicable"
+    },
+    "problem_abstractions": {
+      "value": null,
+      "quotes": [],
+      "status": null,
+      "null_reason": "not_applicable"
+    },
+    "inputs": [
+      "the request id"
+    ],
+    "preconditions": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "tool_call",
+        "text": "Read the request record with get_request: the request, every fact known so far with its source, and the registry.",
+        "span": null,
+        "tool": "get_request",
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s2",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s2",
+        "type": "tool_call",
+        "text": "Check the rules with check_rules on scheduling the requested opening: intent schedule_opening at the requested time, with the facts of the request record.",
+        "span": null,
+        "tool": "check_rules",
+        "subprocedure_ref": null,
+        "args_schema": {
+          "const": {
+            "intent.tool": "schedule_opening"
+          }
+        },
+        "condition": null,
+        "next": [
+          {
+            "to": "s3",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s3",
+        "type": "condition",
+        "text": "If the rules allow the opening, schedule it; if they deny it, offer another time; if they escalate, ask for the missing fact.",
+        "span": null,
+        "tool": null,
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s4",
+            "guard": "{\"eq\":[\"outcome\",\"allow\"]}"
+          },
+          {
+            "to": "s5",
+            "guard": "{\"eq\":[\"outcome\",\"deny\"]}"
+          },
+          {
+            "to": "s9",
+            "guard": "{\"eq\":[\"outcome\",\"escalate\"]}"
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s4",
+        "type": "tool_call",
+        "text": "The requested time is allowed: schedule the opening at the requested time with schedule_opening.",
+        "span": null,
+        "tool": "schedule_opening",
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s12",
+            "guard": null
+          }
+        ],
+        "risk": "irreversible",
+        "requires_approval": false,
+        "preconditions": [
+          {
+            "eq": [
+              "outcome",
+              "allow"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s5",
+        "type": "tool_call",
+        "text": "The requested time is not allowed: ask the user with ask_user whether another time is acceptable (field accepts_alternative).",
+        "span": null,
+        "tool": "ask_user",
+        "subprocedure_ref": null,
+        "args_schema": {
+          "const": {
+            "field": "accepts_alternative"
+          }
+        },
+        "condition": null,
+        "next": [
+          {
+            "to": "s6",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s6",
+        "type": "condition",
+        "text": "If the user accepts another time, schedule the earliest allowed one; otherwise deny the request.",
+        "span": null,
+        "tool": null,
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s7",
+            "guard": "{\"eq\":[\"accepts_alternative\",true]}"
+          },
+          {
+            "to": "s8",
+            "guard": "{\"eq\":[\"accepts_alternative\",false]}"
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s7",
+        "type": "tool_call",
+        "text": "The user accepts another time: schedule the opening at the earliest allowed time (the next_allowed of check_rules) with schedule_opening.",
+        "span": null,
+        "tool": "schedule_opening",
+        "subprocedure_ref": null,
+        "args_schema": {
+          "from_result": {
+            "open_at": "next_allowed"
+          }
+        },
+        "condition": null,
+        "next": [
+          {
+            "to": "s12",
+            "guard": null
+          }
+        ],
+        "risk": "irreversible",
+        "requires_approval": false,
+        "preconditions": [
+          {
+            "eq": [
+              "outcome",
+              "deny"
+            ]
+          },
+          {
+            "eq": [
+              "accepts_alternative",
+              true
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s8",
+        "type": "tool_call",
+        "text": "The user declines another time: deny the request with deny_request, citing the deciding section.",
+        "span": null,
+        "tool": "deny_request",
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s12",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": [
+          {
+            "eq": [
+              "outcome",
+              "deny"
+            ]
+          },
+          {
+            "eq": [
+              "accepts_alternative",
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s9",
+        "type": "tool_call",
+        "text": "A needed fact is missing: ask the user for it with ask_user (a missing fact check_rules named).",
+        "span": null,
+        "tool": "ask_user",
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s10",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s10",
+        "type": "condition",
+        "text": "If the user knew the fact, check the rules again; otherwise escalate the request.",
+        "span": null,
+        "tool": null,
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s2",
+            "guard": "{\"eq\":[\"fact_learned\",true]}"
+          },
+          {
+            "to": "s11",
+            "guard": "{\"eq\":[\"fact_learned\",false]}"
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      },
+      {
+        "id": "s11",
+        "type": "tool_call",
+        "text": "Nobody knows the missing fact: escalate the request with escalate_request, naming the missing facts.",
+        "span": null,
+        "tool": "escalate_request",
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [
+          {
+            "to": "s12",
+            "guard": null
+          }
+        ],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": [
+          {
+            "eq": [
+              "outcome",
+              "escalate"
+            ]
+          },
+          {
+            "eq": [
+              "fact_learned",
+              false
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s12",
+        "type": "end",
+        "text": "Reply to the user: scheduled, denied or escalated, citing the deciding section when denying.",
+        "span": null,
+        "tool": null,
+        "subprocedure_ref": null,
+        "args_schema": null,
+        "condition": null,
+        "next": [],
+        "risk": "unknown",
+        "requires_approval": false,
+        "preconditions": []
+      }
+    ],
+    "escalation": "Escalate when a needed fact is missing and nobody knows it (s11).",
+    "success_criteria": "One terminal action (schedule, deny or escalate) and a reply that states it.",
+    "tests": [
+      {
+        "condition": "s3",
+        "edge": 0,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s4",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s3",
+        "edge": 1,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s5",
+          "s6",
+          "s7",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s3",
+        "edge": 2,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s9",
+          "s10",
+          "s11",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s6",
+        "edge": 0,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s5",
+          "s6",
+          "s7",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s6",
+        "edge": 1,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s5",
+          "s6",
+          "s8",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s10",
+        "edge": 0,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s9",
+          "s10",
+          "s2"
+        ]
+      },
+      {
+        "condition": "s10",
+        "edge": 1,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s9",
+          "s10",
+          "s11",
+          "s12"
+        ]
+      }
+    ],
+    "ambiguity_flags": [],
+    "source_kind": "authored"
+  }
+}

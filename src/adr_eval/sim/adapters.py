@@ -3,8 +3,11 @@ Task 20): `ProcessEnv` is the environment process (`python -m adr_eval.sim.env`,
 the default; `LocalEnv` runs the same `env.Env` in this process (tests), its results passed
 through JSON so both render the same bytes. Both have `store_path`, `first_message`,
 `call(tool, args)`, `close() -> end state` (idempotent) and `log_lines()`. The factories log a
-trial to `<root>/<arm>/<task>/t<trial>` and refuse the `gate-runtime` arm until Task 21 wires
-the procedure runtime into the environment (it is never run as `gate`)."""
+trial to `<root>/<arm>/<task>/t<trial>`. The procedure runtime runs inside the environment
+(`env.Env`: forced on in arm `gate-runtime`, elsewhere on when the given `profile` is enabled
+in `runtime_config`, Task 21), so with `ProcessEnv` it runs in the environment process, never
+in the agent loop (N13). `ProcessEnv` passes the profile and the config path (resolved here:
+default `runtime.RUNTIME_CONFIG`) on the process's command line."""
 
 from __future__ import annotations
 
@@ -17,33 +20,25 @@ from pathlib import Path
 from typing import Any
 
 from adr_eval.sim import env as env_mod
+from adr_eval.sim import runtime as runtime_mod
 from adr_eval.sim import user
 from adr_eval.sim.tasks import SimError, SimTask
 
-__all__ = ["RUNTIME_NOT_WIRED", "RUNTIME_WIRED", "LocalEnv", "ProcessEnv", "local_env_factory",
-           "process_env_factory", "refuse_unwired", "trial_dir"]
-
-RUNTIME_WIRED = False        # Task 21 wires the procedure runtime into the environment
-RUNTIME_NOT_WIRED = ("the gate-runtime arm needs the procedure runtime in the environment: "
-                     "runtime not wired (Task 21)")
+__all__ = ["LocalEnv", "ProcessEnv", "local_env_factory", "process_env_factory", "trial_dir"]
 
 
 def _plain(v: Any) -> Any:
     return json.loads(json.dumps(v, default=str))
 
 
-def refuse_unwired(arm: str) -> None:
-    """SimError for the `gate-runtime` arm while the runtime is not wired (Task 21)."""
-    if arm == "gate-runtime" and not RUNTIME_WIRED:
-        raise SimError(RUNTIME_NOT_WIRED)
-
-
 class LocalEnv:
     """`env.Env` in this process, with the process's interface (results as plain JSON)."""
 
-    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path):
+    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path, *,
+                 profile: str | None = None, runtime_config: Path | None = None):
         self.store_path = Path(store_path)
-        self._env = env_mod.Env(self.store_path, task, arm, log_dir)
+        self._env = env_mod.Env(self.store_path, task, arm, log_dir, profile=profile,
+                                runtime_config=runtime_config)
         self.first_message = user.first_message(task)
         self._end: dict | None = None
         self._closed = False
@@ -65,14 +60,18 @@ class LocalEnv:
 class ProcessEnv:
     """The environment process of one trial (`python -m adr_eval.sim.env`, JSON lines)."""
 
-    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path):
+    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path, *,
+                 profile: str | None = None, runtime_config: Path | None = None):
         self.store_path = Path(store_path)
         self.log_path = Path(log_dir) / "env.jsonl"
         self._end: dict | None = None
         self._closed = False
+        flags = ["--runtime-config", str(runtime_config or runtime_mod.RUNTIME_CONFIG)]
+        if profile is not None:
+            flags += ["--profile", profile]
         self._proc = subprocess.Popen(
             [sys.executable, "-m", "adr_eval.sim.env", "--store", str(self.store_path),
-             "--log", str(log_dir)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+             "--log", str(log_dir), *flags], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             text=True, encoding="utf-8",
             env={**os.environ, "HF_HUB_OFFLINE": "1", "PYTHONIOENCODING": "utf-8"})
         try:
@@ -123,17 +122,20 @@ def trial_dir(root: Path, task_id: str, arm: str, trial: int) -> Path:
     return Path(root) / arm / task_id / f"t{trial}"
 
 
-def local_env_factory(store_path: Path, root: Path) -> Callable:
+def local_env_factory(store_path: Path, root: Path, *, profile: str | None = None,
+                      runtime_config: Path | None = None) -> Callable:
     """`(task, arm, trial) -> LocalEnv` logging to `root/<arm>/<task>/t<trial>`."""
     def make(task: SimTask, arm: str, trial: int) -> LocalEnv:
-        refuse_unwired(arm)
-        return LocalEnv(store_path, task, arm, trial_dir(root, task.task_id, arm, trial))
+        return LocalEnv(store_path, task, arm, trial_dir(root, task.task_id, arm, trial),
+                        profile=profile, runtime_config=runtime_config)
     return make
 
 
-def process_env_factory(store_path: Path, root: Path) -> Callable:
-    """`(task, arm, trial) -> ProcessEnv` logging to `root/<arm>/<task>/t<trial>`."""
+def process_env_factory(store_path: Path, root: Path, *, profile: str | None = None,
+                        runtime_config: Path | None = None) -> Callable:
+    """`(task, arm, trial) -> ProcessEnv` logging to `root/<arm>/<task>/t<trial>`: one
+    environment process (`python -m adr_eval.sim.env`) per trial, the runtime inside it."""
     def make(task: SimTask, arm: str, trial: int) -> ProcessEnv:
-        refuse_unwired(arm)
-        return ProcessEnv(store_path, task, arm, trial_dir(root, task.task_id, arm, trial))
+        return ProcessEnv(store_path, task, arm, trial_dir(root, task.task_id, arm, trial),
+                          profile=profile, runtime_config=runtime_config)
     return make

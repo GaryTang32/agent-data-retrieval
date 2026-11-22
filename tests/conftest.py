@@ -103,6 +103,10 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     (`w = 1.0`, lexical-only), whatever the committed file says, so no test loads an embedding
     model (C8). `$ADR_UNITS_TUNING` names it too, and `adr mcp` subprocesses inherit it
     (`mcp_client.server_parameters`); CLI subprocesses inherit the environment.
+    The per-profile runtime flags (`sim.runtime.RUNTIME_CONFIG`, the committed
+    `config/runtime.json`, which `adr-eval sim runtime-check` writes) are a fresh copy of the
+    committed file per test, so no test writes the real one (N9); the environment process gets
+    the copy's path from its factory.
     The fastembed model store (.cache/fastembed) is only read."""
     from adr_eval import runner
     from adr_eval.retrieval.dense import DenseIndex
@@ -163,6 +167,11 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     monkeypatch.setattr(sim_agent, "OUT_ROOT", writable_state / "runs")
     monkeypatch.setattr(sim_tasks, "TASKS_DIR",
                         tmp_path_factory.mktemp("golden-sim-drawbridge") / "v0.1")
+    from adr_eval.sim import runtime as sim_runtime
+
+    flags = tmp_path_factory.mktemp("runtime-config") / "runtime.json"
+    flags.write_bytes(sim_runtime.RUNTIME_CONFIG.read_bytes())
+    monkeypatch.setattr(sim_runtime, "RUNTIME_CONFIG", flags)
     tuning = _default_tuning_file(tmp_path_factory.mktemp("units-tuning") / "tuning.json")
     monkeypatch.setattr(units_index, "TUNING_PATH", tuning)
     monkeypatch.setenv(units_index.TUNING_ENV, str(tuning))

@@ -293,8 +293,9 @@ def test_env_refuses_an_unknown_arm_a_runtime_and_a_used_log(sim_store, tmp_path
     t = sim_tasks(sim_store)[0]
     with pytest.raises(ValueError, match="unknown arm"):
         Env(sim_store.path, t, "gated", tmp_path / "a")
-    with pytest.raises(ValueError, match="Task 21"):
-        Env(sim_store.path, t, "gate-runtime", tmp_path / "b", runtime=object())
+    for arm in ("no-gate", "prompt", "gate"):        # a runtime only in arm gate-runtime
+        with pytest.raises(ValueError, match="only in arm gate-runtime"):
+            Env(sim_store.path, t, arm, tmp_path / "b", runtime=object())
     with Env(sim_store.path, t, "no-gate", tmp_path / "c"):
         pass
     with pytest.raises(ValueError, match="new directory"):

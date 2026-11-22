@@ -20,6 +20,20 @@ runs only when the client verifies the allow's single-use token (`check_token`).
 escalate changes nothing (P35); an allow whose token does not verify is a fail-closed deny. In
 arms `no-gate` and `prompt` side effects run directly.
 
+**The procedure runtime** (`runtime.Runtime` over `desk-request@1`, §9.3; Task 21) runs here,
+in the environment, beside the gate and never in the agent loop (N13). Arm `gate-runtime`
+forces it on (the measured arm, builder note 19; a test may give its own `runtime`); in the
+other arms it is on only when the environment is given a `profile` whose flag in
+`runtime_config` (`config/runtime.json`) is enabled (A4), and `adr-eval sim drawbridge` gives
+none, so its arms `no-gate`, `prompt` and `gate` are §13.5's arms without it. With a runtime,
+every well-formed call is put to `Runtime.allows` (with the record as facts) before anything
+else: a refusal executes nothing, never reaches the gate, and is logged with its rule id
+`adr.runtime.refused@1`; a side effect it allows then goes to the gate as above, so both must
+allow. After a call that succeeded, the runtime advances on its result (for `ask_user`, the
+result with `learned`, whether the user knew the answer, and `value`, the field's value in the
+record, which the agent never sees). The runtime adds nothing to what the agent sees but a
+refusal, so the arms share their calls until it refuses (P50).
+
 **Malformed calls** (Review Focus 5): an unknown tool, arguments that are not an object, a
 missing or extra argument, a wrong type (`ARG_SCHEMAS`: exact types, a `draw` is an int and not
 a bool, times are `YYYY-MM-DDTHH:MM:SS` with no offset), an unknown request id or opening id, or
@@ -27,17 +41,19 @@ a table that is not a drawbridge table: refused before the gate sees it, logged 
 `adr.gate.fail-closed@1`; nothing executes and the trial goes on.
 
 **The log** (`env.jsonl` in `log_dir`, canonical JSON lines): a `start` line (task, arm, initial
-record, registry, bindings and units ids, the reference draw the monitor uses, the gate
-instance id), one `call` line per call (its number, tool, arguments, `ok`, result or refusal,
-the record the call was judged on, the fact an answer wrote, the executed effect, and for a
-gated arm the gate's sequence number, instance id, decision and `token_ok`; never the token),
-and an `end` line with the end state at `close`. Logged arguments are bounded: a string over
-1,024 characters (`MAX_LOGGED_CHARS`) keeps its first 256 with `{"truncated": true, "sha256",
-"length"}`; an executed deny also logs the sections its full text cites, for the monitor.
-The task's `reference["bindings_id"]` must be the store's `bindings/HEAD`, or the environment
-refuses to start (the tasks were drawn from other bindings). Two runs of one scripted trace
-give the same bytes except the gate instance id (the run directory's timestamp, P38, names the
-directory and is never written in it).
+record, registry, bindings and units ids, the reference draw the monitor uses, the gate instance
+id), one `call` line per call (its number, tool, arguments, `ok`, result or refusal, the record the
+call was judged on, the fact an answer wrote, the executed effect, and for a gated arm the gate's
+sequence number, instance id, decision and `token_ok`; never the token), and an `end` line with the
+end state at `close`. With a runtime the `start` line names it (`{"procedure", "source": "arm" or
+"profile", "step"}`) and each call line holds `{"step", "decision": "allow" or "refuse", "after",
+"rule_id"?}` (null without one). Logged arguments are bounded: a string over 1,024 characters
+(`MAX_LOGGED_CHARS`) keeps its first 256 with `{"truncated": true, "sha256", "length"}`; an executed
+deny also logs the sections its full text cites, for the monitor. The task's
+`reference["bindings_id"]` must be the store's `bindings/HEAD`, or the environment refuses to start
+(the tasks were drawn from other bindings). Two runs of one scripted trace give the same bytes
+except the gate instance id (the run directory's timestamp, P38, names the directory and is never
+written in it).
 """
 
 from __future__ import annotations
@@ -54,6 +70,7 @@ from pathlib import Path
 from typing import Any
 
 from adr_eval.corpora import REPO_ROOT
+from adr_eval.sim import runtime as runtime_mod
 from adr_eval.sim import user
 from adr_eval.sim.tasks import SimError, SimTask, ref_to_dict, reference_draws, registry_fact
 from adr_eval.sim.world import World
@@ -228,14 +245,22 @@ class Env:
     `log_dir/env.jsonl` (a new file; module text). `close` stops its gate."""
 
     def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path, *,
-                 runtime=None):
+                 runtime: runtime_mod.Runtime | None = None, profile: str | None = None,
+                 runtime_config: Path | None = None):
         from adr_store.bindings.manifest import read_bindings_head
         from adr_store.tools import NO_BINDINGS, Tools
 
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; arms are {', '.join(ARMS)}")
-        if runtime is not None:
-            raise ValueError("the procedure runtime is wired into the environment by Task 21")
+        if runtime is not None and arm != "gate-runtime":
+            raise ValueError("a runtime is given only in arm gate-runtime; elsewhere the "
+                             "profile's flag in config/runtime.json decides")
+        source = None
+        if arm == "gate-runtime":            # the measured arm forces it on (builder note 19)
+            runtime, source = runtime or runtime_mod.Runtime(
+                runtime_mod.load_desk_procedure()), "arm"
+        elif profile is not None and runtime_mod.runtime_enabled(profile, runtime_config):
+            runtime, source = runtime_mod.Runtime(runtime_mod.load_desk_procedure()), "profile"
         self.store_path = Path(store_path)
         self.task, self.arm, self.runtime = task, arm, runtime
         self.log_dir = Path(log_dir)
@@ -273,7 +298,9 @@ class Env:
                        "registry": task.registry, "bindings_id": self.bindings_id,
                        "units_id": self.units_id, "reference": ref_to_dict(self.ref),
                        "gate": None if self._gate is None else
-                       {"instance": self._gate.instance}})
+                       {"instance": self._gate.instance},
+                       "runtime": None if runtime is None else
+                       {"procedure": runtime.name, "source": source, "step": runtime.active}})
         except BaseException:
             self._closed = True
             if self._gate is not None:
@@ -327,17 +354,46 @@ class Env:
         self._n += 1
         entry: dict[str, Any] = {"kind": "call", "n": self._n, "tool": _bounded(tool),
                                  "args": _bounded(args), "record": None, "fact": None,
-                                 "effect": None, "gate": None}
+                                 "effect": None, "gate": None, "runtime": None}
         problem = _schema_problem(tool, args) or self._target_problem(tool, args)
+        refusal = None
         if problem:
             out = {"ok": False, "refusal": malformed_refusal(problem)}
+        elif self.runtime is not None and (refusal := self._runtime_refusal(tool, args,
+                                                                             entry)):
+            out = {"ok": False, "refusal": refusal}
         elif tool in READS:
             out = self._read(tool, args, entry)
         else:
             out = self._side_effect(tool, args, entry)
+        if entry["runtime"] is not None and refusal is None:
+            if out.get("ok") is True:
+                self.runtime.advance(tool, self._runtime_result(tool, args, out["result"]),
+                                     args)
+            entry["runtime"]["after"] = self.runtime.active
         entry.update(_echoes_bounded(out, args))
         self._log(entry)
         return out
+
+    def _runtime_refusal(self, tool: str, args: dict, entry: dict) -> dict | None:
+        """The runtime's refusal of the call (None when it allows), noted in `entry`."""
+        step = self.runtime.active
+        ok, refusal = self.runtime.allows(tool, args, copy.deepcopy(self.world.record))
+        entry["runtime"] = {"step": step, "decision": "allow" if ok else "refuse",
+                            "after": step}
+        if ok:
+            return None
+        entry["runtime"]["rule_id"] = refusal["rule_ids"][0][0]
+        return refusal
+
+    def _runtime_result(self, tool: str, args: dict, result: dict) -> dict:
+        """The result the runtime advances on: for `ask_user`, with `learned` and `value`."""
+        if tool != "ask_user":
+            return result
+        learned = result.get("answer") != user.DONT_KNOW
+        fact = self.world.record.get(args["field"]) if learned else None
+        return {**result, "learned": learned,
+                "value": fact.get("value") if isinstance(fact, dict) else None}
 
     def _target_problem(self, tool: str, args: dict) -> str | None:
         rid = args.get("id") if tool == "get_request" else args.get("request")
@@ -472,11 +528,17 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m adr_eval.sim.env")
     ap.add_argument("--store", type=Path, required=True)
     ap.add_argument("--log", type=Path, required=True, help="a new directory for env.jsonl")
+    ap.add_argument("--profile", default=None,
+                    help="the agent's model profile, whose flag in --runtime-config turns the "
+                         "procedure runtime on outside arm gate-runtime (default none)")
+    ap.add_argument("--runtime-config", type=Path, default=None,
+                    help="the per-profile runtime flags (default config/runtime.json)")
     a = ap.parse_args(argv)
     try:
         first = json.loads(sys.stdin.readline())
         task = SimTask.model_validate(first["task"])
-        env = Env(a.store, task, first["arm"], a.log)
+        env = Env(a.store, task, first["arm"], a.log, profile=a.profile,
+                  runtime_config=a.runtime_config)
     except Exception as e:  # noqa: BLE001 - any start failure is reported, never hidden
         _write({"ready": False, "error": f"{type(e).__name__}: {e}"})
         return 2
