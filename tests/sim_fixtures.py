@@ -24,6 +24,13 @@ hours notice; Phase 3 draw 2) and § 117.1081 draw 1 (on signal, closed 6:30-8:3
 through Friday; Phase 3 draw 1). Its unit index is the corpus default (lexical only, C8), so the
 environment process never loads an embedding model.
 
+**The stub agent** (Task 20): `stub_agent(cache_dir, script, tasks)` is a `CachedStubClient`
+that finds the task by the first message in the rendered transcript, counts the turns already
+taken, and answers with `script(task, turn, repeat, system, user)` (a dict is sent as JSON, a
+string as it is). `oracle_script` asks the user what only the user knows (turn 0), then takes
+the action the expected state holds and replies (a deny cites the request's section). `sim_acl`
+gives the directory and policy the store's ACL syncs from (for `keep_fresh`).
+
 **`env`** is a factory: `env(cls, index=0, arm="no-gate")` builds an `Env` over the task of
 class `cls` (the `index`-th of that class) generated from the store; every environment is
 closed (its gate stopped) at teardown. **`env_gate`** is one `Env` in arm `gate` over the first
@@ -54,8 +61,8 @@ from tests.store.units_fixtures import (
 )
 
 __all__ = ["SIM_1081_DRAW", "StampedAnalysis", "env", "env_gate", "make_sim_store",
-           "renumbered_bindings", "sim_ecfr_facts", "sim_enrich_reply", "sim_store",
-           "sim_tasks"]
+           "oracle_script", "renumbered_bindings", "sim_acl", "sim_ecfr_facts",
+           "sim_enrich_reply", "sim_store", "sim_tasks", "stub_agent"]
 
 # § 117.1081's draw as the enrichment pass would give it (on signal, one closed window)
 SIM_1081_DRAW = {
@@ -215,3 +222,58 @@ def env_gate(env):
     """An environment in arm `gate` over the first allow task."""
     return env("allow", 0, "gate")
 
+
+
+def sim_acl(store) -> dict:
+    """{"directory", "policy"}: the ACL config `make_units_store` wrote beside `store`."""
+    config = Path(store.path).parent / f"{Path(store.path).name}-acl"
+    return {"directory": config / "directory.json", "policy": config / "policy.json"}
+
+
+def stub_agent(cache_dir: Path, script, tasks, *, model: str = "stub-agent", cls=None):
+    """A cached stub agent over `tasks` (module text); `cls` replaces `CachedStubClient`."""
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+    from adr_eval.sim.user import first_message
+
+    by = {first_message(t): t for t in tasks}
+
+    def fn(system: str, user: str, repeat: int) -> str:
+        (msg,) = [m for m in by if m in user]
+        turn = user.count(": your reply ==") - 1
+        out = script(by[msg], turn, repeat, system, user)
+        return out if isinstance(out, str) else json.dumps(out)
+
+    return (cls or CachedStubClient)(model, Cache(Path(cache_dir)), fn)
+
+
+def oracle_action(task) -> dict:
+    """The one side effect that leaves `task`'s expected state."""
+    req, want = task.request, task.expected_state
+    if want["openings"]:
+        (o,) = want["openings"]
+        return {"tool": "schedule_opening", "args": {
+            "request": req["id"], "section": o["section"], "draw": o["draw"],
+            "open_at": o["open_at"]}}
+    if want["denials"]:
+        return {"tool": "deny_request", "args": {
+            "request": req["id"], "rule_id": f"33 CFR {req['section']}",
+            "reason": "the rules do not allow an opening at the requested time"}}
+    return {"tool": "escalate_request", "args": {
+        "request": req["id"], "missing": ["notice_received_at"],
+        "reason": "nobody knows when notice was given"}}
+
+
+def oracle_reply(task) -> dict:
+    want = task.expected_state
+    status = "scheduled" if want["openings"] else "denied" if want["denials"] else "escalated"
+    return {"status": status, "text": f"Request {status} under 33 CFR {task.request['section']}."}
+
+
+def oracle_script(task, turn: int, repeat: int, system: str, user: str) -> dict:
+    """Turn 0 asks what only the user knows (if anything); then the action and the reply."""
+    asks = [{"tool": "ask_user", "args": {"field": f}} for f in sorted(task.user_knows)
+            if f != "accepts_alternative"]
+    if turn == 0 and asks:
+        return {"tool_calls": asks}
+    return {"tool_calls": [oracle_action(task)], "reply": oracle_reply(task)}

@@ -1942,6 +1942,123 @@ def _sim_tasks(a: argparse.Namespace) -> int:
     return 0
 
 
+def _sim_drawbridge(a: argparse.Namespace) -> int:
+    """`adr-eval sim drawbridge --store S --tasks PATH --arms LIST --generator P --max-calls N
+    [--canary] [--trials 4]`: the simulation (§13.3, §13.5) in rounds by trial index (P28) under
+    `N` budget units (every transport attempt counts), written to `<out>/sim-<arms>-<time>/`
+    (local: rows, transcripts and logs; `summary.json` holds totals only, P30). It refuses
+    (exit 2) before any call: an unknown arm, `gate-runtime` until Task 21 wires the runtime, a
+    store with no bindings (`NO_BINDINGS`), no tasks file, and tasks drawn from other bindings
+    than `bindings/HEAD`. The store's ACL is kept fresh before every trial (`keep_fresh`,
+    N28). A budget stop or a model failure that is no input rejection keeps the complete rounds
+    and exits 1 (a rerun replays the cached calls); a served model other than the profile's
+    writes the outputs and exits 1."""
+    from datetime import UTC, datetime
+
+    from adr_eval.sim import agent
+    from adr_eval.sim import tasks as sim_tasks
+    from adr_store.store import Store, StoreError
+    from adr_store.tables.extract import metered_client
+
+    arms = tuple(x.strip() for x in a.arms.split(",") if x.strip())
+    unknown = [x for x in arms if x not in agent.ARMS]
+    if unknown or not arms or len(set(arms)) != len(arms):
+        print(f"error: --arms takes distinct arms of {', '.join(agent.ARMS)}, got {a.arms!r}",
+              file=sys.stderr)
+        return 2
+    if "gate-runtime" in arms and not agent.RUNTIME_WIRED:
+        print(f"error: {agent.RUNTIME_NOT_WIRED}", file=sys.stderr)
+        return 2
+    if a.trials < 1 or a.max_calls < 0:
+        print("error: --trials must be at least 1 and --max-calls not negative",
+              file=sys.stderr)
+        return 2
+    try:
+        store = Store.open(a.store)
+    except StoreError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    path = a.tasks or sim_tasks.TASKS_DIR / "tasks.jsonl"
+    try:      # the bindings first: a store without them has no tasks to run
+        agent.check_bindings([], store.path)
+        if not path.is_file():
+            raise sim_tasks.SimError(f"no tasks file {path}: run `adr-eval sim tasks --gen`")
+        tasks = sim_tasks.load_tasks(path)
+        if not tasks:
+            raise sim_tasks.SimError(f"{path} holds no task")
+        agent.check_bindings(tasks, store.path)
+    except sim_tasks.SimError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    try:
+        meter = metered_client(a.max_calls, profile=a.generator)
+    except runner.ProfileError as e:
+        raise runner.RunError(str(e)) from e
+    started = datetime.now(UTC)          # names the run directory only (P38)
+    run_dir = runner._new_run_dir(Path(a.out or agent.OUT_ROOT),
+                                  f"sim-{'+'.join(arms)}-{started:%Y%m%dT%H%M%S}")
+    res = agent.run_rounds(tasks, arms, meter, run_dir, store=store.path, trials=a.trials,
+                           canary=a.canary, directory=a.directory, policy=a.policy)
+    for arm, s in res["summary"]["arms"].items():
+        k = ", ".join(f"pass^{n} {s[f'pass^{n}']:.3f}" for n in range(1, 5)
+                      if s[f"pass^{n}"] is not None)
+        print(f"{arm}: {s['trials']} trial(s) over {s['tasks']} task(s); {k or 'no pass^k'}; "
+              f"outcome success {s['successes']}; violations "
+              f"{' '.join(f'{v} {n}' for v, n in s['violations'].items())}; false passes "
+              f"{s['false_passes']}; gate {s['gate_outcomes']}")
+    served = res["served_models"]
+    other = [m for m in served if m != meter.model]
+    if res["stop"] is not None:
+        head = (f"stopped at --max-calls {a.max_calls}" if res["stop"]["reason"] == "calls"
+                else f"stopped: {' '.join(res['stop']['message'].split())}")
+        head += f" in round {res['stop']['round']}; {res['rounds']} complete round(s) kept"
+    else:
+        head = res["status"]
+    if other:
+        head = f"served model mismatch: {', '.join(other)} != {meter.model}; {head}"
+    print(f"status: {head}; {meter.budget.calls} budget unit(s) of {a.max_calls} used; "
+          f"{res['calls']['cached']} cached call(s) in kept rounds; served "
+          f"{', '.join(served) or 'none reported'} -> {run_dir}")
+    return 1 if other or res["stop"] is not None else 0
+
+
+def _sim_score(a: argparse.Namespace) -> int:
+    """`adr-eval sim score RUN [RUN ...]`: the totals and the §17 comparisons of one or more
+    simulation runs (their rows, merged; their tasks must be the same), printed as JSON (and
+    written to `--out`): totals only, no task id or text (P30)."""
+    from adr_eval.sim import score
+
+    tasks_bytes, rows = None, []
+    for run in a.runs:
+        d = Path(run)
+        if not (d / "rows.jsonl").is_file() or not (d / "tasks.jsonl").is_file():
+            print(f"error: {d}: not a simulation run (no rows.jsonl or tasks.jsonl)",
+                  file=sys.stderr)
+            return 2
+        data = (d / "tasks.jsonl").read_bytes()
+        if tasks_bytes is not None and data != tasks_bytes:
+            print(f"error: {d} ran other tasks than {a.runs[0]}", file=sys.stderr)
+            return 2
+        tasks_bytes = data
+        rows += [json.loads(x) for x in (d / "rows.jsonl").read_text(
+            encoding="utf-8").splitlines() if x.strip()]
+    from adr_eval.sim.tasks import SimTask
+
+    tasks = [SimTask.model_validate_json(x) for x in tasks_bytes.splitlines() if x.strip()]
+    try:
+        summary = score.summarize(rows, tasks)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    out = {"runs": len(a.runs), "tasks": len(tasks), "summary": score.public(summary),
+           "criteria": score.criteria(summary)}
+    text = json.dumps(out, indent=2, sort_keys=True) + "\n"
+    if a.out:
+        a.out.write_text(text, encoding="utf-8")
+    print(text, end="")
+    return 0
+
+
 def _report(a: argparse.Namespace) -> int:
     run_dir = _run_dir(a.run_id, a.out)
     rep = write_report(run_dir)
@@ -2321,7 +2438,8 @@ def _parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("sim", help="the drawbridge simulation (Phase 4 §13): `sim tasks --gen` "
                                    "draws the 18 tasks of sim-drawbridge v0.1 from a store's "
-                                   "signed-off bindings (no model call)")
+                                   "signed-off bindings (no model call); `sim drawbridge` "
+                                   "runs the agent in its arms; `sim score` totals runs")
     sim_sub = p.add_subparsers(dest="sim_command", required=True)
     q = sim_sub.add_parser("tasks", help="generate the simulation tasks (no model call)")
     q.add_argument("--gen", action="store_true", help="generate (required)")
@@ -2334,6 +2452,37 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("--overwrite", action="store_true",
                    help="replace a tasks file that holds other tasks")
     q.set_defaults(fn=_sim_tasks)
+    q = sim_sub.add_parser(
+        "drawbridge", help="run the simulation in rounds by trial index (calls the agent's "
+                           "model under --max-calls; every transport attempt counts); the "
+                           "store's ACL is kept fresh before every trial (`keep_fresh`), so "
+                           "at least every round; writes <out>/sim-<arms>-<time>/ (local; "
+                           "summary.json holds totals only)")
+    q.add_argument("--store", type=Path, required=True,
+                   help="the store the tasks were drawn from (its bindings/HEAD)")
+    q.add_argument("--tasks", type=Path, default=None,
+                   help="the tasks file (default golden/sim-drawbridge/v0.1/tasks.jsonl)")
+    q.add_argument("--arms", required=True,
+                   help="comma-separated arms of no-gate, prompt, gate, gate-runtime "
+                        "(gate-runtime is refused until Task 21 wires the runtime)")
+    q.add_argument("--generator", default="claude_code_sonnet",
+                   help="the agent's model profile (default claude_code_sonnet)")
+    q.add_argument("--max-calls", type=int, required=True,
+                   help="budget units: every transport attempt, retries included")
+    q.add_argument("--canary", action="store_true",
+                   help="run trial 0 of the first task in each arm and stop")
+    q.add_argument("--trials", type=int, default=4, help="trials per task and arm (default 4)")
+    q.add_argument("--out", type=Path, default=None, help="output root (default runs)")
+    q.add_argument("--directory", type=Path, default=acl_config / "directory.json",
+                   help="the directory the store's ACL is kept fresh from")
+    q.add_argument("--policy", type=Path, default=acl_config / "policy.json",
+                   help="the policy the store's ACL is kept fresh from")
+    q.set_defaults(fn=_sim_drawbridge)
+    q = sim_sub.add_parser("score", help="totals and §17 comparisons of simulation runs "
+                                         "(no model call)")
+    q.add_argument("runs", nargs="+", help="run directories (sim-<arms>-<time>)")
+    q.add_argument("--out", type=Path, default=None, help="also write the JSON here")
+    q.set_defaults(fn=_sim_score)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")
