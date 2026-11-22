@@ -551,3 +551,16 @@ def test_binding_status_is_the_envelope_literal():
     from adr_store.units.envelope import BindingStatus as EnvelopeStatus
     assert get_args(BindingStatus) == get_args(EnvelopeStatus)
     assert LANGUAGE == "adr-dsl@1"
+
+
+def test_a_window_on_a_day_outside_the_holiday_rules_is_unknown():   # re-review minor
+    w = W(1380, 360, hol=True)
+    e = {"in_window": {"fact": "open_at"}, "window": w.model_dump()}
+    assert evaluate(e, {"open_at": "1977-03-01T01:00:00"}) is Tri.U
+    assert evaluate(e, {"open_at": "0001-01-01T01:00:00"}) is Tri.U
+
+
+def test_assignment_to_a_binding_is_validated():                # re-review (c)
+    b = binding()
+    with pytest.raises(ValidationError):
+        b.binding_version = "0" * 64

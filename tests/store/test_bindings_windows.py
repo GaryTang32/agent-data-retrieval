@@ -256,3 +256,7 @@ def test_read_windows_names_why_a_quote_is_unreadable(quote, reason):
     windows, why = read_windows(quote)
     assert why == reason and (windows is None) == bool(reason)
     assert parse_windows(quote) == windows
+
+
+def test_an_empty_59_range_stays_unreadable():                  # re-review minor: P45 a == b
+    assert parse_windows("from 5:59 p.m. to 5:59 p.m.") is None

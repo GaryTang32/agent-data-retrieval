@@ -186,7 +186,7 @@ def read_windows(quote: str) -> tuple[list[Window] | None, str]:
             a, b = parse_time(m["a"]), parse_time(m["b"])
             if a is None or b is None:
                 return None, "an unreadable time"
-            if _THROUGH_MINUTE.search(m["b"]):
+            if _THROUGH_MINUTE.search(m["b"]) and a != b:   # an empty range stays empty
                 b += 1                               # P45: "to 5:59 p.m." includes 17:59
             ranges.append((a, b or 1440))
     if ranges and "all_times" in by:

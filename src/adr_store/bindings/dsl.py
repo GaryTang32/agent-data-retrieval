@@ -295,7 +295,10 @@ def _eval(e: Expr, facts: dict[str, Any]) -> Tri:
     at = parse_local_datetime(facts.get(arg["fact"]))
     if at is None:
         return Tri.U
-    return _tri(in_window(w, at.hour * 60 + at.minute, at.date()))
+    try:
+        return _tri(in_window(w, at.hour * 60 + at.minute, at.date()))
+    except (ValueError, OverflowError):     # a day outside the holiday rules: unknown, not a crash
+        return Tri.U
 
 
 def required_facts(e: Expr) -> list[str]:
@@ -361,7 +364,7 @@ class Binding(BaseModel):
     (`binding_ids`, `required_facts(when)`); only a `basis` may carry `overrides` (the `forbid`s
     it sets aside when True, P32)."""
 
-    model_config = ConfigDict(extra="forbid", title="Binding")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True, title="Binding")
 
     binding_id: str
     binding_version: str
