@@ -44,8 +44,11 @@ step's line starts "If " (added when its text does not start with "If"). Under a
 indented three spaces: `Tool: <tool>` (a tool call), `Subprocedure: <ref>`, `Handoff` or
 `Wait`, then its routing: `If <guard> then step N` per guarded edge (a leading "If" and
 trailing ".:;," of the guard dropped), `Otherwise step N` for an "otherwise" edge and `Go to
-step N` for an unguarded edge, except a step's only edge when it leads to the next step. Then
-a `Source: <canonical_ref>` line. With more than `REFERENCES_FROM` condition steps the routing
+step N` for an unguarded edge, except a step's only edge when it leads to the next step. A
+guard that is an `adr-dsl@1` expression in JSON (the authored desk procedure's, P17, P52; no
+corpus guard is) is written readably instead (`_dsl_text`: `outcome == "allow"`, `x >= 2`,
+`x in ["a"]`, `x is known`, `not (...)`, `(a and b)`); the IR and the Mermaid keep the JSON.
+Then a `Source: <canonical_ref>` line. With more than `REFERENCES_FROM` condition steps the routing
 lines move under a `## references/` heading after the body, each step's under a `Step N:`
 line; the body says so once, and each condition line ends "(branches: see references, step
 N)", so the body still shows where it branches without a line more (§9.2; it stays under
@@ -63,6 +66,7 @@ import re
 import unicodedata
 from collections.abc import Callable
 
+from adr_store.bindings.dsl import check_expr
 from adr_store.units.envelope import Unit
 from adr_store.units.procedures import WHEN_TO_USE_MAX, ProcedureBody, Step
 
@@ -270,6 +274,38 @@ def _description(unit: Unit, body: ProcedureBody) -> str:
     return text
 
 
+def _dsl_text(guard: str) -> str | None:
+    """`guard` written readably when it is an `adr-dsl@1` expression in JSON, else None."""
+    try:
+        expr = json.loads(guard)
+    except ValueError:
+        return None
+    if not isinstance(expr, dict) or check_expr(expr):
+        return None
+
+    def text(e: dict) -> str:
+        op = next(k for k in e if k != "window")
+        arg = e[op]
+        if op in ("and", "or"):
+            return "(" + f" {op} ".join(text(x) for x in arg) + ")"
+        if op == "not":
+            inner = text(arg)
+            return f"not {inner}" if inner.startswith("(") else f"not ({inner})"
+        if op == "cmp":
+            return f"{arg[0]} {arg[1]} {arg[2]}"
+        if op == "eq":
+            return f"{arg[0]} == {json.dumps(arg[1])}"
+        if op == "in":
+            return f"{arg[0]} in {json.dumps(arg[1])}"
+        if op == "known":
+            return f"{arg} is known"
+        if op == "const":
+            return json.dumps(arg)
+        window = json.dumps(e["window"], sort_keys=True, default=str)
+        return f"{arg['fact']} in window {window}"
+    return text(expr)
+
+
 def _routing(s: Step, i: int, number: dict[str, int]) -> list[str]:
     """The routing lines of step number `i` (module docstring)."""
     if len(s.next) == 1 and s.next[0].guard is None and number[s.next[0].to] == i + 1:
@@ -283,8 +319,10 @@ def _routing(s: Step, i: int, number: dict[str, int]) -> list[str]:
             lines.append(f"Otherwise step {n}")
         else:
             _check_guard(e.guard)
-            whole = " ".join(e.guard.split())
-            guard = _LEADING_IF.sub("", whole, count=1).rstrip(".:;, ") or whole
+            guard = _dsl_text(e.guard)
+            if guard is None:
+                whole = " ".join(e.guard.split())
+                guard = _LEADING_IF.sub("", whole, count=1).rstrip(".:;, ") or whole
             lines.append(f"If {guard} then step {n}")
     return lines
 

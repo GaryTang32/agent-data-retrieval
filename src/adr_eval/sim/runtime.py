@@ -49,7 +49,10 @@ irreversible) -> s12; deny -> s5 `ask_user` whether another time is acceptable -
 `deny_request` -> s12; escalate -> s9 `ask_user` for a missing fact -> s10: learned -> s2
 again, unknown -> s11 `escalate_request` -> s12; s12 the reply (`end`). Guards are canonical
 JSON `adr-dsl@1` expressions over the last result (`{"eq":["outcome","allow"]}`). Its `tests`
-are `branch_paths` of its steps. `as_unit` wraps it in a unit for `render_skill`.
+are `branch_paths` of its steps. `as_unit` wraps it in a unit for `render_skill`. The
+environment serves it through `procedure_lookup` in every arm (P52): `desk_hit` is its catalog
+entry (first in every catalog, the store's own entries after it) and `desk_rendering` its
+SKILL.md, Mermaid and IR views for the id `DESK_UNIT_ID` or `desk-request@1`.
 
 **Where it runs (§9.3, §12.6; N13).** In the environment process (`env.Env`; the CLI's factory
 starts `python -m adr_eval.sim.env` per trial), beside the gate, never in the agent loop. In arm
@@ -70,6 +73,7 @@ places first, so 0.75 against 0.80 - 0.05 is enabled whatever the float error.
 from __future__ import annotations
 
 import copy
+import functools
 import hashlib
 import json
 from pathlib import Path
@@ -90,15 +94,17 @@ from adr_store.units.envelope import (
 )
 from adr_store.units.procedures import ProcedureBody, Step, validate_ir
 
-__all__ = ["DESK_PROCEDURE", "DESK_PROCEDURE_PATH", "DISCIPLINE_MARGIN", "READ_ONLY", "REFUSED",
-           "RUNTIME_CONFIG", "Runtime", "as_unit", "discipline_check", "load_desk_procedure",
-           "load_runtime_config", "result_facts", "runtime_enabled", "write_runtime_entry"]
+__all__ = ["DESK_PROCEDURE", "DESK_PROCEDURE_PATH", "DESK_UNIT_ID", "DISCIPLINE_MARGIN",
+           "READ_ONLY", "REFUSED", "RUNTIME_CONFIG", "Runtime", "as_unit", "desk_hit",
+           "desk_rendering", "discipline_check", "load_desk_procedure", "load_runtime_config",
+           "result_facts", "runtime_enabled", "write_runtime_entry"]
 
 READ_ONLY = ("get_request", "ask_user", "rule_lookup", "define", "check_rules",
              "procedure_lookup", "query_table")
 DISCIPLINE_MARGIN = 0.05
 DESK_PROCEDURE = "desk-request@1"
 DESK_PROCEDURE_PATH = REPO_ROOT / "config" / "sim" / "desk-request.json"
+DESK_UNIT_ID = f"procedure/{DESK_PROCEDURE}"   # its stable id in `procedure_lookup` (P52)
 RUNTIME_CONFIG = REPO_ROOT / "config" / "runtime.json"   # tests redirect it (N9)
 REFUSED = ["adr.runtime.refused@1", "1"]
 OUTCOMES = ("allow", "deny", "escalate")
@@ -150,6 +156,34 @@ def as_unit(body: ProcedureBody, *, ref: str = DESK_PROCEDURE, title: str | None
         body=data, hashes={"text": "", "meta": ""})
     return draft.model_copy(update={"hashes": {"text": text_sha256(text),
                                                "meta": meta_sha256(draft)}})
+
+
+@functools.cache
+def _desk_renderings(path: Path) -> tuple[str, str, dict, str, str | None]:
+    from adr_store.units.render import render_mermaid, render_skill
+
+    body = load_desk_procedure(path)
+    value = body.when_to_use.get("value")
+    return (render_skill(as_unit(body, title=_desk_title(path))), render_mermaid(body),
+            body.model_dump(mode="json"), _desk_title(path),
+            value if isinstance(value, str) else None)
+
+
+def desk_hit(rank: int = 1, path: Path = DESK_PROCEDURE_PATH) -> dict:
+    """The desk procedure as a `procedure_lookup` catalog entry (P52): the keys of the store's
+    entries (`rank`, `unit_id` `DESK_UNIT_ID`, `canonical_ref`, `title`, `when_to_use`,
+    `doc_id` null: no corpus document, `score` null: not ranked), with `source_kind`
+    "authored" and its rendered `skill` (SKILL.md) and `mermaid`."""
+    skill, mermaid, _, title, when = _desk_renderings(Path(path))
+    return {"rank": rank, "unit_id": DESK_UNIT_ID, "canonical_ref": DESK_PROCEDURE,
+            "title": title, "when_to_use": when, "doc_id": None, "score": None,
+            "source_kind": "authored", "skill": skill, "mermaid": mermaid}
+
+
+def desk_rendering(view: str, path: Path = DESK_PROCEDURE_PATH) -> str | dict:
+    """The desk procedure's SKILL.md (`skill`), Mermaid (`mermaid`) or IR (`ir`)."""
+    skill, mermaid, ir, _, _ = _desk_renderings(Path(path))
+    return {"skill": skill, "mermaid": mermaid, "ir": copy.deepcopy(ir)}[view]
 
 
 # -- the facts of a result ----------------------------------------------------------------------

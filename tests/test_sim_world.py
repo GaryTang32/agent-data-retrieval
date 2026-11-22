@@ -270,7 +270,8 @@ def test_reads_go_to_the_store_tools(env):  # noqa: F811
                                  "op": "count"})
     assert out["ok"] and out["result"]["count"] == 1        # the version in force on as_of
     assert e.call("define", {"term": "drawbridge"})["ok"]
-    assert e.call("procedure_lookup", {"task": "open a drawbridge"})["ok"]
+    out = e.call("procedure_lookup", {"task": "open a drawbridge"})
+    assert out["ok"] and out["result"]["catalog"][0]["unit_id"] == "procedure/desk-request@1"
     out = e.call("rule_lookup", {"rule_id": "33 CFR 999.1"})
     assert not out["ok"] and out["refusal"]["code"]
 

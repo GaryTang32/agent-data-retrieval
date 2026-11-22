@@ -530,6 +530,116 @@ def test_the_environment_advances_on_its_own_results(sim_store, tasks, tmp_path)
                              ("ask_user", "s9", "s11"), ("escalate_request", "s11", "s12")]
 
 
+# -- procedure_lookup serves the desk procedure (P52) -------------------------------------------
+
+LOOKUP = {"task": "open a drawbridge for a vessel"}
+
+
+STORE_HITS = [  # the sim store holds no procedure units: two store entries stand in for them
+    {"rank": 1, "unit_id": "procedure/IRM 21.4.1.3/aaaaaaaaaaaa/" + "1" * 16,
+     "canonical_ref": "IRM 21.4.1.3", "title": "Refund trace", "when_to_use": None,
+     "doc_id": "1" * 64, "score": 2.5},
+    {"rank": 2, "unit_id": "procedure/IRM 5.19.1/bbbbbbbbbbbb/" + "2" * 16,
+     "canonical_ref": "IRM 5.19.1", "title": "Balance due", "when_to_use": "When owed.",
+     "doc_id": "2" * 64, "score": 1.0}]
+
+
+def test_procedure_lookup_serves_the_desk_procedure_first_in_every_arm(sim_store, tasks,  # noqa: F811
+                                                                      tmp_path, monkeypatch):
+    import dataclasses
+
+    from adr_store.tools import Tools
+
+    real = Tools.procedure_lookup
+
+    def with_hits(self, task=None, **kw):
+        res = real(self, task, **kw)
+        return dataclasses.replace(res, catalog=[dict(h) for h in STORE_HITS]) \
+            if task is not None else res
+
+    monkeypatch.setattr(Tools, "procedure_lookup", with_hits)
+    task = _of(tasks, "allow", 1)
+    store = Tools(sim_store.path, acl=True, caller="user:auditor").procedure_lookup(
+        LOOKUP["task"], as_of=task.as_of[:10]).to_dict()
+    results = {}
+    for arm in ("no-gate", "prompt", "gate", "gate-runtime"):
+        with Env(sim_store.path, task, arm, tmp_path / arm) as e:
+            out = e.call("procedure_lookup", LOOKUP)
+            assert out["ok"], arm
+            results[arm] = out["result"]
+            if e.runtime is not None:
+                assert e.runtime.active == "s1"            # a read: the runtime stays put
+    first = results["no-gate"]
+    assert all(r == first for r in results.values())          # identical in all four arms
+    desk, *rest = first["catalog"]
+    assert desk == rt_mod.desk_hit() and desk["rank"] == 1
+    assert desk["unit_id"] == "procedure/desk-request@1" and desk["source_kind"] == "authored"
+    assert desk["canonical_ref"] == "desk-request@1" and desk["doc_id"] is None
+    assert set(store["catalog"][0]) < set(desk)                # the store entries' keys, and more
+    assert desk["skill"] == render_skill(as_unit(load_desk_procedure()))
+    assert 'If outcome == "allow" then step 4' in desk["skill"]
+    assert desk["mermaid"] == render_mermaid(load_desk_procedure())
+    # the store's own hits follow, in their order, ranks moved down by one
+    assert store["catalog"] and rest == [{**h, "rank": h["rank"] + 1} for h in store["catalog"]]
+    assert {k: v for k, v in first.items() if k != "catalog"} == \
+        {k: v for k, v in json.loads(json.dumps(store)).items() if k != "catalog"}
+    # the desk procedure by its id, in each view, exempt from the store's view and filters
+    with Env(sim_store.path, task, "gate", tmp_path / "views") as e:
+        body = load_desk_procedure()
+        for ident in ("procedure/desk-request@1", "desk-request@1"):
+            out = e.call("procedure_lookup", {"id": ident, "view": "catalog"})["result"]
+            assert out["catalog"] == [rt_mod.desk_hit()] and out["rendering"] is None
+            assert out["applicability_filters"] == {} and out["handle"] is None
+            assert out["units"] == e.units_id and out["snapshot"] == e.tools.snapshot
+            for view, want in (("skill", desk["skill"]), ("mermaid", desk["mermaid"]),
+                               ("ir", body.model_dump(mode="json"))):
+                out = e.call("procedure_lookup", {"id": ident, "view": view})["result"]
+                assert out["rendering"] == want and out["catalog"] is None, (ident, view)
+        # a task and the id together, or an unknown view, are the store's refusals still
+        out = e.call("procedure_lookup", {"id": "desk-request@1", "task": "x"})
+        assert not out["ok"] and "not both" in out["refusal"]["message"]
+        out = e.call("procedure_lookup", {"id": "desk-request@1", "view": "pdf"})
+        assert not out["ok"] and "view must be one of" in out["refusal"]["message"]
+
+
+def test_the_stores_own_procedure_lookup_is_unchanged(sim_store, tasks,  # noqa: F811
+                                                    tmp_path):
+    from adr_store.tools import UNKNOWN_PROCEDURE, ToolError, Tools
+
+    tools = Tools(sim_store.path, acl=True, caller="user:auditor")
+    res = tools.procedure_lookup(LOOKUP["task"]).to_dict()
+    assert res["catalog"] == []          # the sim store holds no procedure; no desk entry
+    # the environment's catalog of the same store: the desk entry alone
+    with Env(sim_store.path, _of(tasks, "allow", 1), "no-gate", tmp_path / "e") as e:
+        assert e.call("procedure_lookup", LOOKUP)["result"]["catalog"] == [rt_mod.desk_hit()]
+    for ident in ("procedure/desk-request@1", "desk-request@1"):
+        with pytest.raises(ToolError, match=UNKNOWN_PROCEDURE):
+            tools.procedure_lookup(id=ident, view="skill")
+
+
+def test_env_log_with_the_desk_procedure_is_identical_twice(sim_store, tasks,  # noqa: F811
+                                                            tmp_path):
+    task = _of(tasks, "allow", 1)
+    runs = []
+    for k in range(2):
+        with Env(sim_store.path, task, "gate-runtime", tmp_path / f"run-{k}") as e:
+            e.call("get_request", {"id": "r1"})
+            e.call("procedure_lookup", LOOKUP)
+            e.call("procedure_lookup", {"id": "procedure/desk-request@1", "view": "skill"})
+            e.call("check_rules", {"intent": {"tool": "schedule_opening",
+                                              "args": _schedule(task)},
+                                   "facts": _facts(task, False)})
+            e.call("deny_request", {"request": "r1", "rule_id": "33 CFR 117.1081",
+                                    "reason": "x"})                       # refused off s4
+            e.call("schedule_opening", _schedule(task))
+            instance = e._gate.instance
+        runs.append(e.log_path.read_bytes().replace(instance.encode(), b"<instance>"))
+    assert runs[0] == runs[1]
+    lines = [json.loads(x) for x in runs[0].splitlines()]
+    assert lines[2]["result"]["catalog"][0]["unit_id"] == "procedure/desk-request@1"
+    assert [c["runtime"]["decision"] for c in lines[1:-1]] == ["allow"] * 4 + ["refuse", "allow"]
+
+
 # -- trials in the gate-runtime arm -------------------------------------------------------------
 
 def _facts(task, asked: bool) -> dict:

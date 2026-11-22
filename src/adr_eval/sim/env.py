@@ -9,6 +9,8 @@ its source) and the registry; `ask_user(field)` returns the scripted answer (`us
 writes a known fact to the record as `{"value", "source": "user", "seq"}`, `seq` being the
 call's number (P33). At start the environment writes `local_procedure_conflict` from the
 registry (`tasks.registry_fact`, P37). The agent has no tool that writes a fact.
+`procedure_lookup` serves the desk procedure `desk-request@1` first, identically in every arm,
+the store's own hits after it (P52, `_procedure_lookup`).
 
 **Side effects** (`schedule_opening`, `deny_request`, `escalate_request`, `cancel_opening`). In
 arms `gate` and `gate-runtime` each call is sent to the gate, which this environment spawns
@@ -436,8 +438,7 @@ class Env:
                 res = self.tools.check_rules(kw["intent"], kw.get("facts"),
                                              as_of=kw.get("as_of", self.task.as_of))
             elif tool == "procedure_lookup":
-                res = self.tools.procedure_lookup(kw.pop("task", None),
-                                                  as_of=kw.pop("as_of", day), **kw)
+                return {"ok": True, "result": self._procedure_lookup(kw, day)}
             else:
                 res = self.tools.query_table(kw.pop("table"), kw.pop("filters", None),
                                              kw.pop("op", "count"), applicability={"as_of": day},
@@ -446,6 +447,33 @@ class Env:
             return {"ok": False, "refusal": {"code": getattr(e, "code", type(e).__name__),
                                              "message": str(e)}}
         return {"ok": True, "result": _json_safe(res.to_dict())}
+
+    def _procedure_lookup(self, kw: dict, day: str) -> dict:
+        """`procedure_lookup` with the desk procedure served first, in every arm (P52): a
+        catalog of a task is the desk procedure's entry (`runtime.desk_hit`, rank 1) and then
+        the store's own entries, ranks moved down by one; the id `procedure/desk-request@1`
+        (or `desk-request@1`) with no task gives its catalog entry, SKILL.md, Mermaid or IR,
+        with the store's snapshot and units id, no filters (it is the environment's, not a
+        unit of the store, so the view, the ACL and the filters do not apply) and no handle
+        (no part of the store was read). Anything else is the store's own result."""
+        from adr_store.tools import PROCEDURE_VIEWS
+
+        view = kw.get("view", "catalog")
+        if kw.get("id") in (runtime_mod.DESK_UNIT_ID, runtime_mod.DESK_PROCEDURE) and \
+                kw.get("task") is None and view in PROCEDURE_VIEWS:
+            return {"task": None, "id": kw["id"], "view": view,
+                    "catalog": [runtime_mod.desk_hit()] if view == "catalog" else None,
+                    "rendering": None if view == "catalog" else
+                    runtime_mod.desk_rendering(view),
+                    "snapshot": self.tools.snapshot, "units": self.units_id,
+                    "applicability_filters": {}, "handle": None}
+        res = _json_safe(self.tools.procedure_lookup(kw.pop("task", None),
+                                                     as_of=kw.pop("as_of", day),
+                                                     **kw).to_dict())
+        if res.get("task") is not None and isinstance(res.get("catalog"), list):
+            res["catalog"] = [runtime_mod.desk_hit()] + [
+                {**e, "rank": e["rank"] + 1} for e in res["catalog"]]
+        return res
 
     # -- side effects ----------------------------------------------------------------------------
 

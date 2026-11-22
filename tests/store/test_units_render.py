@@ -435,6 +435,31 @@ def test_skill_guard_lines_drop_a_leading_if_and_trailing_punctuation():
     assert head[3:6] == ["1. If x", "   If the RTN matches then step 2", "   Otherwise step 3"]
 
 
+def test_skill_writes_a_dsl_guard_readably_and_keeps_the_json_elsewhere():
+    """Task 21 fix (P52): an adr-dsl@1 guard in JSON, as the authored desk procedure has, is
+    written readably in SKILL.md; the IR and the Mermaid keep the JSON; prose guards, and JSON
+    that is no DSL expression, are written as before."""
+    guards = ['{"eq":["outcome","allow"]}',
+              '{"and":[{"cmp":["notice_hours",">=",2]},{"not":{"known":"vessel_class"}}]}',
+              '{"or":[{"in":["vessel_class",["public_safety","police"]]},{"const":false}]}',
+              '{"not":{"or":[{"eq":["accepts_alternative",true]},{"eq":["x","y"]}]}}',
+              '{"eq":["x"]}', '["eq", "outcome", "allow"]', "If the RTN matches."]
+    b = body(step("s1", "condition", [(f"t{i}", g) for i, g in enumerate(guards)]),
+             *[step(f"t{i}", nxt=[("end", None)]) for i in range(len(guards))],
+             step("end", "end", text=""))
+    head, _ = split_skill(render_skill(procedure_unit(b)))
+    assert head[4:11] == [
+        '   If outcome == "allow" then step 2',
+        "   If (notice_hours >= 2 and not (vessel_class is known)) then step 3",
+        '   If (vessel_class in ["public_safety", "police"] or false) then step 4',
+        '   If not (accepts_alternative == true or x == "y") then step 5',
+        '   If {"eq":["x"]} then step 6',                       # no DSL: as written
+        '   If ["eq", "outcome", "allow"] then step 7',
+        "   If the RTN matches then step 8"]
+    assert parse_mermaid(render_mermaid(b)) == ir_graph(b)
+    assert [g for _, _, g in ir_graph(b)[1]][:len(guards)] == guards   # the graph keeps JSON
+
+
 def test_a_condition_line_shows_that_it_branches_without_adding_lines():
     """I3, the IRM Exhibit 5.19.1-7 shape: a condition's numbered line starts "If " and, when
     its branch lines are under references/, ends by pointing there; the body gains no line."""
