@@ -54,7 +54,8 @@ from tests.store.units_fixtures import (
 )
 
 __all__ = ["SIM_1081_DRAW", "StampedAnalysis", "env", "env_gate", "make_sim_store",
-           "sim_ecfr_facts", "sim_enrich_reply", "sim_store", "sim_tasks"]
+           "renumbered_bindings", "sim_ecfr_facts", "sim_enrich_reply", "sim_store",
+           "sim_tasks"]
 
 # § 117.1081's draw as the enrichment pass would give it (on signal, one closed window)
 SIM_1081_DRAW = {
@@ -147,6 +148,30 @@ def make_sim_store(path: Path):
     promote_bindings(store.path, bindings_id)
     fresh_acl(store.path)
     return store
+
+
+def renumbered_bindings(section: str = "117.821", phase3: int = 2, to: int = 7, *,
+                        known: bool = True):
+    """A stand-in for `manifest.load_bindings` (monkeypatch it in) whose manifest pairs Phase 3
+    draw `phase3` of `section` with the bindings' draw `to` (the draw's bindings retargeted),
+    so the two numberings differ (C5); with `known` False, `to` is left out of the known
+    draws (P49)."""
+    from adr_store.bindings.manifest import load_bindings
+
+    def load(path, bindings_id):
+        m, bs = load_bindings(path, bindings_id)
+        old = {"section": section, "draw": phase3}
+        bs = [b.model_copy(update={"target": {"tool": "schedule_opening", "selector": {
+            "section": section, "draw": to}}}) if b.target["selector"] == old else b for b in bs]
+        doc = bs[0].doc_id
+        draws = {*m.known_draws, (doc, section, to)} if known else \
+            {k for k in m.known_draws if k[1:] != (section, to)}
+        pairs = [(s, p, to) if (s, p) == (section, phase3) else (s, p, d)
+                 for s, p, d in m.agreement_pairs]
+        return m.model_copy(update={"agreement_pairs": pairs,
+                                    "known_draws": sorted(draws)}), bs
+
+    return load
 
 
 @pytest.fixture(scope="session")

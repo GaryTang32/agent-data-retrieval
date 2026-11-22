@@ -31,15 +31,20 @@ record, registry, bindings and units ids, the reference draw the monitor uses, t
 instance id), one `call` line per call (its number, tool, arguments, `ok`, result or refusal,
 the record the call was judged on, the fact an answer wrote, the executed effect, and for a
 gated arm the gate's sequence number, instance id, decision and `token_ok`; never the token),
-and an `end` line with the end state at `close`. Two runs of one scripted trace give the same
-bytes except the gate instance id (the run directory's timestamp, P38, names the directory and
-is never written in it).
+and an `end` line with the end state at `close`. Logged arguments are bounded: a string over
+1,024 characters (`MAX_LOGGED_CHARS`) keeps its first 256 with `{"truncated": true, "sha256",
+"length"}`; an executed deny also logs the sections its full text cites, for the monitor.
+The task's `reference["bindings_id"]` must be the store's `bindings/HEAD`, or the environment
+refuses to start (the tasks were drawn from other bindings). Two runs of one scripted trace
+give the same bytes except the gate instance id (the run directory's timestamp, P38, names the
+directory and is never written in it).
 """
 
 from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import re
 import secrets
@@ -52,6 +57,7 @@ from adr_eval.corpora import REPO_ROOT
 from adr_eval.sim import user
 from adr_eval.sim.tasks import SimError, SimTask, ref_to_dict, reference_draws, registry_fact
 from adr_eval.sim.world import World
+from adr_store.bindings.decide import cited_sections
 
 __all__ = ["ARG_SCHEMAS", "ARMS", "CALLER", "DESK_POLICY_PATH", "GATED", "GATED_ARMS", "READS",
            "TOOLS", "Env", "fail_closed_refusal", "load_desk_policy", "main", "malformed_refusal"]
@@ -66,6 +72,8 @@ CALLER = "user:auditor"
 DESK_POLICY_PATH = REPO_ROOT / "config" / "sim" / "desk_policy.txt"   # §13.2, every arm
 FAIL_CLOSED = ["adr.gate.fail-closed@1", "1"]
 KEY_BYTES = 32
+MAX_LOGGED_CHARS = 1024      # a longer logged string keeps KEPT_CHARS, its SHA-256 and length
+KEPT_CHARS = 256
 # per tool: {"required": {arg: kind}, "optional": {arg: kind}}; kinds are checked exactly
 ARG_SCHEMAS: dict[str, dict] = {
     "get_request": {"required": {"id": "str"}, "optional": {}},
@@ -153,6 +161,63 @@ def _json_safe(v: Any) -> Any:
     return json.loads(json.dumps(v, default=lambda o: f"<{type(o).__name__}>"))
 
 
+def _cut(s: str) -> str | dict:
+    if len(s) <= MAX_LOGGED_CHARS:
+        return s
+    return {"text": s[:KEPT_CHARS], "truncated": True,
+            "sha256": hashlib.sha256(s.encode("utf-8", "surrogatepass")).hexdigest(),
+            "length": len(s)}
+
+
+def _long_strings(v: Any) -> set[str]:
+    if isinstance(v, str):
+        return {v} if len(v) > MAX_LOGGED_CHARS else set()
+    if isinstance(v, dict):
+        return set().union(*(_long_strings(k) | _long_strings(x) for k, x in v.items()))
+    if isinstance(v, list):
+        return set().union(*(_long_strings(x) for x in v))
+    return set()
+
+
+def _echoes_bounded(out: dict, args: Any) -> dict:
+    """`out` as logged: a result or refusal that echoes a long argument string (a query, a
+    term, a field) logs it bounded as the argument is; the store's own text is kept whole."""
+    long = _long_strings(_json_safe(args))
+    if not long:
+        return _json_safe(out)
+
+    def walk(x: Any) -> Any:
+        if isinstance(x, str):
+            return _cut(x) if x in long else x
+        if isinstance(x, list):
+            return [walk(y) for y in x]
+        if isinstance(x, dict):
+            return {k: walk(y) for k, y in x.items()}
+        return x
+    return walk(_json_safe(out))
+
+
+def _bounded(v: Any) -> Any:
+    """`v` as logged (JSON-safe): every string over `MAX_LOGGED_CHARS` characters, value or key,
+    becomes its first `KEPT_CHARS` characters with `truncated`, its SHA-256 and its length (a
+    key becomes a string of the same parts)."""
+    def walk(x: Any) -> Any:
+        if isinstance(x, str):
+            return _cut(x)
+        if isinstance(x, list):
+            return [walk(y) for y in x]
+        if isinstance(x, dict):
+            out = {}
+            for k, y in x.items():
+                c = _cut(k)
+                key = c if isinstance(c, str) else \
+                    f"{c['text']}...[truncated sha256={c['sha256']} length={c['length']}]"
+                out[key] = walk(y)
+            return out
+        return x
+    return walk(_json_safe(v))
+
+
 def _line(entry: dict) -> bytes:
     return (json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
             + "\n").encode("utf-8")
@@ -182,6 +247,11 @@ class Env:
         self.bindings_id = read_bindings_head(self.store_path)
         if self.bindings_id is None:
             raise SimError(NO_BINDINGS.format(self.tools.snapshot[:12]))
+        drawn_from = task.reference.get("bindings_id")
+        if drawn_from != self.bindings_id:
+            raise SimError(f"task {task.task_id} was drawn from bindings "
+                           f"{str(drawn_from)[:12]}, but bindings/HEAD is "
+                           f"{self.bindings_id[:12]}: regenerate the tasks or restore the head")
         m, refs, _ = reference_draws(self.store_path, self.bindings_id)
         req = task.request
         self.ref = refs.get((req["section"], req["draw"]))
@@ -255,8 +325,8 @@ class Env:
         """One tool call: `{"ok": True, "result": ...}` or `{"ok": False, "refusal": ...}`
         (module text). Never raises for what the agent sends."""
         self._n += 1
-        entry: dict[str, Any] = {"kind": "call", "n": self._n, "tool": _json_safe(tool),
-                                 "args": _json_safe(args), "record": None, "fact": None,
+        entry: dict[str, Any] = {"kind": "call", "n": self._n, "tool": _bounded(tool),
+                                 "args": _bounded(args), "record": None, "fact": None,
                                  "effect": None, "gate": None}
         problem = _schema_problem(tool, args) or self._target_problem(tool, args)
         if problem:
@@ -265,7 +335,7 @@ class Env:
             out = self._read(tool, args, entry)
         else:
             out = self._side_effect(tool, args, entry)
-        entry.update(out)
+        entry.update(_echoes_bounded(out, args))
         self._log(entry)
         return out
 
@@ -339,7 +409,7 @@ class Env:
         gate_args = self._gate_args(tool, args)
         record = copy.deepcopy(self.world.record)
         entry["record"] = record
-        entry["gate_args"] = gate_args
+        entry["gate_args"] = _bounded(gate_args)
         decided: dict | None = None
         if self._client is not None:
             request = {"session": self.task.task_id, "caller": CALLER, "tool": tool,
@@ -358,7 +428,7 @@ class Env:
                                                   "accepts")
                 return {"ok": False, "refusal": decided}
         effect = self._execute(tool, args)
-        entry["effect"] = effect
+        entry["effect"] = _bounded(effect)
         result = {"executed": effect}
         if decided is not None:
             result["gate"] = decided
@@ -374,7 +444,9 @@ class Env:
             return {"opening": dict(o)}
         if tool == "deny_request":
             w.denials.append(req["id"])
-            return {"denial": req["id"], "rule_id": args["rule_id"], "reason": args["reason"]}
+            cited = sorted(cited_sections(f"{args['rule_id']} {args['reason']}"))
+            return {"denial": req["id"], "rule_id": args["rule_id"], "reason": args["reason"],
+                    "cited_sections": cited}
         if tool == "escalate_request":
             w.escalations.append(req["id"])
             return {"escalation": req["id"], "missing": list(args["missing"]),

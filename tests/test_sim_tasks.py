@@ -28,7 +28,7 @@ from adr_eval.sim.user import DONT_KNOW, answer
 from adr_store.bindings import decide
 from adr_store.bindings.manifest import load_bindings, read_bindings_head
 from adr_store.bindings.reference import ref_decide, ref_in_window, ref_next_allowed
-from tests.sim_fixtures import sim_store  # noqa: F401 - the fixture
+from tests.sim_fixtures import renumbered_bindings, sim_store  # noqa: F401 - fixture
 from tests.store.units_fixtures import make_units_store
 
 SPEC_KEYS = {"task_id", "class", "as_of", "request", "record", "user_knows", "registry",
@@ -56,7 +56,9 @@ def test_tasks_are_six_classes_of_three_in_the_spec_format(sim_store):  # noqa: 
         assert set(line) == SPEC_KEYS and line["class"] == t.class_
         assert set(line["request"]) == {"id", "vessel", "section", "draw", "requested_open_at"}
         assert set(line["expected_state"]) == {"openings", "denials", "escalations"}
-        assert set(line["reference"]) == {"outcome", "denying_sections", "missing_facts"}
+        assert set(line["reference"]) == {"outcome", "denying_sections", "missing_facts",
+                                          "bindings_id"}
+        assert line["reference"]["bindings_id"] == _bindings(sim_store)
         for o in line["expected_state"]["openings"]:
             assert set(o) == {"request", "section", "draw", "open_at", "status"}
         for fact in line["record"].values():
@@ -114,7 +116,8 @@ def test_expected_states_and_references_hold_under_the_reference_evaluator(sim_s
         rec, at = full_record(t), _requested(t)
         d = ref_decide(ref, at, rec)
         assert t.reference == {"outcome": d.outcome, "denying_sections": sorted(
-            d.denying_sections), "missing_facts": list(d.missing)}
+            d.denying_sections), "missing_facts": list(d.missing),
+            "bindings_id": _bindings(sim_store)}
         want = {"allow": "allow", "reschedule": "deny", "deny-closed": "deny",
                 "deny-notice": "deny", "escalate": "escalate", "emergency": "allow"}
         assert d.outcome == want[t.class_]
@@ -144,7 +147,8 @@ def test_escalate_tasks_hide_notice_from_record_and_user(sim_store):  # noqa: F8
         assert refs[(t.request["section"], t.request["draw"])].notice_hours is not None
         assert t.record["vessel_class"]["value"] in ("commercial", "recreational")   # P37
         assert t.reference == {"outcome": "escalate", "denying_sections": [],
-                               "missing_facts": ["notice_minutes"]}
+                               "missing_facts": ["notice_minutes"],
+                               "bindings_id": _bindings(sim_store)}
         assert t.expected_state == {"openings": [], "denials": [], "escalations": ["r1"]}
         assert not _inside(refs[(t.request["section"], t.request["draw"])], _requested(t))
 
@@ -222,27 +226,11 @@ def test_requests_target_the_bindings_draw_numbers_of_known_draws(sim_store, mon
     # the bindings' number targets the request; the Phase 3 number picks the reference draw
     from adr_store.bindings import manifest
 
-    def renumbered(path, bid):
-        m0, bs = load_bindings(path, bid)
-        bs = [b.model_copy(update={"target": {"tool": "schedule_opening", "selector": {
-            "section": "117.821", "draw": 7}}}) if b.target["selector"] == {
-            "section": "117.821", "draw": 2} else b for b in bs]
-        doc = bs[0].doc_id
-        return m0.model_copy(update={
-            "agreement_pairs": [("117.821", 2, 7)],
-            "known_draws": sorted({*m0.known_draws, (doc, "117.821", 7)})}), bs
-
-    monkeypatch.setattr(manifest, "load_bindings", renumbered)
+    monkeypatch.setattr(manifest, "load_bindings", renumbered_bindings())
     _, refs, _ = reference_draws(sim_store.path, _bindings(sim_store))
-    assert list(refs) == [("117.821", 7)] and refs[("117.821", 7)].draw == 2
+    assert ("117.821", 2) not in refs and refs[("117.821", 7)].draw == 2
     assert refs[("117.821", 7)].notice_hours == 4
-
-    def unknown(path, bid):
-        m0, bs = renumbered(path, bid)
-        return m0.model_copy(update={"known_draws": [k for k in m0.known_draws
-                                                     if k[1:] != ("117.821", 7)]}), bs
-
-    monkeypatch.setattr(manifest, "load_bindings", unknown)
+    monkeypatch.setattr(manifest, "load_bindings", renumbered_bindings(known=False))
     with pytest.raises(SimError, match="no known draw"):
         reference_draws(sim_store.path, _bindings(sim_store))
 

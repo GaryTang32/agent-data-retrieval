@@ -52,6 +52,10 @@ tasks are placed so that they cannot: notice is in the initial record and is eno
 requested time, so it is enough at every later minute; the vessel class is a non-emergency one.
 Then both definitions give the first minute after the request outside every closed window.
 
+**The bindings a task was drawn from** are named in its `reference` (`bindings_id`; the nine
+keys of §13.4 stay exact): the environment refuses to run a task on a store whose
+`bindings/HEAD` is another set, and the monitor refuses a log of other bindings (fix round 1).
+
 Each line of `tasks.jsonl` is `canonical(task)`: `SimTask.model_dump(by_alias=True)` in
 canonical JSON (sorted keys, no padding, UTF-8, one newline).
 """
@@ -317,7 +321,7 @@ def _eligible(cls: str, r: RefDraw) -> bool:
 
 
 def _task(cls: str, i: int, key: tuple[str, int], r: RefDraw, placed: dict, day: date,
-          rng: random.Random) -> SimTask | None:
+          rng: random.Random, bindings_id: str) -> SimTask | None:
     section, draw = key
     at = placed["at"]
     registry = [{**e, "section": section, "draw": draw} for e in placed["registry"]]
@@ -347,7 +351,7 @@ def _task(cls: str, i: int, key: tuple[str, int], r: RefDraw, placed: dict, day:
                               "open_at": _iso(t), "status": "active"} for t in openings],
                 "denials": denials, "escalations": escalations}
     reference = {"outcome": ref.outcome, "denying_sections": sorted(ref.denying_sections),
-                 "missing_facts": list(ref.missing)}
+                 "missing_facts": list(ref.missing), "bindings_id": bindings_id}
     return draft.model_copy(update={"expected_state": expected, "reference": reference})
 
 
@@ -379,7 +383,7 @@ def generate_tasks(store_path: Path, bindings_id: str, seed: int = SEED4) -> lis
             for _ in range(ATTEMPTS):
                 day = rng.choice(days)
                 placed = _place(cls, i, rng, refs[key], day)
-                task = placed and _task(cls, i, key, refs[key], placed, day, rng)
+                task = placed and _task(cls, i, key, refs[key], placed, day, rng, bindings_id)
                 if task is not None:
                     tasks.append(task)
                     break
