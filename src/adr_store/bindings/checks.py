@@ -19,7 +19,8 @@ all-other-times condition, or a condition the compiler never writes are failures
 
 **Cases** (`boundary_cases`, at least `MIN_CASES` each way): for every window of the binding
 (its parameters' and its `when`'s), the minutes just before, at, just inside the end of and at
-the end, on two days each window admits and on the days it shuts out (a weekday it lacks, a
+the end, on two days each window admits, on an admitted day of each weekday it lists (of those
+its dates admit), and on the days it shuts out (a weekday it lacks, a
 federal holiday it excepts, the days just outside its dates), each also on the day before and
 after (a crossing window's early minutes are judged on the day before, P44), every day with
 every window's edge minutes; the notice values
@@ -371,6 +372,8 @@ def _intended(b: Binding) -> tuple[list[_Part], list[str], list[_Shape]]:
         else:
             windows[i] = w
     if _under(b.rule_id, GENERAL_DUTY):
+        if b.effect != "basis":
+            problems.append("§ 117.5 binds as a basis")
         ws = tuple(windows.values())
         return [_Part(outside=ws) if ws else _Part()], problems, shapes
     n = _prov_value(b.params_prov, "notice_hours")
@@ -489,10 +492,13 @@ def _pool(ws: list[Window]) -> list[date]:
 
 
 def _days_for(w: Window, pool: list[date]) -> list[date]:
-    """Two days `w` admits, then the days it shuts out by each limit it has: two with a weekday
-    it lacks, two federal holidays it excepts, and the day nearest each end of its date
-    range."""
-    out = [d for d in pool if _admits(w, d)][:2]
+    """Two days `w` admits and one admitted day of each weekday it lists (of those its dates
+    admit), then the days it shuts out by each limit it has: two with a weekday it lacks, two
+    federal holidays it excepts, and the day nearest each end of its date range."""
+    admitted = [d for d in pool if _admits(w, d)]
+    out = admitted[:2] + [d for wd in w.days
+                          for d in [next((x for x in admitted if DAYS[x.weekday()] == wd), None)]
+                          if d is not None]
     relax = {"days": {"days": DAYS}, "holidays": {"except_federal_holidays": False},
              "dates": {"date_from": None, "date_to": None}}
     for limit, update in relax.items():

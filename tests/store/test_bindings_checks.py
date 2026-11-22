@@ -58,7 +58,9 @@ from tests.store.test_bindings_compile import (
     WEEKDAYS,
     draw,
     g,
+    on_signal,
     period,
+    run,
 )
 
 FORBID_821 = by_rule(BINDINGS_821, CARD_A.canonical_ref, "forbid")          # the 7-9 window
@@ -189,6 +191,40 @@ def test_a_binding_encoding_the_wrong_window_fails_its_tests():
     assert checks.test_binding(with_when(EMERGENCY_821, defaulted))   # a shape it never writes
     lenient = {"or": [EMERGENCY_821.when, {"not": {"known": "local_procedure_conflict"}}]}
     assert checks.test_binding(with_when(EMERGENCY_821, lenient))
+
+
+def test_general_duty_inverted_to_a_forbid_fails_and_rejects_its_draw():
+    """Fix round 2: § 117.5 binds as a basis; compiled as a forbid it would deny the openings
+    the general duty requires."""
+    (duty,) = [b for b in BINDINGS_NOTICE_PERIOD if b.rule_id == GENERAL_CARD.canonical_ref]
+    assert checks.test_binding(duty) == []
+    inverted = rebuild(duty, effect="forbid")
+    assert "parameters: § 117.5 binds as a basis" in checks.test_binding(inverted)
+    out = mark_tested([inverted if b.binding_id == duty.binding_id else b
+                       for b in BINDINGS_NOTICE_PERIOD])
+    assert {b.status for b in out} == {"rejected"}
+    # the constant form too
+    (const,) = [b for b in BINDINGS_GENERAL if b.rule_id == GENERAL_CARD.canonical_ref]
+    assert checks.test_binding(rebuild(const, effect="forbid"))
+
+
+def test_a_weekday_dropped_from_a_short_dated_window_fails():
+    """Fix round 2: true cases fall on an admitted day of every listed weekday, so a weekday
+    dropped from a short dated window is caught (the reviewer's 06-17..07-12 case)."""
+    days = ("Mon", "Thu", "Fri", "Sun")
+    bs = run(draw(periods=[on_signal("06-17", "07-12", start=360, end=1080, days=days)]))[0]
+    basis = by_rule(bs, CARD_A.canonical_ref, "basis")
+    assert checks.test_binding(basis) == []
+    allow, _ = boundary_cases(basis)
+    assert {c["facts"]["weekday"] for c in allow} >= set(days)
+    for dropped in days:
+        w = {**basis.when["window"], "days": [d for d in days if d != dropped]}
+        bad = with_when(basis, {"in_window": {"fact": "open_at"}, "window": w})
+        assert checks.test_binding(bad), dropped
+    # a range that admits fewer weekdays than it lists uses those it admits
+    one_day = run(draw(periods=[on_signal("12-25", "12-25", start=360, end=1080,
+                                          days=days)]))[0]
+    assert checks.test_binding(by_rule(one_day, CARD_A.canonical_ref, "basis")) == []
 
 
 def test_a_basis_one_minute_too_wide_fails_a_complement_probe():
