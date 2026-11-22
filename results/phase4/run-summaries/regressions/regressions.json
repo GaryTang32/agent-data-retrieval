@@ -1,0 +1,327 @@
+{
+ "head": "4502637",
+ "llm_cache_files_before_after": [
+  12010,
+  12010
+ ],
+ "model_calls": 0,
+ "phase2_regression": {
+  "bench": {
+   "committed_run": "bench-p2-default-test-retrieval-20261116T091038",
+   "config_differs_only_in": [
+    "run_id",
+    "started",
+    "finished",
+    "wall_clock_s",
+    "settings.acl.{acl_snapshot,sequence,synced_at}",
+    "settings.store",
+    "settings.phase1_store"
+   ],
+   "items": 572,
+   "retrieval_identical": true,
+   "rows_equal": true,
+   "summary_equal_to_committed": true
+  },
+  "gov": {
+   "committed_run": "gov-p2-default-test-retrieval-20261116T090659",
+   "config_differs_only_in": [
+    "run_id",
+    "started",
+    "finished",
+    "wall_clock_s",
+    "settings.acl.{acl_snapshot,sequence,synced_at}",
+    "settings.store",
+    "settings.phase1_store"
+   ],
+   "items": 242,
+   "retrieval_identical": true,
+   "rows_equal": true,
+   "summary_equal_to_committed": true
+  },
+  "research": {
+   "committed_run": "research-p2-default-test-retrieval-20261116T090011",
+   "config_differs_only_in": [
+    "run_id",
+    "started",
+    "finished",
+    "wall_clock_s",
+    "settings.acl.{acl_snapshot,sequence,synced_at}",
+    "settings.store",
+    "settings.phase1_store"
+   ],
+   "items": 222,
+   "retrieval_identical": true,
+   "rows_equal": true,
+   "summary_equal_to_committed": true
+  }
+ },
+ "phase3_replays": {
+  "Q1 gov p3-typed test": {
+   "accuracy": 1.0,
+   "calls": 0,
+   "compile_json": "identical to the 3B replays T234858 and T235123; differs from the named 3A run T200702 in its tables manifest (3A 2678b8da9633 vs 3B HEAD fec2a2b12e31), as expected",
+   "results_jsonl": "identical to gov-p3-typed-test-20261120T200702 (named) and to the 3B replays T234858, T235123",
+   "rows": 27
+  },
+  "Q1 research p3-typed test": {
+   "accuracy": 0.963,
+   "calls": 0,
+   "compile_json": "identical (named, T235106, committed copy)",
+   "results_jsonl": "identical to research-p3-typed-test-20261120T200924 (named) and T235106",
+   "rows": 27
+  },
+  "Q2 gov-tables baseline-linear test": {
+   "accuracy": 0.237,
+   "calls": 0,
+   "compile_json": "identical to T234009 and its committed copy",
+   "results_jsonl": "identical to T234651; against the named run T234009 only notional_cost_usd and latency_s differ (97 of 97)",
+   "rows": 97
+  },
+  "Q2 gov-tables p3-typed dev": {
+   "accuracy": 0.826,
+   "calls": 0,
+   "compile_json": "identical to T233926 and its committed copy",
+   "results_jsonl": "identical to T234737; against the named run T233926 only notional_cost_usd differs (23 of 23)",
+   "rows": 23
+  },
+  "Q2 gov-tables p3-typed test": {
+   "accuracy": 0.68,
+   "calls": 0,
+   "compile_json": "identical to gov-tables-p3-typed-test-20261120T233723 and its committed copy",
+   "results_jsonl": "identical to the Task 11 zero-call replay T234725; against the named model-call run T233723 only notional_cost_usd differs (97 of 97 rows: 0.0 on a cache hit)",
+   "rows": 97
+  },
+  "tables_HEAD": {
+   "gov": "fec2a2b12e318fcb",
+   "research": "62604e913378c76b"
+  }
+ },
+ "read_only_store_hash_before_after": "923ca5f71744 (7,320 files), unchanged",
+ "store_p2_heads_unchanged": true,
+ "what": "Phase 4 Task 23 part 1: Phase 2 regression, Phase 3 replays, and X1 for what exists before the Task 13 and 22 model runs. Counts and ids only; no item id, question or corpus text.",
+ "where": "private scratch copies of .cache/store-p2/{gov,research,bench} (logs left out), ACL synced on the copies only; Phase 1 store, index and embedding cache also copied and the config pointed at the copies; .cache/llm read in place",
+ "x1_probe_sets": {
+  "probes-units-applicability-gov": {
+   "committed_summary": "probes-units-applicability-gov-20261122T020007",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-closure-gov": {
+   "committed_summary": "probes-units-closure-gov-20261122T022254",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-define-bench": {
+   "committed_summary": "probes-units-define-bench-20261121T173738",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-define-gov": {
+   "committed_summary": "probes-units-define-gov-20261122T015853",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-define-research": {
+   "committed_summary": "probes-units-define-research-20261121T173751",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-equivalence-bench": {
+   "committed_summary": "probes-units-equivalence-bench-20261121T175717",
+   "note": "probe calls changed in 94f692d (Task 12 carry C: unit-id contexts); per-call results and summary counts unchanged; a second fresh run gave byte-identical probes, results and summaries",
+   "probes_json_equal_to_local_run": false,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-equivalence-gov": {
+   "committed_summary": "probes-units-equivalence-gov-20261122T021053",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-failclosed-gov": {
+   "committed_summary": "probes-units-failclosed-gov-20261122T020025",
+   "note": "150 rows (was 120): the 120 earlier rows and their targets are byte-equal; the 30 check_rules rows all pass; a second fresh run gave byte-identical probes, results and summaries",
+   "probes_json_equal_to_local_run": false,
+   "results_json_equal_to_local_run": false,
+   "summary_json_equal_to_committed_except": "78 keys: config.tools, config.target_types.check_rules, and the per-tool, per-condition and log counts that the 30 check_rules rows add",
+   "summary_md_lines_differing_from_committed": 9
+  },
+  "probes-units-leak-bench": {
+   "committed_summary": "probes-units-leak-bench-20261121T175538",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-leak-gov": {
+   "committed_summary": "probes-units-leak-gov-20261122T020056",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-mcp-gov": {
+   "committed_summary": "probes-units-mcp-gov-20261122T024907",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 0
+  },
+  "probes-units-procedures-bench": {
+   "committed_summary": "probes-units-procedures-bench-20261121T173604",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  },
+  "probes-units-procedures-gov": {
+   "committed_summary": "probes-units-procedures-gov-20261122T022235",
+   "probes_json_equal_to_local_run": true,
+   "results_json_equal_to_local_run": true,
+   "summary_json_equal_to_committed_except": [
+    "/config/tools"
+   ],
+   "summary_md_lines_differing_from_committed": 1
+  }
+ },
+ "x1_probe_sets_note": "13 sets re-run once in fresh processes. Store paths normalised. Every difference from the committed summaries is the tools list gaining check_rules (Task 18, 2cca8a3) and, for units-failclosed, the 30 check_rules rows. probes.json and results.json equal the local runs behind the committed summaries in 11 of 13 sets.",
+ "x1_unit_index": {
+  "dense-bench": {
+   "A_equals_B": true,
+   "docs": 394,
+   "files": {
+    "dense-51f1bd0addd6e859/index.json": "bdf62c3872512df1",
+    "dense-51f1bd0addd6e859/rows.jsonl": "7f9a0f5831dd0536",
+    "dense-51f1bd0addd6e859/vectors.npy": "fc5dc4e83ee9c126",
+    "lexical/index.json": "83afcbc08e333275"
+   },
+   "fingerprint": "318d36386bc37a3f",
+   "n_rankings": 120,
+   "rankings_sha256": "7fb9431b89706e33",
+   "w": 0.75
+  },
+  "dense-gov": {
+   "A_equals_B": true,
+   "docs": 16459,
+   "files": {
+    "dense-51f1bd0addd6e859/index.json": "e19be800922a58bd",
+    "dense-51f1bd0addd6e859/rows.jsonl": "1f7979128d3be0be",
+    "dense-51f1bd0addd6e859/vectors.npy": "27c2041da699579d",
+    "lexical/index.json": "43ca2ce276e30d5d"
+   },
+   "fingerprint": "4c229cede88fb75f",
+   "n_rankings": 120,
+   "rankings_sha256": "886c8e0cd492f20e",
+   "w": 0.75
+  },
+  "dense-research": {
+   "A_equals_B": true,
+   "docs": 1425,
+   "files": {
+    "dense-51f1bd0addd6e859/index.json": "330611d1916c7d96",
+    "dense-51f1bd0addd6e859/rows.jsonl": "c9ccb854cd5fbb28",
+    "dense-51f1bd0addd6e859/vectors.npy": "5749163b1a09da82",
+    "lexical/index.json": "185dd2377a500116"
+   },
+   "fingerprint": "751178cd53f23862",
+   "n_rankings": 120,
+   "rankings_sha256": "538bc3196d9d54cb",
+   "w": 0.75
+  },
+  "lex-bench": {
+   "A_equals_B": true,
+   "docs": 394,
+   "files": {
+    "lexical/index.json": "83afcbc08e333275"
+   },
+   "fingerprint": "318d36386bc37a3f",
+   "n_rankings": 120,
+   "rankings_sha256": "c1fe8516c2d71a5c",
+   "real_store_in_memory_same": true,
+   "w": 1.0
+  },
+  "lex-gov": {
+   "A_equals_B": true,
+   "docs": 16459,
+   "files": {
+    "lexical/index.json": "43ca2ce276e30d5d"
+   },
+   "fingerprint": "4c229cede88fb75f",
+   "n_rankings": 120,
+   "rankings_sha256": "27e82feb9d123ace",
+   "real_store_in_memory_same": true,
+   "w": 1.0
+  },
+  "lex-research": {
+   "A_equals_B": true,
+   "docs": 1425,
+   "files": {
+    "lexical/index.json": "185dd2377a500116"
+   },
+   "fingerprint": "751178cd53f23862",
+   "n_rankings": 120,
+   "rankings_sha256": "19a4f31a63ee80cf",
+   "real_store_in_memory_same": true,
+   "w": 1.0
+  }
+ },
+ "x1_unit_index_note": "lex = the tuning in force (w 1.0, lexical only, index.json written); dense = vectors stored and fused at w 0.75 (the path a tuned w < 1 takes). 120 rankings per build (30 fixed queries x 2 views x 2 type filters, top 100, scores by repr). bench dense also built twice from empty embedding caches: identical to each other and to the warm-cache build.",
+ "x1_units_builds": {
+  "bench": {
+   "builds_identical": true,
+   "equals_units_HEAD": true,
+   "files": 9,
+   "files_equal_to_store_p2": true,
+   "units_id": "d50f23029eed"
+  },
+  "gov": {
+   "builds_identical": true,
+   "equals_units_HEAD": true,
+   "files": 9,
+   "files_equal_to_store_p2": true,
+   "units_id": "3fae4bc9cd7b"
+  },
+  "research": {
+   "builds_identical": true,
+   "equals_units_HEAD": true,
+   "files": 5,
+   "files_equal_to_store_p2": true,
+   "units_id": "a2e70511c9c5"
+  }
+ }
+}
