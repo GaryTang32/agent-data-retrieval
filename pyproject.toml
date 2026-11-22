@@ -31,6 +31,9 @@ dependencies = [
 dev = ["pytest==9.2.0", "ruff==0.17.4"]
 # the MCP server (`adr mcp`, Phase 2 spec §9.1): pinned exactly; the core install does not need it
 mcp = ["mcp==2.3.0"]
+# build-time binding analysis (Phase 4 spec §12.4, P11): only adr_store.bindings.analysis imports z3,
+# the gate never does; CI installs .[dev,mcp] and every z3 test is skipped there
+analysis = ["z3-solver==5.3.3.0"]
 
 [project.scripts]
 adr-eval = "adr_eval.cli:main"
