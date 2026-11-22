@@ -1,15 +1,18 @@
 """The binding review (Phase 4 spec §12.5, P12, P48; builder note 16; preflight C3; Task 17).
 
-There is no human reviewer. Each section whose rules have bindings goes to one review call
+There is no human reviewer. Each section whose draws have bindings goes to one review call
 (`binding-review@1`, the review profile; `max_tokens` 2000 through `tables.extract._call`, so
-the P21 retry and failure rules hold). A binding is reviewed in the section of its **rule**:
-the specific rules in their own section, every draw's § 117.5 general duty in § 117.5 and
-every § 117.31(b) emergency basis in § 117.31, so the pool's 30 sections need at most 32 calls.
+the P21 retry and failure rules hold). A binding is reviewed in the section of the **draw** it
+targets: a draw's specific rules, its § 117.5 general duty and its § 117.31(b) emergency
+basis go together in that draw's section call, so no call carries every draw's emergency
+basis and the pool's sections need at most 30 calls (builder note 16, amended after Task 17).
 Only `analysed` bindings (tested and analysed) are sent; a section whose bindings are all
 rejected gets no call.
 
 **The message** (`review_message`), built by code: the section, the rule cards' verbatim text
-with their provision ids, then each binding with a label (`[B<n>] binding <id>`), its rule id,
+with their provision ids (the section's own, every card holding a quote, and always the
+§ 117.5 and § 117.31(b) cards, so the general duty and the emergency basis are judged in
+context), then each binding with a label (`[B<n>] binding <id>`), its rule id,
 version and effect, its draw, the plain-English sentence code rendered (`derivation`), what it
 overrides, and each parameter with its quote. The flags of Task 15 are surfaced on their own
 lines and the prompt asks the reviewer to judge them: `FLAG sentence_qualifiers (...)` (the
@@ -20,7 +23,11 @@ parameter quote of the binding (`enrich.read_sentence` over the card holding the
 
 **The reply** is `{"verdicts": [{"binding": "B1", "verdict": "approve"|"reject", "reason"}]}`.
 A binding with no verdict (none given, two that differ, neither approve nor reject, no reason,
-an unparseable reply after the retry, an input rejection) is not approved.
+an input rejection) is not approved. A reply still unparseable after the retry at repeat 1
+(the usual sign of a reply cut at `max_tokens`) gives every binding of the section the reason
+`review_unparseable`, so its draws are rejected and counted in the report
+(`review_unparseable`: sections, draws, bindings), never dropped silently; replies whose
+output reached `max_tokens` are counted too (`replies_at_max_tokens`).
 
 **Sign-off** (`review_all`). The record is stored on the binding (validated): its `review`
 keeps the compiler's flags and gains `verdict`, `reason`, `prompt_version` and `served_model`,
@@ -40,20 +47,23 @@ from importlib import resources
 from typing import Any
 
 from adr_eval.llm import ModelOutputError, parse_json_recovering
-from adr_store.bindings.checks import _draw_key, section_of
+from adr_store.bindings.checks import _draw_key, _under
+from adr_store.bindings.compile import EMERGENCY, GENERAL_DUTY
 from adr_store.bindings.dsl import Binding
 from adr_store.bindings.enrich import _Recorder, in_section, read_sentence, section_key
 from adr_store.tables import extract as ex
 from adr_store.units.envelope import Unit
 
-__all__ = ["FLAGS", "MAX_TOKENS", "PROMPT_VERSION", "VERIFIER", "flagged", "review_all",
-           "review_message", "review_section", "review_sections", "system_prompt"]
+__all__ = ["FLAGS", "MAX_TOKENS", "PROMPT_VERSION", "UNPARSEABLE", "VERIFIER", "flagged",
+           "review_all", "review_message", "review_section", "review_sections", "system_prompt",
+           "target_section"]
 
 PROMPT_VERSION = "binding-review@1"
 MAX_TOKENS = 2000
 VERIFIER = "model-review:claude_code_opus"
 FLAGS = ("sentence_qualifiers", "sentence_conditions")
 VERDICTS = ("approve", "reject")
+UNPARSEABLE = "review_unparseable"
 _FLAG_TEXT = {
     "sentence_qualifiers": "the sentence states qualifiers the parameters lack",
     "sentence_conditions": "the sentence says only, unless or notice around the window",
@@ -180,8 +190,9 @@ def _no_verdict(why: str) -> dict:
 
 def _read_verdicts(reply: dict | None, outcome: str, labels: dict[str, str]) -> dict[str, dict]:
     if reply is None:
-        why = "the input was rejected" if outcome == "model_error" else "unparseable reply"
-        return {bid: _no_verdict(why) for bid in labels}
+        v = _no_verdict("the input was rejected") if outcome == "model_error" else \
+            {"verdict": None, "reason": UNPARSEABLE}
+        return {bid: dict(v) for bid in labels}
     given: dict[str, list[dict]] = {}
     for v in reply["verdicts"]:
         given.setdefault(str(v.get("binding")), []).append(v)
@@ -215,6 +226,7 @@ def _review(section: str, cards: list[Unit], bindings: list[Binding], client
                                                                            bindings),
                                       _parse, max_tokens=MAX_TOKENS)
     served = tuple(sorted({c.served_model for c in rec.completions if c.served_model}))
+    counts["at_max_tokens"] = sum(c.output_tokens >= MAX_TOKENS for c in rec.completions)
     return _read_verdicts(reply, outcome, labels), outcome, counts, served
 
 
@@ -227,19 +239,26 @@ def review_section(section: str, cards: list[Unit], bindings: list[Binding], cli
 
 # -- the whole review ----------------------------------------------------------------------------
 
+def target_section(b: Binding) -> str:
+    """The section of the draw a binding targets (its selector's `section`)."""
+    return str(b.target.get("selector", {}).get("section"))
+
+
 def review_sections(bindings: list[Binding]) -> list[str]:
-    """The sections a review calls, in order: the sections of the rules of the `analysed`
-    bindings."""
-    return sorted({section_of(b.rule_id) for b in bindings if b.status == "analysed"},
+    """The sections a review calls, in order: the sections of the draws the `analysed`
+    bindings target."""
+    return sorted({target_section(b) for b in bindings if b.status == "analysed"},
                   key=section_key)
 
 
 def _cards_for(section: str, bindings: list[Binding], cards: list[Unit]) -> list[Unit]:
-    """The cards a section's message shows: the section's own cards and every card holding a
-    parameter quote of its bindings, in the bindings' documents."""
+    """The cards a section's message shows, in the bindings' documents: the section's own
+    cards, the § 117.5 and § 117.31(b) cards, and every card holding a parameter quote of its
+    bindings."""
     docs = {b.doc_id for b in bindings}
-    out = {c.unit_id: c for c in cards if c.doc_id in docs
-           and in_section(c.canonical_ref, section)}
+    out = {c.unit_id: c for c in cards if c.doc_id in docs and (
+        in_section(c.canonical_ref, section) or _under(c.canonical_ref, GENERAL_DUTY)
+        or _under(c.canonical_ref, EMERGENCY))}
     for b in bindings:
         for prov in b.params_prov.values():
             span = _span(prov)
@@ -269,7 +288,7 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
         cards = section_cards(store)[1]
     groups: dict[str, list[Binding]] = {}
     for b in eligible:
-        groups.setdefault(section_of(b.rule_id), []).append(b)
+        groups.setdefault(target_section(b), []).append(b)
     verdicts: dict[str, dict] = {}
     served_of: dict[str, str | None] = {}
     counts, outcomes, served_all = Counter(), Counter(), set()
@@ -314,11 +333,17 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
     out = [updated.get(b.binding_id, b) if b.status == "analysed" else b for b in bindings]
     tally = Counter(v["verdict"] for v in verdicts.values())
     statuses = Counter(b.status for b in out)
+    unparseable = [b for b in eligible if verdicts.get(b.binding_id, {}).get("reason")
+                   == UNPARSEABLE]
     report = {
         "prompt_version": PROMPT_VERSION, "max_tokens": MAX_TOKENS, "limit": limit,
         "sections_total": len(sections), "sections_reviewed": len(chosen),
         "calls": {k: counts[k] for k in ("made", "cached", "failed")},
         "served_models": sorted(served_all), "outcomes": dict(sorted(outcomes.items())),
+        "replies_at_max_tokens": counts["at_max_tokens"],
+        "review_unparseable": {
+            "sections": sum(s["outcome"] == "unparseable" for s in per_section),
+            "draws": len({_draw_key(b) for b in unparseable}), "bindings": len(unparseable)},
         "flagged": sum(s["flagged"] for s in per_section), "sections": per_section,
         "bindings": {"candidates": len(bindings), "eligible": len(eligible),
                      "approved": tally["approve"], "rejected_by_review": tally["reject"],

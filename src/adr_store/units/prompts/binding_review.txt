@@ -30,9 +30,11 @@ For each binding decide:
 - approve: the sentence states what the rule cards require of the desk for that draw (the
   times, days, holidays, dates, notice and vessels), no more and no less.
 - reject: the binding is wrong, too wide, too narrow, or you cannot tell from the cards.
-A binding for 33 CFR 117.5 is the general duty to open where no specific rule of the draw
-applies; a binding for 33 CFR 117.31(b) lets emergency vessels through by overriding the
-draw's forbids. Judge them against the draw's rules quoted with them.
+Each draw's bindings come together, its general-duty and emergency bindings included, and
+RULE CARDS always quote 33 CFR 117.5 and 33 CFR 117.31(b). A binding for 33 CFR 117.5 is the
+general duty to open where no specific rule of the draw applies; a binding for 33 CFR
+117.31(b) lets emergency vessels through by overriding the draw's forbids. Judge them against
+those cards and the draw's own rules in the same message.
 
 Reply with JSON only, no prose and no code fences, in exactly this shape, one entry for every
 binding label of the message:

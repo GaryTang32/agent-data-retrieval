@@ -68,7 +68,9 @@ from tests.store.units_fixtures import (  # noqa: F401
 SNAP = "s" * 12
 U = "a" * 64          # a units id
 T = "b" * 64          # a tables id
-CARDS = [CARD_A, CARD_B, GENERAL_CARD, EMERGENCY_CARD]
+CARD_901 = card("33 CFR 117.901(a)", 1400, 1600)
+IN_901 = 1410                    # an offset inside the span of § 117.901(a)
+CARDS = [CARD_A, CARD_B, CARD_901, GENERAL_CARD, EMERGENCY_CARD]
 
 
 def candidates(*draws: list[Binding]) -> list[Binding]:
@@ -76,8 +78,10 @@ def candidates(*draws: list[Binding]) -> list[Binding]:
     return stamp_analysed(mark_tested([b for d in draws for b in d]))
 
 
-# a weekday closure and nothing else: the forbid, § 117.5 outside it and § 117.31(b)
-BINDINGS_DUTY = run(draw(n=3, periods=[closed(420, 540, days=WEEKDAYS)]))[0]
+# § 117.901: a weekday closure and nothing else: the forbid, § 117.5 outside it and
+# § 117.31(b)
+BINDINGS_DUTY = compile_draw("117.901", draw(n=3, periods=[
+    closed(420, 540, days=WEEKDAYS, at=IN_901)]), [CARD_901], GENERAL_CARD, EMERGENCY_CARD)[0]
 # the same shape with every window moved half an hour off its parameters: fails its tests
 BINDINGS_OFF = shift(run(draw(n=4, periods=[closed(420, 540, days=WEEKDAYS)]))[0], 30)
 CANDIDATES = candidates(BINDINGS_821, BINDINGS_SIGNAL, BINDINGS_DUTY)
@@ -180,12 +184,16 @@ def test_a_missing_or_unparseable_verdict_rejects_the_draw(tmp_path):
     assert "no verdict" in st[B2].review["reason"]
     assert {st[x].status for x in DRAW_SIGNAL} == {"rejected"}
     assert {st[x].status for x in DRAW_821 | DRAW_DUTY} == {"signed_off"}
-    # a reply that never parses (retried once at repeat 1) rejects every binding it covers
+    # a reply that never parses (retried once at repeat 1) rejects every binding it covers,
+    # with the reason review_unparseable, counted in the report
     junk = CachedStubClient("stub-opus", Cache(tmp_path / "junk"), lambda s, u, r: "no json")
     out, report = review_all(None, CANDIDATES, junk, cards=CARDS)
     assert {b.status for b in out} == {"rejected"}
+    assert {b.review["reason"] for b in out} == {"review_unparseable"} == {br.UNPARSEABLE}
     assert set(report["outcomes"]) == {"unparseable"}
-    assert junk.calls == 2 * report["sections_reviewed"]
+    assert junk.calls == 2 * report["sections_reviewed"] == 4
+    assert report["review_unparseable"] == {"sections": 2, "draws": 3,
+                                            "bindings": len(CANDIDATES)}
     # verdicts that differ for one label are no verdict
     def twice(system, user, repeat):
         reply = json.loads(review_reply()(system, user, repeat))
@@ -209,20 +217,22 @@ def test_a_missing_or_unparseable_verdict_rejects_the_draw(tmp_path):
             {"rejected"}
 
 
-def test_a_partly_reviewed_draw_is_not_signed_off(tmp_path):          # --limit, P48
+def test_a_limited_review_signs_off_whole_draws_only(tmp_path):        # --limit, P48
     sections = br.review_sections(CANDIDATES)
-    assert sections == ["117.5", "117.31", "117.821"]
+    assert sections == ["117.821", "117.901"]          # the draws' sections, never 117.5/31
     client = stub_review(tmp_path)
-    out, report = review_all(None, CANDIDATES, client, cards=CARDS, limit=2)
-    assert client.calls == 2 and report["sections_reviewed"] == 2 == \
+    out, report = review_all(None, CANDIDATES, client, cards=CARDS, limit=1)
+    assert client.calls == 1 and report["sections_reviewed"] == 1 == \
         report["sections_total"] - 1
-    # every draw has a § 117.821 binding, not reviewed: nothing is signed off, nothing rejected
-    assert {b.status for b in out} == {"analysed"}
-    assert all(b.review.get("verdict") == "approve" for b in out
-               if b.rule_id in (GENERAL_CARD.canonical_ref, EMERGENCY_CARD.canonical_ref))
-    assert report["bindings"]["not_reviewed"] == sum(
-        b.rule_id.startswith("33 CFR 117.821") for b in CANDIDATES)
-    assert load_bindings(tmp_path, write_bindings(tmp_path, SNAP, U, T, out)[0])[1] == []
+    st = {b.binding_id: b for b in out}
+    # § 117.821's draws are reviewed whole (their § 117.5 and § 117.31(b) bindings too)
+    assert {st[x].status for x in DRAW_821 | DRAW_SIGNAL} == {"signed_off"}
+    # § 117.901's draw is not reviewed at all: no record, still analysed
+    assert {st[x].status for x in DRAW_DUTY} == {"analysed"}
+    assert all("verdict" not in st[x].review and st[x].verifier is None for x in DRAW_DUTY)
+    assert report["bindings"]["not_reviewed"] == len(DRAW_DUTY)
+    assert {b.binding_id for b in load_bindings(tmp_path, write_bindings(
+        tmp_path, SNAP, U, T, out)[0])[1]} == DRAW_821 | DRAW_SIGNAL
 
 
 # -- one call per section, and what it holds (§12.5, builder note 16, C3) -------------------------
@@ -239,21 +249,62 @@ def test_one_review_call_per_section_with_bindings(tmp_path):
     off = mark_tested([*BINDINGS_OFF])
     assert {b.status for b in off} == {"rejected"}
     out, report = review_all(None, CANDIDATES + off, client, cards=CARDS)
-    assert client.calls == 3 == report["sections_reviewed"]
-    assert report["calls"] == {"made": 3, "cached": 0, "failed": 0}
-    assert [m.split("\n", 1)[0] for m in seen] == ["SECTION § 117.5", "SECTION § 117.31",
-                                                    "SECTION § 117.821"]
-    # each section's call carries exactly the bindings whose rule is in that section
+    # one call per pool section with bindings; none for § 117.5 or § 117.31 alone
+    assert client.calls == 2 == report["sections_reviewed"]
+    assert report["calls"] == {"made": 2, "cached": 0, "failed": 0}
+    assert [m.split("\n", 1)[0] for m in seen] == ["SECTION § 117.821", "SECTION § 117.901"]
     for m in seen:
         section = m.split("\n", 1)[0].removeprefix("SECTION § ")
-        ids = set(re.findall(r"^\[B\d+\] binding ([0-9a-f]{64})$", m,
-                                           re.M))
+        # each call carries exactly the bindings of the draws of its section, their general
+        # duty and emergency bindings included
+        ids = set(re.findall(r"^\[B\d+\] binding ([0-9a-f]{64})$", m, re.M))
         assert ids == {b.binding_id for b in CANDIDATES
-                       if b.rule_id.removeprefix("33 CFR ").split("(")[0] == section}
+                       if b.target["selector"]["section"] == section}
+        assert any(b.rule_id == EMERGENCY_CARD.canonical_ref for b in CANDIDATES
+                   if b.binding_id in ids)
+        # and the verbatim § 117.5 and § 117.31(b) cards, whatever the section
+        for c in (GENERAL_CARD, EMERGENCY_CARD):
+            assert f"[{c.canonical_ref}] {c.body['text']}" in m
     assert {b.status for b in out[len(CANDIDATES):]} == {"rejected"}
     # a rerun reads the cache: no call is made
     _, again = review_all(None, CANDIDATES, client, cards=CARDS)
-    assert client.calls == 3 and again["calls"] == {"made": 0, "cached": 3, "failed": 0}
+    assert client.calls == 2 and again["calls"] == {"made": 0, "cached": 2, "failed": 0}
+
+
+def test_an_emergency_binding_rejected_in_a_section_rejects_only_its_draw(tmp_path):
+    e1 = next(b.binding_id for b in CANDIDATES if b.binding_id in DRAW_821
+              and b.rule_id == EMERGENCY_CARD.canonical_ref)
+    out, report = reviewed(tmp_path, {e1: "reject"})
+    st = {b.binding_id: b.status for b in out}
+    assert st[e1] == "rejected" and {st[x] for x in DRAW_821} == {"rejected"}
+    # the other draw of the same section and the other section's draw are signed off
+    assert {st[x] for x in DRAW_SIGNAL | DRAW_DUTY} == {"signed_off"}
+    assert report["bindings"]["rejected_by_review"] == 1
+
+
+def test_a_truncated_reply_is_retried_then_rejected_and_counted(tmp_path):
+    from dataclasses import replace
+
+    calls = []
+
+    class Cut(CachedStubClient):
+        """Replies cut at max_tokens: half a JSON object, output at the limit."""
+
+        def _attempt(self, system, user, max_tokens, repeat):
+            calls.append(repeat)
+            c = super()._attempt(system, user, max_tokens, repeat)
+            return replace(c, text=c.text[:len(c.text) // 2], output_tokens=max_tokens)
+
+    client = Cut("stub-opus", Cache(tmp_path / "cut"), review_reply())
+    out, report = review_all(None, CANDIDATES, client, cards=CARDS, limit=1)
+    assert calls == [0, 1]                         # the retry at repeat 1, then no more
+    st = {b.binding_id: b for b in out}
+    assert {st[x].status for x in DRAW_821 | DRAW_SIGNAL} == {"rejected"}
+    assert {st[x].review["reason"] for x in DRAW_821 | DRAW_SIGNAL} == {"review_unparseable"}
+    assert report["review_unparseable"] == {"sections": 1, "draws": 2,
+                                            "bindings": len(DRAW_821 | DRAW_SIGNAL)}
+    assert report["replies_at_max_tokens"] == 2
+    assert report["bindings"]["no_verdict"] == len(DRAW_821 | DRAW_SIGNAL)
 
 
 def test_the_review_call_passes_max_tokens_2000_and_caches_it(tmp_path):
@@ -326,11 +377,13 @@ def test_flagged_bindings_name_the_flag_and_quote_the_full_sentence():
         "sentence_qualifiers" in b.review for b in bs if b.rule_id.startswith("33 CFR 117.821"))
 
 
-def test_flags_of_general_duty_bindings_are_surfaced_in_their_own_section():
+def test_flags_of_general_duty_bindings_are_surfaced_in_the_draws_section():
     bs = flagged_bindings()
     duty = next(b for b in bs if b.rule_id == GENERAL_CARD.canonical_ref)
     assert duty.review["sentence_conditions"] == ["unless"]
-    msg = review_message("117.5", [GENERAL_CARD, FLAG_CARD], [duty])
+    msg = review_message("117.821", br._cards_for("117.821", bs, [
+        FLAG_CARD, CARD_B, GENERAL_CARD, EMERGENCY_CARD]), bs)
+    assert f"[{GENERAL_CARD.canonical_ref}] {GENERAL_CARD.body['text']}" in msg
     assert f"FLAG sentence_conditions (unless) on binding {duty.binding_id}" in msg
     assert f'full sentence: "{FLAG_SENTENCE}"' in msg
 
@@ -368,7 +421,7 @@ def test_flagged_bindings_are_counted_per_review(tmp_path):
     assert len(flagged) == 2              # the closure's forbid and § 117.5 outside it
     assert report["flagged"] == len(flagged)
     per = {s["section"]: s["flagged"] for s in report["sections"]}
-    assert per == {"117.5": 1, "117.31": 0, "117.821": 1}
+    assert per == {"117.821": 2}
     # the flags stay on the review record beside the verdict
     for b in out:
         if b.binding_id in flagged:
@@ -807,14 +860,15 @@ def test_review_sign_off_and_promote_end_to_end(flow_store, capsys, monkeypatch,
             "claude_code_opus"]
     # the cap: nothing written, exit 1
     before = sorted((path / BINDINGS_DIR).rglob("bindings-[0-9a-f]*.json"))
-    code, out, err = adr([*base, "--max-calls", 2], capsys)
-    assert code == 1 and "stopped at --max-calls 2" in out
+    code, out, err = adr([*base, "--max-calls", 1], capsys)
+    assert code == 1 and "stopped at --max-calls 1" in out
     assert sorted((path / BINDINGS_DIR).rglob("bindings-[0-9a-f]*.json")) == before
-    # one call per section with bindings: §§ 117.5, 117.31, 117.821, 117.901 (builder note 16)
-    code, out, err = adr([*base, "--max-calls", 4], capsys)
+    # one call per pool section with bindings: §§ 117.821 and 117.901, each with its draws'
+    # § 117.5 and § 117.31(b) bindings (builder note 16, amended after Task 17)
+    code, out, err = adr([*base, "--max-calls", 2], capsys)
     assert code == 0, err
-    assert "4 section(s) reviewed" in out
-    assert "status: review complete; 2 model call(s) made, 2 cached" in out
+    assert "2 section(s) reviewed" in out
+    assert "status: review complete; 1 model call(s) made, 1 cached" in out
     bindings_id = next(x.split()[1] for x in out.splitlines() if x.startswith("bindings "))
     assert f"adr bindings promote --store {path} --bindings {bindings_id}" in out
     manifest, loaded = load_bindings(path, bindings_id)
@@ -827,7 +881,8 @@ def test_review_sign_off_and_promote_end_to_end(flow_store, capsys, monkeypatch,
     report = json.loads((path / BINDINGS_DIR / manifest.snapshot /
                          f"review-{bindings_id[:16]}.report.json").read_text())
     assert report["candidates_id"] == cid and report["served_model_mismatch"] is False
-    assert report["sections_reviewed"] == 4 and report["bindings"]["signed_off"] == len(cands)
+    assert report["sections_reviewed"] == 2 and report["bindings"]["signed_off"] == len(cands)
+    assert report["review_unparseable"] == {"sections": 0, "draws": 0, "bindings": 0}
     assert "flagged binding(s)" in out
     # show and promote
     code, out, err = adr(["bindings", "show", "--store", path, "--bindings", bindings_id],
@@ -862,8 +917,9 @@ def test_units_review_fails_on_a_served_model_mismatch_after_writing(flow_store,
                          f"review-{bindings_id[:16]}.report.json").read_text())
     assert report["served_model_mismatch"] is True
     assert report["served_models"] == ["served-other"] and report["limit"] == 1
-    # one section reviewed (§ 117.5): no draw is whole, so nothing is signed off
-    assert load_bindings(path, bindings_id)[1] == []
+    # one section reviewed (§ 117.821): its two draws are whole and signed off, § 117.901's not
+    assert {b.target["selector"]["section"] for b in load_bindings(path, bindings_id)[1]} == \
+        {"117.821"}
 
 
 # -- the real analysis (z3 only) ------------------------------------------------------------------
