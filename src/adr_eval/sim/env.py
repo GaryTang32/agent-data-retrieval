@@ -7,8 +7,10 @@ P35, P37, P49; Review Focus 5; Task 19). It runs in its own process (`main`); th
 `as_of` as the default filter; `get_request` returns the request, the record (every fact with
 its source) and the registry; `ask_user(field)` returns the scripted answer (`user.answer`) and
 writes a known fact to the record as `{"value", "source": "user", "seq"}`, `seq` being the
-call's number (P33). At start the environment writes `local_procedure_conflict` from the
-registry (`tasks.registry_fact`, P37). The agent has no tool that writes a fact.
+call's number (P33); a name the gate reports missing is asked as the user's field it maps to
+(`tasks.USER_FIELD_OF`: `notice_minutes` is written as `notice_received_at`, pre-run review C1).
+At start the environment writes `local_procedure_conflict` from the registry
+(`tasks.registry_fact`, P37). The agent has no tool that writes a fact.
 `procedure_lookup` serves the desk procedure `desk-request@1` first, identically in every arm,
 the store's own hits after it (P52, `_procedure_lookup`).
 
@@ -48,7 +50,8 @@ a table that is not a drawbridge table: refused before the gate sees it, logged 
 record, registry, bindings and units ids, the reference draw the monitor uses, the gate instance
 id), one `call` line per call (its number, tool, arguments, `ok`, result or refusal, the record the
 call was judged on, the fact an answer wrote, the executed effect, and for a gated arm the gate's
-sequence number, instance id, decision and `token_ok`; never the token), and an `end` line with the
+sequence number, instance id, decision, `token_ok` and `deadline`, true when the client's I/O
+deadline fired, P38; never the token), and an `end` line with the
 end state at `close`. With a runtime the `start` line names it (`{"procedure", "source": "arm" or
 "profile", "step"}`) and each call line holds `{"step", "decision": "allow" or "refuse", "after",
 "rule_id"?}` (null without one). Logged arguments are bounded: a string over 1,024 characters
@@ -398,8 +401,9 @@ class Env:
         if tool != "ask_user":
             return result
         learned = result.get("answer") != user.DONT_KNOW
-        fact = self.world.record.get(args["field"]) if learned else None
-        return {**result, "learned": learned,
+        name = user.record_field(args["field"])          # an alias names its field (C1)
+        fact = self.world.record.get(name) if learned else None
+        return {**result, "field": name, "learned": learned,
                 "value": fact.get("value") if isinstance(fact, dict) else None}
 
     def _target_problem(self, tool: str, args: dict) -> str | None:
@@ -511,13 +515,19 @@ class Env:
         entry["gate_args"] = _bounded(gate_args)
         decided: dict | None = None
         if self._client is not None:
+            from adr_store.gate.client import DEADLINE_MISSED
+
             request = {"session": self.task.task_id, "caller": CALLER, "tool": tool,
                        "args": gate_args, "as_of": self.task.as_of, "facts": record,
                        "units": self.units_id}
             reply = self._client.judge(request)
             token_ok = self._client.check_token(request, reply)
+            message = reply["explanation"].get("message")
             entry["gate"] = {"seq": reply["seq"], "instance": reply["instance"],
-                             "decision": reply["decision"], "token_ok": token_ok}
+                             "decision": reply["decision"], "token_ok": token_ok,
+                             # P38: the client's I/O deadline fired (a fail-closed deny)
+                             "deadline": reply["seq"] is None and isinstance(message, str)
+                             and message.endswith(DEADLINE_MISSED)}
             decided = {k: reply[k] for k in _REFUSAL_KEYS}
             decided["message"] = reply["explanation"].get("message")
             decided["rule_text"] = reply["explanation"].get("rule_text")

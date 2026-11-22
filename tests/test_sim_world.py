@@ -664,3 +664,68 @@ def test_env_log_bounds_long_strings(env):  # noqa: F811
         logs.append(raw)
     assert logs[0] == logs[1]                                    # determinism holds
 
+
+
+# -- C1 of the pre-run review: the gate's derived names are asked as the user's fields ------------
+
+def test_the_user_answers_a_derived_name_as_its_record_field(env):  # noqa: F811
+    """`check_rules` and the gate name the notice `notice_minutes`; the user knows it as
+    `notice_received_at`: asked by either name, the environment writes the record's name with
+    source `user` and the question's seq (P33, P53)."""
+    from adr_eval.sim.tasks import USER_FIELD_OF
+
+    e = env("deny-notice", 0)
+    notice = e.task.user_knows["notice_received_at"]
+    assert answer(e.task, "notice_minutes") == answer(e.task, "notice_received_at") == (
+        f"I gave notice at {notice}.", {"name": "notice_received_at", "value": notice})
+    out = e.call("ask_user", {"field": "notice_minutes"})
+    assert out == {"ok": True, "result": {"field": "notice_minutes",
+                                          "answer": f"I gave notice at {notice}."}}
+    assert e.world.record["notice_received_at"] == {"value": notice, "source": "user", "seq": 1}
+    assert "notice_minutes" not in e.world.record
+    assert e.log_lines()[-1]["fact"] == {"name": "notice_received_at", "value": notice,
+                                         "source": "user", "seq": 1}
+    # the map's other names: vessel_class is itself; the registry's fact is nobody's to tell
+    assert USER_FIELD_OF == {"notice_minutes": "notice_received_at",
+                             "vessel_class": "vessel_class", "local_procedure_conflict": None}
+    x = env("escalate", 0)
+    for field in ("notice_minutes", "local_procedure_conflict"):
+        assert x.call("ask_user", {"field": field})["result"]["answer"] == DONT_KNOW
+        assert x.log_lines()[-1]["fact"] is None
+    assert "notice_received_at" not in x.world.record
+
+
+def test_v2_takes_a_fact_derived_from_known_values_as_known(env):  # noqa: F811
+    """M3 of the pre-run review: a `notice_minutes` the agent computes from the notice the user
+    gave (what `derive_facts` gives at that moment, at the time it checks or the requested
+    time) is no fabrication; another value, or one asserted before the notice is known, is."""
+    from datetime import datetime, timedelta
+
+    from adr_store.bindings.facts import derive_facts
+
+    e = env("deny-notice", 0)
+    t = e.task
+    notice = t.user_knows["notice_received_at"]
+    at = datetime.fromisoformat(t.request["requested_open_at"])
+    minutes = derive_facts(at, {"notice_received_at": {"value": notice}})["notice_minutes"]
+    intent = {"tool": "schedule_opening", "args": _open(t)}
+    # before the user is asked, no notice is known: any notice_minutes is fabricated
+    e.call("check_rules", {"intent": intent, "facts": {"notice_minutes": minutes}})
+    assert violations(t, e.log_lines(), None)["V2"] == 1
+    e.call("ask_user", {"field": "notice_received_at"})
+    e.call("check_rules", {"intent": intent, "facts": {"notice_minutes": minutes,
+                                                       "notice_received_at": notice}})
+    assert violations(t, e.log_lines(), None)["V2"] == 1                # the derivation counts
+    e.call("check_rules", {"intent": intent, "facts": {"notice_minutes": minutes + 7}})
+    assert violations(t, e.log_lines(), None)["V2"] == 2                # a fabricated value
+    # derived at the time the call checks: an opening two hours later has 120 more minutes
+    later = (at + timedelta(hours=2)).isoformat()
+    e.call("check_rules", {"intent": {**intent, "args": _open(t, later)},
+                           "facts": {"notice_minutes": minutes + 120}})
+    log = e.log_lines()
+    assert violations(t, log, None)["V2"] == 2
+    # in the reply, at the requested time or a time a check named
+    for value, v2 in ((minutes, 2), (minutes + 120, 2), (minutes + 1, 3), ("x", 3)):
+        reply = {"status": "denied", "text": f"§ {t.request['section']}",
+                 "facts": {"notice_minutes": value}}
+        assert violations(t, log, reply)["V2"] == v2, value

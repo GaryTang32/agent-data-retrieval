@@ -676,3 +676,47 @@ def test_a_served_model_other_than_the_profile_fails_the_run(units_store, monkey
     assert "status: served model mismatch: served-sonnet != stub-claude_code_sonnet; " \
         "2 model call(s) made" in out
     assert len(load_rule_items(gu.RULES_DIR / "items.jsonl")) == 2
+
+
+# -- I3 of the pre-run review: a budget stop keeps every completed call -------------------------
+
+@pytest.mark.parametrize("kind", ["rules", "procedures"])
+def test_a_budget_stop_keeps_every_completed_call_for_the_rerun(units_store, monkeypatch,
+                                                                tmp_path, kind):
+    """Stopped at any cap, a rerun with a higher cap makes exactly the calls the stopped run had
+    not made (redraws included) and gives the items of an uninterrupted run: nothing finished
+    is phrased again, so a share topped up by the user is spent only on what is left."""
+    from adr_eval.pipeline import BudgetExceeded
+    from adr_store.tables.extract import metered_client
+
+    store = units_store
+    counts(monkeypatch, {"33 CFR 117": 3, "33 CFR 165": 1}, 0.0)
+    monkeypatch.setattr(gu, "N_PROCEDURES", 2)
+    first = gu._rule_pools(store, SEED4)["33 CFR 117"]["newest"][0][0]
+
+    def fn(system, user, repeat):
+        if kind == "rules" and first.text in user:
+            return leaking(user)                 # both tries leak: the draw is replaced
+        if "Missing Refund Research" in user and repeat == 0:
+            return "not json"                    # malformed once: redrawn at repeat 1
+        return clean_reply(system, user, repeat)
+
+    def run(cache: str, cap: int):
+        inner = CachedStubClient("stub-sonnet", Cache(tmp_path / cache), fn)
+        meter = metered_client(cap, client=inner)
+        gen = (lambda: generate_rules(store.path, meter)) if kind == "rules" else \
+            (lambda: generate_procedures([store.path], meter))
+        return gen, inner, meter
+
+    gen, inner, _ = run("whole", 100)
+    whole = gen()
+    total = inner.calls
+    assert total >= 4                            # the redraws are calls too
+    for cap in range(total):
+        gen, inner, meter = run(f"cap-{cap}", cap)
+        with pytest.raises(BudgetExceeded):
+            gen()
+        assert inner.calls == meter.budget.calls == cap         # each one completed, cached
+        gen, inner, meter = run(f"cap-{cap}", cap + 100)
+        assert gen() == whole, cap
+        assert inner.calls == meter.budget.calls == total - cap, cap

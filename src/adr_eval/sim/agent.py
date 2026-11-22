@@ -34,7 +34,11 @@ removed; a rerun replays the cached calls). Any other failure (an environment th
 start, a monitor error) is handled the same way, with status `failed: <type>`, and is then
 raised again. `canary` runs trial 0 of the first task in each
 arm and stops. The run refuses up front, before any call or file: an unknown arm, a store
-with no bindings (`NO_BINDINGS`) and tasks drawn from other bindings than `bindings/HEAD`.
+with no bindings (`NO_BINDINGS`), tasks drawn from other bindings than `bindings/HEAD`, and a
+`units/HEAD` other than the units build the bindings were built against (`check_units`,
+pre-run review I1). Should the units move under a run anyway, every `check_rules` call is
+refused (BINDINGS_UNITS): the rows and the summary count those refusals and the run's status
+is `invalid: BINDINGS_UNITS`, never `complete`.
 **The ACL is kept fresh** with `probes.tables.keep_fresh` before every trial (so at least
 every round, N28): it re-syncs the store's ACL only when it is within 15
 minutes of the freshness limit, so a long run is never denied F3 midway. That check, and the
@@ -43,9 +47,11 @@ clock inputs; nothing in the run directory depends on the clock.
 
 **Outputs** (local, under the run directory `runs/sim-<arms>-<ts>/`, P30): `config.json`,
 `tasks.jsonl` (a copy, for `adr-eval sim score`), `rows.jsonl` (one row per trial: the
-trial without its transcript and log), and `trials/<arm>/<task>/t<k>/` (`env.jsonl`, the
-gate's log, `transcript.json`). `summary.json` holds totals only (`score.public`): no task id,
-transcript or text.
+trial without its transcript and log; `gate_deadline` counts its gated calls on which the
+gate's I/O deadline fired, P38, and `summary.json` counts such trials as
+`gate_deadline_trials`; `replay_compare`, T2, excludes them), and
+`trials/<arm>/<task>/t<k>/` (`env.jsonl`, the gate's log, `transcript.json`). `summary.json`
+holds totals only (`score.public`): no task id, transcript or text.
 
 **The environment** of a trial is its own process by default (`adapters.ProcessEnv`);
 `adapters.LocalEnv` runs the same `Env` in-process (tests). The procedure runtime of arm
@@ -83,11 +89,13 @@ from adr_store import acl
 
 __all__ = ["AGENT_PROMPT_VERSION", "ARMS", "K", "MAX_CALLS", "MAX_TOKENS", "MAX_TOOL_CALLS",
            "OUT_ROOT", "PROMPT_SECTIONS", "SUMMARY_FORMAT",
-           "LocalEnv", "ProcessEnv", "check_bindings", "local_env_factory", "parse_turn",
-           "process_env_factory", "render_transcript", "run_rounds", "run_trial",
+           "LocalEnv", "ProcessEnv", "check_bindings", "check_units", "local_env_factory",
+           "parse_turn",
+           "process_env_factory", "render_transcript", "replay_compare", "run_rounds",
+           "run_trial",
            "system_prompt", "tool_list"]
 
-AGENT_PROMPT_VERSION = "desk-agent@1"
+AGENT_PROMPT_VERSION = "desk-agent@2"   # @2: the askable fields named (C1)
 MAX_TOKENS = 1500
 MAX_CALLS = 3
 MAX_TOOL_CALLS = 3
@@ -103,9 +111,10 @@ REQUEST = "== The request =="
 TOOL_HELP = {
     "get_request": "the request record: the request, every fact known so far with its source, "
                    "and the registry of approved local emergency procedures",
-    "ask_user": "ask the user for one fact (for example when notice was given, the vessel "
-                "class, or whether another time is acceptable); the desk writes the answer to "
-                "the request record",
+    # the askable fields exactly, the same text in every arm (pre-run review C1)
+    "ask_user": "ask the user for one fact; field is one of notice_received_at (when the "
+                "vessel's notice was given), vessel_class or accepts_alternative (whether "
+                "another time is acceptable); the desk writes the answer to the request record",
     "rule_lookup": "search the regulations, or fetch a rule by its id",
     "define": "the definition of a term in the regulations",
     "check_rules": "the rules' decision on an intended call, intent = {\"tool\": ..., \"args\": "
@@ -282,6 +291,15 @@ def _gate_stats(log: list[dict]) -> tuple[dict, dict]:
     return outcomes, {"denies": denies, "recovered": recovered}
 
 
+def _units_refused(call: dict) -> bool:
+    """Whether a logged `check_rules` call was refused because the bindings were built against
+    other units than the store's tools read (BINDINGS_UNITS, pre-run review I1)."""
+    from adr_store.tools import BINDINGS_UNITS
+
+    message = (call.get("refusal") or {}).get("message") if call.get("ok") is False else None
+    return isinstance(message, str) and message.startswith(BINDINGS_UNITS.split("{}")[0])
+
+
 def run_trial(task: SimTask, arm: str, trial: int, client, env_factory: Callable) -> dict:
     """One trial of `task` in `arm` (module text): {task_id, arm, trial, calls, tokens,
     transcript, reply, end_state, gate_outcomes, recovered} with `violations` (the trace
@@ -335,8 +353,13 @@ def run_trial(task: SimTask, arm: str, trial: int, client, env_factory: Callable
     finally:
         env.close()
     gate_outcomes, recovered = _gate_stats(log)
+    checks = [x for x in log if x.get("kind") == "call" and x.get("tool") == "check_rules"]
     return {"task_id": task.task_id, "arm": arm, "trial": trial, "calls": calls,
             "tokens": tokens, "made": made, "cached": calls - made - (failed is not None),
+            "check_rules_calls": len(checks),
+            "gate_deadline": sum(bool((x.get("gate") or {}).get("deadline")) for x in log
+                                 if x.get("kind") == "call"),
+            "bindings_units_refusals": sum(_units_refused(x) for x in checks),
             "transcript": {"agent_prompt": AGENT_PROMPT_VERSION,
                            "system_sha256": hashlib.sha256(system.encode()).hexdigest(),
                            "first_message": env.first_message, "turns": turns},
@@ -347,9 +370,28 @@ def run_trial(task: SimTask, arm: str, trial: int, client, env_factory: Callable
 
 # -- rounds ---------------------------------------------------------------------------------
 
+def check_units(store_path: Path, bindings_id: str) -> None:
+    """SimError unless `units/HEAD` of the store is the units build the bindings `bindings_id`
+    were built against (pre-run review I1): otherwise the store's tools refuse every
+    `check_rules` call (BINDINGS_UNITS) while the gate, sent the bindings' own units id, keeps
+    deciding, and a run would measure nothing it claims."""
+    from adr_store.bindings import manifest
+    from adr_store.units import overlay
+
+    built_on = manifest.load_bindings(store_path, bindings_id)[0].units_id
+    head = overlay.read_units_head(store_path)
+    if head != built_on:
+        now = "no units/HEAD that loads" if head is None else f"units/HEAD {head[:12]}"
+        raise SimError(f"the bindings {bindings_id[:12]} were built against units "
+                       f"{built_on[:12]}, but the store has {now}: promote that units build "
+                       f"(`adr units gate --candidate {built_on[:12]}...`) or build bindings "
+                       f"against the units in force; nothing was run")
+
+
 def check_bindings(tasks: list[SimTask], store_path: Path) -> str:
-    """`bindings/HEAD` of the store, which every task must have been drawn from; SimError
-    (`NO_BINDINGS`, or the tasks of other bindings) otherwise."""
+    """`bindings/HEAD` of the store, which every task must have been drawn from and whose units
+    build must be `units/HEAD` (`check_units`); SimError (`NO_BINDINGS`, the tasks of other
+    bindings, or other units in force) otherwise."""
     from adr_store.bindings import manifest
     from adr_store.store import Store
     from adr_store.tools import NO_BINDINGS
@@ -358,6 +400,7 @@ def check_bindings(tasks: list[SimTask], store_path: Path) -> str:
     if head is None:
         snapshot = Store.open(store_path).snapshot_id
         raise SimError(f"NO_BINDINGS: {NO_BINDINGS.format(snapshot[:12])}")
+    check_units(store_path, head)
     other = sorted(t.task_id for t in tasks if t.reference.get("bindings_id") != head)
     if other:
         raise SimError(f"{len(other)} task(s) ({', '.join(other[:3])}"
@@ -384,7 +427,10 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
     (module text); `store` is the store (or its path) the tasks were drawn from. The store's
     ACL is kept fresh before every trial, so at least every round (`probes.tables.keep_fresh`
     with `directory`, `policy` and `clock`; N28). Returns {"order", "rows", "rounds",
-    "status" ("complete", "canary" or "stopped"), "stop", "calls", "served_models",
+    "status" ("complete", "canary", "stopped" or "invalid: BINDINGS_UNITS" when any
+    `check_rules` call was refused because `units/HEAD` is not the bindings' units), "stop",
+    "calls" (made, cached, input rejections), "checks" (`check_rules` calls and BINDINGS_UNITS
+    refusals), "gate_deadline_trials", "served_models",
     "summary"}; the env factory defaults to one environment process per trial. A failure that
     is no model failure or budget stop writes `summary.json` (status `failed: <type>`, the
     complete rounds' totals), removes the partial round's directories and is raised again."""
@@ -450,10 +496,16 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
                 f.write(json.dumps(_row(t), sort_keys=True, ensure_ascii=False) + "\n")
         rows += [_row(t) for t in done]
         complete = k + 1
-    status = (f"failed: {type(failure).__name__}" if failure is not None else
-              "stopped" if stop else "canary" if canary else "complete")
     calls = {"made": sum(r["made"] for r in rows), "cached": sum(r["cached"] for r in rows),
              "input_rejected": sum(r["failed"] is not None for r in rows)}
+    checks = {"check_rules": sum(r["check_rules_calls"] for r in rows),
+              "bindings_units_refused": sum(r["bindings_units_refusals"] for r in rows)}
+    # a `check_rules` refused for its units means `units/HEAD` moved under the run: whatever
+    # the arms scored, the run measured no rules check, so it is never "complete" (I1)
+    status = (f"failed: {type(failure).__name__}" if failure is not None else
+              "stopped" if stop else
+              "invalid: BINDINGS_UNITS" if checks["bindings_units_refused"] else
+              "canary" if canary else "complete")
     # the metered client's served models include calls of a discarded round
     served = sorted({m for r in rows for m in r["served_models"]}
                     | set(getattr(client, "served_models", ())))
@@ -463,9 +515,68 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
         "stop": None if stop is None else {k: v for k, v in stop.items() if k != "message"},
         "arms": list(arms), "trials": trials, "rounds_complete": complete, "tasks": len(tasks),
         "bindings_id": bindings_id, "agent_prompt": AGENT_PROMPT_VERSION, "model": model,
-        "served_models": served, "calls": calls, "summary": score.public(summary),
+        "served_models": served, "calls": calls, "checks": checks,
+        "gate_deadline_trials": sum(r["gate_deadline"] > 0 for r in rows),
+        "summary": score.public(summary),
         "criteria": score.criteria(summary)})
     if failure is not None:
         raise failure
     return {"order": order, "rows": rows, "rounds": complete, "status": status, "stop": stop,
-            "calls": calls, "served_models": served, "summary": summary, "out_dir": out_dir}
+            "calls": calls, "checks": checks, "served_models": served, "summary": summary,
+            "out_dir": out_dir,
+            "gate_deadline_trials": sum(r["gate_deadline"] > 0 for r in rows)}
+
+
+# -- T2: a replay against its run -------------------------------------------------------------
+
+_REPLAY_ONLY = ("made", "cached")          # a replay reads from the cache what the run made
+_PER_PROCESS = ("instance", "prev_sha256")  # the gate instance id and the chain over it
+
+
+def _without(obj: Any, keys: tuple[str, ...]) -> Any:
+    if isinstance(obj, dict):
+        return {k: _without(v, keys) for k, v in obj.items() if k not in keys}
+    if isinstance(obj, list):
+        return [_without(v, keys) for v in obj]
+    return obj
+
+
+def _log(path: Path) -> list | None:
+    if not path.is_file():
+        return None
+    return [_without(json.loads(x), _PER_PROCESS) for x in path.read_bytes().splitlines()]
+
+
+def _rows_by_trial(run: Path) -> dict[tuple, dict]:
+    rows = [json.loads(x) for x in (Path(run) / "rows.jsonl").read_text(
+        encoding="utf-8").splitlines() if x.strip()]
+    return {(r["task_id"], r["arm"], r["trial"]): r for r in rows}
+
+
+def replay_compare(run: Path, replay: Path) -> dict:
+    """T2 of the simulation (Task 22 Step 9): the trials of `replay` against those of `run`
+    (local; may name tasks). A trial in which the gate's I/O deadline fired in either run
+    (`gate_deadline`, P38) is excluded, never compared. Every other trial must give the same
+    row (less `made` and `cached`), the same `transcript.json` bytes, and the same environment
+    and gate logs less the gate instance id and the hash chain over it (random per gate process
+    by design). Returns {"trials", "compared", "identical", "excluded_deadline", "differ":
+    [[task, arm, trial], ...]}; ValueError when the two runs hold other trials."""
+    a, b = _rows_by_trial(run), _rows_by_trial(replay)
+    if a.keys() != b.keys():
+        raise ValueError(f"{replay} holds other trials than {run}: not a replay of it")
+    excluded = identical = 0
+    differ = []
+    for key in sorted(a):
+        if a[key].get("gate_deadline") or b[key].get("gate_deadline"):
+            excluded += 1
+            continue
+        da, db = (trial_dir(Path(r) / "trials", *key) for r in (run, replay))
+        same = (_without(a[key], _REPLAY_ONLY) == _without(b[key], _REPLAY_ONLY)
+                and (da / "transcript.json").read_bytes() == (db / "transcript.json").read_bytes()
+                and _log(da / "env.jsonl") == _log(db / "env.jsonl")
+                and _log(da / "gate" / "gate.jsonl") == _log(db / "gate" / "gate.jsonl"))
+        identical += same
+        if not same:
+            differ.append(list(key))
+    return {"trials": len(a), "compared": len(a) - excluded, "identical": identical,
+            "excluded_deadline": excluded, "differ": differ}

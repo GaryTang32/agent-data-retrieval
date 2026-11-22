@@ -8,6 +8,12 @@ signed off and decide as the reference evaluator does on the B1 grid. The refere
 pair is `reference.ref_draws` over those facts, keyed by its Phase 3 number; the task's request
 targets the bindings' number, which must be one of the manifest's `known_draws` (P49).
 
+**The task screen** (pre-run review I2). An agreement draw is eligible for tasks only when its
+governing paragraphs (the section's lines that hold its Phase 3 parameter quotes) name no
+phrase of `TASK_SCREEN`: a P47 restricted opening, a vessel-class exception, or a clearance or
+height condition, none of which the DSL or the reference evaluator models. Excluded draws stay
+in the agreement set for B1; `report` counts them per reason.
+
 **The scenario** (§13.4). Six classes of three, drawn with `random.Random(seed)` (`SEED4`):
 classes in `CLASSES` order, each class's draws rotated from a random start over the agreement
 draws that can serve it (a draw may serve several classes, and one class several times).
@@ -64,6 +70,8 @@ from __future__ import annotations
 
 import json
 import random
+import re
+from collections import Counter
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
@@ -77,9 +85,11 @@ from adr_store.bindings.facts import EMERGENCY_CLASSES
 from adr_store.bindings.reference import RefDraw, ref_decide, ref_in_window, ref_next_allowed
 
 __all__ = ["AS_OF_TIME", "CLASSES", "FACT_FIELDS", "FIRST_DATE", "LAST_DATE", "PER_CLASS",
-           "REQUEST_ID", "SEED4", "TASKS_DIR", "SimError", "SimTask", "canonical",
-           "full_record", "generate_tasks", "load_tasks", "ref_from_dict", "ref_to_dict",
-           "reference_draws", "registry_fact", "write_tasks"]
+           "REQUEST_ID", "SEED4", "TASKS_DIR", "USER_FIELD_OF", "SimError", "SimTask",
+           "canonical",
+           "TASK_SCREEN", "draw_screen", "full_record", "generate_tasks", "governing_text",
+           "load_tasks", "ref_from_dict", "ref_to_dict", "reference_draws", "registry_fact",
+           "screen_reasons", "write_tasks"]
 
 TASKS_DIR = REPO_ROOT / "golden" / "sim-drawbridge" / "v0.1"
 CLASSES = ("allow", "reschedule", "deny-closed", "deny-notice", "escalate", "emergency")
@@ -91,11 +101,40 @@ AS_OF_TIME = time(5, 30)
 EARLIEST, LATEST, STEP = 6 * 60, 21 * 60 + 45, 15          # requested times, minutes of day
 REQUEST_ID = "r1"
 FACT_FIELDS = ("notice_received_at", "vessel_class", "accepts_alternative")
+# The user's field of each fact the gate and `check_rules` can name missing (P53): the derived
+# `notice_minutes` is asked as `notice_received_at`; the registry's fact is the desk's, nobody's
+# to tell. One map, imported by the scripted user (`user.answer` takes a name here as an alias
+# of its field) and by the procedure runtime (s9 of `desk-request@1` names it, `ASK_MAPS`), so
+# the two cannot drift (pre-run review C1).
+USER_FIELD_OF: dict[str, str | None] = {"notice_minutes": "notice_received_at",
+                                        "vessel_class": "vessel_class",
+                                        "local_procedure_conflict": None}
 RECORD_CLASSES = ("commercial", "recreational")
 EMERGENCY_VESSEL = "public_safety"           # § 117.31(b)(1); one of EMERGENCY_CLASSES
 assert EMERGENCY_VESSEL in EMERGENCY_CLASSES
 VESSELS = ("Osprey", "Cape Lookout", "Nantucket Belle", "Sea Robin", "Miss Hatteras",
            "Northern Light", "Pamlico Star", "Blue Heron")
+# The task screen (pre-run review I2, `whole-branch-review-prerun.md`): a draw whose governing
+# paragraphs (the full text of the section's paragraphs, its lines, that hold the draw's
+# Phase 3 parameter quotes) name any of these, matched as whole words and case-insensitively,
+# is decided by something the DSL and the reference evaluator do not model, so a task on it
+# could carry an expected state the regulation contradicts. Such draws stay in the agreement
+# set (B1's grid); only task eligibility drops them. "need not open" is not here: it is the
+# closed-period phrase the DSL models (`need_not_open`), held by 35 of the 56 simple
+# closed-window draws (controller ruling in the pre-run fix round).
+TASK_SCREEN: dict[str, tuple[str, ...]] = {
+    # the restricted openings of P47 ("the draw need open only on the hour")
+    "restricted_opening": ("need open", "need be opened", "need only open",
+                           "need only be opened"),
+    # exceptions for a vessel class the tasks do not model (§ 117.305(a), § 117.315(a))
+    "vessel_class": ("tug", "tugs", "towboat", "public vessel", "vessels of the United States",
+                     "commercial vessel", "pleasure craft", "with a tow", "in tow"),
+    # conditions on clearance or height (§ 117.949: notice above 50 feet of clearance)
+    "clearance": ("vertical clearance", "clearance of", "feet or more", "height"),
+}
+_SCREEN_RX = {reason: [re.compile(r"(?<!\w)" + r"\s+".join(map(re.escape, p.split()))
+                                  + r"(?!\w)", re.IGNORECASE) for p in phrases]
+              for reason, phrases in TASK_SCREEN.items()}
 OUTCOME = {"allow": "allow", "reschedule": "deny", "deny-closed": "deny", "deny-notice": "deny",
            "escalate": "escalate", "emergency": "allow"}
 ATTEMPTS = 400
@@ -209,6 +248,49 @@ def _scenario_days(store_path: Path, snapshot: str, doc: str) -> list[date]:
             out.append(day)
         day += timedelta(days=1)
     return out
+
+
+# -- the task screen (pre-run review I2) -----------------------------------------------------------
+
+def screen_reasons(text: str) -> tuple[str, ...]:
+    """The `TASK_SCREEN` reasons whose phrases occur in `text` (whole words, any case), in
+    `TASK_SCREEN` order."""
+    return tuple(r for r, rxs in _SCREEN_RX.items() if any(rx.search(text) for rx in rxs))
+
+
+def governing_text(section_text: str, draw: dict) -> str:
+    """The full text of the paragraphs (lines) of `section_text` that hold a quote of the
+    draw's parameters (`draw`: field -> `tables.extract.Value` with offsets), in order."""
+    spans = [(v.start, v.end) for v in draw.values()
+             if getattr(v, "start", None) is not None and v.end is not None]
+    out, at = [], 0
+    for line in section_text.split("\n"):
+        end = at + len(line)
+        if any(a < end and b > at for a, b in spans):
+            out.append(line)
+        at = end + 1
+    return "\n".join(out)
+
+
+def draw_screen(facts: list, sections: list, doc_id: str | None) -> dict[tuple[str, int], tuple]:
+    """{(section, Phase 3 draw): the `TASK_SCREEN` reasons of its governing paragraphs} for
+    every second-pass draw of the sections of `doc_id` (`reference.ref_draws`' numbering)."""
+    from adr_store.bindings.reference import _sections
+
+    return {(section, n): screen_reasons(governing_text(u.text, d))
+            for section, u, f in _sections(facts, sections, doc_id)
+            for n, d in enumerate(f.draws, 1)}
+
+
+def _screened(store_path: Path, m, doc: str) -> dict[tuple[str, int], tuple]:
+    """The screen of the agreement draws, keyed by (section, bindings' draw)."""
+    from adr_store.store import Store
+    from adr_store.tables import extract as ex
+
+    screen = draw_screen(ex.load_facts(store_path, m.facts_id), ex.units(Store.open(store_path)),
+                         doc)
+    return {(section, draw): screen.get((section, p3), ())
+            for section, p3, draw in m.agreement_pairs}
 
 
 # -- facts -----------------------------------------------------------------------------------------
@@ -355,13 +437,26 @@ def _task(cls: str, i: int, key: tuple[str, int], r: RefDraw, placed: dict, day:
     return draft.model_copy(update={"expected_state": expected, "reference": reference})
 
 
-def generate_tasks(store_path: Path, bindings_id: str, seed: int = SEED4) -> list[SimTask]:
+def generate_tasks(store_path: Path, bindings_id: str, seed: int = SEED4, *,
+                   report: dict | None = None) -> list[SimTask]:
     """The 18 tasks of `sim-drawbridge v0.1` from the bindings `bindings_id` of the store
-    (module text). BindingsError for bindings that do not load; SimError when the tasks cannot
-    be made."""
+    (module text), over the agreement draws the task screen keeps (`TASK_SCREEN`); `report`,
+    when given, receives {"agreement_draws", "eligible", "excluded": {reason: draws}} (a draw
+    counts under each reason it hits). BindingsError for bindings that do not load; SimError
+    when the tasks cannot be made."""
     m, refs, doc = reference_draws(store_path, bindings_id)
     if not refs:
         raise SimError(f"bindings {bindings_id[:12]} have no agreement draw to draw tasks from")
+    screen = _screened(store_path, m, doc)
+    excluded = Counter(r for k in refs for r in screen.get(k, ()))
+    if report is not None:
+        report.update({"agreement_draws": len(refs),
+                       "eligible": sum(not screen.get(k) for k in refs),
+                       "excluded": {r: excluded[r] for r in TASK_SCREEN if excluded[r]}})
+    refs = {k: r for k, r in refs.items() if not screen.get(k)}
+    if not refs:
+        raise SimError(f"the task screen excludes every agreement draw of bindings "
+                       f"{bindings_id[:12]} ({dict(excluded)})")
     days = _scenario_days(store_path, m.snapshot, doc)
     if not days:
         raise SimError("the bindings' 33 CFR 117 version is in force on no scenario day after "
@@ -372,7 +467,7 @@ def generate_tasks(store_path: Path, bindings_id: str, seed: int = SEED4) -> lis
     for cls in CLASSES:
         eligible = [k for k in keys if _eligible(cls, refs[k])]
         if not eligible:
-            raise SimError(f"no agreement draw can serve class {cls}")
+            raise SimError(f"no agreement draw the task screen keeps can serve class {cls}")
         start = rng.randrange(len(eligible))
         picks = [eligible[(start + i) % len(eligible)] for i in range(PER_CLASS)]
         if cls == "allow":       # the task whose notice only the user knows: a threshold draw

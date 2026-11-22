@@ -758,3 +758,200 @@ def test_cli_reports_a_failed_run(sim_store, tasks, tmp_path, monkeypatch,  # no
         "round(s) kept" in out
     (run,) = (tmp_path / "runs").glob("sim-no-gate-*")
     assert json.loads((run / "summary.json").read_text())["status"] == "failed: SimError"
+
+
+# -- C1 of the pre-run review: the askable fields, and the gate's names as aliases -----------------
+
+ASK_HELP = ("- ask_user(field: string): ask the user for one fact; field is one of "
+            "notice_received_at (when the vessel's notice was given), vessel_class or "
+            "accepts_alternative (whether another time is acceptable); the desk writes the "
+            "answer to the request record (read)")
+
+
+def test_the_ask_user_help_lists_the_askable_fields_in_every_arm(sim_store, tasks):  # noqa: F811
+    from adr_eval.sim.tasks import FACT_FIELDS
+
+    for task in (_of(tasks, "allow", 1), _of(tasks, "deny-notice", 0)):
+        prompts = {arm: system_prompt(arm, task, sim_store.path) for arm in ARMS}
+        for arm, p in prompts.items():
+            assert p.count(ASK_HELP) == 1, arm
+        assert all(f in ASK_HELP for f in FACT_FIELDS)
+    assert agent.AGENT_PROMPT_VERSION == "desk-agent@2"
+
+
+def asks_by_the_gates_name(t, turn, repeat, system, user):
+    """The reviewer's C1 scenario: check, learn that `notice_minutes` is missing, ask the user
+    by that name; escalate on "I don't know", else check again on the record and deny."""
+    req = t.request
+    check = {"tool": "check_rules", "args": {"intent": {"tool": "schedule_opening",
+                                                       "args": _open(t)}}}
+    if turn == 0:
+        return {"tool_calls": [{"tool": "get_request", "args": {"id": req["id"]}},
+                               {**check, "args": {**check["args"], "facts": {
+                                   k: v["value"] for k, v in t.record.items()}}}]}
+    if turn == 1:
+        assert '"missing_facts": ["notice_minutes"]' in user
+        return {"tool_calls": [{"tool": "ask_user", "args": {"field": "notice_minutes"}}]}
+    if "I don't know" in user:
+        return {"tool_calls": [{"tool": "escalate_request", "args": {
+            "request": req["id"], "missing": ["notice_minutes"], "reason": "unknown notice"}}],
+                "reply": {"status": "escalated", "text": "Escalated: the notice is unknown."}}
+    facts = {**{k: v["value"] for k, v in t.record.items()},
+             "notice_received_at": t.user_knows["notice_received_at"]}
+    return {"tool_calls": [{**check, "args": {**check["args"], "facts": facts}},
+                           {"tool": "deny_request", "args": {
+                               "request": req["id"], "rule_id": f"33 CFR {req['section']}",
+                               "reason": "the notice given is short of the threshold"}}],
+            "reply": {"status": "denied", "text": f"Denied under 33 CFR {req['section']}."}}
+
+
+@pytest.mark.parametrize("arm", ["no-gate", "gate"])
+def test_a_deny_notice_agent_asking_by_the_gates_name_recovers(sim_store, tasks, tmp_path,  # noqa: F811
+                                                               arm):
+    task = _of(tasks, "deny-notice", 0)
+    assert "notice_received_at" in task.user_knows and task.expected_state["denials"]
+    row = _trial(sim_store, task, arm, stub_agent(tmp_path / "llm", asks_by_the_gates_name,
+                                                  tasks), tmp_path / "t")
+    (fact,) = [c["fact"] for c in _calls(row["log"]) if c["fact"]]
+    assert fact == {"name": "notice_received_at", "value": task.user_knows["notice_received_at"],
+                    "source": "user", "seq": 3}
+    assert row["end_state"] == task.expected_state and success(row, task)
+    assert not any(row["violations"].values()), row["violations"]
+    if arm == "gate":
+        (deny,) = [c for c in _calls(row["log"]) if c["tool"] == "deny_request"]
+        # the gate allows the deny: notice short of the threshold, the section cited (P34)
+        assert deny["gate"]["decision"] == "allow" and deny["gate"]["token_ok"] is True
+        assert deny["ok"] and deny["effect"]["denial"] == "r1"
+
+
+# -- I1 of the pre-run review: the units in force must be the bindings' units ----------------------
+
+def test_the_units_guard_refuses_before_any_call(sim_store, tasks, tmp_path,  # noqa: F811
+                                                 monkeypatch, capsys):
+    """`check_bindings` (used by `sim tasks` and `sim drawbridge`) refuses when `units/HEAD` is
+    not the units build the bindings were built against, naming both ids; nothing is called,
+    no run directory is made, no tasks file is written."""
+    from adr_eval import cli, runner
+    from adr_eval.sim.tasks import write_tasks
+    from adr_store.bindings.manifest import load_bindings, read_bindings_head
+    from adr_store.units.overlay import read_units_head
+
+    head = read_bindings_head(sim_store.path)
+    built_on = load_bindings(sim_store.path, head)[0].units_id
+    assert read_units_head(sim_store.path) == built_on               # the fixture lines up
+    assert agent.check_bindings(tasks, sim_store.path) == head
+    moved = "9" * 64
+    monkeypatch.setattr("adr_store.units.overlay.read_units_head", lambda path: moved)
+    client = stub_agent(tmp_path / "llm", oracle_script, tasks)
+    with pytest.raises(SimError, match="units") as e:
+        agent.check_bindings(tasks, sim_store.path)
+    assert built_on[:12] in str(e.value) and moved[:12] in str(e.value)
+    with pytest.raises(SimError, match=moved[:12]):
+        _rounds(sim_store, tasks[:1], ("gate",), client, tmp_path / "run")
+    assert client.calls == 0 and not (tmp_path / "run").exists()
+
+    def no_client(*a, **kw):
+        raise AssertionError("no client is made before the run is checked")
+
+    monkeypatch.setattr(runner, "make_client", no_client)
+    monkeypatch.setattr(agent, "OUT_ROOT", tmp_path / "runs")
+    path = tmp_path / "tasks.jsonl"
+    write_tasks(tasks[:2], path)
+    assert cli.main(_cli_args(sim_store, path, "gate")) == 2
+    err = capsys.readouterr().err
+    assert built_on[:12] in err and moved[:12] in err and not (tmp_path / "runs").exists()
+    out = tmp_path / "gen.jsonl"
+    assert cli.main(["sim", "tasks", "--gen", "--store", str(sim_store.path),
+                     "--out", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert built_on[:12] in err and moved[:12] in err and not out.exists()
+    # no units/HEAD at all is refused the same way
+    monkeypatch.setattr("adr_store.units.overlay.read_units_head", lambda path: None)
+    with pytest.raises(SimError, match="units/HEAD"):
+        agent.check_bindings(tasks, sim_store.path)
+
+
+def test_a_run_whose_check_rules_is_refused_for_its_units_is_not_complete(
+        sim_store, tasks, tmp_path, monkeypatch):  # noqa: F811
+    """Should `units/HEAD` move under a run (after the guard), every `check_rules` call is
+    refused with BINDINGS_UNITS: the rows and the summary count those refusals and the run is
+    never reported complete."""
+    from adr_store.tools import BINDINGS_UNITS, ToolError, Tools
+
+    def moved(self, *a, **kw):
+        raise ToolError(BINDINGS_UNITS.format("a" * 12, "b" * 12, "c" * 12))
+
+    monkeypatch.setattr(Tools, "check_rules", moved)
+    check = lambda t, turn, r, s, u: {  # noqa: E731
+        "tool_calls": [{"tool": "check_rules", "args": {"intent": {
+            "tool": "schedule_opening", "args": _open(t)}, "facts": {}}}],
+        "reply": oracle_reply(t)}
+    out = _rounds(sim_store, tasks[:2], ("no-gate", "gate"), stub_agent(
+        tmp_path / "llm", check, tasks), tmp_path / "run", trials=1)
+    # a refused call drops the turn's reply (P51): three turns, three refusals, no reply
+    assert all(r["bindings_units_refusals"] == r["check_rules_calls"] == 3 and
+               r["reply"] is None for r in out["rows"])
+    assert out["status"] == "invalid: BINDINGS_UNITS" != "complete"
+    summary = json.loads((tmp_path / "run" / "summary.json").read_text())
+    assert summary["status"] == "invalid: BINDINGS_UNITS"
+    assert summary["checks"] == {"check_rules": 12, "bindings_units_refused": 12}
+    # a run whose check_rules calls are answered counts none and completes
+    monkeypatch.undo()
+    out = _rounds(sim_store, tasks[:2], ("no-gate",), stub_agent(tmp_path / "llm2", check, tasks),
+                  tmp_path / "run2", trials=1)
+    assert out["status"] == "complete"
+    assert out["checks"] == {"check_rules": 2, "bindings_units_refused": 0}
+
+
+# -- M2 of the pre-run review (P38): a fired gate deadline is flagged and kept out of T2 ----------
+
+def test_a_fired_gate_deadline_is_flagged_counted_and_excluded_from_t2(
+        sim_store, tasks, tmp_path, monkeypatch, capsys):  # noqa: F811
+    import shutil
+
+    from adr_eval import cli
+    from adr_store.gate.client import DEADLINE_MISSED, GateClient
+
+    three = [_of(tasks, "allow", 1), _of(tasks, "deny-closed", 0)]
+    client = stub_agent(tmp_path / "llm", oracle_script, tasks)
+    run = _rounds(sim_store, three, ("no-gate", "gate"), client, tmp_path / "run", trials=1)
+    assert run["status"] == "complete" and run["gate_deadline_trials"] == 0
+    assert all(r["gate_deadline"] == 0 for r in run["rows"])
+    # the replay of the run from the cache: every trial compared and identical
+    replay = _rounds(sim_store, three, ("no-gate", "gate"), client, tmp_path / "replay",
+                     trials=1)
+    assert replay["calls"]["made"] == 0
+    res = agent.replay_compare(tmp_path / "run", tmp_path / "replay")
+    assert res == {"trials": 4, "compared": 4, "identical": 4, "excluded_deadline": 0,
+                   "differ": []}
+    # the gate misses its deadline on the first gated call of every gate trial
+    real = GateClient.exchange
+    monkeypatch.setattr(GateClient, "exchange", lambda self, data: (None, DEADLINE_MISSED))
+    slow = _rounds(sim_store, three, ("no-gate", "gate"), client, tmp_path / "slow", trials=1)
+    flagged = {(r["task_id"], r["arm"]): r["gate_deadline"] for r in slow["rows"]}
+    # each turn's gated call is refused for the deadline: three turns, three flags
+    assert all(n == (3 if arm == "gate" else 0) for (_, arm), n in flagged.items()), flagged
+    assert all(not success(r, t) for r, t in zip(slow["rows"][1::2], three, strict=True))
+    summary = json.loads((tmp_path / "slow" / "summary.json").read_text())
+    assert summary["gate_deadline_trials"] == slow["gate_deadline_trials"] == 2
+    log = [json.loads(x) for x in (tmp_path / "slow" / "trials" / "gate" / three[0].task_id
+                                   / "t0" / "env.jsonl").read_text().splitlines()]
+    line = next(x for x in _calls(log) if x["gate"])
+    assert line["gate"]["deadline"] is True and line["gate"]["seq"] is None
+    # T2 excludes those trials: compared with the run, only the no-gate trials are compared
+    res = agent.replay_compare(tmp_path / "run", tmp_path / "slow")
+    assert res == {"trials": 4, "compared": 2, "identical": 2, "excluded_deadline": 2,
+                   "differ": []}
+    monkeypatch.setattr(GateClient, "exchange", real)
+    # a trial that differs is named; a run of other trials is refused (CLI: 1 and 2)
+    edited = tmp_path / "edited"
+    shutil.copytree(tmp_path / "replay", edited)
+    t = edited / "trials" / "no-gate" / three[0].task_id / "t0" / "transcript.json"
+    t.write_text(t.read_text().replace("Request", "Requests", 1))
+    assert cli.main(["sim", "replay-compare", str(tmp_path / "run"), str(edited)]) == 1
+    assert f'differ: [["{three[0].task_id}", "no-gate", 0]]' in capsys.readouterr().out
+    assert cli.main(["sim", "replay-compare", str(tmp_path / "run"),
+                     str(tmp_path / "replay")]) == 0
+    assert "4 of 4 compared trial(s) identical; 0 of 4 excluded" in capsys.readouterr().out
+    (edited / "rows.jsonl").write_text((edited / "rows.jsonl").read_text().splitlines()[0] + "\n")
+    assert cli.main(["sim", "replay-compare", str(tmp_path / "run"), str(edited)]) == 2

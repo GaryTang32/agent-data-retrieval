@@ -50,11 +50,14 @@ dotted into the arguments):
   `{request,section,draw,open_at}`; s7's `{request,section,draw}`; s8's and s11's `request`;
 - `{"from_result": {path: fact}}`: the argument must equal a string fact the runtime learned
   (s7's `open_at` is the `next_allowed` of the last `check_rules`; refused while none is);
-- `{"ask_missing": {path: {missing fact: user field or null}}}`: the argument must be the
-  user's field of one of the last `check_rules` result's `missing_facts` (s9: `notice_minutes`
-  -> `notice_received_at`, `vessel_class` -> `vessel_class`, `local_procedure_conflict` ->
-  none, the environment writes it). Another question stays allowed (a read) but does not
-  advance; when no missing fact has a user field, the step is passed as unknown.
+- `{"ask_missing": {path: map name}}`: the argument must be the user's field, by the shared
+  map `ASK_MAPS[map name]`, of one of the last `check_rules` result's `missing_facts`, or that
+  missing fact's own name, which the scripted user answers as the field (s9 names
+  `"user_fields"`, `tasks.USER_FIELD_OF`, the map `user.answer` imports: `notice_minutes` ->
+  `notice_received_at`, `vessel_class` -> `vessel_class`, `local_procedure_conflict` -> none,
+  the environment writes it; pre-run review C1: one map, never a copy in the IR). Another
+  question stays allowed (a read) but does not advance; when no missing fact has a user
+  field, the step is passed as unknown.
 
 **`desk-request@1`** (`config/sim/desk-request.json`, P17: authored as part of the environment,
 `source_kind: "authored"`, no spans): s1 `get_request` -> s2 `check_rules` of the requested opening
@@ -95,6 +98,7 @@ from pathlib import Path
 from typing import Any
 
 from adr_eval.corpora import REPO_ROOT
+from adr_eval.sim.tasks import USER_FIELD_OF
 from adr_store.bindings.dsl import Tri, check_expr, evaluate
 from adr_store.units.envelope import (
     COMPILER_VERSION,
@@ -109,10 +113,10 @@ from adr_store.units.envelope import (
 )
 from adr_store.units.procedures import ProcedureBody, Step, validate_ir
 
-__all__ = ["DESK_PROCEDURE", "DESK_PROCEDURE_PATH", "DESK_UNIT_ID", "DISCIPLINE_MARGIN",
+__all__ = ["ASK_MAPS", "DESK_PROCEDURE", "DESK_PROCEDURE_PATH", "DESK_UNIT_ID", "DISCIPLINE_MARGIN",
            "READ_ONLY", "REFUSED", "RUNTIME_CONFIG", "Runtime", "as_unit", "desk_hit",
            "desk_rendering", "discipline_check", "load_desk_procedure", "load_runtime_config",
-           "result_facts", "runtime_enabled", "write_runtime_entry"]
+           "USER_FIELD_OF", "result_facts", "runtime_enabled", "write_runtime_entry"]
 
 READ_ONLY = ("get_request", "ask_user", "rule_lookup", "define", "check_rules",
              "procedure_lookup", "query_table")
@@ -126,6 +130,8 @@ OUTCOMES = ("allow", "deny", "escalate")
 _PLACES = 9                     # the discipline rule is judged on figures rounded here
 _ENFORCED = ("tool_call", "condition", "end")
 _SCHEMA_KEYS = ("const", "from_request", "from_result", "ask_missing")
+# the maps an `ask_missing` names, by name: one shared object each, never a copy in an IR (C1)
+ASK_MAPS: dict[str, dict[str, str | None]] = {"user_fields": USER_FIELD_OF}
 # the facts a tool's result gives, replaced as a group when the runtime moves on it
 _GROUPS = {"check_rules": ("outcome", "next_allowed", "missing_facts"),
            "ask_user": ("fact_learned",)}
@@ -296,8 +302,7 @@ class Runtime:
             if bad or not all(isinstance(schema.get(k, {}), dict) for k in _SCHEMA_KEYS) or \
                     not all(isinstance(v, str) for m in named if isinstance(m, dict)
                             for v in m.values()) or \
-                    not all(isinstance(m, dict) and all(v is None or isinstance(v, str)
-                                                        for v in m.values())
+                    not all(m in ASK_MAPS
                             for m in (asks.values() if isinstance(asks, dict) else [None])):
                 out.append(f"{s.id}: args_schema takes only {', '.join(_SCHEMA_KEYS)} objects "
                            f"of the forms the module text gives")
@@ -329,11 +334,22 @@ class Runtime:
                 "message": f"refused by the procedure {self.name} at step {s.id}: {reason}"}
 
     @staticmethod
-    def _askable(mapping: dict, learned: dict) -> list[str]:
-        """The user's fields of the missing facts of the last `check_rules` (`ask_missing`)."""
+    def _askable(map_name: str, learned: dict) -> list[str]:
+        """The user's fields of the missing facts of the last `check_rules` (`ask_missing`,
+        over the shared map `ASK_MAPS[map_name]`)."""
+        mapping = ASK_MAPS[map_name]
         missing = learned.get("missing_facts")
         missing = missing if isinstance(missing, list) else []
         return sorted({mapping[m] for m in missing if isinstance(mapping.get(m), str)})
+
+    @staticmethod
+    def _aliases(map_name: str, fields: list[str], learned: dict) -> list[str]:
+        """The missing facts whose user field is one of `fields`: the user answers them as
+        that field (`user.record_field`, C1), so asking one is asking the field."""
+        mapping = ASK_MAPS[map_name]
+        missing = learned.get("missing_facts")
+        missing = missing if isinstance(missing, list) else []
+        return sorted({m for m in missing if isinstance(m, str) and mapping.get(m) in fields})
 
     def _args_problem(self, s: Step, args: Any) -> str | None:
         schema = s.args_schema or {}
@@ -355,10 +371,10 @@ class Runtime:
             found, got = _at(args, path)
             if not found or not _same(got, want):
                 return f"{path} must be {want} (the {fact} of the last result)"
-        for path, mapping in sorted(schema.get("ask_missing", {}).items()):
-            fields = self._askable(mapping, self.learned)
+        for path, map_name in sorted(schema.get("ask_missing", {}).items()):
+            fields = self._askable(map_name, self.learned)
             found, got = _at(args, path)
-            if not found or got not in fields:
+            if not found or got not in fields + self._aliases(map_name, fields, self.learned):
                 return (f"{path} must be one of {json.dumps(fields)}: the user's fields for the "
                         f"missing facts {json.dumps(self.learned.get('missing_facts', []))}")
         return None

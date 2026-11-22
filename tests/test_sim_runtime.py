@@ -314,17 +314,23 @@ def test_reschedule_path_reaches_s7_and_escalate_loop_returns_to_s2():
 
 
 def test_s9_advances_only_on_the_users_field_of_a_missing_fact():
-    """I-2 (P53): `check_rules` names `notice_minutes`; the user answers `notice_received_at`."""
+    """I-2 (P53): `check_rules` names `notice_minutes`; the user answers `notice_received_at`
+    (and, since the pre-run review's C1, answers `notice_minutes` as that field)."""
     r = to_s2()
     walk(r, ("check_rules", rules("escalate", None, NOTICE), INTENT))
     assert r.active == "s9"
-    # the derived name, another field, or no field: still a read, but s9 does not move
-    for field in ("notice_minutes", "vessel_class", "accepts_alternative"):
+    # another field, or no field: still a read, but s9 does not move
+    for field in ("vessel_class", "accepts_alternative"):
         assert r.allows("ask_user", {"field": field}, {}) == (True, None)
         r.advance("ask_user", answer(field, learned=False), {"field": field})
         assert r.active == "s9", field
     r.advance("ask_user", answer("notice_received_at", learned=False), {})
     assert r.active == "s9"
+    # the derived name is the user's alias of its field (C1): it moves s9 as the field does
+    alias = to_s2()
+    walk(alias, ("check_rules", rules("escalate", None, NOTICE), INTENT))
+    assert walk(alias, ("ask_user", answer("notice_received_at", "2026-08-14T08:00:00"),
+                        {"field": "notice_minutes"})) == ["s2"]
     # the reviewer's deny-notice-01 path now recovers: ask the user's field, recheck, deny
     assert walk(r, ("ask_user", answer("notice_received_at", "2026-08-14T08:00:00"),
                     {"field": "notice_received_at"}),
@@ -918,8 +924,9 @@ def test_a_skill_following_agent_reaches_every_expected_end_state(sim_store, tas
 def test_an_agent_that_asks_only_after_an_escalate_recovers(sim_store, tasks,  # noqa: F811
                                                            tmp_path):
     """The reviewer's deny-notice-01 path through the agent loop: check first, learn that the
-    notice is missing, ask the user's field (after a wrong name, which does not advance),
-    check again, ask about another time, deny."""
+    notice is missing, ask by the gate's name (the user's alias of the field since the pre-run
+    review's C1: it moves s9 and writes the fact), ask the field itself (a read at s2), check
+    again, ask about another time, deny."""
     task = _of(tasks, "deny-notice", 0)
     req = task.request
 
@@ -944,8 +951,8 @@ def test_an_agent_that_asks_only_after_an_escalate_recovers(sim_store, tasks,  #
     steps = [(c["tool"], c["args"].get("field"), c["runtime"]["step"], c["runtime"]["after"])
              for c in _calls(row["log"])]
     assert steps == [("get_request", None, "s1", "s2"), ("check_rules", None, "s2", "s9"),
-                     ("ask_user", "notice_minutes", "s9", "s9"),
-                     ("ask_user", "notice_received_at", "s9", "s2"),
+                     ("ask_user", "notice_minutes", "s9", "s2"),
+                     ("ask_user", "notice_received_at", "s2", "s2"),
                      ("check_rules", None, "s2", "s5"),
                      ("ask_user", "accepts_alternative", "s5", "s8"),
                      ("deny_request", None, "s8", "s12")]
@@ -1202,3 +1209,28 @@ def test_a_fail_closed_check_moves_no_step():                    # re-review: ma
     r.advance("check_rules", fail_closed, INTENT)
     assert r.active == "s2" and "outcome" not in r.learned
     assert walk(r, ("check_rules", rules("allow"), INTENT)) == ["s4"]
+
+
+def test_the_user_and_the_runtime_share_one_alias_map():
+    """C1 of the pre-run review: the map from the gate's missing facts to the user's fields is
+    one object, imported by the scripted user and by the runtime; the desk procedure's s9 names
+    it instead of holding a copy, and its text spells every pair."""
+    from adr_eval.sim import tasks as tasks_mod
+    from adr_eval.sim import user as user_mod
+
+    assert user_mod.USER_FIELD_OF is tasks_mod.USER_FIELD_OF is rt_mod.USER_FIELD_OF
+    assert rt_mod.ASK_MAPS == {"user_fields": tasks_mod.USER_FIELD_OF}
+    s9 = next(s for s in load_desk_procedure().steps if s.id == "s9")
+    assert s9.args_schema == {"ask_missing": {"field": "user_fields"}}
+    raw = json.loads(rt_mod.DESK_PROCEDURE_PATH.read_text())
+    assert "notice_received_at" not in json.dumps(
+        next(s for s in raw["body"]["steps"] if s["id"] == "s9")["args_schema"])
+    for missing, field in tasks_mod.USER_FIELD_OF.items():
+        assert missing in s9.text and (field is None or f"{missing} -> field {field}" in s9.text)
+    # an unknown map name is refused when the runtime is built
+    body = load_desk_procedure()
+    bad = body.model_copy(update={"steps": [
+        s.model_copy(update={"args_schema": {"ask_missing": {"field": "other_map"}}})
+        if s.id == "s9" else s for s in body.steps]})
+    with pytest.raises(ValueError, match="args_schema"):
+        Runtime(bad)

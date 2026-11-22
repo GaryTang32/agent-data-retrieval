@@ -43,7 +43,8 @@ from adr_store.bindings.decide import SYSTEM_RULES, SYSTEM_TEXT
 from adr_store.gate import tokens
 from adr_store.gate.server import IO_DEADLINE_S
 
-__all__ = ["REPLY_KEYS", "GateClient", "GateProcess", "fail_closed_reply", "private_socket"]
+__all__ = ["DEADLINE_MISSED", "REPLY_KEYS", "GateClient", "GateProcess", "fail_closed_reply",
+           "private_socket"]
 
 REPLY_KEYS = tuple(sorted(("seq", "instance", "decision", "rule_ids", "deciding_sections",
                           "missing_facts", "next_allowed", "evaluated_outcome", "explanation",
@@ -54,6 +55,7 @@ REPLY_KEYS = tuple(sorted(("seq", "instance", "decision", "rule_ids", "deciding_
 _SEEN: dict[tuple[str, str], set[tuple[str, int]]] = {}
 _SEEN_LOCK = threading.Lock()
 MAX_REPLY_BYTES = 1 << 20
+DEADLINE_MISSED = "the gate missed the I/O deadline"   # P38: the simulation flags it
 CONNECT_RETRY_S = 0.5          # how long a refused connect is retried (within the deadline)
 CONNECT_BACKOFF_S = 0.01
 _INSTANCE = re.compile(r"[0-9a-f]{32}")
@@ -148,12 +150,12 @@ class GateClient:
             while b"\n" not in buf and len(buf) <= MAX_REPLY_BYTES:
                 left = end - time.monotonic()
                 if left <= 0:
-                    return None, "the gate missed the I/O deadline"
+                    return None, DEADLINE_MISSED
                 s.settimeout(left)
                 try:
                     chunk = s.recv(65536)
                 except TimeoutError:
-                    return None, "the gate missed the I/O deadline"
+                    return None, DEADLINE_MISSED
                 except OSError as e:
                     return None, f"the connection failed ({type(e).__name__})"
                 if not chunk:

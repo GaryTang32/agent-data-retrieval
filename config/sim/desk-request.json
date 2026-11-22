@@ -290,11 +290,7 @@
         "subprocedure_ref": null,
         "args_schema": {
           "ask_missing": {
-            "field": {
-              "local_procedure_conflict": null,
-              "notice_minutes": "notice_received_at",
-              "vessel_class": "vessel_class"
-            }
+            "field": "user_fields"
           }
         },
         "condition": null,

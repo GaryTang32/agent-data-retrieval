@@ -6,6 +6,7 @@ only, and `adr-eval sim tasks --gen`. No model call; no gate."""
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from datetime import datetime, timedelta
 
@@ -287,3 +288,88 @@ def test_sim_tasks_cli_writes_the_tasks_and_refuses_without_bindings(sim_store, 
     assert cli.main(["sim", "tasks", "--gen", "--store", str(tmp_path / "nowhere")]) == 2
     assert cli.main(["sim", "tasks", "--gen", "--store", str(sim_store.path), "--bindings",
                      "f" * 64]) == 2
+
+
+# -- I2 of the pre-run review: the task screen -----------------------------------------------------
+
+# 33 CFR 117 text (US government work) of the reviewer's examples
+S305 = ("§ 117.305 Miami River.\n"
+        "(a) General. Public vessels of the United States, tugs, tugs with tows, and vessels in a "
+        "situation where a delay would endanger life or property shall, upon proper signal, be "
+        "passed through the draw of each bridge listed in this section at any time.\n"
+        "(b) The draws of the S.W. First Street Bridge, mile 0.9, shall open on signal; except "
+        "that, from 7:35 a.m. to 8:59 a.m., Monday through Friday, except Federal holidays, the "
+        "draws need not open for the passage of vessels.\n"
+        "(d) The draw of the Brickell Avenue Bridge, mile 0.1, at Miami, shall open on signal; "
+        "except that, from 7 a.m. to 7 p.m., Monday through Friday except Federal holidays, the "
+        "draw need open only on the hour and half-hour.\n")
+S315 = ("(a) The draw of the Davie Boulevard bridge, mile 0.9 at Fort Lauderdale shall open on "
+        "signal; except that, from 7:30 a.m. to 9 a.m., the draw need not open. Public vessels "
+        "of the United States, tugs with tows, and vessels in distress shall be passed at any "
+        "time.")
+S949 = ("The draws of the Chief John Ross Bridge, mile 464.1, shall open on signal when the "
+        "vertical clearance beneath the draw is 50 feet or less. When the vertical clearance "
+        "beneath the draw is more than 50 feet, at least eight hours notice is required.")
+
+
+class V:                                   # a `tables.extract.Value`'s offsets
+    def __init__(self, text: str, quote: str):
+        self.start = text.index(quote)
+        self.end = self.start + len(quote)
+
+
+def test_the_screen_names_restricted_openings_vessel_classes_and_clearance():
+    from adr_store.units.ecfr import MODAL_LEXICON
+
+    # the P47 phrases, exactly; "need not open" (the closed period the DSL models) is not one
+    assert st.TASK_SCREEN["restricted_opening"] == tuple(
+        p for p in MODAL_LEXICON["exemption"] if p != "need not")
+    assert all("need not" not in p for ps in st.TASK_SCREEN.values() for p in ps)
+    first = {"bridge": V(S305, "S.W. First Street Bridge"),
+             "closed_periods": V(S305, "from 7:35 a.m. to 8:59 a.m.")}
+    brickell = {"bridge": V(S305, "Brickell Avenue Bridge"),
+                "closed_periods": V(S305, "7 a.m. to 7 p.m.")}
+    assert st.governing_text(S305, first) == S305.split("\n")[2]          # paragraph (b) only
+    assert st.screen_reasons(st.governing_text(S305, first)) == ()
+    assert st.screen_reasons(st.governing_text(S305, brickell)) == ("restricted_opening",)
+    assert st.screen_reasons(S305.split("\n")[1]) == ("vessel_class",)    # (a), if it governed
+    assert st.screen_reasons(S315) == ("vessel_class",)
+    assert st.screen_reasons(S949) == ("clearance",)
+    # whole words, any case, any spacing
+    assert st.screen_reasons("A TUG\nmay pass") == ("vessel_class",)
+    assert st.screen_reasons("vessels  in\ttow") == ("vessel_class",)
+    for clean in ("tugboat traffic", "the heights of the bridge", "towing", "need openings",
+                  "a clearance gauge", "20 feet or less", "commercial vessels' berths"):
+        assert st.screen_reasons(clean) == (), clean
+    assert st.screen_reasons("a commercial vessel") == ("vessel_class",)
+    assert st.screen_reasons("need only be opened; clearance of 10 feet") == (
+        "restricted_opening", "clearance")
+
+
+def test_screened_draws_are_no_task_draws_and_are_reported(sim_store, monkeypatch):  # noqa: F811
+    from adr_store.bindings.manifest import load_bindings
+
+    head = _bindings(sim_store)
+    report: dict = {}
+    tasks = generate_tasks(sim_store.path, head, report=report)
+    assert report == {"agreement_draws": 2, "eligible": 2, "excluded": {}}
+    assert tasks == generate_tasks(sim_store.path, head)             # the screen moves nothing
+    # a phrase found only in § 117.1081's governing paragraphs excludes that draw: the closed
+    # window classes then have no draw, and the agreement set itself is unchanged (B1)
+    monkeypatch.setitem(st._SCREEN_RX, "clearance", [re.compile("Port Angeles")])
+    report = {}
+    with pytest.raises(SimError, match="task screen keeps can serve class reschedule"):
+        generate_tasks(sim_store.path, head, report=report)
+    assert report == {"agreement_draws": 2, "eligible": 1, "excluded": {"clearance": 1}}
+    assert len(load_bindings(sim_store.path, head)[0].agreement_pairs) == 2
+    monkeypatch.setitem(st._SCREEN_RX, "vessel_class", [re.compile("Smithfield")])
+    with pytest.raises(SimError, match="excludes every agreement draw"):
+        generate_tasks(sim_store.path, head)
+
+
+def test_sim_tasks_cli_prints_the_screen(sim_store, tmp_path, capsys):  # noqa: F811
+    out = tmp_path / "tasks.jsonl"
+    assert cli.main(["sim", "tasks", "--gen", "--store", str(sim_store.path),
+                     "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert 'task screen (I2): 2 of 2 agreement draw(s) eligible; excluded per reason {}' in printed

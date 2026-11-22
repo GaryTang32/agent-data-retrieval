@@ -1905,7 +1905,10 @@ def _sim_tasks(a: argparse.Namespace) -> int:
     """`adr-eval sim tasks --gen`: the 18 tasks of `sim-drawbridge v0.1` from the store's
     signed-off bindings (default `bindings/HEAD`), written to `--out` (default
     `golden/sim-drawbridge/v0.1/tasks.jsonl`). No model call. Exit 2 with `NO_BINDINGS` when the
-    store has no bindings, and when the file holds other tasks (unless `--overwrite`)."""
+    store has no bindings, when `units/HEAD` is not the units build the bindings were built
+    against (`agent.check_units`, pre-run review I1), and when the file holds other tasks
+    (unless `--overwrite`)."""
+    from adr_eval.sim import agent
     from adr_eval.sim import tasks as sim_tasks
     from adr_store.bindings.manifest import BindingsError, read_bindings_head
     from adr_store.store import Store, StoreError
@@ -1925,7 +1928,9 @@ def _sim_tasks(a: argparse.Namespace) -> int:
               file=sys.stderr)
         return 2
     try:
-        made = sim_tasks.generate_tasks(store.path, bindings_id)
+        agent.check_units(store.path, bindings_id)       # the units in force (I1)
+        screen: dict = {}
+        made = sim_tasks.generate_tasks(store.path, bindings_id, report=screen)
     except (BindingsError, sim_tasks.SimError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -1937,6 +1942,8 @@ def _sim_tasks(a: argparse.Namespace) -> int:
         return 2
     sim_tasks.write_tasks(made, out)
     counts = Counter(t.class_ for t in made)
+    print(f"task screen (I2): {screen['eligible']} of {screen['agreement_draws']} agreement "
+          f"draw(s) eligible; excluded per reason {json.dumps(screen['excluded'])}")
     print(f"{len(made)} task(s) from bindings {bindings_id[:12]} "
           f"({', '.join(f'{c} {counts[c]}' for c in sim_tasks.CLASSES)}) -> {out}")
     return 0
@@ -2024,10 +2031,30 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
         head = res["status"]
     if other:
         head = f"served model mismatch: {', '.join(other)} != {meter.model}; {head}"
+    if res["gate_deadline_trials"]:
+        print(f"{res['gate_deadline_trials']} trial(s) in which the gate's I/O deadline fired "
+              f"(P38: excluded from T2 by `adr-eval sim replay-compare`)")
     print(f"status: {head}; {meter.budget.calls} budget unit(s) of {a.max_calls} used; "
           f"{res['calls']['cached']} cached call(s) in kept rounds; served "
           f"{', '.join(served) or 'none reported'} -> {run_dir}")
-    return 1 if other or res["stop"] is not None else 0
+    return 1 if other or res["stop"] is not None or res["status"].startswith("invalid") else 0
+
+
+def _sim_replay_compare(a: argparse.Namespace) -> int:
+    """`adr-eval sim replay-compare RUN REPLAY`: T2 of the simulation (`agent.replay_compare`):
+    exit 0 when every compared trial is identical, 1 otherwise, 2 when REPLAY is no replay of
+    RUN. Trials in which the gate's I/O deadline fired are excluded and counted (P38)."""
+    from adr_eval.sim import agent
+
+    try:
+        res = agent.replay_compare(Path(a.run), Path(a.replay))
+    except (OSError, ValueError, KeyError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    print(f"{res['identical']} of {res['compared']} compared trial(s) identical; "
+          f"{res['excluded_deadline']} of {res['trials']} excluded (the gate's I/O deadline "
+          f"fired, P38)" + (f"; differ: {json.dumps(res['differ'])}" if res["differ"] else ""))
+    return 0 if res["identical"] == res["compared"] else 1
 
 
 def _sim_runs(runs: list[str]) -> tuple[list, list[dict], dict, bytes]:
@@ -2071,7 +2098,8 @@ def _sim_score(a: argparse.Namespace) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     out = {"runs": len(a.runs), "tasks": len(tasks), "summary": score.public(summary),
-           "criteria": score.criteria(summary)}
+           "criteria": score.criteria(summary),
+           "gate_deadline_trials": sum(r.get("gate_deadline", 0) > 0 for r in rows)}
     text = json.dumps(out, indent=2, sort_keys=True) + "\n"
     if a.out:
         a.out.write_text(text, encoding="utf-8")
@@ -2558,6 +2586,11 @@ def _parser() -> argparse.ArgumentParser:
     q.add_argument("runs", nargs="+", help="run directories (sim-<arms>-<time>)")
     q.add_argument("--out", type=Path, default=None, help="also write the JSON here")
     q.set_defaults(fn=_sim_score)
+    q = sim_sub.add_parser("replay-compare", help="T2: a replay of a simulation run against "
+                                                  "the run (no model call)")
+    q.add_argument("run", help="the run directory")
+    q.add_argument("replay", help="its replay's run directory (`--max-calls 0`)")
+    q.set_defaults(fn=_sim_replay_compare)
     q = sim_sub.add_parser(
         "runtime-check", help="the discipline check of the procedure runtime (no model call): "
                               "pass^1 of gate-runtime against gate - 0.05 over the runs, "
