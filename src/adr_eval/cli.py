@@ -1951,8 +1951,9 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
     store with no bindings (`NO_BINDINGS`), no tasks file, and tasks drawn from other bindings
     than `bindings/HEAD`. The store's ACL is kept fresh before every trial (`keep_fresh`,
     N28). A budget stop or a model failure that is no input rejection keeps the complete rounds
-    and exits 1 (a rerun replays the cached calls); a served model other than the profile's
-    writes the outputs and exits 1."""
+    and exits 1 (a rerun replays the cached calls); any other failure does the same with status
+    `failed: <type>`; a served model other than the profile's (`meter.served_models`, every
+    call) writes the outputs and exits 1."""
     from datetime import UTC, datetime
 
     from adr_eval.sim import agent
@@ -1966,8 +1967,11 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
         print(f"error: --arms takes distinct arms of {', '.join(agent.ARMS)}, got {a.arms!r}",
               file=sys.stderr)
         return 2
-    if "gate-runtime" in arms and not agent.RUNTIME_WIRED:
-        print(f"error: {agent.RUNTIME_NOT_WIRED}", file=sys.stderr)
+    try:
+        for arm in arms:
+            agent.refuse_unwired(arm)
+    except sim_tasks.SimError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 2
     if a.trials < 1 or a.max_calls < 0:
         print("error: --trials must be at least 1 and --max-calls not negative",
@@ -1997,8 +2001,17 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
     started = datetime.now(UTC)          # names the run directory only (P38)
     run_dir = runner._new_run_dir(Path(a.out or agent.OUT_ROOT),
                                   f"sim-{'+'.join(arms)}-{started:%Y%m%dT%H%M%S}")
-    res = agent.run_rounds(tasks, arms, meter, run_dir, store=store.path, trials=a.trials,
-                           canary=a.canary, directory=a.directory, policy=a.policy)
+    try:
+        res = agent.run_rounds(tasks, arms, meter, run_dir, store=store.path,
+                               trials=a.trials, canary=a.canary, directory=a.directory,
+                               policy=a.policy)
+    except Exception as e:  # noqa: BLE001 - run_rounds wrote summary.json for the kept rounds
+        kept = json.loads((run_dir / "summary.json").read_text(encoding="utf-8")) \
+            if (run_dir / "summary.json").is_file() else {"rounds_complete": 0}
+        print(f"status: failed: {type(e).__name__}: {' '.join(str(e).split())}; "
+              f"{kept['rounds_complete']} complete round(s) kept; {meter.budget.calls} budget "
+              f"unit(s) of {a.max_calls} used -> {run_dir}")
+        return 1
     for arm, s in res["summary"]["arms"].items():
         k = ", ".join(f"pass^{n} {s[f'pass^{n}']:.3f}" for n in range(1, 5)
                       if s[f"pass^{n}"] is not None)
@@ -2006,7 +2019,7 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
               f"outcome success {s['successes']}; violations "
               f"{' '.join(f'{v} {n}' for v, n in s['violations'].items())}; false passes "
               f"{s['false_passes']}; gate {s['gate_outcomes']}")
-    served = res["served_models"]
+    served = sorted(meter.served_models)       # as the other model commands check it
     other = [m for m in served if m != meter.model]
     if res["stop"] is not None:
         head = (f"stopped at --max-calls {a.max_calls}" if res["stop"]["reason"] == "calls"
@@ -2024,22 +2037,30 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
 
 def _sim_score(a: argparse.Namespace) -> int:
     """`adr-eval sim score RUN [RUN ...]`: the totals and the §17 comparisons of one or more
-    simulation runs (their rows, merged; their tasks must be the same), printed as JSON (and
-    written to `--out`): totals only, no task id or text (P30)."""
+    simulation runs (their rows, merged), printed as JSON (and written to `--out`): totals only,
+    no task id or text (P30). Runs merge only when they ran the same tasks file, under the same
+    bindings id and the same model (`config.json`)."""
     from adr_eval.sim import score
 
-    tasks_bytes, rows = None, []
+    tasks_bytes, first, rows = None, None, []
     for run in a.runs:
         d = Path(run)
-        if not (d / "rows.jsonl").is_file() or not (d / "tasks.jsonl").is_file():
-            print(f"error: {d}: not a simulation run (no rows.jsonl or tasks.jsonl)",
-                  file=sys.stderr)
+        if not all((d / f).is_file() for f in ("rows.jsonl", "tasks.jsonl", "config.json")):
+            print(f"error: {d}: not a simulation run (no rows.jsonl, tasks.jsonl or "
+                  f"config.json)", file=sys.stderr)
             return 2
         data = (d / "tasks.jsonl").read_bytes()
+        config = json.loads((d / "config.json").read_text(encoding="utf-8"))
         if tasks_bytes is not None and data != tasks_bytes:
             print(f"error: {d} ran other tasks than {a.runs[0]}", file=sys.stderr)
             return 2
-        tasks_bytes = data
+        for key in ("bindings_id", "model"):
+            if first is not None and config.get(key) != first.get(key):
+                print(f"error: {d} ran under {key} {config.get(key)!r}, {a.runs[0]} under "
+                      f"{first.get(key)!r}: runs merge only under the same {key}",
+                      file=sys.stderr)
+                return 2
+        tasks_bytes, first = data, first or config
         rows += [json.loads(x) for x in (d / "rows.jsonl").read_text(
             encoding="utf-8").splitlines() if x.strip()]
     from adr_eval.sim.tasks import SimTask

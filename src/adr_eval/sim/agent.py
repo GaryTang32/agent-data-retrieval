@@ -8,8 +8,11 @@ format. The arms differ only where §13.5 says: arm `prompt` adds, between the t
 reply format, the verbatim text of §§ 117.5, 117.31 and 117.40 (`PROMPT_SECTIONS`) and of the
 request's bridge section, read from the store in the 33 CFR 117 version the task's bindings
 were built from (the version in force on every scenario date, P31). Arms `no-gate`, `gate` and
-`gate-runtime` get the same prompt, so a trial's first call is one cache entry for the three
-(identical input; the arms part once a gate refusal changes the transcript).
+`gate-runtime` get the same prompt, so they share their calls through the reply cache while
+their transcripts are the same (P50): a trial's first call is one cache entry for the three,
+and they part at the first *gated* call, whose result differs by arm (the gate's decision on an
+allow, its refusal otherwise). That is common random numbers within a task; the paired
+bootstrap over tasks stays valid, and §16's 648 calls are a worst case.
 
 **One trial** (`run_trial`): up to `MAX_CALLS` agent calls, each
 `client.complete(system, <rendered transcript>, max_tokens=MAX_TOKENS, repeat=trial,
@@ -18,15 +21,18 @@ replay is exact. A reply is one JSON object `{"tool_calls": [{"tool", "args"}], 
 {"status", "text", "facts"?}}` (prose around it is recovered with `parse_json_recovering`).
 Up to `MAX_TOOL_CALLS` tool calls run in order; the first refused call ends the turn, and the
 calls after it **and that turn's reply** are not acted on (the agent sees the refusal in the
-next turn). A reply that is no such object is a turn with no action that still uses its call
-(builder note 18). A reply ends the trial; a trial that ends without one fails. A
-`CachedFailure` (an input rejection, stored: Phase 3 P21) ends the trial as failed; every
-other model failure, and a budget stop, propagates.
+next turn; P51). A reply that is no such object is a turn with no action that still uses its
+call (builder note 18); in a reply, a null `facts` or a `text` that is not a string is
+absent. A reply ends the trial; a trial that ends without one fails. A `CachedFailure` (an
+input rejection, stored: Phase 3 P21) ends the trial as failed; every other model failure, and
+a budget stop, propagates to `run_rounds`.
 
 **Rounds** (`run_rounds`, P28): every task in every arm at trial 0, then trial 1, and so on;
 a round's rows are written only when the round is complete, so a budget stop or a model
 failure leaves complete rounds for every arm (the stopped round's trial directories are
-removed; a rerun replays the cached calls). `canary` runs trial 0 of the first task in each
+removed; a rerun replays the cached calls). Any other failure (an environment that does not
+start, a monitor error) is handled the same way, with status `failed: <type>`, and is then
+raised again. `canary` runs trial 0 of the first task in each
 arm and stops. The run refuses up front, before any call or file: an unknown arm, the
 `gate-runtime` arm until Task 21 wires the procedure runtime (`RUNTIME_NOT_WIRED`; it is never
 run as `gate`), a store with no bindings (`NO_BINDINGS`) and tasks drawn from other bindings
@@ -42,8 +48,8 @@ trial without its transcript and log), and `trials/<arm>/<task>/t<k>/` (`env.jso
 gate's log, `transcript.json`). `summary.json` holds totals only (`score.public`): no task id,
 transcript or text.
 
-**The environment** of a trial is its own process by default (`ProcessEnv`: `python -m
-adr_eval.sim.env`, JSON lines); `LocalEnv` runs the same `Env` in-process (tests).
+**The environment** of a trial is its own process by default (`adapters.ProcessEnv`);
+`adapters.LocalEnv` runs the same `Env` in-process (tests).
 """
 
 from __future__ import annotations
@@ -51,10 +57,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
-import os
 import shutil
-import subprocess
-import sys
 from collections.abc import Callable
 from importlib import resources
 from pathlib import Path
@@ -64,13 +67,23 @@ from typing import Any
 from adr_eval.llm import CachedFailure, ModelError, ModelOutputError, parse_json_recovering
 from adr_eval.pipeline import BudgetExceeded
 from adr_eval.sim import env as env_mod
-from adr_eval.sim import monitor, score, user
+from adr_eval.sim import monitor, score
+from adr_eval.sim.adapters import (
+    RUNTIME_NOT_WIRED,
+    RUNTIME_WIRED,
+    LocalEnv,
+    ProcessEnv,
+    local_env_factory,
+    process_env_factory,
+    refuse_unwired,
+    trial_dir,
+)
 from adr_eval.sim.tasks import SimError, SimTask, canonical, reference_draws
 from adr_store import acl
 
 __all__ = ["AGENT_PROMPT_VERSION", "ARMS", "K", "MAX_CALLS", "MAX_TOKENS", "MAX_TOOL_CALLS",
-           "OUT_ROOT", "PROMPT_SECTIONS", "RUNTIME_NOT_WIRED", "SUMMARY_FORMAT", "LocalEnv",
-           "ProcessEnv", "check_bindings", "local_env_factory", "parse_turn",
+           "OUT_ROOT", "PROMPT_SECTIONS", "RUNTIME_NOT_WIRED", "RUNTIME_WIRED", "SUMMARY_FORMAT",
+           "LocalEnv", "ProcessEnv", "check_bindings", "local_env_factory", "parse_turn",
            "process_env_factory", "render_transcript", "run_rounds", "run_trial",
            "system_prompt", "tool_list"]
 
@@ -83,9 +96,6 @@ ARMS = env_mod.ARMS
 PROMPT_SECTIONS = ("33 CFR 117.5", "33 CFR 117.31", "33 CFR 117.40")
 SUMMARY_FORMAT = "sim-summary@1"
 OUT_ROOT = Path("runs")      # where `adr-eval sim drawbridge` writes by default (tests redirect)
-RUNTIME_WIRED = False        # Task 21 wires the procedure runtime into the environment
-RUNTIME_NOT_WIRED = ("the gate-runtime arm needs the procedure runtime in the environment: "
-                     "runtime not wired (Task 21)")
 STATUSES = monitor.STATUSES
 TURN = "== Turn {n}: your reply =="
 DONE = "== Turn {n}: what happened =="
@@ -170,16 +180,22 @@ def system_prompt(arm: str, task: SimTask, store) -> str:
 
 # -- one turn ---------------------------------------------------------------------------------
 
-def _readable_reply(reply: Any) -> bool:
-    return (isinstance(reply, dict) and isinstance(reply.get("status"), str)
-            and isinstance(reply.get("text", ""), str)
-            and isinstance(reply.get("facts", {}), dict))
+def _reply(reply: dict) -> dict | None:
+    """The reply as kept: a string `status` is required (None otherwise); a `text` that is not a
+    string (null, a number, an object) and a null `facts` are absent; `facts` other than an
+    object or null makes the reply unreadable (None)."""
+    facts = reply.get("facts")
+    if not isinstance(reply.get("status"), str) or not (facts is None or isinstance(facts, dict)):
+        return None
+    text = reply.get("text")
+    return {"status": reply["status"], **({"text": text} if isinstance(text, str) else {}),
+            **({"facts": facts} if facts is not None else {})}
 
 
 def parse_turn(text: str) -> dict:
     """{"readable", "json_recovered", "tool_calls", "reply"} of one agent reply: an object with
-    an optional `tool_calls` list and an optional `reply` {status, text, facts?}; anything else
-    is unreadable (no tool call, no reply)."""
+    an optional `tool_calls` list and an optional `reply` {status, text?, facts?} (`_reply`);
+    anything else is unreadable (no tool call, no reply)."""
     none = {"readable": False, "json_recovered": False, "tool_calls": [], "reply": None}
     obj = None
     for required in (("tool_calls",), ("reply",)):
@@ -193,11 +209,12 @@ def parse_turn(text: str) -> dict:
     calls, reply = obj.get("tool_calls", []), obj.get("reply")
     if calls is None:
         calls = []
-    if not isinstance(calls, list) or (reply is not None and not _readable_reply(reply)):
-        return none
     if reply is not None:
-        reply = {"status": reply["status"], "text": reply.get("text", ""),
-                 **({"facts": reply["facts"]} if "facts" in reply else {})}
+        reply = _reply(reply) if isinstance(reply, dict) else None
+        if reply is None:
+            return none
+    if not isinstance(calls, list):
+        return none
     return {"readable": True, "json_recovered": recovered, "tool_calls": calls, "reply": reply}
 
 
@@ -235,118 +252,6 @@ def render_transcript(first_message: str, turns: list[dict]) -> str:
             parts.append("No tool call and no reply: nothing was done.")
     parts.append(TURN.format(n=len(turns) + 1))
     return "\n\n".join(parts)
-
-
-# -- the environment of a trial ------------------------------------------------------------
-
-def _plain(v: Any) -> Any:
-    return json.loads(json.dumps(v, default=str))
-
-
-def _refuse_unwired(arm: str) -> None:
-    if arm == "gate-runtime" and not RUNTIME_WIRED:
-        raise SimError(RUNTIME_NOT_WIRED)
-
-
-class LocalEnv:
-    """`env.Env` in this process, with the process's interface (results as plain JSON)."""
-
-    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path):
-        self.store_path = Path(store_path)
-        self._env = env_mod.Env(self.store_path, task, arm, log_dir)
-        self.first_message = user.first_message(task)
-        self._end: dict | None = None
-        self._closed = False
-
-    def call(self, tool: Any, args: Any) -> dict:
-        return _plain(self._env.call(tool, args))
-
-    def close(self) -> dict:
-        if not self._closed:
-            self._closed = True
-            self._end = _plain(self._env.world.end_state())
-            self._env.close()
-        return self._end
-
-    def log_lines(self) -> list[dict]:
-        return self._env.log_lines()
-
-
-class ProcessEnv:
-    """The environment process of one trial (`python -m adr_eval.sim.env`, JSON lines)."""
-
-    def __init__(self, store_path: Path, task: SimTask, arm: str, log_dir: Path):
-        self.store_path = Path(store_path)
-        self.log_path = Path(log_dir) / "env.jsonl"
-        self._end: dict | None = None
-        self._closed = False
-        self._proc = subprocess.Popen(
-            [sys.executable, "-m", "adr_eval.sim.env", "--store", str(self.store_path),
-             "--log", str(log_dir)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            text=True, encoding="utf-8",
-            env={**os.environ, "HF_HUB_OFFLINE": "1", "PYTHONIOENCODING": "utf-8"})
-        try:
-            first = self._ask({"task": task.model_dump(by_alias=True, mode="json"),
-                               "arm": arm})
-        except BaseException:
-            self._kill()
-            raise
-        if not first.get("ready"):
-            self._kill()
-            raise SimError(f"the environment did not start: {first.get('error')}")
-        self.first_message = first["first_message"]
-
-    def _ask(self, msg: dict) -> dict:
-        self._proc.stdin.write(json.dumps(msg, ensure_ascii=False) + "\n")
-        self._proc.stdin.flush()
-        line = self._proc.stdout.readline()
-        if not line:
-            raise SimError(f"the environment process ended (exit {self._proc.poll()})")
-        return json.loads(line)
-
-    def _kill(self) -> None:
-        if self._proc.poll() is None:
-            self._proc.kill()
-        self._proc.wait()
-        for f in (self._proc.stdin, self._proc.stdout):
-            f.close()
-
-    def call(self, tool: Any, args: Any) -> dict:
-        return self._ask({"tool": tool, "args": args})
-
-    def close(self) -> dict:
-        if not self._closed:
-            self._closed = True
-            try:
-                self._end = self._ask({"end": True})["end_state"]
-                self._proc.stdin.close()
-                self._proc.wait(timeout=120)
-            finally:
-                self._kill()
-        return self._end
-
-    def log_lines(self) -> list[dict]:
-        return [json.loads(x) for x in self.log_path.read_bytes().splitlines()]
-
-
-def _trial_dir(root: Path, task_id: str, arm: str, trial: int) -> Path:
-    return Path(root) / arm / task_id / f"t{trial}"
-
-
-def local_env_factory(store_path: Path, root: Path) -> Callable:
-    """`(task, arm, trial) -> LocalEnv` logging to `root/<arm>/<task>/t<trial>`."""
-    def make(task: SimTask, arm: str, trial: int) -> LocalEnv:
-        _refuse_unwired(arm)
-        return LocalEnv(store_path, task, arm, _trial_dir(root, task.task_id, arm, trial))
-    return make
-
-
-def process_env_factory(store_path: Path, root: Path) -> Callable:
-    """`(task, arm, trial) -> ProcessEnv` logging to `root/<arm>/<task>/t<trial>`."""
-    def make(task: SimTask, arm: str, trial: int) -> ProcessEnv:
-        _refuse_unwired(arm)
-        return ProcessEnv(store_path, task, arm, _trial_dir(root, task.task_id, arm, trial))
-    return make
 
 
 # -- one trial ------------------------------------------------------------------------------
@@ -480,7 +385,9 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
     ACL is kept fresh before every trial, so at least every round (`probes.tables.keep_fresh`
     with `directory`, `policy` and `clock`; N28). Returns {"order", "rows", "rounds",
     "status" ("complete", "canary" or "stopped"), "stop", "calls", "served_models",
-    "summary"}; the env factory defaults to one environment process per trial."""
+    "summary"}; the env factory defaults to one environment process per trial. A failure that
+    is no model failure or budget stop writes `summary.json` (status `failed: <type>`, the
+    complete rounds' totals), removes the partial round's directories and is raised again."""
     from adr_eval.probes import tables as tp
 
     arms = tuple(arms)
@@ -489,7 +396,7 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
         raise ValueError(f"unknown arm(s) {', '.join(unknown) or '(none or repeated)'}; arms "
                          f"are {', '.join(ARMS)}")
     for arm in arms:
-        _refuse_unwired(arm)
+        refuse_unwired(arm)
     if trials < 1 or not tasks:
         raise ValueError("a run needs at least one task and one trial")
     store_path = _store_path(store)
@@ -514,6 +421,7 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
     order: list[tuple[str, str, int]] = []
     rows: list[dict] = []
     stop: dict | None = None
+    failure: Exception | None = None
     complete = 0
     for k in range(trials):
         done: list[dict] = []
@@ -523,16 +431,20 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
                     tp.keep_fresh(store_path, directory, policy, clock)
                     order.append((task.task_id, arm, k))
                     done.append(run_trial(task, arm, k, client, make_env))
-        except (BudgetExceeded, ModelError) as e:     # CachedFailure never reaches here
+        except Exception as e:  # noqa: BLE001 - kept rounds are summarised; raised again below
             budget = getattr(client, "budget", None)
-            stop = {"reason": (budget.stop_reason if isinstance(e, BudgetExceeded) and budget
-                               else "error"), "error": type(e).__name__, "message": str(e),
-                    "round": k}
+            if isinstance(e, BudgetExceeded) and budget is not None:
+                reason = budget.stop_reason
+            elif isinstance(e, (BudgetExceeded, ModelError)):   # CachedFailure is not here
+                reason = "error"
+            else:
+                reason, failure = "failed", e
+            stop = {"reason": reason, "error": type(e).__name__, "message": str(e), "round": k}
             for d in root.glob(f"*/*/t{k}"):
                 shutil.rmtree(d, ignore_errors=True)
             break
         for t in done:
-            d = _trial_dir(root, t["task_id"], t["arm"], k)
+            d = trial_dir(root, t["task_id"], t["arm"], k)
             d.mkdir(parents=True, exist_ok=True)
             _write_json(d / "transcript.json", t["transcript"])
         with open(out_dir / "rows.jsonl", "a", encoding="utf-8") as f:
@@ -540,10 +452,13 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
                 f.write(json.dumps(_row(t), sort_keys=True, ensure_ascii=False) + "\n")
         rows += [_row(t) for t in done]
         complete = k + 1
-    status = "stopped" if stop else "canary" if canary else "complete"
+    status = (f"failed: {type(failure).__name__}" if failure is not None else
+              "stopped" if stop else "canary" if canary else "complete")
     calls = {"made": sum(r["made"] for r in rows), "cached": sum(r["cached"] for r in rows),
              "input_rejected": sum(r["failed"] is not None for r in rows)}
-    served = sorted({m for r in rows for m in r["served_models"]})
+    # the metered client's served models include calls of a discarded round
+    served = sorted({m for r in rows for m in r["served_models"]}
+                    | set(getattr(client, "served_models", ())))
     summary = score.summarize(rows, tasks)
     _write_json(out_dir / "summary.json", {
         "format": SUMMARY_FORMAT, "status": status,
@@ -552,5 +467,7 @@ def run_rounds(tasks: list[SimTask], arms: tuple[str, ...], client, out_dir: Pat
         "bindings_id": bindings_id, "agent_prompt": AGENT_PROMPT_VERSION, "model": model,
         "served_models": served, "calls": calls, "summary": score.public(summary),
         "criteria": score.criteria(summary)})
+    if failure is not None:
+        raise failure
     return {"order": order, "rows": rows, "rounds": complete, "status": status, "stop": stop,
             "calls": calls, "served_models": served, "summary": summary, "out_dir": out_dir}

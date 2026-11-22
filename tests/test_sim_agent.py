@@ -285,11 +285,15 @@ def test_a_cached_input_rejection_fails_the_trial_and_other_failures_stop(
     assert [(r["task_id"], r["trial"], r["failed"]) for r in bad] == [
         (rejected.task_id, 1, "input_rejected")]
     assert bad[0]["reply"] is None and not success(bad[0], rejected)
-    assert out["calls"]["input_rejected"] == 1
+    # 4 calls: 3 made, 1 rejected; per row, made + cached + rejected = calls
+    assert out["calls"] == {"made": 3, "cached": 0, "input_rejected": 1}
+    assert all(r["made"] + r["cached"] + (r["failed"] is not None) == r["calls"]
+               for r in out["rows"])
     # the stored rejection replays without a call (Phase 3 P21)
     n = client.calls
-    _rounds(sim_store, two, ("no-gate",), client, tmp_path / "run2", trials=2)
+    again = _rounds(sim_store, two, ("no-gate",), client, tmp_path / "run2", trials=2)
     assert client.calls == n
+    assert again["calls"] == {"made": 0, "cached": 3, "input_rejected": 1}
 
     def flaky(t, turn, repeat, system, user):
         if repeat == 1 and t.task_id == two[1].task_id:
@@ -301,6 +305,11 @@ def test_a_cached_input_rejection_fails_the_trial_and_other_failures_stop(
     assert out["status"] == "stopped" and out["rounds"] == 1
     assert [(r["task_id"], r["trial"]) for r in out["rows"]] == [(t.task_id, 0) for t in two]
     assert out["stop"]["error"] == "RetriesExhausted"
+    # the stop's message stays out of summary.json (it may carry provider text)
+    raw = (tmp_path / "run3" / "summary.json").read_text()
+    assert "overloaded" not in raw and "giving up" not in raw
+    assert json.loads(raw)["stop"] == {"reason": "error", "error": "RetriesExhausted",
+                                       "round": 1}
 
 
 def test_budget_stop_leaves_complete_rounds(sim_store, tasks, tmp_path):  # noqa: F811
@@ -308,10 +317,10 @@ def test_budget_stop_leaves_complete_rounds(sim_store, tasks, tmp_path):  # noqa
 
     two = [_of(tasks, "allow", 0), _of(tasks, "allow", 1)]   # 2 calls + 1 call per round
     stub = stub_agent(tmp_path / "llm", oracle_script, tasks)
-    out = _rounds(sim_store, two, ("no-gate",), metered_client(7, client=stub),
+    out = _rounds(sim_store, two, ("no-gate",), metered_client(8, client=stub),
                   tmp_path / "run")
     assert out["status"] == "stopped" and out["stop"]["reason"] == "calls"
-    assert out["rounds"] == 2 and stub.calls == 7      # round 2 stopped in its second trial
+    assert out["rounds"] == 2 and stub.calls == 8      # round 2 stopped in its second trial
     rows = [json.loads(x) for x in (tmp_path / "run" / "rows.jsonl").read_text().splitlines()]
     assert sorted((r["task_id"], r["trial"]) for r in rows) == sorted(
         (t.task_id, k) for t in two for k in (0, 1))
@@ -321,11 +330,16 @@ def test_budget_stop_leaves_complete_rounds(sim_store, tasks, tmp_path):  # noqa
     assert summary["status"] == "stopped" and summary["rounds_complete"] == 2
     assert summary["summary"]["arms"]["no-gate"]["pass^2"] == 1.0
     assert summary["summary"]["arms"]["no-gate"]["pass^4"] is None
-    # a rerun resumes from the cache: the stopped round's first call is not made again
-    out = _rounds(sim_store, two, ("no-gate",), metered_client(5, client=stub),
+    # only the complete rounds feed the summary
+    assert len(out["rows"]) == 4 and summary["summary"]["arms"]["no-gate"]["trials"] == 4
+    assert summary["calls"] == {"made": 6, "cached": 0, "input_rejected": 0}
+    assert "exceed" not in (tmp_path / "run" / "summary.json").read_text()
+    assert summary["stop"] == {"reason": "calls", "error": "BudgetExceeded", "round": 2}
+    # a rerun resumes from the cache: the stopped round's first trial is not made again
+    out = _rounds(sim_store, two, ("no-gate",), metered_client(4, client=stub),
                   tmp_path / "rerun")
     assert out["status"] == "complete" and out["rounds"] == 4 and stub.calls == 12
-    assert out["calls"] == {"made": 5, "cached": 7, "input_rejected": 0}
+    assert out["calls"] == {"made": 4, "cached": 8, "input_rejected": 0}
 
 
 def test_canary_runs_trial_0_of_the_first_task_in_each_arm(sim_store, tasks,  # noqa: F811
@@ -519,6 +533,15 @@ def test_served_models_are_recorded(sim_store, tasks, tmp_path):  # noqa: F811
     assert out["served_models"] == ["served-x"]
     assert json.loads((tmp_path / "run" / "summary.json").read_text())["served_models"] == \
         ["served-x"]
+    # a model served only in a discarded round is recorded too (the meter's served models)
+    from adr_store.tables.extract import metered_client
+
+    meter = metered_client(1, client=stub_agent(tmp_path / "llm2", oracle_script, tasks,
+                                                cls=Served))
+    out = _rounds(sim_store, [_of(tasks, "allow", 0)], ("no-gate",), meter, tmp_path / "run2",
+                  trials=1)
+    assert out["status"] == "stopped" and out["rows"] == []
+    assert out["served_models"] == ["served-x"]
 
 
 # -- the command line ---------------------------------------------------------------------------
@@ -565,6 +588,15 @@ def test_cli_drawbridge_writes_its_outputs_and_fails_a_served_model_mismatch(
     summary = json.loads((run / "summary.json").read_text())
     assert summary["served_models"] == ["served-sonnet"] and summary["status"] == "complete"
     assert len((run / "rows.jsonl").read_text().splitlines()) == 4
+    # a stop in the first round keeps no row, and still reports the served model
+    other_path = tmp_path / "ask.jsonl"
+    write_tasks([_of(tasks, "allow", 0)], other_path)          # two calls a trial
+    args = _cli_args(sim_store, other_path, "no-gate", "--trials", "1")
+    args[args.index("--max-calls") + 1] = "1"
+    assert cli.main(args) == 1
+    out = capsys.readouterr().out
+    assert "status: served model mismatch: served-sonnet != stub-claude_code_sonnet; " \
+        "stopped at --max-calls 1 in round 0; 0 complete round(s) kept" in out
     # the prompt arm in a second run, with the profile's own model: exit 0
     cls["value"] = CachedStubClient
     assert cli.main(_cli_args(sim_store, path, "prompt", "--trials", "1")) == 0
@@ -587,6 +619,14 @@ def test_cli_drawbridge_writes_its_outputs_and_fails_a_served_model_mismatch(
     assert cli.main(["sim", "score", str(run), str(other)]) == 2
     assert "other tasks" in capsys.readouterr().err
     assert cli.main(["sim", "score", str(tmp_path)]) == 2
+    # runs under another model or other bindings do not merge (m6)
+    for key, value in (("model", "stub-other"), ("bindings_id", "d" * 64)):
+        moved = tmp_path / f"moved-{key}"
+        shutil.copytree(prompt_run, moved)
+        config = json.loads((moved / "config.json").read_text())
+        (moved / "config.json").write_text(json.dumps({**config, key: value}))
+        assert cli.main(["sim", "score", str(run), str(moved)]) == 2, key
+        assert f"runs merge only under the same {key}" in capsys.readouterr().err
 
 
 def test_cli_drawbridge_refuses_before_any_call(sim_store, tasks, tmp_path,  # noqa: F811
@@ -619,3 +659,103 @@ def test_cli_drawbridge_refuses_before_any_call(sim_store, tasks, tmp_path,  # n
     err = capsys.readouterr().err
     assert "NO_BINDINGS" in err and "no bindings for snapshot" in err
     assert not (tmp_path / "runs").exists()
+
+
+def test_null_facts_and_text_are_absent_and_the_turn_still_runs(sim_store, tasks,  # noqa: F811
+                                                               tmp_path):
+    from adr_eval.sim.agent import parse_turn
+
+    call = {"tool": "get_request", "args": {"id": "r1"}}
+    for reply, kept in (({"status": "scheduled", "text": None, "facts": None},
+                         {"status": "scheduled"}),
+                        ({"status": "denied", "text": 7}, {"status": "denied"}),
+                        ({"status": "denied", "text": {"a": 1}, "facts": {"x": 1}},
+                         {"status": "denied", "facts": {"x": 1}}),
+                        ({"status": "escalated", "text": "t"},
+                         {"status": "escalated", "text": "t"})):
+        p = parse_turn(json.dumps({"tool_calls": [call], "reply": reply}))
+        assert p["readable"] and p["tool_calls"] == [call] and p["reply"] == kept, reply
+    for bad in ({"status": None, "text": "t"}, {"text": "t"}, {"status": "denied",
+                                                              "facts": ["x"]}, "denied"):
+        p = parse_turn(json.dumps({"tool_calls": [call], "reply": bad}))
+        assert not p["readable"] and p["tool_calls"] == [] and p["reply"] is None, bad
+    # in a trial: the tool call runs and the reply ends it
+    task = _of(tasks, "allow", 1)
+    client = stub_agent(tmp_path / "llm", lambda t, turn, r, s_, u: {
+        "tool_calls": [oracle_action(t)],
+        "reply": {"status": "scheduled", "text": None, "facts": None}}, tasks)
+    row = _trial(sim_store, task, "no-gate", client, tmp_path / "t")
+    assert row["calls"] == 1 and row["reply"] == {"status": "scheduled"}
+    assert success(row, task) and row["violations"]["V4"] == 0
+
+
+def test_the_arms_share_calls_until_the_first_gated_call(sim_store, tasks,  # noqa: F811
+                                                         tmp_path):
+    task = _of(tasks, "allow", 0)                # the notice is the user's: asked first
+
+    def script(t, turn, repeat, system, user):
+        if turn == 0:
+            return {"tool_calls": [{"tool": "ask_user", "args": {"field": "notice_received_at"}},
+                                   {"tool": "get_request", "args": {"id": "r1"}}]}
+        if turn == 1:
+            return {"tool_calls": [oracle_action(t)]}
+        return {"tool_calls": [], "reply": oracle_reply(t)}
+
+    client = stub_agent(tmp_path / "llm", script, tasks)
+    _rounds(sim_store, [task], ("no-gate",), client, tmp_path / "ng", trials=1)
+    assert client.calls == 3
+    # gate: turns 1 and 2 have the same input (reads only so far); turn 3 renders the gate's
+    # decision on the schedule, so it is the first call of its own (P50)
+    out = _rounds(sim_store, [task], ("gate",), client, tmp_path / "g", trials=1)
+    assert client.calls == 4 and out["rows"][0]["made"] == 1
+    assert success(out["rows"][0], task)
+    assert "part at the first *gated* call" in agent.__doc__
+
+
+def test_any_other_failure_keeps_the_complete_rounds_and_is_raised(sim_store, tasks,  # noqa: F811
+                                                                  tmp_path):
+    two = [_of(tasks, "allow", 1), _of(tasks, "allow", 2)]
+    inner = local_env_factory(sim_store.path, tmp_path / "run" / "trials")
+
+    def factory(task, arm, trial):
+        if trial == 1 and task.task_id == two[1].task_id:
+            raise SimError("the environment did not start: boom")
+        return inner(task, arm, trial)
+
+    with pytest.raises(SimError, match="boom"):
+        _rounds(sim_store, two, ("no-gate",), stub_agent(tmp_path / "llm", oracle_script,
+                                                         tasks), tmp_path / "run",
+                env_factory=factory)
+    summary = json.loads((tmp_path / "run" / "summary.json").read_text())
+    assert summary["status"] == "failed: SimError" and summary["rounds_complete"] == 1
+    assert summary["stop"] == {"reason": "failed", "error": "SimError", "round": 1}
+    assert summary["summary"]["arms"]["no-gate"]["trials"] == 2
+    assert "boom" not in json.dumps(summary)
+    assert sorted(p.name for p in (tmp_path / "run" / "trials").glob("*/*/t*")) == ["t0", "t0"]
+    assert len((tmp_path / "run" / "rows.jsonl").read_text().splitlines()) == 2
+
+
+def test_cli_reports_a_failed_run(sim_store, tasks, tmp_path, monkeypatch,  # noqa: F811
+                                  capsys):
+    from adr_eval import cli, runner
+    from adr_eval.sim.tasks import write_tasks
+
+    monkeypatch.setattr(agent, "OUT_ROOT", tmp_path / "runs")
+    monkeypatch.setattr(runner, "make_client", lambda name, profiles, cache, max_retries=5:
+                        stub_agent(tmp_path / "llm", oracle_script, tasks,
+                                   model=f"stub-{name}"))
+
+    def broken(store_path, root):
+        def make(task, arm, trial):
+            raise SimError("the environment did not start: boom")
+        return make
+
+    monkeypatch.setattr(agent, "process_env_factory", broken)
+    path = tmp_path / "tasks.jsonl"
+    write_tasks(tasks[1:2], path)
+    assert cli.main(_cli_args(sim_store, path, "no-gate", "--trials", "1")) == 1
+    out = capsys.readouterr().out
+    assert "status: failed: SimError: the environment did not start: boom; 0 complete " \
+        "round(s) kept" in out
+    (run,) = (tmp_path / "runs").glob("sim-no-gate-*")
+    assert json.loads((run / "summary.json").read_text())["status"] == "failed: SimError"

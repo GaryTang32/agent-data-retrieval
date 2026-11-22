@@ -247,3 +247,76 @@ def test_intervals_use_seed_20261108_and_10000_resamples(monkeypatch):
     assert sorted(n for n, _ in seen) == ["paired_bootstrap_ci"] * 2 + [  # A1, A3; A2
         "paired_ratio_diff_ci"]
     assert all(kw == {"n": 10_000, "seed": 20261108} for _, kw in seen)
+
+
+def _fig(i: int, c: int, fp: int, n: int = 4) -> dict:
+    return {"task": i, "n": n, "c": c, "false_passes": fp,
+            **{f"pass^{k}": pass_hat_k(c, n, k) for k in range(1, 5)}}
+
+
+def _two_arms(ng: list[tuple[int, int]], g: list[tuple[int, int]]) -> dict:
+    """A summary of per-task (successes, false passes) for no-gate and gate (and prompt =
+    no-gate), as `summarize` would give it."""
+    per = {"no-gate": [_fig(i, c, f) for i, (c, f) in enumerate(ng)],
+           "gate": [_fig(i, c, f) for i, (c, f) in enumerate(g)]}
+    per["prompt"] = per["no-gate"]
+    return {"arms": dict.fromkeys(per, {}), "per_task": per}
+
+
+def test_a2_fails_on_the_interval_alone():
+    # one task holds both no-gate false passes: rate 2/24 against gate's 1/24 (b <= a/2), but a
+    # resample without that task and with the gate's one goes the other way: hi >= 0
+    s = _two_arms([(4, 2)] + [(4, 0)] * 5, [(4, 0)] * 5 + [(4, 1)])
+    a2 = compare(s, "no-gate", "gate")["A2"]
+    assert a2["demonstrated"] and a2["b"] <= a2["a"] / 2 and a2["hi"] >= 0
+    assert criteria(s)["A2"]["pass"] is False
+    # the same rates with the fall on every task: the upper bound is below 0, and A2 passes
+    s = _two_arms([(4, 2)] * 6, [(4, 1)] * 6)
+    a2 = compare(s, "no-gate", "gate")["A2"]
+    assert a2["hi"] < 0 and criteria(s)["A2"]["pass"] is True
+
+
+def test_a2_needs_a_demonstration_whatever_the_other_figures(monkeypatch):
+    from adr_eval.sim import score
+
+    # with real figures "not demonstrated" (no no-gate false pass) already fails hi < 0, so
+    # the bar's own guard is checked on a comparison that would pass but for it
+    real = score.compare
+
+    def faked(summary, a, b):
+        out = real(summary, a, b)
+        if (a, b) == ("no-gate", "gate"):
+            out["A2"] = {"a": 0.5, "b": 0.1, "diff": -0.4, "lo": -0.6, "hi": -0.2,
+                         "demonstrated": False}
+        return out
+
+    monkeypatch.setattr(score, "compare", faked)
+    s = _two_arms([(4, 2)] * 6, [(4, 1)] * 6)
+    assert criteria(s)["A2"]["pass"] is False
+    monkeypatch.setattr(score, "compare", real)
+    # no gate success at all: no rate, not demonstrated, and the bar is judged, not crashed
+    s = _two_arms([(4, 2)] * 3, [(0, 0)] * 3)
+    a2 = compare(s, "no-gate", "gate")["A2"]
+    assert a2["b"] is None and a2["demonstrated"] is False
+    assert criteria(s)["A2"]["pass"] is False
+
+
+def test_a3_fails_on_its_lower_bound_not_its_mean():
+    # pass^1 differences (-1, 0.25, 0.25, 0.25): the mean -0.0625 is above -0.10, the paired
+    # lower bound is far below it
+    s = _two_arms([(4, 0), (0, 0), (0, 0), (0, 0)], [(0, 0), (1, 0), (1, 0), (1, 0)])
+    a3 = compare(s, "no-gate", "gate")["A3"]
+    assert a3["diff"] == pytest.approx(-0.0625) and a3["lo"] <= -0.10 < a3["diff"]
+    assert criteria(s)["A3"]["pass"] is False
+    s = _two_arms([(2, 0)] * 4, [(2, 0)] * 4)
+    assert criteria(s)["A3"]["pass"] is True                 # lo = 0 > -0.10
+
+
+def test_a_success_with_only_v4_is_a_false_pass():
+    # the state matches and there is a reply, but its status contradicts the state: V4 only
+    rows = [_row(0, "no-gate", 0, violations={"V4": 1},
+                 reply={"status": "denied", "text": "Denied."}),
+            _row(0, "no-gate", 1)]
+    s = summarize(rows, TASKS[:1])["arms"]["no-gate"]
+    assert s["successes"] == 2 and s["false_passes"] == 1 and s["false_pass_rate"] == 0.5
+    assert s["violations"] == {"V1": 0, "V2": 0, "V3": 0, "V4": 1}
