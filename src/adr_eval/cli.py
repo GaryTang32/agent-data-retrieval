@@ -1993,7 +1993,7 @@ def _sim_drawbridge(a: argparse.Namespace) -> int:
         if not tasks:
             raise sim_tasks.SimError(f"{path} holds no task")
         agent.check_bindings(tasks, store.path)
-    except sim_tasks.SimError as e:
+    except (sim_tasks.SimError, StoreError) as e:     # BindingsError is a StoreError
         print(f"error: {e}", file=sys.stderr)
         return 2
     try:

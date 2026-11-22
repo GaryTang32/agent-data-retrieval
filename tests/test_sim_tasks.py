@@ -338,9 +338,14 @@ def test_the_screen_names_restricted_openings_vessel_classes_and_clearance():
     # whole words, any case, any spacing
     assert st.screen_reasons("A TUG\nmay pass") == ("vessel_class",)
     assert st.screen_reasons("vessels  in\ttow") == ("vessel_class",)
-    for clean in ("tugboat traffic", "the heights of the bridge", "towing", "need openings",
-                  "a clearance gauge", "20 feet or less", "commercial vessels' berths"):
+    for clean in ("towing", "need openings", "a clearance gauge", "20 feet or less",
+                  "tugger", "publicly"):
         assert st.screen_reasons(clean) == (), clean
+    # plurals and hyphens are caught too (pre-run re-review N1): the screen errs to exclude
+    for caught in ("tugboats", "towboats", "a tow-boat", "towing vessels", "vessels with tows",
+                   "public vessels", "commercial vessels' berths", "tugboat traffic"):
+        assert st.screen_reasons(caught) == ("vessel_class",), caught
+    assert st.screen_reasons("vertical clearances") == ("clearance",)
     assert st.screen_reasons("a commercial vessel") == ("vessel_class",)
     assert st.screen_reasons("need only be opened; clearance of 10 feet") == (
         "restricted_opening", "clearance")

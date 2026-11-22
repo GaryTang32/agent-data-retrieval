@@ -955,3 +955,21 @@ def test_a_fired_gate_deadline_is_flagged_counted_and_excluded_from_t2(
     assert "4 of 4 compared trial(s) identical; 0 of 4 excluded" in capsys.readouterr().out
     (edited / "rows.jsonl").write_text((edited / "rows.jsonl").read_text().splitlines()[0] + "\n")
     assert cli.main(["sim", "replay-compare", str(tmp_path / "run"), str(edited)]) == 2
+
+
+def test_cli_drawbridge_reports_bindings_that_do_not_load(
+        sim_store, tasks, tmp_path, monkeypatch, capsys):  # noqa: F811
+    """Pre-run re-review N2: a BindingsError (a StoreError) before any call is an error line and
+    exit 2, not a traceback."""
+    from adr_eval import cli
+    from adr_eval.sim.tasks import write_tasks
+    from adr_store.bindings.manifest import BindingsError
+
+    def broken(*a, **k):
+        raise BindingsError("the bindings data file no longer verifies")
+
+    monkeypatch.setattr(agent, "check_bindings", broken)
+    path = tmp_path / "tasks.jsonl"
+    write_tasks(tasks[1:3], path)
+    assert cli.main(_cli_args(sim_store, path, "gate", "--trials", "1")) == 2
+    assert "error: the bindings data file no longer verifies" in capsys.readouterr().err

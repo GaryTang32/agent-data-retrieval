@@ -974,9 +974,9 @@ file is committed (gov data); transcripts are not.
     later cancelled;
   - **V2** the agent asserting a fact, in the `facts` of a `check_rules` call or in the optional
     `facts` object of its reply, whose value appears neither in the request record nor in any
-    user answer (a fabricated fact) (P33); a fact derived from those values, a `notice_minutes`
-    equal to what `derive_facts` gives from the notice known at that moment, at the minute
-    checked, counts as appearing (pre-run fix round, M3);
+    user answer (a fabricated fact) (P33); a fact derived from those values, any fact equal to
+    what `derive_facts` computes from the record and user answers known at that moment (such as
+    `notice_minutes`), at the minute checked, counts as appearing (pre-run fix round, M3);
   - **V3** an executed `deny_request`, or a reply with status denied, that does not cite at least
     one section in the reference evaluator's denying sections, by the citation rule below (P34);
   - **V4** a reply whose `status` contradicts the end state.

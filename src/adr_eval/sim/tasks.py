@@ -127,13 +127,16 @@ TASK_SCREEN: dict[str, tuple[str, ...]] = {
     "restricted_opening": ("need open", "need be opened", "need only open",
                            "need only be opened"),
     # exceptions for a vessel class the tasks do not model (§ 117.305(a), § 117.315(a))
-    "vessel_class": ("tug", "tugs", "towboat", "public vessel", "vessels of the United States",
-                     "commercial vessel", "pleasure craft", "with a tow", "in tow"),
+    "vessel_class": ("tug", "tugboat", "towboat", "tow boat", "towing vessel", "public vessel",
+                     "vessels of the United States", "commercial vessel", "pleasure craft",
+                     "with a tow", "with tows", "in tow"),
     # conditions on clearance or height (§ 117.949: notice above 50 feet of clearance)
     "clearance": ("vertical clearance", "clearance of", "feet or more", "height"),
 }
-_SCREEN_RX = {reason: [re.compile(r"(?<!\w)" + r"\s+".join(map(re.escape, p.split()))
-                                  + r"(?!\w)", re.IGNORECASE) for p in phrases]
+# Whole words, any case; words may be joined by spaces or a hyphen ("tow-boat"), and the last
+# word may take a plural ("tugboats", "public vessels", "vertical clearances").
+_SCREEN_RX = {reason: [re.compile(r"(?<!\w)" + r"[\s-]+".join(map(re.escape, p.split()))
+                                  + r"(?:s|es)?(?!\w)", re.IGNORECASE) for p in phrases]
               for reason, phrases in TASK_SCREEN.items()}
 OUTCOME = {"allow": "allow", "reschedule": "deny", "deny-closed": "deny", "deny-notice": "deny",
            "escalate": "escalate", "emergency": "allow"}
