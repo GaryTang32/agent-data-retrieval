@@ -26,7 +26,7 @@
         "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
         "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
         "snapshot": "7d8d1f8adda6a99fe515a7e40e3ae6c168bc0f743dbf6ff567efb45881ad2d3a",
-        "store": ".cache/store-p2/bench",
+        "store": "<private copy of .cache/store-p2/bench>",
         "units": "d50f23029eed14af978e657963b1fcc9735bdec933fa16b6a9a5143ed39ad5a2"
       },
       "gov": {
@@ -35,8 +35,8 @@
         "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
         "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
         "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
-        "store": ".cache/store-p2/gov",
-        "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+        "store": "<private copy of .cache/store-p2/gov>",
+        "units": "3fae4bc9cd7b59cf746ff9c36bb55164661eb53bc8b0c86d049b8a550b5f6d42"
       }
     },
     "tools": [
@@ -186,9 +186,9 @@
           "caller": "user:acme-0",
           "documents": 88,
           "path": "0e09ae6e7c74",
-          "units": "3cb77ecf1048fbb4a0846eccf3ae194663893fc909364799babc16bd982a0a2a",
-          "units_equal": 11497,
-          "units_of_view": 11497,
+          "units": "694afda4e7a5d73fa9dbb682377fcc453241d197c96ca6446cbcb66f4a747b19",
+          "units_equal": 11639,
+          "units_of_view": 11639,
           "users": [
             "user:acme-0"
           ],
@@ -198,9 +198,9 @@
           "caller": "user:acme-1",
           "documents": 88,
           "path": "892f63f0a090",
-          "units": "3defceb245932fd933432524efde4dfdb0958ec0bf0c98a95a3ebb7607c1606b",
-          "units_equal": 11412,
-          "units_of_view": 11412,
+          "units": "0d0b9d90d39cdadcad64cf7e3dc311031792b78aef322066f5ba6b071f728c9f",
+          "units_equal": 11554,
+          "units_of_view": 11554,
           "users": [
             "user:acme-1"
           ],
@@ -210,9 +210,9 @@
           "caller": "user:acme-2",
           "documents": 88,
           "path": "b30abb0676be",
-          "units": "8de54a3e1182d34a9a31e1d846663af19851742e95b0eb001daff8eb28b8a146",
-          "units_equal": 11412,
-          "units_of_view": 11412,
+          "units": "9a118c942255d973797d966f361c387ea410b8a844317551af71e7cc56ae797f",
+          "units_equal": 11554,
+          "units_of_view": 11554,
           "users": [
             "user:acme-2"
           ],
@@ -222,9 +222,9 @@
           "caller": "user:acme-3",
           "documents": 85,
           "path": "c127e9c8da8b",
-          "units": "61919f1308cce1a78828eee66ee3f7a714d61332ca626b6f773754e5200674d1",
-          "units_equal": 11400,
-          "units_of_view": 11400,
+          "units": "62b40f3429cf2ee9099c13971fa7b9f7a02663d8967821c6ffc641082c6e317b",
+          "units_equal": 11542,
+          "units_of_view": 11542,
           "users": [
             "user:acme-3"
           ],
@@ -234,9 +234,9 @@
           "caller": "user:acme-4",
           "documents": 93,
           "path": "bb1445f0f103",
-          "units": "f4666ebec73685f9756654898e9fac264e75f18af7b0b3a89367aa1ce8b38a23",
-          "units_equal": 11517,
-          "units_of_view": 11517,
+          "units": "b800fe0eae29ed9cea80fcc1053d42faa54be74291196e900f6f781e5ff13b01",
+          "units_equal": 11659,
+          "units_of_view": 11659,
           "users": [
             "user:acme-4"
           ],
@@ -246,9 +246,9 @@
           "caller": "user:acme-5",
           "documents": 93,
           "path": "f7914abd432b",
-          "units": "31ff8656d170e4b2bc6e5c890230a5df6afc9259116cb1529f3af536bb397327",
-          "units_equal": 11432,
-          "units_of_view": 11432,
+          "units": "6c28a9b4829b798e048ffb1d68e458df61cb5e682a9d8943201b3d122cf844af",
+          "units_equal": 11574,
+          "units_of_view": 11574,
           "users": [
             "user:acme-5"
           ],
