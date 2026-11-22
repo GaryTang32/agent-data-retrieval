@@ -42,11 +42,13 @@ bindings). `read_sentence` then reads the sentence of the source text that holds
 times of that quote: the widest span around them that the grammar reads (`widest_reading`),
 and what the grammar's phrases state in the quote's clause (the sentence cut at ";" and at
 ", except that"): times, days, the holiday exception, dates, and the words "only", "unless"
-and "notice". `window_grammar_agrees` (closures only) is whether the period's window is one of
-the windows read, and None when nothing reads or when the clause has one of those words (not a
-plain closure). `sentence_qualifiers` lists the days, holiday exception or dates the clause
+and "notice". `window_grammar_agrees` (closures only) is whether the period's times are a
+range the reading holds and its days, holiday exception and dates are those the clause states
+(`grammar_agrees`), and None when nothing reads or when the clause has one of those words (not
+a plain closure). `sentence_qualifiers` lists the days, holiday exception or dates the clause
 states that the period lacks (`missing_qualifiers`); for a draw's period-less notice or
-on-signal basis, the times, days, holidays or dates its quote's clause states.
+on-signal basis (`period_less`, P46: they hold at all other times), the times, days, holidays
+or dates its quote's clause states.
 
 `write_enrichment` writes the items once as `<store>/units/<snapshot>/enrichment-<id[:16]>.jsonl`
 (canonical JSON per section in document order; the id is the file's SHA-256);
@@ -101,8 +103,9 @@ from adr_store.units.procedures import SEED4
 __all__ = ["BASES", "EFFECTS", "MAX_TOKENS", "POOL", "PROMPT_VERSION", "SEED4", "DrawParams",
            "Grounded", "Period", "SectionEnrichment", "SentenceReading", "apply",
            "binding_sections", "e2_agreement", "enrich_all", "enrich_section",
-           "grammar_agrees", "load_enrichment", "missing_qualifiers", "period_window", "pools",
-           "read_sentence", "write_enrichment"]
+           "extra_qualifiers", "grammar_agrees", "in_section", "load_enrichment",
+           "missing_qualifiers", "period_less", "period_window", "pools", "read_sentence",
+           "section_key", "write_enrichment"]
 
 PROMPT_VERSION = "rule-enrich@1"
 MAX_TOKENS = 4000   # cards and draws of one section, each value with its quote
@@ -192,7 +195,7 @@ class SectionEnrichment(BaseModel):
 
 # -- the pool ------------------------------------------------------------------------------------
 
-def _section_key(section: str) -> tuple:
+def section_key(section: str) -> tuple:
     head, _, rest = section.partition(".")
     return (int(head) if head.isdigit() else 0, int(rest) if rest.isdigit() else 10**9, rest)
 
@@ -227,15 +230,15 @@ def pools(store: Store, tables_id: str, seed: int = SEED4) -> dict[str, list[str
     for row in rows:
         by.setdefault(row["section"], []).append(row)
     crisp = sorted((s for s, rs in by.items() if subparts.get(s) == "B"
-                    and all(_crisp(r) for r in rs)), key=_section_key)
+                    and all(_crisp(r) for r in rs)), key=section_key)
     closed = [s for s in crisp if any(r.get("closed_periods") for r in by[s])]
     notice = [s for s in crisp if any(r.get("notice_hours") is not None for r in by[s])]
     drawn_closed = _ranked(closed, seed)[:POOL["closed_window"]]
     drawn_notice = _ranked([s for s in notice if s not in drawn_closed], seed)[:POOL["notice"]]
     return {"subpart_a": [s for s, sp in subparts.items() if sp == "A"],
             "closed_window_candidates": closed, "notice_candidates": notice,
-            "closed_window": sorted(drawn_closed, key=_section_key),
-            "notice": sorted(drawn_notice, key=_section_key)}
+            "closed_window": sorted(drawn_closed, key=section_key),
+            "notice": sorted(drawn_notice, key=section_key)}
 
 
 def binding_sections(store: Store, tables_id: str, seed: int = SEED4) -> list[str]:
@@ -576,12 +579,32 @@ def stated_kinds(reading: SentenceReading) -> list[str]:
     return sorted(out)
 
 
+def extra_qualifiers(window: Window, reading: SentenceReading) -> list[str]:
+    """The qualifiers (sorted) the window states and the reading does not: a day set other than
+    every day that none stated is, a holiday exception none states, a date range none states."""
+    stated = reading.stated
+    out = []
+    if window.days != DAYS and tuple(window.days) not in [tuple(d) for d in stated["days"]]:
+        out.append("days")
+    if window.except_federal_holidays and not stated["holidays"]:
+        out.append("holidays")
+    if window.date_from is not None and (window.date_from, window.date_to) not in \
+            stated["dates"]:
+        out.append("dates")
+    return sorted(out)
+
+
 def grammar_agrees(window: Window, reading: SentenceReading) -> bool | None:
-    """Whether the window is one the sentence's reading holds; None when nothing reads or the
-    clause is no plain closure ("only", "unless", "notice")."""
+    """Whether the sentence holds the window: its times are a range the reading holds, and its
+    days, holiday exception and dates are the ones the clause states (`missing_qualifiers`,
+    `extra_qualifiers`), wherever in the clause they stand, so a date range written before
+    the sentence's subject counts. None when nothing reads or the clause is no plain closure
+    ("only", "unless", "notice")."""
     if reading.conditions or reading.windows is None:
         return None
-    return window in reading.windows
+    if (window.start, window.end) not in {(w.start, w.end) for w in reading.windows}:
+        return False
+    return not missing_qualifiers(window, reading) and not extra_qualifiers(window, reading)
 
 
 def period_window(p: Period) -> tuple[Window | None, str | None]:
@@ -636,19 +659,26 @@ def _read_period(p: Period, text: str, offset: int) -> Period:
         "sentence_conditions": list(reading.conditions) if closure else []})
 
 
-def _draw_qualifiers(d: DrawParams, text: str, offset: int) -> list[str]:
-    """What the clauses of a draw's period-less notice or on-signal basis state (module text):
-    a notice with no `notice_required` period, an `on_signal` basis with no `on_signal`
-    period (the compiler gives both the all-times window)."""
+def period_less(d: DrawParams) -> tuple[bool, bool]:
+    """(whether the draw has a period-less notice, whether it has a period-less on-signal
+    basis), P46: they apply at all other times, wherever none of the draw's periods does. The
+    notice is period-less when the opening basis is `advance_notice` or no period is
+    `notice_required` (then `notice_hours` belongs to no period); an `on_signal` opening basis
+    is period-less by definition."""
     effects = {p.effect.value for p in d.periods}
-    period_less = []
-    if d.notice_hours.value is not None and "notice_required" not in effects:
-        period_less.append(d.notice_hours)
-    if d.opening_basis.value == "on_signal" and "on_signal" not in effects:
-        period_less.append(d.opening_basis)
+    notice = d.notice_hours.value is not None and (
+        d.opening_basis.value == "advance_notice" or "notice_required" not in effects)
+    return notice, d.opening_basis.value == "on_signal"
+
+
+def _draw_qualifiers(d: DrawParams, text: str, offset: int) -> list[str]:
+    """What the clauses of a draw's period-less notice or on-signal basis state (module text,
+    `period_less`)."""
+    notice, basis = period_less(d)
     found: set[str] = set()
-    for g in period_less:
-        found.update(stated_kinds(read_sentence(text, g.start - offset, g.end - offset)))
+    for g in [d.notice_hours] * notice + [d.opening_basis] * basis:
+        if g.start is not None:
+            found.update(stated_kinds(read_sentence(text, g.start - offset, g.end - offset)))
     return sorted(found)
 
 
@@ -695,13 +725,13 @@ class _Run:
     tally: dict                      # field -> Counter
 
 
-def _in_section(ref: str, section: str) -> bool:
+def in_section(ref: str, section: str) -> bool:
     head = f"33 CFR {section}"
     return ref == head or ref.startswith(head + "(")
 
 
 def _card_ids(cards: list[Unit], doc: str, section: str) -> list[str]:
-    own = sorted((c for c in cards if c.doc_id == doc and _in_section(c.canonical_ref, section)),
+    own = sorted((c for c in cards if c.doc_id == doc and in_section(c.canonical_ref, section)),
                  key=lambda c: c.source_refs[0].start)
     return list(dict.fromkeys(c.canonical_ref for c in own))
 
@@ -868,7 +898,7 @@ def write_enrichment(store_path: Path, snapshot: str, items: list[SectionEnrichm
                      ) -> tuple[str, Path]:
     """Write the items once (module text); (enrichment id, path). The same bytes again are a
     no-op; other bytes under the name are refused."""
-    ordered = sorted(items, key=lambda i: _section_key(i.section))
+    ordered = sorted(items, key=lambda i: section_key(i.section))
     data = b"".join(_canonical(i.model_dump(mode="json")) for i in ordered)
     eid = hashlib.sha256(data).hexdigest()
     path = Path(store_path) / UNITS_DIR / snapshot / f"{ENRICHMENT_PREFIX}-{eid[:16]}.jsonl"
@@ -908,7 +938,7 @@ def apply(store: Store, cards: list[Unit], client, cfg: PassConfig) -> tuple[lis
     runs = {r.item.section: r for r in _runs(store, sections, doc, cards, client, cfg)}
     out = []
     for c in cards:
-        r = next((runs[s] for s in runs if c.doc_id == doc and _in_section(c.canonical_ref, s)),
+        r = next((runs[s] for s in runs if c.doc_id == doc and in_section(c.canonical_ref, s)),
                  None)
         fields = r.item.cards.get(c.canonical_ref) if r is not None else None
         if fields is None:
@@ -934,6 +964,19 @@ def _signal(d: DrawParams) -> bool | None:
             d.opening_basis.value in ("on_signal", "advance_notice"):
         return True
     return False if d.opening_basis.value == "closed_to_navigation" else None
+
+
+def _closed_windows(d: DrawParams) -> set[Window] | None:
+    """The closed windows of a draw as the compiler reads its parameters (`period_window`:
+    times, days, holiday exception and dates); None when one is no window."""
+    out: set[Window] = set()
+    for p in d.periods:
+        if p.effect.value == "need_not_open":
+            window, _ = period_window(p)
+            if window is None:
+                return None
+            out.add(window)
+    return out
 
 
 def _windows(quotes: list[str | None]) -> set[Window] | None:
@@ -962,9 +1005,10 @@ def _share(n: int, k: int) -> dict:
 def e2_agreement(items: list[SectionEnrichment], first_pass: list[RowRecord],
                  facts: list[ex.Facts]) -> dict:
     """Agreement of the enrichment's draw parameters with each Phase 3 pass: `notice_hours`,
-    `opens_on_signal` (`_signal`) and the closed windows (the window grammar on the
-    enrichment's window quotes and on the pass's closed-period quotes, compared as sets; a
-    draw with an unread quote on either side is counted `unread`), over draws matched by
+    `opens_on_signal` (`_signal`) and the closed windows (the compiler's own windows of the
+    draw's `need_not_open` periods, `period_window`, against the window grammar's windows of
+    the pass's closed-period quotes, compared as sets; a draw with a period that is no window
+    or a pass quote the grammar does not read is counted `unread`), over draws matched by
     bridge-name key then mile (`match_draws`, as Phase 3 E2). First-pass rows are those of the
     item's document and section; second-pass facts are found by the section text's SHA-256."""
     rows: dict[tuple[str, str], list[RowRecord]] = {}
@@ -975,14 +1019,13 @@ def e2_agreement(items: list[SectionEnrichment], first_pass: list[RowRecord],
     tally = {p: {"notice_hours": [0, 0], "opens_on_signal": [0, 0], "closed": [0, 0, 0],
                  "draws": Counter()} for p in passes}
     sections = Counter()
-    for item in sorted(items, key=lambda i: _section_key(i.section)):
+    for item in sorted(items, key=lambda i: section_key(i.section)):
         if not item.draws:
             continue
         sections["compared"] += 1
         mine = [{"bridge": d.bridge.value, "mile": d.mile.value, "notice_hours":
                  d.notice_hours.value, "opens_on_signal": _signal(d),
-                 "closed": [p.window_quote for p in d.periods
-                            if p.effect.value == "need_not_open"]} for d in item.draws]
+                 "windows": _closed_windows(d)} for d in item.draws]
         first = sorted(rows.get((item.doc_id, item.section), []), key=lambda r: r.row["draw"])
         fact = by_unit.get(item.section_sha256)
         sections["no_first_pass"] += not first
@@ -1013,7 +1056,7 @@ def e2_agreement(items: list[SectionEnrichment], first_pass: list[RowRecord],
                 for c in ("notice_hours", "opens_on_signal"):
                     t[c][0] += 1
                     t[c][1] += _same(a[c], b[c])
-                wa = _windows(a["closed"]) if a["closed"] else set()
+                wa = a["windows"]
                 wb = _windows(b["closed"]) if b["closed"] else set()
                 if wa is None or wb is None:
                     t["closed"][2] += 1

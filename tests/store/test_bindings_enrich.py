@@ -173,6 +173,7 @@ def test_the_call_passes_max_tokens_4000_and_caches_it(units_store, tmp_path,  #
 
 def test_the_prompt_states_the_reply_shape_and_phase3_p22():
     system = enrich.pass_prompt(load_pass_config("rules"))
+    assert "at all other times" in system and "wherever none of the draw's periods" in system
     for needle in ('"cards"', '"draws"', '"periods"', "need_not_open", "notice_required",
                    "on_signal", "advance_notice", "closed_to_navigation",
                    "A negative or false value needs a quote", '"null_reason": "absent"'):
@@ -510,6 +511,72 @@ def test_an_unconditioned_reading_agrees_and_a_conditioned_one_is_not_compared()
     r = read_sentence(SECTION, *at("from 8 p.m. to 6 a.m."))
     assert enrich.grammar_agrees(w.model_copy(update={"start": 1200}), r) is True
     assert enrich.grammar_agrees(w, r) is False
+
+
+def test_agreement_holds_a_date_range_written_before_the_subject():           # Minor 3
+    text = ("(d) From April 1 through October 31, the draw of the Main Street bridge, mile 1.0, "
+            "need not open from 7 a.m. to 9 a.m., Monday through Friday, except Federal "
+            "holidays.\n")
+    i = text.index("7 a.m. to 9 a.m.")
+    r = read_sentence(text, i, i + 16)
+    right = Window(start=420, end=540, days=DAYS[:5], except_federal_holidays=True,
+                   date_from="04-01", date_to="10-31")
+    assert enrich.grammar_agrees(right, r) is True
+    no_dates = right.model_copy(update={"date_from": None, "date_to": None})
+    assert enrich.grammar_agrees(no_dates, r) is False
+    assert missing_qualifiers(no_dates, r) == ["dates"]
+    other_dates = right.model_copy(update={"date_to": "09-30"})
+    assert enrich.grammar_agrees(other_dates, r) is False
+    no_days = right.model_copy(update={"days": DAYS})
+    assert enrich.grammar_agrees(no_days, r) is False
+
+
+def test_a_qualifier_the_clause_does_not_state_disagrees():
+    text = "(a) The draw need not open from 7 a.m. to 9 a.m.\n"
+    i = text.index("from 7")
+    r = read_sentence(text, i, len(text) - 1)
+    w = Window(start=420, end=540, days=DAYS, except_federal_holidays=False, date_from=None,
+               date_to=None)
+    assert enrich.grammar_agrees(w, r) is True
+    assert enrich.grammar_agrees(w.model_copy(update={"except_federal_holidays": True}), r) \
+        is False
+    assert enrich.extra_qualifiers(w.model_copy(update={"days": DAYS[:5]}), r) == ["days"]
+
+
+def _first_row(quote: str):
+    from adr_store.tables.provenance import RowRecord, ValueProv
+
+    return RowRecord(doc_id=DOC_117_NEW, row={
+        "section": "117.821", "draw": 1, "bridge": "Main Street drawbridge", "mile": 3.4,
+        "notice_hours": None, "opens_on_signal": False, "closed_periods": [quote]},
+        prov={"closed_periods": [ValueProv(doc_id=DOC_117_NEW, start=0, end=len(quote),
+                                           spec_id="bridge.closed_periods@1",
+                                           status="verified", quote=quote)]})
+
+
+def _facts(unit: str, quote: str):
+    v = lambda value, q="q": ex.Value(value, q, 0, len(q), "verified", None, (), None)  # noqa: E731
+    return ex.Facts(unit, {}, [{"bridge": v("Main Street drawbridge"), "mile": v(3.4),
+                                "closed_periods": v([quote], quote)}])
+
+
+def test_e2_compares_the_compilers_windows_of_real_enrichment_output(enrich_821):   # I1
+    """E2 on what `enrich_section` produces: the window quotes hold the time ranges only
+    (`rule_enrich.txt`), so E2 must compare the parameters the compiler uses."""
+    item = enrich_821(reply_821())
+    assert [p.window_quote for p in item.draws[0].periods] == [TIMES_A, "from 4 p.m. to 6 p.m."]
+    full = ("need not open from 7 a.m. to 9 a.m. and from 4 p.m. to 6 p.m. Monday through "
+            "Friday except Federal holidays")
+    short = "need not open from 7 a.m. to 9 a.m. and from 4 p.m. to 6 p.m. Monday through Friday"
+    e2 = enrich.e2_agreement([item], [_first_row(full)], [_facts(item.section_sha256, short)])
+    assert e2["first"]["closed_windows"] == {"compared": 1, "agree": 1, "share": 1.0,
+                                             "unread": 0}
+    assert e2["second"]["closed_windows"] == {"compared": 1, "agree": 0, "share": 0.0,
+                                              "unread": 0}       # the quote drops holidays
+    # a reply that leaves the days and holidays out disagrees with the full quote
+    lax = enrich_821(reply_821(days=ABSENT, except_federal_holidays=ABSENT))
+    e2 = enrich.e2_agreement([lax], [_first_row(full)], [])
+    assert e2["first"]["closed_windows"]["agree"] == 0
 
 
 # -- the enrichment file --------------------------------------------------------------------------

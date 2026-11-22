@@ -40,8 +40,14 @@ once for all draws of the section is repeated on each draw, with the same quote.
 - bridge (a string): the bridge's name, as written.
 - mile (a number): the waterway mile of the bridge.
 - opening_basis: how the draw opens where no period below says otherwise: "on_signal",
-  "advance_notice" (it opens only after advance notice) or "closed_to_navigation".
-- notice_hours (an integer): the hours of advance notice an opening needs.
+  "advance_notice" (it opens only after advance notice) or "closed_to_navigation". It applies
+  at all other times: wherever none of the draw's periods applies (at all times when the draw
+  has no period). "At all other times, the draw shall open on signal if at least 24 hours
+  notice is given" is "advance_notice" with notice_hours 24.
+- notice_hours (an integer): the hours of advance notice an opening needs. A notice that holds
+  only in some window is a "notice_required" period; a notice with no "notice_required"
+  period, or with "advance_notice", applies at all other times too: wherever none of the
+  draw's periods applies.
 - periods: each time window that has its own rule, as stated:
   - effect: "need_not_open" (the draw need not open, or stays closed, in the window),
     "on_signal" (it opens on signal in the window) or "notice_required" (it opens in the

@@ -8,11 +8,14 @@
   opening the rule does not require);
 - notice N in a `notice_required` period: `basis` when `in_window(p) and notice_minutes >=
   60N`, and its complement written out, `forbid` when `in_window(p) and notice_minutes <
-  60N`; a notice with no `notice_required` period, and an `on_signal` opening basis with no
-  `on_signal` period, hold in the all-times window;
-- § 117.5: `basis` when `not (in_window(p1) or ...)` over every window above, emitted only
-  when `covers_all` finds a gap (builder note 13: else it can never fire); with no window at
-  all it holds at all times;
+  60N`; N = 0 (no notice needed) is an on-signal basis with no forbid;
+- a period-less notice (`enrich.period_less`: the opening basis is `advance_notice`, or no
+  period is `notice_required`) and an `on_signal` opening basis hold at all other times (P46):
+  `not (in_window(p1) or ...)` over the draw's periods of any effect, the all-times window when
+  it has none; they fill every gap, so § 117.5 is then not emitted;
+- § 117.5: `basis` when `not (in_window(p1) or ...)` over the periods, emitted only when
+  `covers_all` finds a gap left by the periods and the period-less rules (builder note 13:
+  else it can never fire); with no rule at all it holds at all times;
 - § 117.31(b): the overriding `basis` when `vessel_class in EMERGENCY_CLASSES and not
   local_procedure_conflict`, with `overrides` naming every `forbid` of the draw (P32). An
   unknown vessel class or conflict leaves it Unknown (P37): nothing is defaulted.
@@ -62,9 +65,10 @@ from adr_store.bindings.enrich import (
     Grounded,
     Period,
     SectionEnrichment,
-    _in_section,
-    _section_key,
+    in_section,
+    period_less,
     period_window,
+    section_key,
 )
 from adr_store.bindings.facts import EMERGENCY_CLASSES
 from adr_store.units.ecfr import normalise_rule_id
@@ -250,14 +254,22 @@ def _problems(draw: DrawParams, cards: list[Unit]) -> tuple[list[str], list[Wind
             out.append(f"periods[{i}]: no rule card holds its quote")
     if draw.opening_basis.value == "advance_notice" and draw.notice_hours.value is None:
         out.append("opening_basis: advance notice with no notice hours")
-    effects = {p.effect.value for p in draw.periods}
-    if draw.notice_hours.value is not None and "notice_required" not in effects and \
-            _card_of(cards, draw.notice_hours) is None:
+    notice, basis = period_less(draw)
+    if notice and _card_of(cards, draw.notice_hours) is None:
         out.append("notice_hours: no rule card holds its quote")
-    if draw.opening_basis.value == "on_signal" and "on_signal" not in effects and \
-            _card_of(cards, draw.opening_basis) is None:
+    if basis and _card_of(cards, draw.opening_basis) is None:
         out.append("opening_basis: no rule card holds its quote")
     return out, windows
+
+
+def _notice_parts(card: Unit, where: Expr, n: int, prov: dict, flags) -> list[_Part]:
+    """Notice N where `where` holds: a basis with at least 60N minutes of notice and its
+    complement written out, a forbid with less; N = 0 (no notice needed) is an on-signal basis
+    and no forbid (a forbid on `notice_minutes < 0` could never fire)."""
+    if n == 0:
+        return [_Part(card, "basis", where, prov, *flags)]
+    return [_Part(card, eff, {"and": [where, {"cmp": [NOTICE, op, 60 * n]}]}, prov, *flags)
+            for eff, op in (("basis", ">="), ("forbid", "<"))]
 
 
 def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Unit,
@@ -273,33 +285,29 @@ def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Uni
     n = draw.notice_hours.value
     notice_prov = _prov("notice_hours", draw.notice_hours)
     parts: list[_Part] = []
-    specific: list[Window] = []
+    specific: list[Window] = list(windows)
     for i, (p, w) in enumerate(zip(draw.periods, windows, strict=True)):
         card = _period_card(cards, p)
         prov, flags = _period_prov(i, p), (p.sentence_qualifiers, p.sentence_conditions)
-        specific.append(w)
         effect = p.effect.value
         if effect == "on_signal":
             parts.append(_Part(card, "basis", _in(w), prov, *flags))
         elif effect == "need_not_open":
             parts.append(_Part(card, "forbid", _in(w), prov, *flags))
         else:
-            for eff, op in (("basis", ">="), ("forbid", "<")):
-                parts.append(_Part(card, eff, {"and": [_in(w), {"cmp": [NOTICE, op, 60 * n]}]},
-                                   {**prov, **notice_prov}, *flags))
-    effects = {p.effect.value for p in draw.periods}
-    if n is not None and "notice_required" not in effects:
-        card = _card_of(cards, draw.notice_hours)
-        specific.append(ALL_TIMES)
-        for eff, op in (("basis", ">="), ("forbid", "<")):
-            parts.append(_Part(card, eff, {"and": [_in(ALL_TIMES), {"cmp": [NOTICE, op, 60 * n]}]},
-                               {**notice_prov, **_prov("opening_basis", draw.opening_basis)},
-                               draw.sentence_qualifiers))
-    if draw.opening_basis.value == "on_signal" and "on_signal" not in effects:
-        specific.append(ALL_TIMES)
-        parts.append(_Part(_card_of(cards, draw.opening_basis), "basis", _in(ALL_TIMES),
-                           _prov("opening_basis", draw.opening_basis),
+            parts += _notice_parts(card, _in(w), n, {**prov, **notice_prov}, flags)
+    # P46: a period-less notice or on-signal basis holds at all other times, wherever none of
+    # the draw's periods does (with no period, at all times)
+    notice, basis = period_less(draw)
+    elsewhere = {"not": _any([_in(w) for w in specific])} if specific else _in(ALL_TIMES)
+    basis_prov = _prov("opening_basis", draw.opening_basis)
+    if notice:
+        parts += _notice_parts(_card_of(cards, draw.notice_hours), elsewhere, n,
+                               {**notice_prov, **basis_prov}, (draw.sentence_qualifiers, ()))
+    if basis:
+        parts.append(_Part(_card_of(cards, draw.opening_basis), "basis", elsewhere, basis_prov,
                            draw.sentence_qualifiers))
+    covered = specific + ([ALL_TIMES] if notice or basis else [])
     grouped: dict[tuple[str, str], list[_Part]] = {}
     for part in parts:
         grouped.setdefault((part.card.unit_id, part.effect), []).append(part)
@@ -309,7 +317,7 @@ def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Uni
         prov = {k: v for p in group for k, v in p.prov.items()}
         out.append(_binding(group[0].card, effect, _any([p.when for p in group]), target, prov,
                             _review(group), bridge))
-    if not covers_all(specific):      # the general duty where no specific rule holds
+    if not covers_all(covered):       # the general duty where no specific rule holds
         when = {"not": _any([_in(w) for w in specific])} if specific else {"const": True}
         duty = _Part(general, "basis", when, {k: v for p in parts for k, v in p.prov.items()},
                      {q for p in parts for q in p.qualifiers},
@@ -321,6 +329,21 @@ def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Uni
 
 
 # -- compile_bindings ----------------------------------------------------------------------------
+
+def listed_reason(problem: str) -> str:
+    """The kind of a problem that gives a draw no bindings, for the report's counts."""
+    if problem.endswith("no rule card holds its quote"):
+        return "no_card"        # e.g. a non-modal paragraph ("need open only"), no rule card
+    if problem.endswith("the window grammar cannot read its quote"):
+        return "unreadable_window"
+    if problem.rsplit(": ", 1)[-1] in FAILED:
+        return "failed_check"
+    if "closed to navigation" in problem:
+        return "closed_to_navigation"
+    if "notice" in problem:
+        return "no_notice_hours"
+    return "not_a_window"
+
 
 def _at_or_under(raw: str, ref: str) -> bool:
     r = normalise_rule_id(raw)
@@ -341,19 +364,20 @@ def compile_bindings(items: list[SectionEnrichment], cards: list[Unit]
     § 117.31(b) cards are found in each item's document by rule id (preflight C14); a section's
     cards are the cards of its document at or under the section. The report: sections, draws
     (total, compiled, failed), bindings by effect and by kind, the listed draws with their
-    problems, the draws whose parameters' sentences state qualifiers they lack
-    (`sentence_qualifiers`), and the window grammar's agreement counts over the closed windows."""
+    problems, the number of listed draws per kind of problem (`listed_reason`), the draws
+    whose parameters' sentences state qualifiers they lack (`sentence_qualifiers`), and the
+    window grammar's agreement counts over the closed windows."""
     bindings: list[Binding] = []
     failed: list[dict] = []
     flagged: list[dict] = []
-    grammar, draws, kinds = Counter(), Counter(), Counter()
-    for item in sorted(items, key=lambda i: _section_key(i.section)):
+    grammar, draws, kinds, reasons = Counter(), Counter(), Counter(), Counter()
+    for item in sorted(items, key=lambda i: section_key(i.section)):
         if not item.draws:
             continue
         general = _rule_card(cards, item.doc_id, GENERAL_DUTY)
         emergency = _rule_card(cards, item.doc_id, EMERGENCY)
         own = [c for c in cards if c.doc_id == item.doc_id
-               and _in_section(c.canonical_ref, item.section)]
+               and in_section(c.canonical_ref, item.section)]
         for d in item.draws:
             draws["total"] += 1
             for p in d.periods:
@@ -369,6 +393,7 @@ def compile_bindings(items: list[SectionEnrichment], cards: list[Unit]
             got, problems = compile_draw(item.section, d, own, general, emergency)
             if problems:
                 draws["failed"] += 1
+                reasons.update({listed_reason(x) for x in problems})
                 failed.append({"section": item.section, "draw": d.draw, "problems": problems})
             else:
                 draws["compiled"] += 1
@@ -382,7 +407,8 @@ def compile_bindings(items: list[SectionEnrichment], cards: list[Unit]
         "bindings": len(bindings),
         "by_effect": dict(sorted(Counter(b.effect for b in bindings).items())),
         "by_kind": dict(sorted(kinds.items())),
-        "failed": failed, "sentence_qualifiers": flagged,
+        "failed": failed, "listed_reasons": dict(sorted(reasons.items())),
+        "sentence_qualifiers": flagged,
         "window_grammar": {k: grammar[k] for k in ("agree", "disagree", "not_compared",
                                                    "conditioned")}}
     return bindings, report
@@ -399,7 +425,7 @@ _CLASS_WORDS = {"public_safety": "public-safety", "distress": "distress",
 
 
 def _hm(m: int) -> str:
-    return f"{m // 60}:{m % 60:02d}"
+    return "midnight" if m in (0, 1440) else f"{m // 60}:{m % 60:02d}"
 
 
 def _date(md: str) -> str:
@@ -434,7 +460,7 @@ def _windows_phrase(ws: list[Window]) -> str:
         return "at any time"
     quals = [_qualifiers(w) for w in ws]
     if all(q == quals[0] for q in quals):
-        times = [t for w in ws if (t := _times(w))] or ["all day"]
+        times = list(dict.fromkeys(_times(w) or "all day" for w in ws))
         return ", ".join([" or ".join(times), *quals[0]])
     return "; or ".join(", ".join([_times(w) or "all day", *_qualifiers(w)]) for w in ws)
 

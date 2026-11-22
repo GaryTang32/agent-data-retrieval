@@ -145,6 +145,11 @@ def test_notice_in_a_period_holds_only_in_the_period():
         notice_period(1200, 360, at=IN_B)]))[0]         # 8 p.m. to 6 a.m., crossing midnight
     whens = {b.effect: b.when for b in specific(bs)}
     night, day = datetime(2026, 8, 12, 23, 0), datetime(2026, 8, 12, 12, 0)
+    # the boundary at exactly 60N inside the period
+    assert evaluate(whens["forbid"], facts(night, notice=24 * 60)) is Tri.F
+    assert evaluate(whens["basis"], facts(night, notice=24 * 60)) is Tri.T
+    assert evaluate(whens["forbid"], facts(night, notice=24 * 60 - 1)) is Tri.T
+    assert evaluate(whens["basis"], facts(night, notice=24 * 60 - 1)) is Tri.F
     assert evaluate(whens["forbid"], facts(night, notice=60)) is Tri.T
     assert evaluate(whens["forbid"], facts(day, notice=60)) is Tri.F
     assert evaluate(whens["basis"], facts(night, notice=24 * 60)) is Tri.T
@@ -169,11 +174,107 @@ def test_a_closed_window_compiles_a_forbid_and_its_period_less_rest_is_general_d
 
 
 def test_on_signal_period_compiles_a_basis_in_the_period():
-    bs = run(draw(opening_basis="on_signal", periods=[
-        on_signal(start=360, end=1200)]))[0]
+    bs = run(draw(periods=[on_signal(start=360, end=1200)]))[0]
     (basis,) = [b for b in specific(bs) if b.effect == "basis"]
     assert evaluate(basis.when, facts(datetime(2026, 8, 12, 6, 0))) is Tri.T
     assert evaluate(basis.when, facts(datetime(2026, 8, 12, 20, 0))) is Tri.F
+
+
+def test_an_on_signal_basis_with_periods_holds_at_all_other_times():               # P46
+    bs = run(draw(opening_basis="on_signal", notice_at=IN_A, periods=[
+        closed(420, 540, at=IN_B)]))[0]
+    basis = next(b for b in specific(bs) if b.effect == "basis")
+    forbid = next(b for b in specific(bs) if b.effect == "forbid")
+    assert evaluate(basis.when, facts(datetime(2026, 8, 12, 12, 0))) is Tri.T
+    assert evaluate(basis.when, facts(datetime(2026, 8, 12, 8, 0))) is Tri.F   # in the window
+    assert evaluate(forbid.when, facts(datetime(2026, 8, 12, 8, 0))) is Tri.T
+    assert not any(b.rule_id == GENERAL_CARD.canonical_ref for b in bs)       # no gap left
+
+
+def _decide(bs: list[Binding], f: dict) -> str:
+    """The §12.6 decision for a schedule_opening (overrides, deny, escalate, allow)."""
+    vals = {b.binding_id: evaluate(b.when, f) for b in bs}
+    gone = {o for b in bs if b.overrides and vals[b.binding_id] is Tri.T for o in b.overrides}
+    unknown_over = {o for b in bs if b.overrides and vals[b.binding_id] is Tri.U
+                    for o in b.overrides}
+    forbids = [b for b in bs if b.effect == "forbid" and b.binding_id not in gone]
+    if any(vals[b.binding_id] is Tri.T and b.binding_id not in unknown_over for b in forbids):
+        return "deny"
+    if any(vals[b.binding_id] is Tri.U or (vals[b.binding_id] is Tri.T) for b in forbids):
+        return "escalate"
+    bases = [vals[b.binding_id] for b in bs if b.effect == "basis"]
+    return "allow" if Tri.T in bases else "escalate"
+
+
+def flagship() -> DrawParams:
+    """§4.5: "shall open on signal from April 1 through October 31 ... At all other times, the
+    draw shall open on signal if at least 24 hours notice is given"."""
+    return draw(opening_basis="advance_notice", notice_hours=24, notice_at=IN_A,
+                periods=[on_signal("04-01", "10-31")])
+
+
+def test_the_flagship_rule_needs_notice_only_at_all_other_times():                 # P46
+    bs, problems = run(flagship())
+    assert problems == []
+    july, december = datetime(2026, 7, 15, 10, 0), datetime(2026, 12, 15, 10, 0)
+    assert _decide(bs, facts(july, vessel="commercial", conflict=False)) == "allow"
+    assert _decide(bs, facts(july)) == "allow"                 # no notice, no class needed
+    assert _decide(bs, facts(december, notice=120, vessel="commercial", conflict=False)) == \
+        "deny"
+    forbid = next(b for b in bs if b.effect == "forbid")
+    assert evaluate(forbid.when, facts(december, notice=120)) is Tri.T
+    assert evaluate(forbid.when, facts(july, notice=120)) is Tri.F
+    assert _decide(bs, facts(december, notice=24 * 60, vessel="commercial",
+                             conflict=False)) == "allow"
+    assert not any(b.rule_id == GENERAL_CARD.canonical_ref for b in bs)
+
+
+def test_an_advance_notice_basis_holds_beside_notice_periods():                    # P46
+    # notice in a period, and advance notice "at all other times" with the same hours
+    bs, problems = run(draw(opening_basis="advance_notice", notice_hours=12, notice_at=IN_A,
+                            periods=[notice_period(360, 1320, at=IN_B)]))
+    assert problems == []
+    night, day = datetime(2026, 8, 12, 23, 0), datetime(2026, 8, 12, 12, 0)
+    for at in (night, day):
+        assert _decide(bs, facts(at, notice=60, vessel="commercial", conflict=False)) == "deny"
+        assert _decide(bs, facts(at, notice=12 * 60, vessel="commercial",
+                                 conflict=False)) == "allow"
+    assert not any(b.rule_id == GENERAL_CARD.canonical_ref for b in bs)
+
+
+def test_the_flagship_rule_over_a_year():                                          # P46
+    bs, _ = run(flagship())
+    day = date(2026, 1, 1)
+    checked = 0
+    while day.year == 2026:
+        for hour in (0, 9, 23):
+            at = datetime(day.year, day.month, day.day, hour, 30)
+            season = (4, 1) <= (day.month, day.day) <= (10, 31)
+            for notice in (None, 0, 23 * 60 + 59, 24 * 60, 48 * 60):
+                want = "allow" if season or (notice is not None and notice >= 24 * 60) else \
+                    "escalate" if notice is None else "deny"
+                got = _decide(bs, facts(at, notice=notice, vessel="commercial",
+                                        conflict=False))
+                assert got == want, (at, notice)
+                checked += 1
+        day += timedelta(days=1)
+    assert checked == 365 * 3 * 5
+
+
+def test_a_notice_of_zero_hours_is_an_on_signal_basis():
+    bs, problems = run(draw(notice_hours=0, periods=[closed(420, 540)]))
+    assert problems == [] and not [b for b in specific(bs) if b.effect == "forbid"
+                                   and b.rule_id == CARD_B.canonical_ref]
+    basis = next(b for b in specific(bs) if b.effect == "basis")
+    assert NOTICE_FREE(basis.when)
+    assert evaluate(basis.when, facts(datetime(2026, 8, 12, 12, 0))) is Tri.T   # no notice
+    assert evaluate(basis.when, facts(datetime(2026, 8, 12, 8, 0))) is Tri.F    # closed
+    bs, _ = run(draw(notice_hours=0, periods=[notice_period(420, 540, at=IN_B)]))
+    assert [b.effect for b in specific(bs)] == ["basis"]
+
+
+def NOTICE_FREE(e) -> bool:
+    return "notice_minutes" not in str(e)
 
 
 def test_a_period_less_on_signal_basis_holds_at_all_times_and_needs_no_general_duty():
@@ -242,6 +343,7 @@ def test_unreadable_window_gives_no_bindings_and_is_listed():
     assert report["failed"] == [{"section": "117.821", "draw": 1, "problems": [
         "periods[0]: the window grammar cannot read its quote"]}]
     assert report["draws"] == {"total": 2, "compiled": 1, "failed": 1}
+    assert report["listed_reasons"] == {"unreadable_window": 1}
     assert {b.target["selector"]["draw"] for b in bindings} == {2}
 
 
@@ -307,6 +409,11 @@ def test_rule_id_comes_from_the_card_whose_span_holds_the_quote():
     assert next(b for b in bs if b.effect == "forbid").rule_id == CARD_B.canonical_ref
     bs, problems = run(draw(periods=[closed(420, 540, at=5000)]))       # in no card
     assert bs == [] and problems == ["periods[0]: no rule card holds its quote"]
+    # such draws are counted in the report (a non-modal paragraph has no card, Task 2)
+    item = section_item("117.821", [draw(periods=[closed(420, 540, at=5000)]),
+                                    draw(n=2, notice_hours=4, notice_at=5000)])
+    _, report = compile_bindings([item], [*CARDS, GENERAL_CARD, EMERGENCY_CARD])
+    assert report["listed_reasons"] == {"no_card": 2}
 
 
 def test_binding_ids_are_stable_and_rule_identity_is_split():
@@ -513,12 +620,17 @@ def test_sentence_renders_notice_dates_general_duty_and_emergency():
     bs = run(draw(notice_hours=4, periods=[closed(420, 540, days=("Sat", "Sun")),
                                            closed(960, 1080, days=("Sat", "Sun"))]))[0]
     by = {(b.rule_id, b.effect): b for b in bs}
+    # P46: the period-less notice holds outside the closed windows
     assert sentence(by[(CARD_B.canonical_ref, "basis")], "Main Street drawbridge") == (
+        "Allow scheduling an opening of the Main Street draw at any time except from 7:00 to "
+        "9:00 or from 16:00 to 18:00, Saturday and Sunday with at least 4 hours notice")
+    assert sentence(by[(CARD_B.canonical_ref, "forbid")], "Main Street drawbridge") == (
+        "Forbid scheduling an opening of the Main Street draw at any time except from 7:00 to "
+        "9:00 or from 16:00 to 18:00, Saturday and Sunday with less than 4 hours notice")
+    alone = run(draw(notice_hours=4))[0]
+    assert sentence(next(b for b in alone if b.effect == "basis"), "Main Street") == (
         "Allow scheduling an opening of the Main Street draw at any time with at least 4 hours "
         "notice")
-    assert sentence(by[(CARD_B.canonical_ref, "forbid")], "Main Street drawbridge") == (
-        "Forbid scheduling an opening of the Main Street draw at any time with less than 4 "
-        "hours notice")
     assert sentence(by[(CARD_A.canonical_ref, "forbid")], "Railroad Bridge") == (
         "Forbid scheduling an opening of the Railroad draw from 7:00 to 9:00 or from 16:00 to "
         "18:00, Saturday and Sunday")
@@ -532,6 +644,16 @@ def test_sentence_renders_notice_dates_general_duty_and_emergency():
     assert sentence(general, "Main Street drawbridge") == (
         "Allow scheduling an opening of the Main Street draw at any time except from 6:00 to "
         "20:00, April 1 to October 31")
+
+
+def test_sentence_keeps_an_all_day_window_and_says_midnight():
+    bs = run(draw(periods=[closed(None, None, days=("Sat",)), closed(420, 540, days=("Sat",)),
+                           closed(1200, 1440, days=("Sat",))]))[0]
+    forbid = next(b for b in bs if b.effect == "forbid")
+    text = sentence(forbid, "Main Street")
+    assert text == ("Forbid scheduling an opening of the Main Street draw all day or from 7:00 "
+                    "to 9:00 or from 20:00 to midnight, Saturday")
+    assert "24:00" not in text
 
 
 # -- E2 against both Phase 3 passes (§6.3 check 5) --------------------------------------------
@@ -570,19 +692,13 @@ def enriched(n, bridge, mile, *, notice=None, basis=None, periods=()) -> DrawPar
                       periods=list(periods), sentence_qualifiers=[])
 
 
-def window_quote(p: Period, quote: str) -> Period:
-    return p.model_copy(update={"window_quote": quote})
-
-
 def test_e2_agreement_matches_draws_as_phase3():
     # the enrichment names the draws in another order and one by another spelling
     item = SectionEnrichment(section="117.821", doc_id=D1, section_sha256="a" * 64, cards={},
                              outcome="reply", draws=[
         enriched(1, "Smith River Railroad Bridge", 5.1, notice=4, basis="advance_notice"),
-        enriched(2, "Main Street Bridge", 3.4, basis="on_signal", periods=[window_quote(
-            closed(420, 540, days=WEEKDAYS, holidays=True),
-            "need not open from 7 a.m. to 9 a.m. Monday through Friday except Federal "
-            "holidays")]),
+        enriched(2, "Main Street Bridge", 3.4, basis="on_signal", periods=[
+            closed(420, 540, days=WEEKDAYS, holidays=True)]),
         enriched(3, "Unnamed draw", 9.9, notice=2)])
     first = [first_row("117.821", 1, "Main Street drawbridge", 3.4, None, True,
                        ["7 a.m. to 9 a.m. Monday through Friday except Federal holidays"]),
@@ -609,7 +725,7 @@ def test_e2_agreement_matches_draws_as_phase3():
 def test_e2_counts_unreadable_closed_quotes_apart():
     item = SectionEnrichment(section="117.1", doc_id=D1, section_sha256="c" * 64, cards={},
                              outcome="reply", draws=[enriched(1, "A Bridge", 1.0, periods=[
-                                 window_quote(closed(420, 540), "from 7 a.m. to 9 a.m.")])])
+                                 closed(420, 540)])])
     first = [first_row("117.1", 1, "A Bridge", 1.0, None, None,
                        ["need not be opened for the passage of vessels"])]
     e2 = e2_agreement([item], first, [])
