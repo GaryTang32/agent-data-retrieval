@@ -17,17 +17,25 @@ continued. The socket's directory must be private (mode 0700; it is created so w
 and the socket is made 0600. Any startup failure prints one line on stderr and exits 2, with
 no socket: a client then meets silence, which it treats as a fail-closed deny.
 
+**Instance.** At startup the gate draws a random instance id (16 bytes from `secrets`, hex);
+it is in every reply and log line and in every token's HMAC payload, so a restarted gate's
+sequence numbers (which continue its log, or restart with a fresh one) never make a genuine
+allow look used, and an old instance's token never verifies for a new one.
+
 **Protocol.** One connection per request: one JSON object on one line, at most
 `MAX_REQUEST_BYTES` bytes, `{session, caller, tool, args, as_of, facts, units}` with `facts`
 `{name: {value, source ("record" or "user"), seq?}}` (P13, P33: facts only from the
 environment's record; `args` define only the action). The reply is one line, `{seq,
 decision, rule_ids, deciding_sections, missing_facts, next_allowed, explanation: {message,
-rule_text}, evaluated_outcome, token}`, with a token (`tokens.sign`) on allows only and
+rule_text}, evaluated_outcome, instance, token}`, with a token (`tokens.sign`) on allows only and
 `evaluated_outcome` the outcome of the opening a `deny_request` judged (None otherwise).
 Each connection runs on its own thread and must deliver its whole request within the I/O
 deadline (`IO_DEADLINE_S`, one end time for the whole read; P38: a clock input that can only
-deny), so a slow client never delays another; decisions are made one at a time (one sequence,
-one chain). Any failure while reading, judging or replying is a fail-closed deny (logged when
+deny), so a slow client never delays another; at most `MAX_CONNECTIONS` (64) are served at
+once, and a connection over the cap gets an immediate fail-closed deny, logged as a transport
+line, and is closed; the listen backlog is `BACKLOG` (128), and a failed `accept` backs off
+`ACCEPT_BACKOFF_S` instead of spinning. Decisions are made one at a time (one sequence, one
+chain). Any failure while reading, judging or replying is a fail-closed deny (logged when
 the log can be written: an unparseable, unencodable or too deeply nested request is a
 `transport` line), and the gate keeps serving.
 
@@ -55,6 +63,7 @@ import argparse
 import contextlib
 import json
 import os
+import secrets
 import signal
 import socket
 import stat
@@ -70,7 +79,8 @@ from adr_store.bindings.decide import Decision, Enforcement, fail_closed
 from adr_store.gate import log as gate_log
 from adr_store.gate import tokens
 
-__all__ = ["FACT_SOURCES", "IO_DEADLINE_S", "MAX_REQUEST_BYTES", "REQUEST_KEYS", "Gate",
+__all__ = ["FACT_SOURCES", "IO_DEADLINE_S", "MAX_CONNECTIONS", "MAX_REQUEST_BYTES",
+           "REQUEST_KEYS", "Gate",
            "decision_fields", "evaluate_request", "load_enforcement", "main", "serve"]
 
 MAX_REQUEST_BYTES = 65_536
@@ -78,6 +88,9 @@ IO_DEADLINE_S = 30.0
 REQUEST_KEYS = ("args", "as_of", "caller", "facts", "session", "tool", "units")
 FACT_SOURCES = ("record", "user")
 FACT_KEYS = ("seq", "source", "value")
+MAX_CONNECTIONS = 64          # connections served at once; more get an immediate deny
+BACKLOG = 128
+ACCEPT_BACKOFF_S = 0.05
 DRAIN_BYTES = 4 * MAX_REQUEST_BYTES
 DRAIN_S = 1.0
 
@@ -207,6 +220,8 @@ class Gate:
         self.prev = gate_log.GENESIS if not lines else gate_log._sha256(lines[-1])
         self._acl_cache: OrderedDict = OrderedDict()   # parsed ACL snapshots (acl.resolve)
         self._lock = threading.Lock()                  # one decision at a time (seq, chain)
+        self.instance = secrets.token_hex(16)          # this process's id (tokens, log, replies)
+        self.max_connections = MAX_CONNECTIONS
 
     # -- state ----------------------------------------------------------------------------------
 
@@ -257,19 +272,24 @@ class Gate:
                 None, "transport"
         return evaluate_request(self.enf, req, self.units_id), req, "request"
 
-    def handle(self, raw: bytes, *, oversized: bool = False) -> dict:
+    def handle(self, raw: bytes, *, oversized: bool = False, overloaded: bool = False
+               ) -> dict:
         """The reply to the request bytes `raw` (one line, newline excluded), the log line
         written first (module text). Never raises: any failure is a fail-closed deny, logged
         when the log can be written. Requests are decided one at a time."""
         with self._lock:
             try:
-                d, req, stage = self._judge(raw, oversized)
+                if overloaded:
+                    d, req, stage = fail_closed(f"too many connections (more than "
+                                                f"{self.max_connections})"), None, "transport"
+                else:
+                    d, req, stage = self._judge(raw, oversized)
             except Exception as e:  # noqa: BLE001 - a failure on the enforcement path denies
                 d, req, stage = fail_closed(f"the request could not be judged "
                                             f"({type(e).__name__})"), None, "transport"
             caller = req.get("caller") if isinstance(req, dict) else None
             seq = self.seq + 1
-            line = {"seq": seq, "stage": stage,
+            line = {"seq": seq, "instance": self.instance, "stage": stage,
                     "request": req if stage == "request" else None,
                     "request_sha256": gate_log._sha256(raw), "request_bytes": len(raw),
                     "bindings": self.bindings_id, "units_loaded": self.units_id,
@@ -289,8 +309,9 @@ class Gate:
     def _reply(self, seq, d: Decision, caller, signed_req) -> dict:
         token = None
         if d.outcome == "allow" and isinstance(signed_req, dict) and seq is not None:
-            token = tokens.sign(self._key, signed_req, "allow", seq)
-        return {"seq": seq, "decision": d.outcome, "rule_ids": [list(r) for r in d.rule_ids],
+            token = tokens.sign(self._key, signed_req, "allow", seq, self.instance)
+        return {"seq": seq, "instance": self.instance, "decision": d.outcome,
+                "rule_ids": [list(r) for r in d.rule_ids],
                 "deciding_sections": list(d.deciding_sections),
                 "missing_facts": list(d.missing_facts), "next_allowed": d.next_allowed,
                 "evaluated_outcome": d.evaluated_outcome,
@@ -361,9 +382,23 @@ def _drain(conn: socket.socket) -> None:
             left -= len(chunk)
 
 
-def _serve_one(gate: Gate, conn: socket.socket, deadline: float) -> None:
+def _refuse(gate: Gate, conn: socket.socket) -> None:
+    """A connection over the cap: an immediate fail-closed deny (logged as a transport line),
+    then closed. Never raises."""
+    with conn:
+        try:
+            reply = gate.handle(b"", overloaded=True)
+            conn.settimeout(DRAIN_S)
+            conn.sendall(json.dumps(reply, sort_keys=True, ensure_ascii=True).encode("ascii")
+                         + b"\n")
+        except Exception:  # noqa: BLE001 - one connection's failure never stops the gate
+            pass
+
+
+def _serve_one(gate: Gate, conn: socket.socket, deadline: float,
+               slots: threading.BoundedSemaphore) -> None:
     """One connection, on its own thread: the request read within the deadline, decided (one
-    at a time, `Gate.handle`), the reply sent. Never raises."""
+    at a time, `Gate.handle`), the reply sent, its slot released. Never raises."""
     with conn:
         try:
             raw, oversized = _receive(conn, deadline)
@@ -377,11 +412,13 @@ def _serve_one(gate: Gate, conn: socket.socket, deadline: float) -> None:
             _drain(conn)
         except Exception:  # noqa: BLE001 - one connection's failure never stops the gate
             pass
+        finally:
+            slots.release()
 
 
 def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Path,
           socket_path: Path, key_fd: int, *, models: Path | None = None,
-          deadline: float = IO_DEADLINE_S) -> int:
+          deadline: float = IO_DEADLINE_S, max_connections: int = MAX_CONNECTIONS) -> int:
     """Run the gate until terminated (module text); 2 when it cannot start."""
     from adr_store.bindings import review
 
@@ -398,6 +435,7 @@ def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Pat
             raise GateStartError(f"the models config cannot be read: {e}") from e
         log_dir.mkdir(parents=True, exist_ok=True)
         gate = Gate(store_path, bindings_id, units_id, log_dir, key)
+        gate.max_connections = max_connections
         _private_dir(socket_path.parent)
         if socket_path.exists() or socket_path.is_symlink():
             socket_path.unlink()
@@ -409,7 +447,7 @@ def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Pat
     try:
         srv.bind(str(socket_path))
         os.chmod(socket_path, 0o600)
-        srv.listen(16)
+        srv.listen(BACKLOG)
     except OSError as e:
         srv.close()
         print(f"error: gate: cannot listen on {socket_path}: {e}", file=sys.stderr)
@@ -419,15 +457,21 @@ def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Pat
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, stop)
-    print(f"gate ready on {socket_path} (bindings {bindings_id[:12]}, units "
-          f"{gate.units_id[:12]}, log {gate.log_path}, {gate.seq} line(s) before)", flush=True)
+    print(f"gate ready on {socket_path} (instance {gate.instance}, bindings "
+          f"{bindings_id[:12]}, units {gate.units_id[:12]}, log {gate.log_path}, {gate.seq} "
+          f"line(s) before)", flush=True)
+    slots = threading.BoundedSemaphore(max_connections)
     try:
         while True:
             try:
                 conn, _ = srv.accept()
-            except OSError:
+            except OSError:                 # e.g. out of descriptors: back off, never spin
+                time.sleep(ACCEPT_BACKOFF_S)
                 continue
-            threading.Thread(target=_serve_one, args=(gate, conn, deadline),
+            if not slots.acquire(blocking=False):
+                _refuse(gate, conn)
+                continue
+            threading.Thread(target=_serve_one, args=(gate, conn, deadline, slots),
                              daemon=True).start()
     except (SystemExit, KeyboardInterrupt):
         return 0
@@ -450,6 +494,9 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
                    help="an inherited file descriptor holding the HMAC key (read to EOF)")
     p.add_argument("--models", type=Path, default=None, metavar="PATH",
                    help="the models config (default config/models.json)")
+    p.add_argument("--max-connections", type=int, default=MAX_CONNECTIONS, metavar="N",
+                   help=f"connections served at once; more get an immediate fail-closed deny "
+                        f"(default {MAX_CONNECTIONS})")
     p.add_argument("--deadline", type=float, default=IO_DEADLINE_S, metavar="SECONDS",
                    help=f"the I/O deadline of each connection's whole request (default "
                         f"{IO_DEADLINE_S:g})")
@@ -461,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     add_arguments(ap)
     a = ap.parse_args(argv)
     return serve(a.store, a.bindings, a.units, a.log, a.socket, a.key_fd, models=a.models,
-                 deadline=a.deadline)
+                 deadline=a.deadline, max_connections=a.max_connections)
 
 
 if __name__ == "__main__":

@@ -94,7 +94,7 @@ def test_a_fake_gate_forging_tokens_is_denied(tmp_path):
     srv.listen(1)
     reply = {"seq": 1, "decision": "allow", "rule_ids": [["33 CFR 117.5(p1)", "x"]],
              "deciding_sections": [], "missing_facts": [], "next_allowed": None,
-             "evaluated_outcome": None,
+             "evaluated_outcome": None, "instance": "c" * 32,
              "explanation": {}, "token": "ab" * 32}
 
     def answer():
@@ -647,48 +647,52 @@ def test_a_lone_surrogate_is_a_logged_deny(gate):  # noqa: F811
 
 
 def test_a_slow_client_is_cut_at_the_deadline_and_never_delays_another(gate):  # noqa: F811
-    """The I/O deadline covers a connection's whole request (one end time), and each
-    connection has its own thread: a client dripping one byte every 0.3 s is cut off after
-    the 1 s deadline, while a well-formed request made meanwhile is answered at once."""
+    """Order, not wall-clock bounds: on a gate with a 3 s deadline, a client drips one byte
+    every 0.3 s (its drip would last 54 s). A well-formed request made after its first byte is
+    answered while the dripping connection is still open (one connection at a time would
+    answer it only after the drip is cut), and the drip is cut long before it would end (a
+    per-read deadline would never cut it)."""
     import time
 
     gate.process.stop()
-    p = gate.start(deadline=1.0)
+    p = gate.start(deadline=3.0)
     assert p.ok, p.error
+    payload = b'{"session": "slow"' * 10                           # 180 bytes
     drip = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     drip.connect(str(p.socket_path))
-    start = time.monotonic()
-    closed_after = None
     req = gate.request("schedule_opening", opening(), COMMERCIAL)
-    answered = None
+
+    def still_open() -> bool:
+        drip.setblocking(False)
+        try:
+            return drip.recv(1) != b""
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+        finally:
+            drip.setblocking(True)
+
+    answered, open_when_answered, cut_at = None, None, None
     try:
-        for i, byte in enumerate(b'{"session": "slow"' * 10):
+        for i, byte in enumerate(payload):
             try:
                 drip.sendall(bytes([byte]))
             except OSError:
-                closed_after = time.monotonic() - start
+                cut_at = i
                 break
-            if i == 1:                                 # a legitimate request meanwhile
-                t0 = time.monotonic()
-                got = GateClient(p.socket_path, gate.key, deadline=3.0).judge(req)
-                answered = (got["decision"], time.monotonic() - t0)
+            if i == 0:                                 # a legitimate request meanwhile
+                answered = GateClient(p.socket_path, gate.key, deadline=10.0).judge(req)
+                open_when_answered = still_open()
+            elif not still_open():
+                cut_at = i
+                break
             time.sleep(0.3)
-            drip.settimeout(0.01)
-            try:
-                if drip.recv(1) == b"":
-                    closed_after = time.monotonic() - start
-                    break
-            except TimeoutError:
-                pass
-            except OSError:
-                closed_after = time.monotonic() - start
-                break
     finally:
         drip.close()
-    # answered at once (one connection at a time would wait for the drip's deadline, ~0.7 s)
-    assert answered is not None and answered[0] == "allow" and answered[1] < 0.4
-    assert closed_after is not None and closed_after < 2.5     # cut near the 1 s deadline
-    assert [x["stage"] for x in lines(gate)] == ["request"]    # the drip decided nothing
+    assert answered["decision"] == "allow" and open_when_answered is True
+    assert cut_at is not None and cut_at < len(payload) // 2      # cut, long before its end
+    assert [x["stage"] for x in lines(gate)] == ["request"]       # the drip decided nothing
 
 
 def test_single_use_holds_across_clients_of_one_gate(gate):  # noqa: F811          # Minor 3
@@ -723,3 +727,102 @@ def test_a_denied_deny_request_logs_and_replies_the_evaluated_outcome(gate):  # 
     assert other["evaluated_outcome"] is None
     assert [x["evaluated_outcome"] for x in lines(gate)] == ["allow", "deny", None]
     assert gate_log.replay(gate.log_path, gate.store.path, 3) == []
+
+
+# -- fix round 2: gate instances, bounded connections ----------------------------------------------
+
+def test_a_restarted_gate_is_a_new_instance_whose_allows_are_accepted(gate, tmp_path):  # noqa: F811
+    req = gate.request("schedule_opening", opening(), COMMERCIAL)
+    first = gate.client.judge(req)
+    assert first["seq"] == 1 and gate.client.check_token(req, first)
+    old_instance = first["instance"]
+    assert old_instance == gate.process.instance and len(old_instance) == 32
+    assert lines(gate)[0]["instance"] == old_instance
+    gate.process.stop()
+    # the same socket path and key, a fresh log: its sequence numbers restart at 1
+    p = gate.start(log_dir=tmp_path / "fresh-log")
+    assert p.ok, p.error
+    assert p.instance != old_instance
+    again = gate.client.judge(req)
+    assert (again["seq"], again["instance"]) == (1, p.instance)
+    assert gate.client.check_token(req, again)                  # genuine: accepted
+    assert not gate.client.check_token(req, first)              # the old token: refused
+    assert not gate.client.check_token(req, {**again, "instance": old_instance})
+    assert not GateClient(p.socket_path, gate.key).check_token(req, again)   # once only
+    # the instance is covered by the token: an unused allow relabelled is refused
+    third = gate.client.judge(req)
+    assert not gate.client.check_token(req, {**third, "instance": "d" * 32})
+    assert gate.client.check_token(req, third)
+
+
+def test_instance_runs_are_checked_per_log_file(tmp_path):
+    a, b = "a" * 32, "b" * 32
+    path = tmp_path / "gate.jsonl"
+    prev = gate_log.GENESIS
+    for n, inst in enumerate((a, a, b, a), 1):
+        prev = gate_log.append(path, {"seq": n, "instance": inst, "rule_ids": [["r", "1"]],
+                                      "evaluated": []}, prev)
+    ok, count, bad = gate_log.verify_chain(path)
+    assert (ok, count) == (False, 4) and bad.startswith("line 4: instance aaaaaaaa reappears")
+    raw = path.read_bytes().split(b"\n")
+    path.write_bytes(b"\n".join(raw[:3]) + b"\n")
+    assert gate_log.verify_chain(path) == (True, 3, None)       # a then b: a restart
+
+
+def test_a_burst_of_sixty_connections_all_get_real_decisions(gate):  # noqa: F811
+    barrier = threading.Barrier(60)
+    replies: dict[int, dict] = {}
+    reqs = {i: gate.request("schedule_opening", opening(NOON if i % 2 else CLOSED),
+                            COMMERCIAL, session=f"burst-{i}") for i in range(60)}
+
+    def one(i: int) -> None:
+        barrier.wait()
+        replies[i] = gate.client.judge(reqs[i])
+
+    threads = [threading.Thread(target=one, args=(i,)) for i in range(60)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(r["seq"] for r in replies.values()) == list(range(1, 61))
+    assert all(r["rule_ids"] != [FC] for r in replies.values())
+    assert {r["decision"] for r in replies.values()} == {"allow", "deny"}
+    logged = {x["request"]["session"]: x for x in lines(gate)}
+    for i, r in replies.items():
+        assert logged[f"burst-{i}"]["seq"] == r["seq"]
+        assert logged[f"burst-{i}"]["decision"] == r["decision"]
+    assert gate_log.verify_chain(gate.log_path, 60) == (True, 60, None)
+    assert gate_log.replay(gate.log_path, gate.store.path, 60) == []
+    allows = [i for i, r in replies.items() if r["decision"] == "allow"]
+    assert all(gate.client.check_token(reqs[i], replies[i]) for i in allows)
+    assert not any(gate.client.check_token(reqs[i], replies[i]) for i in allows)
+
+
+def test_a_connection_over_the_cap_is_denied_at_once_and_logged(gate):  # noqa: F811
+    gate.process.stop()
+    p = gate.start(max_connections=2, deadline=5.0)
+    assert p.ok, p.error
+    holders = []
+    try:
+        for _ in range(2):                        # two connections that send nothing yet
+            h = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            h.connect(str(p.socket_path))
+            holders.append(h)
+        import time
+
+        time.sleep(0.2)                           # both accepted and holding their slots
+        got = GateClient(p.socket_path, gate.key, deadline=5.0).judge(
+            gate.request("schedule_opening", opening(), COMMERCIAL))
+        assert (got["decision"], got["rule_ids"], got["token"]) == ("deny", [FC], None)
+        assert "too many connections" in got["explanation"]["message"]
+        (line,) = lines(gate)
+        assert line["stage"] == "transport" and line["seq"] == got["seq"] == 1
+    finally:
+        for h in holders:
+            h.close()
+    import time
+
+    time.sleep(0.2)                               # the slots are released
+    ok = GateClient(p.socket_path, gate.key).judge(gate.request("schedule_opening", opening(),
+                                                                COMMERCIAL))
+    assert ok["decision"] == "allow" and ok["seq"] == 2

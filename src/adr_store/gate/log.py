@@ -12,9 +12,14 @@ a decision on the request's own content, `transport` for a fail-closed deny the 
 or the bytes received forced (an oversized or unparseable request, bindings that no longer
 verify). A line holds no token and no key (`FORBIDDEN`).
 
+Every line also carries the gate's `instance` id; a log continued by restarted gates holds one
+contiguous run per instance (an instance never reappears after another), which `verify_chain`
+and `replay` both check per log file.
+
 `verify_chain` checks every line: canonical JSON of an object, `seq` consecutive from 1,
-`prev_sha256` chaining, no forbidden field, and (G1) at least one `[rule_id, rule_version]`
-and, for every evaluated binding, its `rule_id`, `rule_version` and `doc_id`.
+`prev_sha256` chaining, no forbidden field, the instance runs, and (G1) at least one
+`[rule_id, rule_version]` and, for every evaluated binding, its `rule_id`, `rule_version` and
+`doc_id`.
 
 **A known limit:** the chain is not anchored outside the log, so lines deleted at its end
 leave a valid chain (and a restarted gate continues from the shortened log). A caller that
@@ -34,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 __all__ = ["FORBIDDEN", "GENESIS", "LOG_NAME", "append", "canonical_line", "read_lines",
@@ -84,6 +90,27 @@ def read_lines(path: Path) -> list[bytes]:
     return raw.split(b"\n")[:-1] if raw.endswith(b"\n") else raw.split(b"\n")
 
 
+_INSTANCE = re.compile(r"[0-9a-f]{32}")
+
+
+def _instance_problems(lines: list[dict]) -> list[tuple[int, str]]:
+    """(line number, why) for each line without a gate instance id (32 hex), or whose instance
+    reappears after another instance had started: a log is continued by restarted gates, one
+    contiguous run per instance, never interleaved."""
+    out, seen, current = [], set(), None
+    for n, line in enumerate(lines, 1):
+        inst = line.get("instance")
+        if not isinstance(inst, str) or not _INSTANCE.fullmatch(inst):
+            out.append((n, "no gate instance id"))
+            continue
+        if inst != current:
+            if inst in seen:
+                out.append((n, f"instance {inst[:8]} reappears after another"))
+            seen.add(inst)
+            current = inst
+    return out
+
+
 def _g1_problem(line: dict) -> str | None:
     rules = line.get("rule_ids")
     if not isinstance(rules, list) or not rules or not all(
@@ -108,6 +135,7 @@ def verify_chain(path: Path, expected_lines: int | None = None
         return False, len(lines), (f"{len(lines)} line(s), not the {expected_lines} expected "
                                    f"(lines deleted at the end, or added)")
     prev = GENESIS
+    parsed: list[dict] = []
     for n, raw in enumerate(lines, 1):
         try:
             line = json.loads(raw)
@@ -126,6 +154,9 @@ def verify_chain(path: Path, expected_lines: int | None = None
         if problem := _g1_problem(line):
             return False, len(lines), f"line {n}: {problem}"
         prev = _sha256(raw)
+        parsed.append(line)
+    if bad := _instance_problems(parsed):
+        return False, len(lines), f"line {bad[0][0]}: {bad[0][1]}"
     return True, len(lines), None
 
 
@@ -143,8 +174,11 @@ def replay(path: Path, store_path: Path, expected_lines: int | None = None) -> l
     if expected_lines is not None and len(lines) != expected_lines:
         out.append({"seq": None, "fields": ["lines"], "logged": len(lines),
                     "replayed": expected_lines})
-    for raw in lines:
-        line = json.loads(raw)
+    parsed = [json.loads(raw) for raw in lines]
+    for n, why in _instance_problems(parsed):
+        out.append({"seq": parsed[n - 1].get("seq"), "fields": ["instance"],
+                    "logged": parsed[n - 1].get("instance"), "replayed": why})
+    for line in parsed:
         if line.get("stage") != "request":
             if line.get("decision") != "deny" or line.get("rule_ids") != fail_closed:
                 out.append({"seq": line.get("seq"), "fields": ["decision", "rule_ids"],

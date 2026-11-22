@@ -8,13 +8,14 @@ silent, misses the deadline, or replies with anything malformed: a reply that is
 object of the protocol's keys and types, an allow whose token does not verify for this request
 and sequence number, or a token on anything but an allow.
 
-`check_token(request, reply)` is the environment's mediation: True only for an allow whose
-token verifies for exactly this request and sequence number, the first time that sequence
-number is presented (single use, P23); the side effect runs only then. Accepted sequence
-numbers are kept per gate (socket path and key digest) for the whole process, so every client
-of one gate in a process shares them; they are not persisted, so a restarted environment
-relies on the gate never reusing a sequence number (it continues its log) under the same key.
-The key is held in memory only.
+`check_token(request, reply)` is the environment's mediation: True only for an allow whose token
+verifies for exactly this request and sequence number, the first time that sequence number is
+presented (single use, P23); the side effect runs only then. Accepted sequence numbers are kept
+as (gate instance, sequence number) per socket path and key digest for the whole process, so
+every client of one gate in a process shares them, and a restarted gate (a new random instance
+id, covered by its tokens) is never refused for an old instance's numbers; they are not
+persisted. A connect the gate refuses for now (a full backlog) is retried briefly within the
+deadline. The key is held in memory only.
 
 `GateProcess` starts `python -m adr_store.gate.server` with the key on an inherited pipe (never
 an argument or an environment variable) and waits for its ready line; `private_socket` makes a
@@ -23,9 +24,11 @@ short socket path in a new 0700 directory (Unix socket paths are limited to abou
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
+import re
 import selectors
 import shutil
 import socket
@@ -42,20 +45,27 @@ from adr_store.gate.server import IO_DEADLINE_S
 
 __all__ = ["REPLY_KEYS", "GateClient", "GateProcess", "fail_closed_reply", "private_socket"]
 
-REPLY_KEYS = tuple(sorted(("seq", "decision", "rule_ids", "deciding_sections", "missing_facts",
-                          "next_allowed", "evaluated_outcome", "explanation", "token")))
-# sequence numbers already accepted, per gate (socket path, SHA-256 of the key): shared by every
-# client of this process, so a second client refuses a token the first accepted
-_SEEN: dict[tuple[str, str], set[int]] = {}
+REPLY_KEYS = tuple(sorted(("seq", "instance", "decision", "rule_ids", "deciding_sections",
+                          "missing_facts", "next_allowed", "evaluated_outcome", "explanation",
+                          "token")))
+# (gate instance, sequence number) pairs already accepted, per socket path and SHA-256 of the
+# key: shared by every client of this process, so a second client refuses a token the first
+# accepted, while a restarted gate (a new instance) is never refused for an old one's numbers
+_SEEN: dict[tuple[str, str], set[tuple[str, int]]] = {}
 _SEEN_LOCK = threading.Lock()
 MAX_REPLY_BYTES = 1 << 20
+CONNECT_RETRY_S = 0.5          # how long a refused connect is retried (within the deadline)
+CONNECT_BACKOFF_S = 0.01
+_INSTANCE = re.compile(r"[0-9a-f]{32}")
+_RETRY = (BlockingIOError, ConnectionRefusedError, InterruptedError)
 
 
 def fail_closed_reply(why: str) -> dict:
     """The deny the environment acts on when the gate gives no usable reply."""
     rule = list(SYSTEM_RULES["fail_closed"])
-    return {"seq": None, "decision": "deny", "rule_ids": [rule], "deciding_sections": [],
-            "missing_facts": [], "next_allowed": None, "evaluated_outcome": None,
+    return {"seq": None, "instance": None, "decision": "deny", "rule_ids": [rule],
+            "deciding_sections": [], "missing_facts": [], "next_allowed": None,
+            "evaluated_outcome": None,
             "explanation": {"message": f"deny: fail closed: {why}",
                             "rule_text": {rule[0]: SYSTEM_TEXT[rule[0]]}},
             "token": None}
@@ -77,6 +87,7 @@ def _shape_problem(r: object) -> str | None:
     if not (_strs(r["deciding_sections"]) and _strs(r["missing_facts"])
             and (r["next_allowed"] is None or isinstance(r["next_allowed"], str))
             and r["evaluated_outcome"] in (None, "allow", "deny", "escalate")
+            and isinstance(r["instance"], str) and _INSTANCE.fullmatch(r["instance"])
             and isinstance(r["explanation"], dict)
             and (r["seq"] is None or type(r["seq"]) is int)):
         return "the reply's fields have the wrong types"
@@ -99,6 +110,24 @@ class GateClient:
     def __repr__(self) -> str:
         return f"GateClient({str(self.socket_path)!r}, deadline={self.deadline:g})"
 
+    def _connect(self, end: float) -> socket.socket | str:
+        """A connected socket, or why not. A connect refused for now (a full backlog, a gate
+        restarting: `_RETRY`, or EAGAIN) is retried with a short backoff for at most
+        `CONNECT_RETRY_S`, within the deadline."""
+        retry_end = min(end, time.monotonic() + CONNECT_RETRY_S)
+        while True:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                s.settimeout(max(end - time.monotonic(), 0.001))
+                s.connect(str(self.socket_path))
+                return s
+            except OSError as e:
+                s.close()
+                again = isinstance(e, _RETRY) or e.errno == errno.EAGAIN
+                if not again or time.monotonic() + CONNECT_BACKOFF_S >= retry_end:
+                    return f"the gate is not running ({type(e).__name__})"
+                time.sleep(CONNECT_BACKOFF_S)
+
     def exchange(self, data: bytes) -> tuple[dict | None, str | None]:
         """(the reply object, None) for the request bytes `data` (sent as given, newline
         added when missing), or (None, why) on silence, a timeout or bytes that are not
@@ -106,13 +135,10 @@ class GateClient:
         end = time.monotonic() + self.deadline
         if not data.endswith(b"\n"):
             data += b"\n"
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s = self._connect(end)
+        if isinstance(s, str):
+            return None, s
         try:
-            s.settimeout(self.deadline)
-            try:
-                s.connect(str(self.socket_path))
-            except OSError as e:
-                return None, f"the gate is not running ({type(e).__name__})"
             try:
                 s.sendall(data)
                 s.shutdown(socket.SHUT_WR)
@@ -155,26 +181,27 @@ class GateClient:
         if problem := _shape_problem(reply):
             return fail_closed_reply(problem)
         if reply["decision"] == "allow":
-            if not tokens.verify(self._key, reply["token"], request, "allow", reply["seq"]):
+            if not tokens.verify(self._key, reply["token"], request, "allow", reply["seq"],
+                                 reply["instance"]):
                 return fail_closed_reply("the allow carries no token that verifies")
         elif reply["token"] is not None:
             return fail_closed_reply("a token on a decision that is not an allow")
         return reply
 
     def check_token(self, request: dict, reply: dict) -> bool:
-        """Whether the side effect of `request` may run on `reply` (module text); a sequence
-        number is accepted once."""
+        """Whether the side effect of `request` may run on `reply` (module text); a (gate
+        instance, sequence number) is accepted once."""
         if not isinstance(reply, dict) or reply.get("decision") != "allow":
             return False
-        seq = reply.get("seq")
-        if type(seq) is not int:
+        seq, instance = reply.get("seq"), reply.get("instance")
+        if type(seq) is not int or not isinstance(instance, str):
             return False
-        if not tokens.verify(self._key, reply.get("token"), request, "allow", seq):
+        if not tokens.verify(self._key, reply.get("token"), request, "allow", seq, instance):
             return False
         with _SEEN_LOCK:
-            if seq in self._seen:
+            if (instance, seq) in self._seen:
                 return False
-            self._seen.add(seq)
+            self._seen.add((instance, seq))
         return True
 
 
@@ -192,7 +219,8 @@ class GateProcess:
 
     def __init__(self, store_path: Path, bindings_id: str, log_dir: Path, socket_path: Path,
                  key: bytes, *, units_id: str | None = None, models: Path | None = None,
-                 deadline: float = IO_DEADLINE_S, startup: float = 120.0):
+                 deadline: float = IO_DEADLINE_S, startup: float = 120.0,
+                 max_connections: int | None = None):
         self.socket_path = Path(socket_path)
         args = [sys.executable, "-m", "adr_store.gate.server", "--store", str(store_path),
                 "--bindings", bindings_id, "--log", str(log_dir), "--socket",
@@ -201,6 +229,8 @@ class GateProcess:
             args += ["--units", units_id]
         if models is not None:
             args += ["--models", str(models)]
+        if max_connections is not None:
+            args += ["--max-connections", str(max_connections)]
         r, w = os.pipe()
         try:
             self.proc = subprocess.Popen([*args, "--key-fd", str(r)], pass_fds=(r,),
@@ -228,6 +258,12 @@ class GateProcess:
                 return None
         line = self.proc.stdout.readline().decode("utf-8", "replace")
         return line.strip() if line.startswith("gate ready") else None
+
+    @property
+    def instance(self) -> str | None:
+        """The gate's instance id, from its ready line."""
+        m = re.search(r"\(instance ([0-9a-f]{32}),", self.ready_line or "")
+        return m[1] if m else None
 
     @property
     def pid(self) -> int:

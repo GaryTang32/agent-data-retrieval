@@ -283,7 +283,7 @@ def _token_probes(cond: str, client: GateClient, req: dict, other: dict, k: int
     if cond == "forged_token":
         token = reply["token"]
         forged = (token[:-1] + ("0" if token[-1] != "0" else "1"),
-                  tokens.sign(os.urandom(32), req, "allow", reply["seq"]), "")[k]
+                  tokens.sign(os.urandom(32), req, "allow", reply["seq"], reply["instance"]), "")[k]
         return reply, client.check_token(req, {**reply, "token": forged})
     if cond == "replayed_token":
         if not client.check_token(req, reply):           # the one genuine execution
@@ -417,7 +417,8 @@ def log_checks(log_path: Path, store_path: Path, expected_lines: int | None = No
     probe gate's log, run against `store_path` (the shadow)."""
     ok, n, bad = gate_log.verify_chain(log_path, expected_lines)
     mism = gate_log.replay(log_path, store_path, expected_lines)
-    return {"g1": {"lines": n, "chain_ok": ok, "first_bad": bad},
+    instances = {json.loads(x).get("instance") for x in gate_log.read_lines(log_path)}
+    return {"g1": {"lines": n, "chain_ok": ok, "first_bad": bad, "instances": len(instances)},
             "g3": {"lines": n, "identical": n - len(mism), "differ": len(mism)}}
 
 

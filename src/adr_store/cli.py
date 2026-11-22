@@ -1625,7 +1625,8 @@ def _bindings_show(a: argparse.Namespace) -> int:
 
 def _gate_serve(a: argparse.Namespace) -> int:
     return gate_server.serve(a.store, a.bindings, a.units, a.log, a.socket, a.key_fd,
-                             models=a.models, deadline=a.deadline)
+                             models=a.models, deadline=a.deadline,
+                             max_connections=a.max_connections)
 
 
 def _gate_log_file(path: Path) -> Path:
