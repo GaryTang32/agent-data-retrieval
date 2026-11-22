@@ -1,0 +1,58 @@
+Prompt version: $prompt_version
+Specs: $specs
+
+You read one section of 33 CFR part 117 (Drawbridge Operation Regulations) and give, per rule
+card, who the rule binds and its conditions, and, per draw, the parameters of its operating
+rule. The user message is the section text, starting with its heading, then a line
+"RULE CARDS:" and the provision ids of the section's rule cards, one per line.
+
+Reply with JSON only, no prose and no code fences, in exactly this shape:
+{"cards": {"<provision id>": {"subject": <cell>, "conditions": <cell>, "thresholds": <cell>, "exceptions": <cell>}, ...},
+ "draws": [{"bridge": <cell>, "mile": <cell>, "opening_basis": <cell>, "notice_hours": <cell>,
+            "periods": [{"effect": <cell>, "start": <cell>, "end": <cell>, "days": <cell>, "except_federal_holidays": <cell>, "date_from": <cell>, "date_to": <cell>}, ...]}, ...]}
+
+A cell is {"value": <value or null>, "quote": "<text from the section>" or null, "null_reason": null, "absent" or "not_applicable"}.
+- "quote" is copied character for character from the section text: the shortest phrase or
+  sentence that states the value. Never paraphrase, abbreviate, or join separate passages.
+  For a list give one quote that holds every item of the list.
+- Write numbers as digits, even where the section writes them in words ("four hours notice"
+  is 4).
+- When the section states nothing for a cell, the cell is {"value": null, "quote": null,
+  "null_reason": "absent"}; use "not_applicable" when the cell cannot apply.
+- A negative or false value needs a quote that states it, like every other value: false for
+  except_federal_holidays only when the section says the period holds on holidays (for
+  example "including Federal holidays"), 0 for notice_hours only when the section says no
+  notice is needed, "closed_to_navigation" only when the section says the draw is closed. A
+  negative that would rest on the section saying nothing is {"value": null, "quote": null,
+  "null_reason": "absent"}. Never infer one.
+
+Cards: one entry under "cards" per provision id listed under RULE CARDS, keyed by that id.
+- subject (a string): who or what the rule binds, as the paragraph names it.
+- conditions (a list of strings): when the rule applies, as written: times, days, dates,
+  holidays, notice, vessels, signals.
+- thresholds (a list of strings): the numeric thresholds, as written ("at least four hours
+  notice").
+- exceptions (a list of strings): the cases the rule sets aside, as written.
+
+Draws: one object under "draws" per draw (bridge) the section governs, in the order the
+section names them; "draws" is [] when the section governs no particular draw. A rule stated
+once for all draws of the section is repeated on each draw, with the same quote.
+- bridge (a string): the bridge's name, as written.
+- mile (a number): the waterway mile of the bridge.
+- opening_basis: how the draw opens where no period below says otherwise: "on_signal",
+  "advance_notice" (it opens only after advance notice) or "closed_to_navigation".
+- notice_hours (an integer): the hours of advance notice an opening needs.
+- periods: each time window that has its own rule, as stated:
+  - effect: "need_not_open" (the draw need not open, or stays closed, in the window),
+    "on_signal" (it opens on signal in the window) or "notice_required" (it opens in the
+    window only after the notice in notice_hours);
+  - start and end: clock times as written ("7 a.m.", "4:30 p.m.", "noon", "midnight"). Quote
+    the whole time range for both ("from 7 a.m. to 9 a.m."). Both are null when the period
+    holds all day;
+  - days: the weekdays it holds on, a list of names (["Monday", "Tuesday", "Wednesday",
+    "Thursday", "Friday"]); null when it holds every day;
+  - except_federal_holidays: true when the period does not hold on Federal holidays;
+  - date_from and date_to: the first and the last day of its date range, as written
+    ("April 1", "October 31"); null when it holds all year.
+  Give one period per time range: "from 7 a.m. to 9 a.m. and from 4 p.m. to 6 p.m., Monday
+  through Friday" is two periods with the same days.

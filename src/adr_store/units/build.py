@@ -26,7 +26,11 @@ a model profile (preflight ruling C9). The procedure pass (`procedure_pass.apply
 `passes.json` in `contracts_dir`) fills the four descriptive fields of every procedure unit
 and its lineage before anything is written, so a budget stop or a model failure leaves no
 file; the manifest records the pass (prompt version, adapter, model, max tokens, groups,
-specs). The rules pass is not built yet: asking for it is refused before anything is written.
+specs). The rules pass (`bindings.enrich.apply`, Task 15) fills `subject`, `conditions`,
+`thresholds` and `exceptions` and the lineage of the newest 33 CFR 117 version's cards of the
+binding sections (the pool drawn from `tables/HEAD`, which it needs), one cached call per
+section, the same way; every other card keeps them null `not_extracted`. Its manifest record
+adds the tables id and the number of sections.
 """
 
 from __future__ import annotations
@@ -39,6 +43,7 @@ from typing import Literal
 
 from adr_store import applicability as ap
 from adr_store.applicability import Applicability
+from adr_store.bindings import enrich
 from adr_store.store import Store
 from adr_store.tables import extract as ex
 from adr_store.units import procedure_pass
@@ -181,8 +186,8 @@ def build_units(store_path: Path, corpus: Literal["gov", "research", "bench"], *
     if "procedure" in passes and "procedure" not in CORPUS_TYPES[corpus]:
         raise ValueError(f"the procedure pass fills procedure units; corpus {corpus!r} has "
                          f"none")
-    if "rules" in passes:
-        raise NotImplementedError("the rules pass is not built yet; build without it")
+    if "rules" in passes and "rule_card" not in CORPUS_TYPES[corpus]:
+        raise ValueError(f"the rules pass fills rule cards; corpus {corpus!r} has none")
     if passes and client is None:   # made only now: a metadata build resolves no model profile
         client = ex.metered_client(0)
     store = Store.open(store_path)
@@ -191,9 +196,13 @@ def build_units(store_path: Path, corpus: Literal["gov", "research", "bench"], *
     contracts = load_unit_contracts(contracts_dir)
     types = CORPUS_TYPES[corpus]
     built: dict[str, tuple[list[Unit], dict]] = {"concept": _concepts(store, corpus, overlay)}
-    if "rule_card" in types:
-        built["rule_card"] = _rule_cards(store, overlay, built["concept"][0])
     pass_info: dict[str, dict] = {}
+    if "rule_card" in types:
+        cards, report = _rule_cards(store, overlay, built["concept"][0])
+        if "rules" in passes:
+            cfg = load_pass_config("rules", Path(contracts_dir) / PASSES_CONFIG)
+            cards, pass_info["rules"] = enrich.apply(store, cards, client, cfg)
+        built["rule_card"] = (cards, report)
     if "procedure" in types:
         units, report = procedure_units(store, corpus, overlay)
         if "procedure" in passes:

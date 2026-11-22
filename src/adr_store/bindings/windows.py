@@ -213,3 +213,80 @@ def read_windows(quote: str) -> tuple[list[Window] | None, str]:
         windows.append(Window(start=start, end=end, days=days, except_federal_holidays=holidays,
                               date_from=date_from, date_to=date_to))
     return windows, ""
+
+
+# -- readings around a quote (Task 15: the window grammar on the whole sentence) ----------------
+
+_QUALIFIER_KINDS = ("range", "dates", "days", "holidays")
+_WORD_START = re.compile(r"(?<!\S)\S")
+
+
+def _range_minutes(m: re.Match) -> tuple[int, int] | None:
+    a, b = parse_time(m["a"]), parse_time(m["b"])
+    if a is None or b is None:
+        return None
+    if _THROUGH_MINUTE.search(m["b"]) and a != b:
+        b += 1
+    return a, b or 1440
+
+
+def stated_qualifiers(text: str) -> dict:
+    """What the grammar's own phrases state anywhere in `text`, words outside the grammar
+    skipped: `{"times": [(start, end)], "days": [days], "holidays": bool, "dates":
+    [(date_from, date_to)]}`, each list in text order. `holidays` is True for an exception
+    ("except Federal holidays"), never for "including Federal holidays"; an every-day phrase
+    gives all of `DAYS`; an impossible date or time is left out."""
+    out: dict = {"times": [], "days": [], "holidays": False, "dates": []}
+    pos = 0
+    while pos < len(text):
+        for kind, rx in _TOKENS:
+            if kind not in _QUALIFIER_KINDS:
+                continue
+            m = rx.match(text, pos)
+            if not m:
+                continue
+            if kind == "range":
+                minutes = _range_minutes(m)
+                if minutes is not None:
+                    out["times"].append(minutes)
+            elif kind == "days":
+                out["days"].append(_days(m))
+            elif kind == "holidays":
+                out["holidays"] = out["holidays"] or not m.groupdict().get("incl")
+            else:
+                start = _month_day(m["da"])
+                stop = _month_day(m["db"]) if m.groupdict().get("db") else start
+                if start is not None and stop is not None:
+                    out["dates"].append((start, stop))
+            pos = m.end()
+            break
+        else:
+            nxt = _WORD_START.search(text, pos + 1)
+            pos = nxt.start() if nxt else len(text)
+    return out
+
+
+def widest_reading(text: str, start: int, end: int
+                   ) -> tuple[list[Window] | None, tuple[int, int] | None]:
+    """The windows of the widest span of `text` that holds `[start, end)` and that the grammar
+    reads (`read_windows`), and that span; (None, None) when no such span reads. A span starts
+    at a word start (or at `start`) and ends where a grammar token ends (or at `end`); of two
+    equally wide spans the earlier wins. So the subject of a sentence ("The draw of the Main
+    Street drawbridge, mile 3.4,") is left out, and a qualifier stated beside the quote in
+    the grammar's words is read in."""
+    if not (isinstance(text, str) and 0 <= start <= end <= len(text)):
+        return None, None
+    starts = sorted({m.start() for m in _WORD_START.finditer(text, 0, start + 1)} | {start})
+    best: tuple[int, int, list[Window]] | None = None
+    for s in starts:
+        toks, _ = _tokens(text[s:])
+        ends = sorted({s + m.end() for _, m in toks if s + m.end() >= end} | {end},
+                      reverse=True)
+        for e in ends:
+            if best is not None and e - s <= best[1] - best[0]:
+                break
+            windows = parse_windows(text[s:e])
+            if windows is not None:
+                best = (s, e, windows)
+                break
+    return (None, None) if best is None else (best[2], (best[0], best[1]))

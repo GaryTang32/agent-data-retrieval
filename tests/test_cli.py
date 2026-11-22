@@ -510,7 +510,10 @@ def test_adr_units_build_with_passes(units_store, capsys, monkeypatch):
     assert code == 1 and "stopped at --max-calls 0 (0 budget unit(s) used)" in out
     code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "gov",
                         "--with-passes", "rules", "--max-calls", 0], capsys)
-    assert code == 2 and "rules" in err and "not built yet" in err
+    assert code == 2 and "rules pass needs tables/HEAD" in err     # built with Task 15
+    code, _, err = adr(["units", "build", "--store", units_store, "--units-for", "bench",
+                        "--with-passes", "rules"], capsys)
+    assert code == 2 and "rule cards" in err
 
 
 # -- `adr units define|rules|procedures|search` (Phase 4, Task 8) ---------------------------------

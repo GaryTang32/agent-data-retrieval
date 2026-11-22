@@ -17,8 +17,8 @@ hours notice") and in how § 117.4 marks "Drawtender"; § 117.821(a) is the same
 `make_units_store` writes the store with its applicability overlay derived under a gov config
 that lists 33/117 and 33/165 (Coast Guard) and 47/73 (FCC), so eCFR issuers are known (C15).
 Tests import the pytest fixtures explicitly, as Phase 3 tests import `tables_fixtures` (C2):
-later tasks add their fixtures here and list them in their Files. Nothing reads `data/` or
-`.cache/`.
+later tasks add their fixtures here and list them in their Files (Task 15: the rule enrichment
+replies, `units_enrich_reply`). Nothing reads `data/` or `.cache/`.
 """
 
 from __future__ import annotations
@@ -404,3 +404,98 @@ def units_built(tmp_path) -> Store:
     """`make_units_built` under `tmp_path`: the gov units of `UNITS_DOCS` built and promoted,
     with per-document access (`UNITS_ACL_RULES`)."""
     return make_units_built(tmp_path / "units-built")
+
+
+# -- rule enrichment replies (Task 15, preflight C2) ---------------------------------------------
+# A model's reply to `rule-enrich@1` for the sections of `ecfr_117_units.xml`: § 117.821 (two
+# closed windows of the Main Street drawbridge, Monday to Friday except Federal holidays; the
+# railroad bridge on four hours notice), § 117.901 (on signal, 24 hours notice from November 1
+# through March 31), and every other section its cards with absent fields and no draw.
+
+ENRICH_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+ENRICH_TIMES_A = "from 7 a.m. to 9 a.m."
+
+
+def enrich_cell(value, quote=None, null_reason=None) -> dict:
+    """A reply cell `{value, quote, null_reason}` (absent by default when `value` is None)."""
+    if value is None:
+        return {"value": None, "quote": None, "null_reason": null_reason or "absent"}
+    return {"value": value, "quote": quote, "null_reason": None}
+
+
+ENRICH_ABSENT = enrich_cell(None)
+
+
+def enrich_closed_period(begin="7 a.m.", until="9 a.m.", times=ENRICH_TIMES_A,
+                         **changes) -> dict:
+    """A `need_not_open` period of § 117.821(a), Monday to Friday except Federal holidays;
+    `changes` replace its cells."""
+    c = enrich_cell
+    p = {"effect": c("need_not_open", "need not open"), "start": c(begin, times),
+         "end": c(until, times), "days": c(ENRICH_WEEKDAYS, "Monday through Friday"),
+         "except_federal_holidays": c(True, "except Federal holidays"),
+         "date_from": ENRICH_ABSENT, "date_to": ENRICH_ABSENT}
+    return {**p, **changes}
+
+
+def enrich_reply_821(**period_changes) -> dict:
+    """A well-formed reply for § 117.821; `period_changes` replace cells of the first period of
+    the first draw."""
+    c, absent = enrich_cell, ENRICH_ABSENT
+    return {
+        "cards": {
+            "33 CFR 117.821(a)": {
+                "subject": c("the draw of the Main Street drawbridge",
+                             "The draw of the Main Street drawbridge"),
+                "conditions": c(["from 7 a.m. to 9 a.m.", "from 4 p.m. to 6 p.m.",
+                                 "Monday through Friday except Federal holidays"],
+                                "need not open from 7 a.m. to 9 a.m. and from 4 p.m. to 6 p.m. "
+                                "Monday through Friday except Federal holidays"),
+                "thresholds": absent,
+                "exceptions": c(["Federal holidays"], "except Federal holidays")},
+            "33 CFR 117.821(b)": {
+                "subject": c("the draw of the Smith River Railroad Bridge",
+                             "The draw of the Smith River Railroad Bridge"),
+                "conditions": c(["at least four hours notice is given"],
+                                "if at least four hours notice is given"),
+                "thresholds": c(["4 hours notice"], "at least four hours notice"),
+                "exceptions": absent}},
+        "draws": [
+            {"bridge": c("Main Street drawbridge", "Main Street drawbridge"),
+             "mile": c(3.4, "mile 3.4"), "opening_basis": absent, "notice_hours": absent,
+             "periods": [enrich_closed_period(**period_changes),
+                         enrich_closed_period("4 p.m.", "6 p.m.", "from 4 p.m. to 6 p.m.")]},
+            {"bridge": c("Smith River Railroad Bridge", "Smith River Railroad Bridge"),
+             "mile": c(5.1, "mile 5.1"),
+             "opening_basis": c("advance_notice", "shall open on signal if at least four hours "
+                                                  "notice is given"),
+             "notice_hours": c(4, "four hours notice"), "periods": []}]}
+
+
+def enrich_reply_901() -> dict:
+    """A well-formed reply for § 117.901 (no card fields: the cards come back absent)."""
+    c, absent = enrich_cell, ENRICH_ABSENT
+    season = "From November 1 through March 31"
+    return {"cards": {}, "draws": [
+        {"bridge": c("Harbor Avenue Bridge", "Harbor Avenue Bridge"), "mile": c(0.8, "mile 0.8"),
+         "opening_basis": c("on_signal", "shall open on signal"),
+         "notice_hours": c(24, "24 hours notice"),
+         "periods": [{"effect": c("notice_required", "shall open on signal if at least 24 hours "
+                                                     "notice is given"),
+                      "start": absent, "end": absent, "days": absent,
+                      "except_federal_holidays": absent,
+                      "date_from": c("November 1", season), "date_to": c("March 31", season)}]}]}
+
+
+def units_enrich_reply(system: str, user: str, repeat: int) -> str:
+    """A reply for every section of `ecfr_117_units.xml` (the section is read from the heading
+    the user message starts with; the card ids from its RULE CARDS lines)."""
+    section = user.split(" ", 2)[1]
+    if section == "117.821":
+        return json.dumps(enrich_reply_821())
+    if section == "117.901":
+        return json.dumps(enrich_reply_901())
+    ids = user.split("\n\nRULE CARDS:\n", 1)[1].splitlines()
+    return json.dumps({"cards": {i: dict.fromkeys(
+        ("subject", "conditions", "thresholds", "exceptions"), ENRICH_ABSENT) for i in ids},
+        "draws": []})

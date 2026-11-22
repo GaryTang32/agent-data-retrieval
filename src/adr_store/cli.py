@@ -27,14 +27,18 @@ semantic layer; never its `.report.json` files), `adr query` and `adr sql` (the 
 and `sql` tools, with the filter flags and `--as USER` of `adr search`), and the knowledge
 units (Phase 4 spec §5.2, §6.6): `adr units build` (every unit type of the store's corpus as a
 candidate build, by code; `--units-for` when the store holds documents of several corpora;
-only `--with-passes` makes a model client, and `--with-passes procedure` reads the procedure
+only `--with-passes` makes a model client, and `--with-passes procedure|rules` reads that
 pass's replies, by default from the cache only), `adr units compile --procedures` (the
 procedure pass over the procedures of one or more `--store`s with a model profile under the
 required `--max-calls`, every transport attempt counting; `--limit N` compiles the first N, the
 canary; it prints the procedures per store, writes the unhashed `procedure-pass-report.json`
 of each store and ends with the status, calls and budget units, or stops with exit 1 and
 nothing written at the cap or on a model failure that is no stored input rejection), `adr
-units show` (a build's manifest, counts per
+units compile --rules` (the rule enrichment of the binding sections of one gov `--store`, the
+same way; `--list` prints the sections and calls nothing, with no `--max-calls`; it writes the
+enrichment file and `rules-pass-report.json` with the binding compiler's report and, with
+`--facts ID`, E2 against both Phase 3 passes; a served model other than the profile's fails
+the run after writing them), `adr units show` (a build's manifest, counts per
 type and its reports), `adr units gate` (the units merge gate; without gold sets only a
 first promotion, with no `units/HEAD`, can pass; exit 1 when refused), and the four unit tools
 (Phase 4 spec §11.2, code in `adr_store.tools`): `adr units define TERM`, `adr units rules
@@ -1172,6 +1176,9 @@ def _units_build(a: argparse.Namespace) -> int:
     if "procedure" in passes and "procedure" not in units_build.CORPUS_TYPES[corpus]:
         raise _UsageError(f"--with-passes procedure: the procedure pass fills procedure units "
                           f"and corpus {corpus!r} has none")
+    if "rules" in passes and "rule_card" not in units_build.CORPUS_TYPES[corpus]:
+        raise _UsageError(f"--with-passes rules: the rules pass fills rule cards and corpus "
+                          f"{corpus!r} has none")
     meter = None
     try:
         if passes:
@@ -1205,7 +1212,105 @@ def _units_build(a: argparse.Namespace) -> int:
     return 0
 
 
+def _compile_usage(message: str) -> None:
+    """An argparse-style usage error of `adr units compile` (exit 2)."""
+    print(f"adr units compile: error: {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
 def _units_compile(a: argparse.Namespace) -> int:
+    """`adr units compile --procedures|--rules`: --list (rules only) calls nothing and needs
+    neither --generator nor --max-calls (preflight N6); every other run needs both."""
+    if not a.rules and (a.list or a.facts):
+        _compile_usage("--list and --facts go with --rules")
+    if not (a.rules and a.list):
+        missing = [f for f, v in (("--generator", a.generator), ("--max-calls", a.max_calls))
+                   if v is None]
+        if missing:
+            _compile_usage(f"the following arguments are required: {', '.join(missing)}")
+    return _units_compile_rules(a) if a.rules else _units_compile_procedures(a)
+
+
+def _units_compile_rules(a: argparse.Namespace) -> int:
+    """`adr units compile --rules`: the rule enrichment of the binding sections of one gov
+    store under --max-calls, then the binding compiler on it (no call) and, with --facts, E2
+    against both Phase 3 passes. --list prints the sections and calls nothing. The cap or a
+    model failure other than a stored input rejection stops it with exit 1 and nothing
+    written; otherwise it writes the enrichment file and `rules-pass-report.json`, and a
+    served model other than the profile's fails the run (exit 1) after writing them."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.bindings import compile as bindings_compile
+    from adr_store.bindings import enrich
+
+    if len(a.store) != 1:
+        raise _UsageError("--rules takes one --store (the gov store with tables/HEAD)")
+    store = Store.open(a.store[0])
+    tables_id = tables_overlay.read_head(store.path)
+    if tables_id is None:
+        raise tools.ToolError(f"{store.path}: no tables/HEAD; the rules pass draws its pool "
+                              f"from the Phase 3 first-pass table")
+    pool = enrich.pools(store, tables_id)
+    groups = ("subpart_a", "closed_window", "notice")
+    sections = [(g, s) for g in groups for s in pool[g]]
+    print(f"{len(sections)} binding section(s): {len(pool['subpart_a'])} subpart A, "
+          f"{len(pool['closed_window'])} closed window, {len(pool['notice'])} notice")
+    if a.list:
+        for g, s in sections:
+            print(f"{g} {s}")
+        return 0
+    facts = tables_extract.load_facts(store.path, a.facts) if a.facts else None
+    if a.limit is not None:
+        print(f"canary: the first {a.limit} section(s)")
+    try:
+        meter = tables_extract.metered_client(a.max_calls, profile=a.generator)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    workers = a.concurrency or eval_runner.load_config().get("concurrency", 1)
+    try:
+        items, report = enrich.enrich_all(store, meter, limit=a.limit, workers=workers)
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
+        return 1
+    enrichment_id, path = enrich.write_enrichment(store.path, store.snapshot_id, items)
+    _, cards = enrich.section_cards(store)
+    bindings, compiled = bindings_compile.compile_bindings(items, cards)
+    e2 = None
+    if facts is not None:
+        rows = tables_overlay.load_rows(store.path, tables_overlay.load_manifest(
+            store.path, tables_id), "drawbridge_bridges")
+        e2 = enrich.e2_agreement(items, rows, facts)
+    other = [m for m in report["served_models"] if m != meter.model]
+    run = {"generator": a.generator, "adapter": meter.name, "model": meter.model,
+           "max_calls": a.max_calls, "budget_units": meter.budget.calls,
+           "served_model_mismatch": bool(other), "store": str(store.path),
+           "enrichment_id": enrichment_id, "facts_id": a.facts, "compile": compiled, "e2": e2}
+    out = Path(store.path) / units_overlay.UNITS_DIR / store.snapshot_id / "rules-pass-report.json"
+    write_atomic(out, (json.dumps({**report, **run}, indent=2, sort_keys=True,
+                                  ensure_ascii=False) + "\n").encode("utf-8"))
+    d = compiled["draws"]
+    print(f"enrichment {enrichment_id}: {len(items)} section(s) in {path}")
+    print(f"bindings: {len(bindings)} from {d['compiled']} of {d['total']} draw(s); "
+          f"{d['failed']} draw(s) listed with no bindings; "
+          f"{len(compiled['sentence_qualifiers'])} draw(s) flagged for sentence qualifiers")
+    if e2 is not None:
+        for p in ("first", "second"):
+            shares = {c: e2[p][c]["share"] for c in ("notice_hours", "opens_on_signal",
+                                                     "closed_windows")}
+            print(f"E2 against the {p} pass: " + ", ".join(
+                f"{c} {'n/a' if v is None else f'{v:.3f}'}" for c, v in shares.items()))
+    print(f"report {out}")
+    calls = report["calls"]
+    served = ", ".join(report["served_models"]) or "none reported"
+    head = (f"served model mismatch: {', '.join(other)} != {meter.model}" if other
+            else "rules pass complete")
+    print(f"status: {head}; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {served}")
+    return 1 if other else 0
+
+
+def _units_compile_procedures(a: argparse.Namespace) -> int:
     """`adr units compile --procedures`: the procedure pass over the procedures of every
     --store, under --max-calls (every transport attempt counts). A model failure other than a
     stored input rejection, or the cap, stops it with exit 1 and nothing written; the replies
@@ -1770,8 +1875,8 @@ def _parser() -> argparse.ArgumentParser:
                           "documents are of)")
     unb.add_argument("--with-passes", default=None, metavar="PASS[,PASS]",
                      help=f"model passes whose replies fill model-written fields "
-                          f"({', '.join(units_build.PASSES)}; only procedure is built yet); "
-                          f"without it the build makes no model client")
+                          f"({', '.join(units_build.PASSES)}); without it the build makes no "
+                          f"model client")
     unb.add_argument("--generator", metavar="PROFILE", default=None,
                      help="model profile in config/models.json of the passes (default: config "
                           "generator)")
@@ -1786,16 +1891,24 @@ def _parser() -> argparse.ArgumentParser:
     which.add_argument("--procedures", action="store_true",
                        help="the procedure pass: when_to_use, not_for, trigger_examples and "
                             "problem_abstractions of every procedure")
+    which.add_argument("--rules", action="store_true",
+                       help="the rule enrichment of the 53 binding sections of one gov store "
+                            "(rule-card fields and draw parameters), then the binding compiler "
+                            "and E2 (no call)")
     unc.add_argument("--store", type=Path, action="append", required=True,
-                     help="store directory; repeatable")
-    unc.add_argument("--generator", metavar="PROFILE", required=True,
-                     help="model profile in config/models.json")
-    unc.add_argument("--max-calls", type=_non_negative, required=True,
+                     help="store directory; repeatable for --procedures")
+    unc.add_argument("--generator", metavar="PROFILE", default=None,
+                     help="model profile in config/models.json (required but with --list)")
+    unc.add_argument("--max-calls", type=_non_negative, default=None,
                      help="model calls (transport attempts, retries included) this command may "
-                          "make; 0 reads cached replies only")
+                          "make; 0 reads cached replies only (required but with --list)")
     unc.add_argument("--limit", type=_positive, default=None,
-                     help="compile only the first N procedures over the stores in order (the "
-                          "canary)")
+                     help="compile only the first N procedures over the stores, or the first N "
+                          "binding sections, in order (the canary)")
+    unc.add_argument("--list", action="store_true",
+                     help="--rules: print the binding sections and call nothing")
+    unc.add_argument("--facts", metavar="ID", default=None,
+                     help="--rules: the Phase 3 second-pass facts id, for E2 (preflight C5)")
     unc.add_argument("--concurrency", type=_positive, default=None,
                      help="calls in flight at once (default: config concurrency)")
     unc.set_defaults(fn=_units_compile)

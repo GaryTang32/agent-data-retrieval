@@ -151,8 +151,8 @@ def test_the_committed_config_has_one_procedure_group_and_the_contract_spec_ids(
     assert len(CFG.groups) == 1 and sorted(*CFG.groups.values()) == sorted(FIELDS)
     contract = load_unit_contracts()["procedure"]
     assert SPECS == {f.name: f.spec_id for f in contract.fields if f.name in FIELDS}
-    with pytest.raises(ValueError, match="rules"):
-        load_pass_config("rules")
+    with pytest.raises(ValueError, match="summaries"):
+        load_pass_config("summaries")
 
 
 def test_a_pass_config_names_each_field_once():

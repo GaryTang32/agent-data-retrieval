@@ -1,5 +1,5 @@
 {
-  "_comment": "Phase 4 model passes (spec §6.2): per pass, the prompt version, the field groups (one cached model call per unit and group) and each field's spec version, the source of the spec versions in the procedure contract (a test checks they agree). Bumping one spec recompiles only its group (§6.5, criterion T5). The procedure pass has exactly one group (preflight N7): one call per procedure.",
+  "_comment": "Phase 4 model passes (spec §6.2): per pass, the prompt version, the field groups (one cached model call per unit and group) and each field's spec version, the source of the spec versions in the procedure contract (a test checks they agree). Bumping one spec recompiles only its group (§6.5, criterion T5). The procedure pass has exactly one group (preflight N7): one call per procedure. The rules pass (rule enrichment for the binding sections, Task 15) has one group too: one call per section, which also returns each draw's binding parameters (no rule-card field, so no spec id).",
   "procedure": {
     "prompt_version": "procedure-compile@1",
     "groups": {
@@ -10,6 +10,18 @@
       "not_for": "procedure.not_for@1",
       "trigger_examples": "procedure.trigger_examples@1",
       "problem_abstractions": "procedure.problem_abstractions@1"
+    }
+  },
+  "rules": {
+    "prompt_version": "rule-enrich@1",
+    "groups": {
+      "main": ["subject", "conditions", "thresholds", "exceptions"]
+    },
+    "specs": {
+      "subject": "rule_card.subject@1",
+      "conditions": "rule_card.conditions@1",
+      "thresholds": "rule_card.thresholds@1",
+      "exceptions": "rule_card.exceptions@1"
     }
   }
 }
