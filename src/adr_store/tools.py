@@ -698,6 +698,7 @@ class CheckRulesResult(_Result):
     deciding_sections: list[str]
     missing_facts: list[str]
     next_allowed: str | None
+    evaluated_outcome: str | None  # deny_request: the outcome of the opening it judged
     bindings: str
     snapshot: str
     units: str
@@ -2810,7 +2811,8 @@ class Tools:
                 text[rule_id] = enf.texts.get((rule_id, doc)) if seen and enf else None
             res = CheckRulesResult(d.outcome, [list(r) for r in d.rule_ids], text,
                                    list(d.deciding_sections), list(d.missing_facts),
-                                   d.next_allowed, bindings_id, self.snapshot, us.units_id,
+                                   d.next_allowed, d.evaluated_outcome, bindings_id,
+                                   self.snapshot, us.units_id,
                                    handle=self._result_handle())
             return res, [], {"decision": d.outcome,
                              "rule_ids": [list(r) for r in d.rule_ids],

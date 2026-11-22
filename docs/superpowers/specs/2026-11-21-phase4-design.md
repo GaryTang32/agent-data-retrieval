@@ -814,7 +814,7 @@ the environment, which passes it to the agent; it writes nothing to the denial l
 escalation queue. Only an executed `deny_request` or `escalate_request` does.
 
 **Fails closed (P15).** A gate that is not running, times out, receives a malformed request, an
-unknown tool or target, a bindings manifest that does not verify, a binding without sign-off, or a
+unknown tool or target (P49), a bindings manifest that does not verify, a binding without sign-off, or a
 units id other than the one it loaded, answers deny under the system rule
 `adr.gate.fail-closed@1` (or, if it cannot answer, the environment treats silence as that deny).
 The environment executes a side-effecting call only with an allow token: an HMAC-SHA-256 over the
@@ -828,7 +828,9 @@ sources, units id and bindings id, every binding evaluated (`rule_id`, `rule_ver
 `deciding_sections`, missing facts, and the SHA-256 of the message. Every decision carries at
 least one rule id and version, the fail-closed and desk-policy system rules included
 (criterion G1). Replaying a line's facts against its bindings id gives
-the same decision (criterion G3).
+the same decision (criterion G3). The chain is not anchored outside the log, so lines deleted
+at its end leave a valid chain; a run that knows how many lines it caused (a probe run, a
+simulation replay: the last sequence number it was answered with) checks that count too.
 
 **Visibility.** Enforcement ignores what the caller may read: a rule binds whether or not its
 source is visible. The explanation follows visibility: a deny under a rule whose source the caller
@@ -1224,6 +1226,7 @@ are not moved.
 | P46 | A period-less opening basis or notice applies "at all other times": wherever none of the draw's specific periods (of any effect) applies. It compiles over `not (in_window(p1) or ... or in_window(pk))` instead of the all-times window, which it still is for a draw with no period; such a rule fills every gap, so § 117.5 is then not emitted. A notice of 0 hours compiles to an on-signal basis with no `forbid`. (Made after the Task 15 review.) | The legal text says "at all other times", and the enrichment prompt defines the opening basis as how the draw opens where no period says otherwise; compiled over all times, the §4.5 rule (on signal April 1 through October 31, 24 hours notice at all other times) needed notice in July | A model that gives a period-less notice meant for all times alongside on-signal periods is read as "other times" only; the prompt says so explicitly |
 | P47 | The exemption lexicon adds four word-bounded, case-insensitive restricted-opening phrases: "need open", "need be opened", "need only open" and "need only be opened" (§8.1). Leftmost-longest matching is unchanged, so a paragraph whose first lexicon phrase is a restricted opening is an exemption even if a "shall" or "must" follows (6 newest 33 CFR 117 cards move from obligation to exemption). The phrases match nothing in 33 CFR 165, 47 CFR 73 or 33 CFR 117 subpart A, in any stored version, so no narrowing (such as requiring "draw" or "bridge") was needed. Unit ids were rebuilt and gov `units/HEAD` re-promoted under the pre-gold reset, before any gold existed. (Controller ruling, Task 2b, made after the Task 15 review.) | 33 CFR 117 states many restricted openings as "the draw need open only on the hour" (§§ 117.293(a), 117.1097(a)(1)(i)); a restricted opening releases the general duty to open (§ 117.5) outside the stated times, so it is an exemption. Without the phrases 45 to 49 paragraphs per 117 version had no card: the compiler listed their draws as `no_card` and the gold could never contain them | A paragraph that restricts openings and also imposes a duty in a later sentence is classed by the restriction; other phrasings ("do not need to open", "need to open for") stay outside the lexicon |
 | P48 | A draw's bindings pass or fail together: if any binding of a draw fails its tests (§12.5), is vacuous, or the draw has a conflict (§12.4), every binding of the draw is `rejected`. (Made in Task 16.) | A partial set of a draw's bindings changes that draw's decision (a dropped forbid allows, a dropped basis escalates), so keeping the rest would not fail closed | Stricter than per-binding rejection: one bad binding loses the whole draw from the gate |
+| P49 | An unknown target is a (section, draw) absent from the bindings manifest's known draws for the version in force; it denies, under `adr.gate.fail-closed@1`, for every gated tool (`schedule_opening`, `deny_request`, `escalate_request`, `cancel_opening`); a known draw with no binding escalates (P15, §12.2) under `adr.gate.no-binding@1`. The known draws (`known_draws: [[doc_id, section, draw]]`, hash-covered by the manifest, validated by `load_bindings`: every draw holding bindings is among them) are recorded at `adr bindings build`: every enriched draw in the bindings' own numbering, failed draws included, and for a pool section whose enrichment reply produced no draw, draws 1..n of its Phase 3 `drawbridge_bridges` count. Sections with rule cards but no draw (§§ 117.5, 117.31) are unknown targets. (Controller ruling, Task 18 fix round 1.) | The bindings' targets cannot tell a draw that failed checks (escalate) from one that does not exist (deny), and Phase 3 numbers draws differently; side effects on nonexistent targets must not execute | A section whose reply produced no draw is numbered by the Phase 3 count, which may differ from the regulation's count; such draws have no bindings and only escalate |
 
 ## 20. Build order
 

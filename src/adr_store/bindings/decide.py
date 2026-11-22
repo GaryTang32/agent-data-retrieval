@@ -38,8 +38,12 @@ on-signal draw is next allowed at the end of its closed window. None when no suc
   opening the rules allow is denied under the rules that allow it, § 117.5 among them).
 - `escalate_request` and `cancel_opening`: allowed under the desk-policy system rules
   `adr.desk.escalate@1` and `adr.desk.cancel@1`.
-Every decision carries at least one (rule id, version) (G1): the deciding bindings', or a
-system rule's (`SYSTEM_RULES`; `no_binding` for a draw with no binding at all).
+Every decision carries at least one (rule id, version) (G1): the deciding bindings' (deny: the
+True forbids; escalate: the Unknown forbids or bases; allow: the True bases), or a system
+rule's (`SYSTEM_RULES`; `no_binding` when no binding is True or Unknown where it would decide:
+no binding at all, or no basis holding with nothing Unknown; False forbids are never named).
+A `deny_request` decision also carries `evaluated_outcome`, the outcome of the opening it
+judged.
 
 **Arguments** (`check_args`, N12): every gated call names its target `section` (a string) and
 `draw` (a positive int, not a bool); `schedule_opening` adds `open_at`, `deny_request`
@@ -49,11 +53,12 @@ three; times are naive ISO datetimes with a time. Any other key, a missing one o
 is a ValueError.
 
 **Judging under an enforcement context** (`judge`, what the gate and `check_rules` call): the
-loaded bindings, the 33 CFR 117 versions with their envelopes, and the sections that hold a
-rule card in each version. Fail closed (P15) under `adr.gate.fail-closed@1`: an unknown tool,
-malformed arguments or facts, no version in force on `as_of`, an unknown target (a section
-with no rule card in the version in force), a selected binding that is not signed off, or any
-exception while selecting or evaluating.
+loaded bindings, the 33 CFR 117 versions with their envelopes, and the known draws of each
+version (the bindings manifest's `known_draws`). Fail closed (P15) under
+`adr.gate.fail-closed@1`: an unknown tool, malformed arguments or facts, no version in force
+on `as_of`, an unknown target (a (section, draw) absent from the known draws of the version in
+force, for every gated tool, P49), a selected binding that is not signed off, or any exception
+while selecting or evaluating. A known draw with no binding escalates (P15, §12.2).
 """
 
 from __future__ import annotations
@@ -128,6 +133,7 @@ class Decision:
     message: str
     fail_closed: str | None = None           # why the call failed closed, when it did
     sources: dict[str, str] = field(default_factory=dict)   # rule_id -> doc_id of its binding
+    evaluated_outcome: str | None = None     # deny_request: the opening's own outcome
 
     @property
     def message_sha256(self) -> str:
@@ -339,10 +345,10 @@ def _opening(selected: list[Binding], open_at: datetime, record: dict
 
 
 def _of_draw(d: DrawDecision, selected, values, nxt, outcome=None, why=None) -> Decision:
-    if not selected:
-        rules = [SYSTEM_RULES["no_binding"]]
-    else:
-        rules = _rule_ids(d.deciding) or _rule_ids(selected)
+    # the bindings that decided; none (no basis holds and nothing is Unknown, or no binding at
+    # all): the no-binding system rule, never the False forbids
+    rules = _rule_ids(d.deciding) or [SYSTEM_RULES["no_binding"]]
+    evaluated_outcome = d.outcome if outcome is not None else None
     outcome = outcome or d.outcome
     sections = sorted(d.sections)
     missing = list(d.missing)
@@ -351,7 +357,8 @@ def _of_draw(d: DrawDecision, selected, values, nxt, outcome=None, why=None) -> 
                   "no rule binding covers this call"}[d.outcome]
     return Decision(outcome, rules, sections, missing, nxt, _evaluated(selected, values),
                     _message(outcome, rules, sections, missing, nxt, why),
-                    sources={b.rule_id: b.doc_id for b in selected})
+                    sources={b.rule_id: b.doc_id for b in selected},
+                    evaluated_outcome=evaluated_outcome)
 
 
 def decide(tool: str, args: dict, record: dict, bindings: list[Binding], doc_in_force: str
@@ -384,15 +391,16 @@ def decide(tool: str, args: dict, record: dict, bindings: list[Binding], doc_in_
 @dataclass(frozen=True)
 class Enforcement:
     """What a call is judged against: the loaded bindings (id, units id, snapshot), the
-    envelopes of the 33 CFR 117 versions (`applicability.Envelope`), the sections holding a
-    rule card in each version, and each card's text by (rule id, doc id)."""
+    envelopes of the 33 CFR 117 versions (`applicability.Envelope`), the known draws
+    `(section, draw)` of each version (the manifest's `known_draws`, P49), and each rule
+    card's text by (rule id, doc id)."""
 
     bindings_id: str
     units_id: str
     snapshot: str
     bindings: tuple[Binding, ...]
     envelopes: dict
-    sections: dict[str, frozenset[str]]
+    known: dict[str, frozenset[tuple[str, int]]]
     texts: dict[tuple[str, str], str]
 
     def doc_in_force(self, as_of: date | None) -> str | None:
@@ -447,9 +455,9 @@ def judge(enf: Enforcement, tool: object, args: object, record: object, as_of: o
         if doc is None:
             return fail_closed("no single version of 33 CFR 117 is in force on "
                                f"{day.isoformat() if day else 'today'}")
-        if args["section"] not in enf.sections.get(doc, frozenset()):
-            return fail_closed(f"unknown target: § {args['section'][:20]} has no rule card in "
-                               f"the version in force")
+        if (args["section"], args["draw"]) not in enf.known.get(doc, frozenset()):
+            return fail_closed(f"unknown target: § {args['section'][:20]} draw {args['draw']} "
+                               f"is no draw of the version in force (P49)")
         selected = select(list(enf.bindings), tool, args, doc)
         unsigned = [b.binding_id[:12] for b in selected if b.status != "signed_off"]
         if unsigned:

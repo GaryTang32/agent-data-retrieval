@@ -16,6 +16,8 @@ preflight C5, C6; Task 17).
    compared with the reference on the B1 grid, and a draw with a mismatch is rejected whole
    (P48). The grid summary is appended to each of its bindings' `tests`.
 6. **B2:** totals of the analysis records (conflicts, vacuous, redundant, draws with gaps).
+7. **Known draws (P49):** every enriched draw in the bindings' numbering, failed ones included;
+   a pool section whose reply produced no draw gets its Phase 3 table count (`known_draws`).
 
 Draws are keyed by document and target (`checks._draw_key`). The agreement pairs are
 `(section, Phase 3 draw, bindings' draw)` of the draws still `analysed`.
@@ -28,6 +30,7 @@ from dataclasses import dataclass
 
 from adr_store.bindings import checks
 from adr_store.bindings.dsl import Binding
+from adr_store.bindings.enrich import section_key
 from adr_store.bindings.manifest import INSTALL_ANALYSIS, BindingsError, by_draw
 
 __all__ = ["Candidates", "analysis_module", "build_candidates"]
@@ -41,6 +44,36 @@ class Candidates:
     agreement_pairs: list[tuple[str, int, int]]
     served_models: list[str]
     report: dict
+    known_draws: list[tuple[str, str, int]] = ()
+
+
+def known_draws(items, fallback: dict[str, int], doc_id: str | None
+                ) -> list[tuple[str, str, int]]:
+    """The known-draws census (P49): `[doc_id, section, draw]` of every enriched draw in the
+    bindings' own numbering (`DrawParams.draw`, failed draws included), and for each section
+    of `fallback` with no enriched draw, draws 1..n of its count in `doc_id`."""
+    out = {(i.doc_id, i.section, d.draw) for i in items for d in i.draws}
+    with_draws = {i.section for i in items if i.draws}
+    if doc_id is not None:
+        out |= {(doc_id, s, n) for s, count in fallback.items() if s not in with_draws
+                for n in range(1, count + 1)}
+    return sorted(out, key=lambda k: (k[0], section_key(k[1]), k[2]))
+
+
+def pool_draw_counts(store, tables_id: str) -> dict[str, int]:
+    """The Phase 3 `drawbridge_bridges` row count of each pool section (`enrich.pools`) in
+    the newest 33 CFR 117 version: the fallback of `known_draws`."""
+    from adr_store.bindings import enrich
+    from adr_store.tables.overlay import load_manifest, load_rows
+
+    doc = enrich.newest_doc(store)
+    p = enrich.pools(store, tables_id)
+    pool = set(p["closed_window"]) | set(p["notice"])
+    counts: dict[str, int] = {}
+    for r in load_rows(store.path, load_manifest(store.path, tables_id), "drawbridge_bridges"):
+        if r.doc_id == doc and r.row["section"] in pool:
+            counts[r.row["section"]] = counts.get(r.row["section"], 0) + 1
+    return counts
 
 
 def analysis_module():
@@ -139,5 +172,8 @@ def build_candidates(store, client, *, units_id: str, facts_id: str) -> Candidat
                "agreement_draws": len(agree), "grid_equal": len(grid_ok),
                "grid_mismatch": [list(k) for k in grid_bad]},
         "b2": _b2(out)}
+    known = known_draws(items, pool_draw_counts(store, enrich_report["tables_id"]),
+                        enrich.newest_doc(store))
+    report["known_draws"] = len(known)
     return Candidates(out, enrich_report["tables_id"], enrichment_id, agreement_pairs,
-                      enrich_report["served_models"], report)
+                      enrich_report["served_models"], report, known)

@@ -414,6 +414,7 @@ class CheckRulesOut(_Strict):
     deciding_sections: list[str]
     missing_facts: list[str]
     next_allowed: str | None
+    evaluated_outcome: Literal["allow", "deny", "escalate"] | None
     bindings: str
     snapshot: str
     units: str

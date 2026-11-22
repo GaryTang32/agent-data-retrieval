@@ -106,8 +106,11 @@ def test_no_basis_escalates_no_rule_binding_covers_this_call():                 
     d = decide("schedule_opening", OPEN(open_at=noon), REC_OK, [FORBID], DOC_NEW)
     assert d.outcome == "escalate" and d.missing_facts == []
     assert "no rule binding covers this call" in d.message
-    assert d.rule_ids == [(FORBID.rule_id, FORBID.rule_version)]
-    # a draw with no binding at all escalates under the no-binding system rule
+    # no binding was True or Unknown: the system rule, never the False forbid (Minor 5)
+    assert d.rule_ids == [SYSTEM_RULES["no_binding"]]
+    assert [e.value for e in d.evaluated] == ["F"]
+    # a draw with no binding at all escalates under the no-binding system rule (`decide` does
+    # not know which draws exist: `judge` denies an unknown draw first, P49)
     d = decide("schedule_opening", OPEN(draw=9, open_at=noon), REC_OK, BINDINGS_821, DOC_NEW)
     assert (d.outcome, d.rule_ids, d.evaluated) == ("escalate", [SYSTEM_RULES["no_binding"]],
                                                     [])
@@ -281,8 +284,8 @@ ENF = Enforcement(
     bindings_id="b" * 64, units_id="u" * 64, snapshot="s" * 64, bindings=signed(BINDINGS_821),
     envelopes={DOC_OLD: _env(DOC_OLD, date(2025, 6, 27), date(2026, 6, 26), DOC_NEW),
                DOC_NEW: _env(DOC_NEW, date(2026, 6, 26), None)},
-    sections={DOC_NEW: frozenset({"117.5", "117.31", "117.821"}),
-              DOC_OLD: frozenset({"117.5", "117.31", "117.821"})},
+    known={DOC_NEW: frozenset({("117.821", 1), ("117.821", 2)}),     # draw 2 has no binding
+           DOC_OLD: frozenset({("117.821", 1)})},
     texts={})
 FC = SYSTEM_RULES["fail_closed"]
 
@@ -312,6 +315,46 @@ def test_judge_equals_decide_on_a_well_formed_call():
 def test_judge_fails_closed(tool, args, rec, as_of, why):
     d = judge(ENF, tool, args, rec, as_of)
     assert (d.outcome, d.rule_ids) == ("deny", [FC]) and why in d.fail_closed
+
+
+@pytest.mark.parametrize("tool,extra", [
+    ("schedule_opening", {"open_at": "2026-08-14T12:00:00"}),
+    ("deny_request", {"requested_open_at": "2026-08-14T07:30:00", "rule_id": "§ 117.821",
+                      "reason": "closed"}),
+    ("escalate_request", {"missing": [], "reason": "?"}),
+    ("cancel_opening", {"opening_id": "o1"}),
+])
+def test_an_unknown_draw_denies_and_a_known_draw_without_bindings_escalates(tool, extra):
+    """P49: a (section, draw) absent from the known draws of the version in force is an
+    unknown target for every gated tool (fail closed); a known draw with no binding escalates
+    (P15), and the desk rules still allow its escalation or cancellation."""
+    for section, n in (("117.821", 3), ("117.821", 99999), ("117.5", 1), ("117.31", 1)):
+        d = judge(ENF, tool, {"section": section, "draw": n, **extra}, REC_OK, "2026-08-14")
+        assert (d.outcome, d.rule_ids) == ("deny", [FC]) and "unknown target" in d.fail_closed
+    # § 117.821 draw 2 is known under the newest version only
+    d = judge(ENF, tool, {"section": "117.821", "draw": 2, **extra}, REC_OK, "2025-08-14")
+    assert d.rule_ids == [FC] and "unknown target" in d.fail_closed
+    d = judge(ENF, tool, {"section": "117.821", "draw": 2, **extra}, REC_OK, "2026-08-14")
+    assert d.fail_closed is None
+    if tool == "schedule_opening":
+        assert (d.outcome, d.rule_ids) == ("escalate", [SYSTEM_RULES["no_binding"]])
+    elif tool == "deny_request":
+        assert (d.outcome, d.evaluated_outcome) == ("deny", "escalate")
+    else:
+        assert d.outcome == "allow"
+
+
+def test_a_denied_deny_request_carries_the_evaluated_outcome():                     # Minor 6
+    noon = "2026-08-14T12:00:00"
+    ok = record(datetime(2026, 8, 14, 12), notice=600, vessel="commercial", conflict=False)
+    d = decide("deny_request", DENY("§ 117.821", "closed", at=noon), ok, BINDINGS_821, DOC_NEW)
+    assert (d.outcome, d.evaluated_outcome) == ("deny", "allow")
+    d = decide("deny_request", DENY("§ 117.821", "closed"), REC_NO_CLASS, BINDINGS_821, DOC_NEW)
+    assert (d.outcome, d.evaluated_outcome) == ("deny", "escalate")
+    d = decide("deny_request", DENY("§ 117.821", "closed"), REC_OK, BINDINGS_821, DOC_NEW)
+    assert (d.outcome, d.evaluated_outcome) == ("allow", "deny")
+    d = decide("schedule_opening", OPEN(), REC_OK, BINDINGS_821, DOC_NEW)
+    assert d.evaluated_outcome is None
 
 
 def test_judge_fails_closed_on_any_exception_and_on_unsigned_bindings(monkeypatch):

@@ -89,6 +89,7 @@ BINDINGS_DUTY = compile_draw("117.901", draw(n=3, periods=[
 # the same shape with every window moved half an hour off its parameters: fails its tests
 BINDINGS_OFF = shift(run(draw(n=4, periods=[closed(420, 540, days=WEEKDAYS)]))[0], 30)
 CANDIDATES = candidates(BINDINGS_821, BINDINGS_SIGNAL, BINDINGS_DUTY)
+KNOWN = bm.draw_keys(CANDIDATES)          # every draw of the candidates is known (P49)
 DRAW_821 = {b.binding_id for b in CANDIDATES if b.target["selector"]["draw"] == 1}
 DRAW_SIGNAL = {b.binding_id for b in CANDIDATES if b.target["selector"]["draw"] == 2}
 DRAW_DUTY = {b.binding_id for b in CANDIDATES if b.target["selector"]["draw"] == 3}
@@ -134,7 +135,7 @@ def test_only_tested_analysed_approved_bindings_are_signed_off_and_written(tmp_p
     # P48: the rejected binding's whole draw is rejected; the approved draw is signed off whole
     assert {st[x] for x in DRAW_821 | DRAW_DUTY} == {"signed_off"}
     assert {st[x] for x in DRAW_SIGNAL} == {"rejected"}
-    bindings_id, _ = write_bindings(tmp_path, SNAP, U, T, out)
+    bindings_id, _ = write_bindings(tmp_path, SNAP, U, T, out, known_draws=KNOWN)
     assert {b.binding_id for b in load_bindings(tmp_path, bindings_id)[1]} == \
         DRAW_821 | DRAW_DUTY
     # a tested binding that was never analysed is not reviewed nor signed off, even if the
@@ -151,7 +152,8 @@ def test_only_tested_analysed_approved_bindings_are_signed_off_and_written(tmp_p
     assert {b.review["reason"] for b in out2[:len(tested)]} == {"incomplete_draw"}
     assert report["incomplete_draws"] == {"draws": 1, "bindings": len(tested)}
     assert all(b.verifier is None and "verdict" not in b.review for b in out2)
-    assert load_bindings(tmp_path, write_bindings(tmp_path, SNAP, U, T, out2)[0])[1] == []
+    assert load_bindings(tmp_path, write_bindings(tmp_path, SNAP, U, T, out2,
+                                                  known_draws=KNOWN)[0])[1] == []
 
 
 DUTY_GENERAL = next(b.binding_id for b in CANDIDATES if b.binding_id in DRAW_DUTY
@@ -172,7 +174,7 @@ def test_a_draw_with_a_binding_not_analysed_is_rejected_whole(tmp_path, status):
     assert report["incomplete_draws"] == {"draws": 1, "bindings": len(DRAW_DUTY)}
     assert client.calls == 1 and report["sections_reviewed"] == 1        # § 117.901 not sent
     assert {st[x].status for x in DRAW_821 | DRAW_SIGNAL} == {"signed_off"}
-    bindings_id, _ = write_bindings(tmp_path, SNAP, U, T, out,
+    bindings_id, _ = write_bindings(tmp_path, SNAP, U, T, out, known_draws=KNOWN,
                                     candidate_draws=bm.draw_sizes(CANDIDATES))
     loaded = {b.binding_id for b in load_bindings(tmp_path, bindings_id)[1]}
     assert loaded == DRAW_821 | DRAW_SIGNAL and not loaded & DRAW_DUTY
@@ -208,16 +210,18 @@ def test_write_bindings_refuses_an_incomplete_draw(tmp_path):                   
     part = [Binding.model_validate({**b.model_dump(), "status": "analysed"})
             if b.binding_id == DUTY_GENERAL else b for b in out]
     with pytest.raises(BindingsError, match="signed off in part"):
-        write_bindings(tmp_path, SNAP, U, T, part)
+        write_bindings(tmp_path, SNAP, U, T, part, known_draws=KNOWN)
     # a binding the candidates list for the draw is missing from the input altogether
     short = [b for b in out if b.binding_id != DUTY_GENERAL]
     with pytest.raises(BindingsError, match="holds 2 binding.s., not the 3"):
-        write_bindings(tmp_path, SNAP, U, T, short, candidate_draws=bm.draw_sizes(CANDIDATES))
+        write_bindings(tmp_path, SNAP, U, T, short, known_draws=KNOWN,
+                       candidate_draws=bm.draw_sizes(CANDIDATES))
     # a draw without its § 117.31(b) emergency basis
     emergency = next(b.binding_id for b in out if b.binding_id in DRAW_DUTY
                      and b.rule_id == EMERGENCY_CARD.canonical_ref)
     with pytest.raises(BindingsError, match="no § 117.31.b. emergency basis"):
-        write_bindings(tmp_path, SNAP, U, T, [b for b in out if b.binding_id != emergency])
+        write_bindings(tmp_path, SNAP, U, T, [b for b in out if b.binding_id != emergency],
+                       known_draws=KNOWN)
 
 
 def test_review_record_is_labelled_model_review(tmp_path):
@@ -306,7 +310,7 @@ def test_a_limited_review_signs_off_whole_draws_only(tmp_path):        # --limit
     assert all("verdict" not in st[x].review and st[x].verifier is None for x in DRAW_DUTY)
     assert report["bindings"]["not_reviewed"] == len(DRAW_DUTY)
     assert {b.binding_id for b in load_bindings(tmp_path, write_bindings(
-        tmp_path, SNAP, U, T, out)[0])[1]} == DRAW_821 | DRAW_SIGNAL
+        tmp_path, SNAP, U, T, out, known_draws=KNOWN)[0])[1]} == DRAW_821 | DRAW_SIGNAL
 
 
 # -- one call per section, and what it holds (§12.5, builder note 16, C3) -------------------------
@@ -538,7 +542,7 @@ def test_the_prompt_asks_for_a_judgement_of_each_flag():
 
 def written(tmp_path, verdicts=None, **kw) -> tuple[str, list[Binding]]:
     out, _ = reviewed(tmp_path, verdicts)
-    return write_bindings(tmp_path, SNAP, U, T, out, **kw)[0], out
+    return write_bindings(tmp_path, SNAP, U, T, out, **{"known_draws": KNOWN, **kw})[0], out
 
 
 def manifest_path(store_path: Path, bindings_id: str) -> Path:
@@ -575,12 +579,12 @@ def test_the_manifest_and_its_data_file_have_their_own_stems_and_hashes(tmp_path
 def test_write_bindings_refuses_an_agreement_draw_or_override_it_cannot_hold(tmp_path):
     out, _ = reviewed(tmp_path)
     with pytest.raises(BindingsError, match="agreement"):
-        write_bindings(tmp_path, SNAP, U, T, out, agreement_pairs=[["117.821", 1, 1],
-                                                                    ["117.821", 2, 1]])
+        write_bindings(tmp_path, SNAP, U, T, out, known_draws=KNOWN,
+                       agreement_pairs=[["117.821", 1, 1], ["117.821", 2, 1]])
     # an emergency basis whose listed forbid is not in the set (a partial draw) is refused
     partial = [b for b in out if b.binding_id != B1]
     with pytest.raises(BindingsError, match="overrides"):
-        write_bindings(tmp_path, SNAP, U, T, partial)
+        write_bindings(tmp_path, SNAP, U, T, partial, known_draws=KNOWN)
 
 
 def _draws_of(lines: list[bytes]) -> list[tuple]:
@@ -743,7 +747,7 @@ def test_promote_refuses_unless_all_signed_off(tmp_path):
     assert read_bindings_head(tmp_path) is None
     assert not (tmp_path / BINDINGS_DIR / "HEAD").exists()
     # an empty set is no binding set to enforce
-    empty, _ = write_bindings(tmp_path, SNAP, U, T, [])
+    empty, _ = write_bindings(tmp_path, SNAP, U, T, [], known_draws=[])
     with pytest.raises(BindingsError, match="no binding"):
         promote_bindings(tmp_path, empty)
     assert read_bindings_head(tmp_path) is None
@@ -996,7 +1000,8 @@ def test_load_candidates_verifies_its_files(flow_store, capsys, monkeypatch):
     with pytest.raises(BindingsError, match="mixes statuses"):
         bm.write_candidates(path, m.snapshot, m.units_id, m.tables_id,
                             [Binding.model_validate_json(x) for x in mixed], facts_id=None,
-                            enrichment_id=None, agreement_pairs=[], report={})
+                            enrichment_id=None, agreement_pairs=[], report={},
+                            known_draws=m.known_draws)
     # a bindings id is no candidates id
     with pytest.raises(BindingsError):
         load_bindings(path, cid)
@@ -1018,6 +1023,37 @@ def test_bindings_build_reads_units_head_without_units(flow_store, capsys, monke
     m, _ = bm.load_candidates(path, candidates_id(out))
     assert m.units_id == flow_store["units_id"]
     assert f"units {flow_store['units_id'][:12]}" in out
+    # P49: the known draws are every enriched draw (117.821 draws 1-2, 117.901 draw 1), and
+    # cover every draw with bindings
+    doc = {d[0] for d in m.draws}
+    assert len(doc) == 1
+    (doc,) = doc
+    assert {("117.821", 1), ("117.821", 2), ("117.901", 1)} <= {
+        (s, n) for d, s, n in m.known_draws if d == doc}
+    assert {tuple(d[:3]) for d in m.draws} <= {tuple(k) for k in m.known_draws}
+
+
+def test_known_draws_take_every_enriched_draw_and_the_table_count_of_empty_sections():
+    from adr_store.bindings.build import known_draws
+    from adr_store.bindings.enrich import SectionEnrichment
+    from tests.store.test_bindings_compile import draw
+
+    failed = draw(n=2).model_copy(update={"opening_basis": g_failed()})
+    items = [SectionEnrichment.model_construct(section="117.821", doc_id=D1, draws=[
+                 draw(n=1), failed]),
+             SectionEnrichment.model_construct(section="117.1081", doc_id=D1, draws=[]),
+             SectionEnrichment.model_construct(section="117.5", doc_id=D1, draws=[])]
+    got = known_draws(items, {"117.1081": 3, "117.821": 9}, D1)
+    # a failed draw is known; an empty pool section takes its table count; a section with
+    # enriched draws ignores the fallback; subpart A sections get no draw
+    assert got == [(D1, "117.821", 1), (D1, "117.821", 2), (D1, "117.1081", 1),
+                   (D1, "117.1081", 2), (D1, "117.1081", 3)]
+
+
+def g_failed():
+    from tests.store.test_bindings_compile import g
+
+    return g(None, null_reason="unparseable")
 
 
 def reversed_821(system: str, user: str, repeat: int) -> str:
@@ -1201,6 +1237,31 @@ def test_a_recorded_draw_with_no_bindings_is_refused():          # re-review N7
     fields = dict(format_version="0.1", snapshot="s", units_id="a" * 64, tables_id="b" * 64,
                   facts_id=None, enrichment_id=None, agreement_set=[], agreement_pairs=[],
                   draws=[["d", "117.821", 1, 2], ["d", "117.821", 2, 0]], file="f",
-                  sha256="c" * 64, bindings=2, language="adr-dsl@1")
+                  sha256="c" * 64, bindings=2, language="adr-dsl@1",
+                  known_draws=[["d", "117.821", 1], ["d", "117.821", 2]])
     with pytest.raises(ValueError, match="at least one binding"):
         bm.BindingsManifest.model_validate(fields)
+
+
+def test_known_draws_are_sorted_distinct_and_cover_every_draw_with_bindings(tmp_path):  # P49
+    fields = dict(format_version="0.1", snapshot="s", units_id="a" * 64, tables_id="b" * 64,
+                  facts_id=None, enrichment_id=None, agreement_set=[], agreement_pairs=[],
+                  draws=[["d", "117.821", 1, 2]], file="bindings-data-cccccccccccccccc.jsonl",
+                  sha256="c" * 64, bindings=2, language="adr-dsl@1")
+    known = [["d", "117.821", 1], ["d", "117.821", 2], ["d", "117.1081", 1]]
+    ok = bm.BindingsManifest.model_validate({**fields, "known_draws": known})
+    assert [list(k) for k in ok.known_draws] == known      # section order: 117.821 < 117.1081
+    with pytest.raises(ValueError, match="known draw"):     # a draw with bindings missing
+        bm.BindingsManifest.model_validate({**fields, "known_draws": [["d", "117.821", 2]]})
+    with pytest.raises(ValueError, match="sorted and distinct"):
+        bm.BindingsManifest.model_validate({**fields, "known_draws": known[::-1]})
+    # write_bindings refuses a census without a written draw, records the one it is given
+    # (sorted) and the bindings id covers it
+    out, _ = reviewed(tmp_path)
+    with pytest.raises(BindingsError, match="known draw"):
+        write_bindings(tmp_path, SNAP, U, T, out, known_draws=KNOWN[1:])
+    extra = [(KNOWN[0][0], "117.821", 9), *KNOWN]
+    a, _ = write_bindings(tmp_path, SNAP, U, T, out, known_draws=extra)
+    b, _ = write_bindings(tmp_path, SNAP, U, T, out, known_draws=KNOWN)
+    assert a != b
+    assert (KNOWN[0][0], "117.821", 9) in load_bindings(tmp_path, a)[0].known_draws

@@ -94,6 +94,7 @@ def test_a_fake_gate_forging_tokens_is_denied(tmp_path):
     srv.listen(1)
     reply = {"seq": 1, "decision": "allow", "rule_ids": [["33 CFR 117.5(p1)", "x"]],
              "deciding_sections": [], "missing_facts": [], "next_allowed": None,
+             "evaluated_outcome": None,
              "explanation": {}, "token": "ab" * 32}
 
     def answer():
@@ -124,7 +125,7 @@ def _mixed(g) -> list[dict]:
         g.request("schedule_opening", opening(CLOSED), COMMERCIAL),                 # deny
         g.request("schedule_opening", opening(CLOSED), {}),                         # escalate
         g.request("schedule_opening", opening(NOON, draw=2), COMMERCIAL),           # escalate
-        g.request("schedule_opening", opening(NOON, draw=9), COMMERCIAL),           # no binding
+        g.request("schedule_opening", opening(NOON, "117.1081"), COMMERCIAL),       # no binding
         g.request("schedule_opening", opening(NOON, "117.901"), COMMERCIAL),        # allow
         g.request("deny_request", deny_args(), COMMERCIAL),                         # allow
         g.request("deny_request", deny_args("33 CFR 117.5", "no"), COMMERCIAL),     # deny
@@ -133,6 +134,8 @@ def _mixed(g) -> list[dict]:
         g.request("cancel_opening", {"opening_id": "o1", "section": "117.821", "draw": 1}),
         g.request("open_bridge", opening()),                                        # FC
         g.request("schedule_opening", opening(section="117.9999")),                 # FC
+        g.request("schedule_opening", opening(NOON, draw=9), COMMERCIAL),           # FC (P49)
+        g.request("cancel_opening", {"opening_id": "o", "section": "117.5", "draw": 1}),  # FC
         g.request("schedule_opening", opening(), units="0" * 64),                   # FC
         g.request("schedule_opening", opening(), {"vessel_class": {"value": "commercial",
                                                                    "source": "agent"}}),
@@ -474,6 +477,8 @@ CHECKS = [
         "value": "2026-08-14T10:17:00", "source": "user"}}),
     ("schedule_opening", opening("2026-12-02T12:00:00", "117.901"), COMMERCIAL),
     ("schedule_opening", opening(NOON, draw=9), COMMERCIAL),
+    ("schedule_opening", opening(NOON, "117.1081"), COMMERCIAL),
+    ("escalate_request", {"section": "117.821", "draw": 7, "missing": [], "reason": "?"}, {}),
     ("deny_request", deny_args(), COMMERCIAL),
     ("deny_request", deny_args("33 CFR 117.5", "general duty"), COMMERCIAL),
     ("deny_request", deny_args(at=NOON), COMMERCIAL),
@@ -588,3 +593,133 @@ def test_check_rules_over_mcp_equals_the_python_api(units_built_with_bindings): 
                 b = m.check_rules({"tool": tool, "args": args}, given, as_of=AS_OF_GATE)
                 assert {k: v for k, v in a.to_dict().items() if k != "handle"} == \
                     {k: v for k, v in b.to_dict().items() if k != "handle"}
+
+
+
+# -- fix round 1: unknown draws, robustness, deadlines, single use, truncation --------------------
+
+def test_unknown_draws_deny_for_every_tool_and_a_known_draw_without_bindings_escalates(
+        gate):  # noqa: F811                                                       # P49
+    for args in ({"opening_id": "o", "section": "117.821", "draw": 3},
+                 {"opening_id": "o", "section": "117.31", "draw": 1}):
+        got = gate.client.judge(gate.request("cancel_opening", args))
+        assert (got["decision"], got["rule_ids"], got["token"]) == ("deny", [FC], None)
+        assert "unknown target" in got["explanation"]["message"]
+    esc = {"section": "117.901", "draw": 2, "missing": [], "reason": "?"}
+    got = gate.client.judge(gate.request("escalate_request", esc))
+    assert (got["decision"], got["rule_ids"]) == ("deny", [FC])
+    got = gate.client.judge(gate.request("schedule_opening", opening(NOON, "117.5")))
+    assert (got["decision"], got["rule_ids"]) == ("deny", [FC])
+    got = gate.client.judge(gate.request("schedule_opening", opening(NOON, "117.1081"),
+                                         COMMERCIAL))
+    assert (got["decision"], got["rule_ids"]) == ("escalate",
+                                                  [list(SYSTEM_RULES["no_binding"])])
+    ok = gate.client.judge(gate.request("escalate_request", {**esc, "section": "117.1081",
+                                                             "draw": 1}))
+    assert ok["decision"] == "allow"
+
+
+def test_deeply_nested_json_is_a_logged_deny_and_the_gate_keeps_serving(gate):  # noqa: F811
+    for data in (b"[" * 10000, b'{"session": ' + b"[" * 10000 + b"]" * 10000 + b"}"):
+        reply, why = gate.client.exchange(data)
+        assert why is None, why
+        assert (reply["decision"], reply["rule_ids"], reply["token"]) == ("deny", [FC], None)
+        assert "malformed request" in reply["explanation"]["message"]
+    logged = lines(gate)
+    assert [x["stage"] for x in logged] == ["transport", "transport"]
+    assert all(x["decision"] == "deny" and x["request"] is None for x in logged)
+    got = gate.client.judge(gate.request("schedule_opening", opening(), COMMERCIAL))
+    assert got["decision"] == "allow" and got["seq"] == 3
+    assert gate_log.verify_chain(gate.log_path, 3) == (True, 3, None)
+
+
+def test_a_lone_surrogate_is_a_logged_deny(gate):  # noqa: F811
+    req = gate.request("schedule_opening", opening(), COMMERCIAL)
+    data = json.dumps({**req, "session": "\ud800"}).encode()      # an escaped lone surrogate
+    assert b"\\ud800" in data
+    reply, why = gate.client.exchange(data)
+    assert why is None and (reply["decision"], reply["rule_ids"]) == ("deny", [FC])
+    assert "not loggable" in reply["explanation"]["message"]
+    (line,) = lines(gate)
+    assert line["stage"] == "transport" and line["request_sha256"] == hashlib.sha256(
+        data).hexdigest()
+    assert gate_log.verify_chain(gate.log_path) == (True, 1, None)
+
+
+def test_a_slow_client_is_cut_at_the_deadline_and_never_delays_another(gate):  # noqa: F811
+    """The I/O deadline covers a connection's whole request (one end time), and each
+    connection has its own thread: a client dripping one byte every 0.3 s is cut off after
+    the 1 s deadline, while a well-formed request made meanwhile is answered at once."""
+    import time
+
+    gate.process.stop()
+    p = gate.start(deadline=1.0)
+    assert p.ok, p.error
+    drip = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    drip.connect(str(p.socket_path))
+    start = time.monotonic()
+    closed_after = None
+    req = gate.request("schedule_opening", opening(), COMMERCIAL)
+    answered = None
+    try:
+        for i, byte in enumerate(b'{"session": "slow"' * 10):
+            try:
+                drip.sendall(bytes([byte]))
+            except OSError:
+                closed_after = time.monotonic() - start
+                break
+            if i == 1:                                 # a legitimate request meanwhile
+                t0 = time.monotonic()
+                got = GateClient(p.socket_path, gate.key, deadline=3.0).judge(req)
+                answered = (got["decision"], time.monotonic() - t0)
+            time.sleep(0.3)
+            drip.settimeout(0.01)
+            try:
+                if drip.recv(1) == b"":
+                    closed_after = time.monotonic() - start
+                    break
+            except TimeoutError:
+                pass
+            except OSError:
+                closed_after = time.monotonic() - start
+                break
+    finally:
+        drip.close()
+    # answered at once (one connection at a time would wait for the drip's deadline, ~0.7 s)
+    assert answered is not None and answered[0] == "allow" and answered[1] < 0.4
+    assert closed_after is not None and closed_after < 2.5     # cut near the 1 s deadline
+    assert [x["stage"] for x in lines(gate)] == ["request"]    # the drip decided nothing
+
+
+def test_single_use_holds_across_clients_of_one_gate(gate):  # noqa: F811          # Minor 3
+    req = gate.request("schedule_opening", opening(), COMMERCIAL)
+    reply = gate.client.judge(req)
+    assert gate.client.check_token(req, reply)
+    second = GateClient(gate.process.socket_path, gate.key)
+    assert not second.check_token(req, reply)
+    fresh = second.judge(req)
+    assert second.check_token(req, fresh) and not gate.client.check_token(req, fresh)
+
+
+def test_a_known_line_count_detects_lines_deleted_at_the_end(gate):  # noqa: F811   # Minor 4
+    replies = [gate.client.judge(gate.request("schedule_opening", opening(at), COMMERCIAL))
+               for at in (NOON, CLOSED, NOON)]
+    n = replies[-1]["seq"]
+    assert gate_log.verify_chain(gate.log_path, n) == (True, 3, None)
+    raw = gate.log_path.read_bytes().split(b"\n")
+    gate.log_path.write_bytes(b"\n".join(raw[:2]) + b"\n")       # the last line deleted
+    assert gate_log.verify_chain(gate.log_path)[0]                 # the chain alone: valid
+    ok, count, bad = gate_log.verify_chain(gate.log_path, n)
+    assert (ok, count) == (False, 2) and "not the 3 expected" in bad
+    assert gate_log.replay(gate.log_path, gate.store.path, n)[0]["fields"] == ["lines"]
+
+
+def test_a_denied_deny_request_logs_and_replies_the_evaluated_outcome(gate):  # noqa: F811
+    got = gate.client.judge(gate.request("deny_request", deny_args(at=NOON), COMMERCIAL))
+    assert (got["decision"], got["evaluated_outcome"]) == ("deny", "allow")
+    ok = gate.client.judge(gate.request("deny_request", deny_args(), COMMERCIAL))
+    assert (ok["decision"], ok["evaluated_outcome"]) == ("allow", "deny")
+    other = gate.client.judge(gate.request("schedule_opening", opening(), COMMERCIAL))
+    assert other["evaluated_outcome"] is None
+    assert [x["evaluated_outcome"] for x in lines(gate)] == ["allow", "deny", None]
+    assert gate_log.replay(gate.log_path, gate.store.path, 3) == []

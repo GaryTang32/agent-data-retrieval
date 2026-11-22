@@ -16,6 +16,12 @@ verify). A line holds no token and no key (`FORBIDDEN`).
 `prev_sha256` chaining, no forbidden field, and (G1) at least one `[rule_id, rule_version]`
 and, for every evaluated binding, its `rule_id`, `rule_version` and `doc_id`.
 
+**A known limit:** the chain is not anchored outside the log, so lines deleted at its end
+leave a valid chain (and a restarted gate continues from the shortened log). A caller that
+knows how many lines it caused (a probe run, a simulation replay: the last sequence number it
+was answered with) passes `expected_lines` to `verify_chain` and `replay`, which then fail on
+any other length.
+
 `replay` (G3) re-evaluates every `request` line from its logged request and bindings id
 against the store (`server.evaluate_request`, the gate's own function) and lists each line
 whose decision, rule ids, deciding sections, missing facts, next allowed time, evaluated
@@ -37,7 +43,7 @@ LOG_NAME = "gate.jsonl"
 GENESIS = "0" * 64
 FORBIDDEN = ("token", "key")
 COMPARED = ("decision", "rule_ids", "deciding_sections", "missing_facts", "next_allowed",
-            "evaluated", "message_sha256")
+            "evaluated", "evaluated_outcome", "message_sha256")
 
 
 def canonical_line(line: dict) -> bytes:
@@ -91,10 +97,16 @@ def _g1_problem(line: dict) -> str | None:
     return None
 
 
-def verify_chain(path: Path) -> tuple[bool, int, str | None]:
+def verify_chain(path: Path, expected_lines: int | None = None
+                 ) -> tuple[bool, int, str | None]:
     """(whether the whole log verifies, the number of lines, the first bad line as
-    "line N: why", or None). A missing log is an empty, valid one."""
+    "line N: why", or None). A missing log is an empty, valid one. With `expected_lines` (a
+    count the caller knows, e.g. the last sequence number it was answered with), a log of
+    another length fails: the only way to see lines deleted at its end."""
     lines = read_lines(path)
+    if expected_lines is not None and len(lines) != expected_lines:
+        return False, len(lines), (f"{len(lines)} line(s), not the {expected_lines} expected "
+                                   f"(lines deleted at the end, or added)")
     prev = GENESIS
     for n, raw in enumerate(lines, 1):
         try:
@@ -117,16 +129,21 @@ def verify_chain(path: Path) -> tuple[bool, int, str | None]:
     return True, len(lines), None
 
 
-def replay(path: Path, store_path: Path) -> list[dict]:
+def replay(path: Path, store_path: Path, expected_lines: int | None = None) -> list[dict]:
     """The G3 mismatches of the log at `path` replayed against the store (module text): one
-    `{seq, field(s), logged, replayed}` per line that differs."""
+    `{seq, field(s), logged, replayed}` per line that differs, and with `expected_lines` one
+    `{seq: None, fields: ["lines"]}` when the log holds another number of lines."""
     from adr_store.bindings.decide import SYSTEM_RULES
     from adr_store.gate import server
 
     contexts: dict[tuple[str, str], object] = {}
     out = []
     fail_closed = [list(SYSTEM_RULES["fail_closed"])]
-    for raw in read_lines(path):
+    lines = read_lines(path)
+    if expected_lines is not None and len(lines) != expected_lines:
+        out.append({"seq": None, "fields": ["lines"], "logged": len(lines),
+                    "replayed": expected_lines})
+    for raw in lines:
         line = json.loads(raw)
         if line.get("stage") != "request":
             if line.get("decision") != "deny" or line.get("rule_ids") != fail_closed:

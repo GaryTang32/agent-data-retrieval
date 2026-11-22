@@ -1539,7 +1539,7 @@ def _probes_gate(a: argparse.Namespace) -> int:
     logs: dict = {}
     try:
         rows = pg.gate_failclosed(a.store, work, logs=logs)
-        checks = pg.log_checks(logs["log"], work / "shadow")
+        checks = pg.log_checks(logs["log"], work / "shadow", logs.get("expected_lines"))
         log_bytes = Path(logs["log"]).read_bytes()
     except ValueError as e:
         raise runner.RunError(str(e)) from e

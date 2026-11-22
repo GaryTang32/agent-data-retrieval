@@ -22,8 +22,14 @@ no socket: a client then meets silence, which it treats as a fail-closed deny.
 `{name: {value, source ("record" or "user"), seq?}}` (P13, P33: facts only from the
 environment's record; `args` define only the action). The reply is one line, `{seq,
 decision, rule_ids, deciding_sections, missing_facts, next_allowed, explanation: {message,
-rule_text}, token}`, with a token (`tokens.sign`) on allows only. Connections are served one at
-a time, each under the I/O deadline (`IO_DEADLINE_S`, P38: a clock input that can only deny).
+rule_text}, evaluated_outcome, token}`, with a token (`tokens.sign`) on allows only and
+`evaluated_outcome` the outcome of the opening a `deny_request` judged (None otherwise).
+Each connection runs on its own thread and must deliver its whole request within the I/O
+deadline (`IO_DEADLINE_S`, one end time for the whole read; P38: a clock input that can only
+deny), so a slow client never delays another; decisions are made one at a time (one sequence,
+one chain). Any failure while reading, judging or replying is a fail-closed deny (logged when
+the log can be written: an unparseable, unencodable or too deeply nested request is a
+`transport` line), and the gate keeps serving.
 
 **Every request** is first checked against the gate's state: the bindings manifest and data
 file are stat-ed and, when either changed, the set is loaded again; a set that no longer loads
@@ -53,6 +59,8 @@ import signal
 import socket
 import stat
 import sys
+import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -102,14 +110,14 @@ def load_enforcement(store_path: Path, bindings_id: str, units_id: str | None = 
     if um.snapshot != m.snapshot:
         raise BindingsError(f"units {units_id[:12]} are of snapshot {um.snapshot[:12]}, the "
                             f"bindings of {m.snapshot[:12]}")
-    sections: dict[str, set[str]] = {}
-    texts: dict[tuple[str, str], str] = {}
-    for u in units_overlay.load_units(store_path, um, "rule_card"):
-        if u.doc_id in envelopes:
-            sections.setdefault(u.doc_id, set()).add(dm.section_of(u.canonical_ref))
-            texts[(u.canonical_ref, u.doc_id)] = u.body["text"]
+    texts = {(u.canonical_ref, u.doc_id): u.body["text"]
+             for u in units_overlay.load_units(store_path, um, "rule_card")
+             if u.doc_id in envelopes}
+    known: dict[str, set[tuple[str, int]]] = {}
+    for doc, section, draw in m.known_draws:
+        known.setdefault(doc, set()).add((section, draw))
     return Enforcement(bindings_id, units_id, m.snapshot, tuple(bindings), envelopes,
-                       {d: frozenset(s) for d, s in sections.items()}, texts)
+                       {d: frozenset(k) for d, k in known.items()}, texts)
 
 
 def _request_problem(req: object, units_loaded: str) -> str | None:
@@ -151,7 +159,8 @@ def decision_fields(d: Decision) -> dict:
             "deciding_sections": list(d.deciding_sections),
             "missing_facts": list(d.missing_facts), "next_allowed": d.next_allowed,
             "evaluated": [dict(e.__dict__) for e in d.evaluated],
-            "fail_closed": d.fail_closed, "message_sha256": d.message_sha256}
+            "fail_closed": d.fail_closed, "evaluated_outcome": d.evaluated_outcome,
+            "message_sha256": d.message_sha256}
 
 
 # -- the gate --------------------------------------------------------------------------------------
@@ -197,6 +206,7 @@ class Gate:
         self.seq = n
         self.prev = gate_log.GENESIS if not lines else gate_log._sha256(lines[-1])
         self._acl_cache: OrderedDict = OrderedDict()   # parsed ACL snapshots (acl.resolve)
+        self._lock = threading.Lock()                  # one decision at a time (seq, chain)
 
     # -- state ----------------------------------------------------------------------------------
 
@@ -232,36 +242,49 @@ class Gate:
 
     # -- one request ----------------------------------------------------------------------------
 
+    def _judge(self, raw: bytes, oversized: bool) -> tuple[Decision, object, str]:
+        """(the decision, the request object or None, the stage) for the request bytes."""
+        if oversized:
+            return fail_closed(f"oversized request (more than {MAX_REQUEST_BYTES} bytes)"), \
+                None, "transport"
+        if (broken := self._check_state()) is not None:
+            return fail_closed(broken), None, "transport"
+        try:
+            req = json.loads(raw.decode("utf-8"))
+            gate_log.canonical_line({"request": req})        # loggable: UTF-8, not too deep
+        except Exception as e:  # noqa: BLE001 - any unreadable request is a fail-closed deny
+            return fail_closed(f"malformed request: not loggable JSON ({type(e).__name__})"), \
+                None, "transport"
+        return evaluate_request(self.enf, req, self.units_id), req, "request"
+
     def handle(self, raw: bytes, *, oversized: bool = False) -> dict:
         """The reply to the request bytes `raw` (one line, newline excluded), the log line
-        written first (module text)."""
-        req: object = None
-        stage = "transport"
-        if oversized:
-            d = fail_closed(f"oversized request (more than {MAX_REQUEST_BYTES} bytes)")
-        elif (broken := self._check_state()) is not None:
-            d = fail_closed(broken)
-        else:
+        written first (module text). Never raises: any failure is a fail-closed deny, logged
+        when the log can be written. Requests are decided one at a time."""
+        with self._lock:
             try:
-                req = json.loads(raw.decode("utf-8"))
-            except (UnicodeDecodeError, ValueError):
-                d = fail_closed("malformed request: not JSON")
-            else:
-                stage = "request"
-                d = evaluate_request(self.enf, req, self.units_id)
-        caller = req.get("caller") if isinstance(req, dict) else None
-        seq = self.seq + 1
-        line = {"seq": seq, "stage": stage, "request": req if stage == "request" else None,
-                "request_sha256": gate_log._sha256(raw), "request_bytes": len(raw),
-                "bindings": self.bindings_id, "units_loaded": self.units_id,
-                **decision_fields(d), "token_issued": d.outcome == "allow"}
-        try:
-            sha = gate_log.append(self.log_path, line, self.prev)
-        except (OSError, ValueError, TypeError):
-            d = fail_closed("the decision log cannot be written")
-            return self._reply(None, d, caller, None)
-        self.seq, self.prev = seq, sha
-        return self._reply(seq, d, caller, req)
+                d, req, stage = self._judge(raw, oversized)
+            except Exception as e:  # noqa: BLE001 - a failure on the enforcement path denies
+                d, req, stage = fail_closed(f"the request could not be judged "
+                                            f"({type(e).__name__})"), None, "transport"
+            caller = req.get("caller") if isinstance(req, dict) else None
+            seq = self.seq + 1
+            line = {"seq": seq, "stage": stage,
+                    "request": req if stage == "request" else None,
+                    "request_sha256": gate_log._sha256(raw), "request_bytes": len(raw),
+                    "bindings": self.bindings_id, "units_loaded": self.units_id,
+                    **decision_fields(d), "token_issued": d.outcome == "allow"}
+            try:
+                sha = gate_log.append(self.log_path, line, self.prev)
+            except Exception:  # noqa: BLE001 - an unwritten decision is never an allow
+                return self._reply(None, fail_closed("the decision log cannot be written"),
+                                   caller, None)
+            self.seq, self.prev = seq, sha
+            try:
+                return self._reply(seq, d, caller, req)
+            except Exception as e:  # noqa: BLE001 - logged as decided; replied as a deny
+                return self._reply(None, fail_closed(f"the reply could not be built "
+                                                     f"({type(e).__name__})"), None, None)
 
     def _reply(self, seq, d: Decision, caller, signed_req) -> dict:
         token = None
@@ -270,6 +293,7 @@ class Gate:
         return {"seq": seq, "decision": d.outcome, "rule_ids": [list(r) for r in d.rule_ids],
                 "deciding_sections": list(d.deciding_sections),
                 "missing_facts": list(d.missing_facts), "next_allowed": d.next_allowed,
+                "evaluated_outcome": d.evaluated_outcome,
                 "explanation": {"message": d.message, "rule_text": self._rule_text(caller, d)},
                 "token": token}
 
@@ -298,12 +322,18 @@ def _private_dir(path: Path) -> None:
         raise GateStartError(f"{path}: the socket directory must be ours with mode 0700")
 
 
-def _receive(conn: socket.socket) -> tuple[bytes | None, bool]:
-    """(the request line without its newline, oversized?); None on silence or EOF without a
-    newline."""
+def _receive(conn: socket.socket, deadline: float) -> tuple[bytes | None, bool]:
+    """(the request line without its newline, oversized?) read within `deadline` seconds in
+    all (one end time for the whole request, so a slow client cannot hold the connection
+    longer); None on silence, the deadline, or EOF without a request."""
     buf = bytearray()
+    end = time.monotonic() + deadline
     while True:
+        left = end - time.monotonic()
+        if left <= 0:
+            return None, False
         try:
+            conn.settimeout(left)
             chunk = conn.recv(65536)
         except OSError:
             return None, False
@@ -332,16 +362,21 @@ def _drain(conn: socket.socket) -> None:
 
 
 def _serve_one(gate: Gate, conn: socket.socket, deadline: float) -> None:
-    conn.settimeout(deadline)
-    raw, oversized = _receive(conn)
-    if raw is None and not oversized:
-        return                                       # silence: no request, no decision
-    reply = gate.handle(raw or b"", oversized=oversized)
-    with contextlib.suppress(OSError):
-        conn.sendall(json.dumps(reply, sort_keys=True, ensure_ascii=False).encode("utf-8")
-                     + b"\n")
-        conn.shutdown(socket.SHUT_WR)
-    _drain(conn)
+    """One connection, on its own thread: the request read within the deadline, decided (one
+    at a time, `Gate.handle`), the reply sent. Never raises."""
+    with conn:
+        try:
+            raw, oversized = _receive(conn, deadline)
+            if raw is None and not oversized:
+                return                               # silence: no request, no decision
+            reply = gate.handle(raw or b"", oversized=oversized)
+            data = json.dumps(reply, sort_keys=True, ensure_ascii=True).encode("ascii")
+            conn.settimeout(deadline)
+            conn.sendall(data + b"\n")
+            conn.shutdown(socket.SHUT_WR)
+            _drain(conn)
+        except Exception:  # noqa: BLE001 - one connection's failure never stops the gate
+            pass
 
 
 def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Path,
@@ -388,9 +423,12 @@ def serve(store_path: Path, bindings_id: str, units_id: str | None, log_dir: Pat
           f"{gate.units_id[:12]}, log {gate.log_path}, {gate.seq} line(s) before)", flush=True)
     try:
         while True:
-            conn, _ = srv.accept()
-            with conn:
-                _serve_one(gate, conn, deadline)
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                continue
+            threading.Thread(target=_serve_one, args=(gate, conn, deadline),
+                             daemon=True).start()
     except (SystemExit, KeyboardInterrupt):
         return 0
     finally:
@@ -413,7 +451,8 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--models", type=Path, default=None, metavar="PATH",
                    help="the models config (default config/models.json)")
     p.add_argument("--deadline", type=float, default=IO_DEADLINE_S, metavar="SECONDS",
-                   help=f"the I/O deadline per connection (default {IO_DEADLINE_S:g})")
+                   help=f"the I/O deadline of each connection's whole request (default "
+                        f"{IO_DEADLINE_S:g})")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -530,7 +530,8 @@ def review_reply(verdicts: dict[str, str] | None = None, default: str = "approve
 # The bindings of §§ 117.821 (two draws) and 117.901 (one draw) of the newest 33 CFR 117
 # version, compiled from `units_enrich_reply` against the rule cards of the promoted units
 # build, tested (the real tests), stamped analysed by the test helper (CI has no z3), approved
-# by `review_reply` behind a cached stub, written and promoted to bindings/HEAD.
+# by `review_reply` behind a cached stub, written and promoted to bindings/HEAD. Its known draws
+# are those three and § 117.1081 draw 1, which has no binding.
 
 def make_units_built_with_bindings(path: Path) -> Store:
     """`make_units_built` with signed-off bindings promoted (module comment above). The
@@ -538,6 +539,7 @@ def make_units_built_with_bindings(path: Path) -> Store:
     fixture's units have none; the gate never reads it)."""
     from adr_eval.cache import Cache
     from adr_eval.llm import CachedStubClient
+    from adr_store.bindings.build import known_draws
     from adr_store.bindings.checks import mark_tested
     from adr_store.bindings.compile import compile_bindings
     from adr_store.bindings.enrich import enrich_section
@@ -558,8 +560,11 @@ def make_units_built_with_bindings(path: Path) -> Store:
     candidates = stamp_analysed(mark_tested(compiled))
     review = CachedStubClient("stub-opus", Cache(llm / "review"), review_reply())
     reviewed, _ = review_all(None, candidates, review, cards=cards)
+    # known draws (P49): the enriched draws, and § 117.1081 as a pool section whose reply gave
+    # no draw (one draw by its table count): a known draw with no binding, which escalates
+    known = known_draws(items, {"117.1081": 1}, DOC_117_NEW)
     bindings_id, _ = write_bindings(path, store.snapshot_id, units_id,
-                                    m.tables_id or "0" * 64, reviewed)
+                                    m.tables_id or "0" * 64, reviewed, known_draws=known)
     promote_bindings(path, bindings_id)
     return store
 

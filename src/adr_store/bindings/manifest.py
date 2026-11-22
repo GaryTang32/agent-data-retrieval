@@ -16,6 +16,13 @@ its own SHA-256; its manifest names it with that hash, and the SHA-256 of the ma
 id (N16: data and manifest have their own stems and hashes). Every file is written once: the
 same bytes again are a no-op, other bytes under the name are refused.
 
+**Known draws (P49).** Both manifests record `known_draws`, `[doc_id, section, draw]` of every
+draw the enrichment knows in the bindings' own numbering, failed draws included (with the
+Phase 3 table's draw count for a pool section whose reply produced no draw;
+`build.known_draws`), sorted; every draw holding bindings must be among them. The gate denies a
+target outside them for the version in force (an unknown target) and escalates a known draw
+with no binding (P15).
+
 **The candidates** (`write_candidates`, from `bindings.build.build_candidates`) record the
 units, tables, facts and enrichment ids, the agreement pairs `[section, Phase 3 draw, bindings'
 draw]` of the draws still `analysed`, and every draw with its number of bindings (`draws`:
@@ -60,8 +67,9 @@ from adr_store.store import StoreError, write_atomic
 from adr_store.tables.overlay import TablesError, _write_once
 
 __all__ = ["BINDINGS_DIR", "INSTALL_ANALYSIS", "BindingsError", "BindingsManifest",
-           "CandidatesManifest", "by_draw", "draw_sizes", "load_bindings", "load_candidates",
-           "promote_bindings", "read_bindings_head", "write_bindings", "write_candidates"]
+           "CandidatesManifest", "by_draw", "draw_keys", "draw_sizes", "load_bindings",
+           "load_candidates", "promote_bindings", "read_bindings_head", "write_bindings",
+           "write_candidates"]
 
 BINDINGS_DIR = "bindings"
 FORMAT_VERSION = "0.1"
@@ -88,6 +96,23 @@ def by_draw(bindings: list[Binding]) -> dict[str, list[Binding]]:
     return out
 
 
+def draw_keys(bindings: list[Binding]) -> list[tuple[str, str, int]]:
+    """(doc_id, section, draw) of every draw of `bindings`, sorted (a known-draws census of
+    the draws that hold bindings, for callers that know of no other draw)."""
+    return [d[:3] for d in draw_sizes(bindings)]
+
+
+def _known(known_draws) -> list[tuple[str, str, int]]:
+    return sorted({(d, s, n) for d, s, n in known_draws}, key=_draw_order)
+
+
+def _check_known(bindings: list[Binding], known_draws) -> None:
+    missing = set(draw_keys(bindings)) - set(_known(known_draws))
+    if missing:
+        d = sorted(missing, key=_draw_order)[0]
+        raise BindingsError(f"§ {d[1]} draw {d[2]} holds bindings but is no known draw (P49)")
+
+
 def draw_sizes(bindings: list[Binding]) -> list[tuple[str, str, int, int]]:
     """(doc_id, section, draw, number of bindings) of every draw of `bindings`, sorted."""
     out = []
@@ -108,6 +133,7 @@ class _Manifest(BaseModel):
     enrichment_id: str | None = Field(pattern=_HEX64)   # the enrichment compiled (C5)
     agreement_pairs: list[tuple[str, int, int]]          # [section, Phase 3 draw, bindings' draw]
     draws: list[tuple[str, str, int, int]]               # [doc_id, section, draw, bindings]
+    known_draws: list[tuple[str, str, int]]              # [doc_id, section, draw] (P49)
     file: str
     sha256: str = Field(pattern=_HEX64)
     bindings: int = Field(ge=0)
@@ -124,6 +150,11 @@ class _Manifest(BaseModel):
             raise ValueError("draws must count every binding")
         if any(d[3] < 1 for d in self.draws):   # a recorded draw holds at least its emergency basis
             raise ValueError("every recorded draw holds at least one binding")
+        known = [tuple(k) for k in self.known_draws]
+        if known != sorted(set(known), key=_draw_order):
+            raise ValueError("known_draws must be sorted and distinct")
+        if not {tuple(k) for k in keys} <= set(known):
+            raise ValueError("every draw holding bindings must be a known draw (P49)")
         return self
 
 
@@ -242,18 +273,19 @@ def _selector(b: Binding) -> tuple[str, int]:
 
 def write_candidates(store_path: Path, snapshot: str, units_id: str, tables_id: str,
                      bindings: list[Binding], *, facts_id: str | None,
-                     enrichment_id: str | None, agreement_pairs, report: dict
-                     ) -> tuple[str, Path]:
+                     enrichment_id: str | None, agreement_pairs, report: dict,
+                     known_draws) -> tuple[str, Path]:
     """Write a build's bindings (every status) once, their manifest and `report` (unhashed);
     (candidates id, manifest path). Refuses a draw that mixes statuses (P48)."""
     if problems := _uniform_problems(bindings):
         raise BindingsError("; ".join(problems))
+    _check_known(bindings, known_draws)
     data = _data(bindings)
     sha = _sha256(data)
     m = CandidatesManifest(format_version=FORMAT_VERSION, snapshot=snapshot, units_id=units_id,
                            tables_id=tables_id, facts_id=facts_id, enrichment_id=enrichment_id,
                            agreement_pairs=_pair_list([tuple(p) for p in agreement_pairs]),
-                           draws=draw_sizes(bindings),
+                           draws=draw_sizes(bindings), known_draws=_known(known_draws),
                            file=f"bindings-candidates-data-{sha[:16]}.jsonl", sha256=sha,
                            bindings=len(bindings), language=LANGUAGE)
     d = _dir(store_path, snapshot)
@@ -350,14 +382,15 @@ def _set_problems(bindings: list[Binding], pairs, sizes) -> list[str]:
 def write_bindings(store_path: Path, snapshot: str, units_id: str, tables_id: str,
                    bindings: list[Binding], *, facts_id: str | None = None,
                    enrichment_id: str | None = None, agreement_pairs=(),
-                   candidate_draws=None) -> tuple[str, Path]:
+                   candidate_draws=None, known_draws) -> tuple[str, Path]:
     """Write the signed-off bindings of `bindings` (the others are left out) once, with their
     manifest; (bindings id, manifest path). Only whole draws are written: a draw with any
     binding of `bindings` not signed off is refused, and with `candidate_draws` (the
     candidates' `draws`) each draw must hold every binding they list for it.
     `agreement_pairs` ([section, Phase 3 draw, bindings' draw]) are kept for the draws whose
     bindings are in the set. Refuses (BindingsError) a set an override, a draw or an agreement
-    pair cannot be read in."""
+    pair cannot be read in. `known_draws` ([doc_id, section, draw]) is the census of every draw
+    the enrichment knows (P49); each written draw must be in it."""
     kept = [b for b in bindings if b.status == "signed_off"]
     for b in kept:
         if problems := _signed_problems(b):
@@ -370,6 +403,7 @@ def write_bindings(store_path: Path, snapshot: str, units_id: str, tables_id: st
             f"§ {_selector(bs[0])[0]} draw {_selector(bs[0])[1]} is signed off in part (an "
             f"incomplete draw, P48)" for bs in partial))
     sizes = draw_sizes(kept)
+    _check_known(kept, known_draws)
     if candidate_draws is not None:
         listed = {tuple(d[:3]): d[3] for d in candidate_draws}
         sizes = [(*d[:3], listed.get(d[:3], 0)) for d in sizes]
@@ -382,7 +416,8 @@ def write_bindings(store_path: Path, snapshot: str, units_id: str, tables_id: st
     m = BindingsManifest(format_version=FORMAT_VERSION, snapshot=snapshot, units_id=units_id,
                          tables_id=tables_id, facts_id=facts_id, enrichment_id=enrichment_id,
                          agreement_set=[(s, p) for s, p, _ in pairs], agreement_pairs=pairs,
-                         draws=sizes, file=f"bindings-data-{sha[:16]}.jsonl", sha256=sha,
+                         draws=sizes, known_draws=_known(known_draws),
+                         file=f"bindings-data-{sha[:16]}.jsonl", sha256=sha,
                          bindings=len(kept), language=LANGUAGE)
     d = _dir(store_path, snapshot)
     _once(d / m.file, data, "bindings file")

@@ -10,8 +10,11 @@ and sequence number, or a token on anything but an allow.
 
 `check_token(request, reply)` is the environment's mediation: True only for an allow whose
 token verifies for exactly this request and sequence number, the first time that sequence
-number is presented (single use, P23); the side effect runs only then. The key is held in
-memory only.
+number is presented (single use, P23); the side effect runs only then. Accepted sequence
+numbers are kept per gate (socket path and key digest) for the whole process, so every client
+of one gate in a process shares them; they are not persisted, so a restarted environment
+relies on the gate never reusing a sequence number (it continues its log) under the same key.
+The key is held in memory only.
 
 `GateProcess` starts `python -m adr_store.gate.server` with the key on an inherited pipe (never
 an argument or an environment variable) and waits for its ready line; `private_socket` makes a
@@ -20,6 +23,7 @@ short socket path in a new 0700 directory (Unix socket paths are limited to abou
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import selectors
@@ -28,6 +32,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -38,7 +43,11 @@ from adr_store.gate.server import IO_DEADLINE_S
 __all__ = ["REPLY_KEYS", "GateClient", "GateProcess", "fail_closed_reply", "private_socket"]
 
 REPLY_KEYS = tuple(sorted(("seq", "decision", "rule_ids", "deciding_sections", "missing_facts",
-                          "next_allowed", "explanation", "token")))
+                          "next_allowed", "evaluated_outcome", "explanation", "token")))
+# sequence numbers already accepted, per gate (socket path, SHA-256 of the key): shared by every
+# client of this process, so a second client refuses a token the first accepted
+_SEEN: dict[tuple[str, str], set[int]] = {}
+_SEEN_LOCK = threading.Lock()
 MAX_REPLY_BYTES = 1 << 20
 
 
@@ -46,7 +55,7 @@ def fail_closed_reply(why: str) -> dict:
     """The deny the environment acts on when the gate gives no usable reply."""
     rule = list(SYSTEM_RULES["fail_closed"])
     return {"seq": None, "decision": "deny", "rule_ids": [rule], "deciding_sections": [],
-            "missing_facts": [], "next_allowed": None,
+            "missing_facts": [], "next_allowed": None, "evaluated_outcome": None,
             "explanation": {"message": f"deny: fail closed: {why}",
                             "rule_text": {rule[0]: SYSTEM_TEXT[rule[0]]}},
             "token": None}
@@ -67,6 +76,7 @@ def _shape_problem(r: object) -> str | None:
         return "the reply carries no [rule_id, rule_version]"
     if not (_strs(r["deciding_sections"]) and _strs(r["missing_facts"])
             and (r["next_allowed"] is None or isinstance(r["next_allowed"], str))
+            and r["evaluated_outcome"] in (None, "allow", "deny", "escalate")
             and isinstance(r["explanation"], dict)
             and (r["seq"] is None or type(r["seq"]) is int)):
         return "the reply's fields have the wrong types"
@@ -82,7 +92,9 @@ class GateClient:
         self.socket_path = Path(socket_path)
         self._key = key
         self.deadline = float(deadline)
-        self._seen: set[int] = set()
+        gate = (str(self.socket_path.resolve()), hashlib.sha256(key).hexdigest())
+        with _SEEN_LOCK:
+            self._seen = _SEEN.setdefault(gate, set())
 
     def __repr__(self) -> str:
         return f"GateClient({str(self.socket_path)!r}, deadline={self.deadline:g})"
@@ -155,11 +167,14 @@ class GateClient:
         if not isinstance(reply, dict) or reply.get("decision") != "allow":
             return False
         seq = reply.get("seq")
-        if type(seq) is not int or seq in self._seen:
+        if type(seq) is not int:
             return False
         if not tokens.verify(self._key, reply.get("token"), request, "allow", seq):
             return False
-        self._seen.add(seq)
+        with _SEEN_LOCK:
+            if seq in self._seen:
+                return False
+            self._seen.add(seq)
         return True
 
 

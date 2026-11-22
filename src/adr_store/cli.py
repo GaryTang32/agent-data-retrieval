@@ -1476,7 +1476,8 @@ def _bindings_build(a: argparse.Namespace) -> int:
     cid, path = bm.write_candidates(store.path, store.snapshot_id, units_id, c.tables_id,
                                     c.bindings, facts_id=a.facts,
                                     enrichment_id=c.enrichment_id,
-                                    agreement_pairs=c.agreement_pairs, report=report)
+                                    agreement_pairs=c.agreement_pairs, report=report,
+                                    known_draws=c.known_draws)
     b1, b2, st = c.report["b1"], c.report["b2"], c.report["statuses"]
     print(f"candidates {cid}")
     print(f"{len(c.bindings)} binding(s) of {b1['draws']} draw(s): {st['analysed']} analysed, "
@@ -1541,7 +1542,8 @@ def _units_review(a: argparse.Namespace) -> int:
     bindings_id, path = bm.write_bindings(store.path, m.snapshot, m.units_id, m.tables_id, out,
                                           facts_id=m.facts_id, enrichment_id=m.enrichment_id,
                                           agreement_pairs=m.agreement_pairs,
-                                          candidate_draws=m.draws)
+                                          candidate_draws=m.draws,
+                                          known_draws=m.known_draws)
     written = bm.load_bindings(store.path, bindings_id)[0]
     other = [x for x in report["served_models"] if x != meter.model]
     full = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
@@ -1636,7 +1638,7 @@ def _gate_verify(a: argparse.Namespace) -> int:
     """`adr gate verify --log DIR`: exit 1 when the chain or G1 fails."""
     from adr_store.gate import log as gate_log
 
-    ok, n, bad = gate_log.verify_chain(_gate_log_file(a.log))
+    ok, n, bad = gate_log.verify_chain(_gate_log_file(a.log), a.lines)
     print(f"{n} line(s); " + ("the chain verifies and every line carries a rule id and "
                               "version" if ok else f"FAILS at {bad}"))
     return 0 if ok else 1
@@ -2274,6 +2276,8 @@ def _parser() -> argparse.ArgumentParser:
     gtv = gt_sub.add_parser("verify", help="verify a decision log (hash chain, G1)")
     gtv.add_argument("--log", type=Path, required=True, metavar="DIR",
                      help="the log directory (gate.jsonl) or the log file")
+    gtv.add_argument("--lines", type=int, default=None, metavar="N",
+                     help="the number of lines the log must hold (detects deleted tail lines)")
     gtv.set_defaults(fn=_gate_verify)
     gtr = gt_sub.add_parser("replay", help="replay every line of a decision log (G3)")
     gtr.add_argument("--store", type=Path, required=True, help="store directory")

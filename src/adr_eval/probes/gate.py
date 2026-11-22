@@ -16,24 +16,31 @@ a draw. Every seeded request is judged first (`baseline`): each must be an allow
 the environment accepts once, so each probe shows a fault turning an allow into a deny.
 
 **Conditions** (12, crossed with the 4 tools and 3 seeded requests: 144 probes), each probe a
-row `{probe_id, condition, tool, seed, outcome, gate_decision, executed, rule_ids, reason}`:
-`killed` (SIGKILL; nothing listens), `timeout` (SIGSTOP; a client with a 0.3 s deadline),
-`malformed` (a key dropped, a fact smuggled into the arguments, bytes that are not JSON),
-`oversized` (a string argument padded past `MAX_REQUEST_BYTES`), `unknown_tool`,
-`unknown_target` (a section with no rule card in the version in force), `manifest_altered` (a
-byte appended to the manifest, a byte changed in the data file, the manifest truncated, each
-under the running gate and restored after), `unsigned_binding` (a gate started on a set whose
-files hash consistently but hold a binding that is not signed off: it refuses to start, so its
-socket is silent), `stale_units` (zeros, the units id with its last digit changed, the
-bindings id), `forged_token` (the genuine allow's token with a digit changed, signed with
-another key, or empty), `replayed_token` (the genuine allow accepted once, then presented
-again), `mismatched_token` (a genuine allow presented with another request: another session,
-other arguments, another caller). `unwritable_log` (the log replaced by a directory) is a
-13th condition counted separately (`separate`). `outcome` is what the environment does: allow
-only when the reply is an allow and `GateClient.check_token` accepts it (`executed`); a probe
-passes when it is not executed.
+row `{probe_id, condition, tool, seed, outcome, gate_decision, executed, seq, rule_ids,
+reason}`: `killed` (SIGKILL; nothing listens), `timeout` (SIGSTOP; a client with a 0.3 s
+deadline), `malformed` (a key dropped, a fact smuggled into the arguments, bytes that are not
+JSON), `oversized` (a string argument padded past `MAX_REQUEST_BYTES`), `unknown_tool`,
+`unknown_target` (a (section, draw) absent from the known draws of the version in force),
+`manifest_altered` (a byte appended to the manifest, a byte changed in the data file, the
+manifest truncated, each under the running gate and restored after), `unsigned_binding` (a gate
+started on a set whose files hash consistently but hold a binding that is not signed off: it
+refuses to start, so its socket is silent), `stale_units` (zeros, the units id with its last
+digit changed, the bindings id), `forged_token` (the genuine allow's token with a digit changed,
+signed with another key, or empty), `replayed_token` (the genuine allow accepted once, then
+presented again), `mismatched_token` (a genuine allow presented with another request: another
+session, other arguments, another caller); `unknown_target` also covers absent draws of a known
+section and a section with rule cards but no draw (P49). `unwritable_log` (the log replaced by a
+directory) is a 13th condition counted separately (`separate`). Every request is sent as raw
+bytes and the gate's own reply is recorded: `outcome` is the gate's decision (an allow stays an
+allow even if its token is refused, so a gate that wrongly allows is seen), every allow is
+offered to the environment (`GateClient.check_token`, `executed`), and only under the three
+token conditions, where the gate's allow is genuine by construction, is the outcome the
+environment's. A probe passes when its outcome is not allow and it was not executed.
 
-`log_checks` gives G1 (`log.verify_chain`) and G3 (`log.replay`) over the probe gate's log.
+`log_checks` gives G1 (`log.verify_chain`) and G3 (`log.replay`) over the probe gate's log,
+both told the number of lines the probe caused (`logs["expected_lines"]`: the last sequence
+number answered before the gate was stopped, plus the queued requests and one more), so lines
+deleted at the end are seen too.
 """
 
 from __future__ import annotations
@@ -44,6 +51,7 @@ import os
 import random
 import shutil
 import signal
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -52,7 +60,7 @@ from adr_store.bindings.dsl import Binding
 from adr_store.bindings.manifest import BINDINGS_DIR, BindingsManifest, read_bindings_head
 from adr_store.gate import log as gate_log
 from adr_store.gate import tokens
-from adr_store.gate.client import GateClient, GateProcess, private_socket
+from adr_store.gate.client import GateClient, GateProcess, fail_closed_reply, private_socket
 from adr_store.gate.server import MAX_REQUEST_BYTES, load_enforcement
 from adr_store.records import canonical_json
 
@@ -150,29 +158,67 @@ def seeded_requests(store_path: Path, bindings_id: str, seed: int = SEED4
 
 # -- planting and judging --------------------------------------------------------------------------
 
-def _row(cond: str, tool: str, k: int, reply: dict | None, executed: bool, *,
-         gate_decision: str | None = None, reason: str | None = None) -> dict:
-    decision = None if reply is None else reply.get("decision")
-    gate_decision = gate_decision or decision
-    outcome = "allow" if executed else (decision if decision not in (None, "allow") else "deny")
+TOKEN_CONDITIONS = ("forged_token", "replayed_token", "mismatched_token")
+
+
+def _row(cond: str, tool: str, k: int, reply: dict, executed: bool, *,
+         reason: str | None = None) -> dict:
+    """A probe row. `outcome` is the gate's own decision (an allow stays an allow, whether or
+    not its token was accepted), except under the token conditions, where the gate's allow is
+    genuine by construction and the outcome is the environment's: allow only if executed."""
+    decision = reply.get("decision")
+    if cond in TOKEN_CONDITIONS:
+        outcome = "allow" if executed else "deny"
+    else:
+        outcome = "allow" if executed else decision
     return {"probe_id": f"{cond}:{tool}:{k}", "condition": cond, "tool": tool, "seed": k,
-            "outcome": outcome, "gate_decision": gate_decision, "executed": executed,
-            "rule_ids": None if reply is None else reply.get("rule_ids"),
+            "outcome": outcome, "gate_decision": decision, "executed": executed,
+            "seq": reply.get("seq"), "rule_ids": reply.get("rule_ids"),
             "reason": reason if reason is not None else (reply or {}).get(
                 "explanation", {}).get("message"),
             "separate": cond in SEPARATE}
 
 
+def _raw(client: GateClient, data: bytes, req: dict | None = None) -> tuple[dict, bool]:
+    """(the gate's own reply to the bytes `data`, executed?): an allow is offered to the
+    environment (`check_token`) with `req`, or with `data` parsed when it is a JSON object, so
+    a gate that wrongly allows is seen; silence is the client's fail-closed deny."""
+    reply, why = client.exchange(data)
+    if reply is None or not isinstance(reply, dict):
+        return fail_closed_reply(why or "the reply is not an object"), False
+    if req is None:
+        try:
+            parsed = json.loads(data)
+        except ValueError:
+            parsed = None
+        req = parsed if isinstance(parsed, dict) else None
+    executed = reply.get("decision") == "allow" and req is not None and \
+        client.check_token(req, reply)
+    return reply, executed
+
+
 def _act(client: GateClient, req: dict) -> tuple[dict, bool]:
-    reply = client.judge(req)
-    return reply, reply["decision"] == "allow" and client.check_token(req, reply)
+    return _raw(client, json.dumps(req, sort_keys=True, separators=(",", ":"),
+                                   ensure_ascii=False).encode("utf-8"), req)
 
 
-def _absent_section(enf, doc: str, base: str) -> str:
-    out = base
-    while out in enf.sections.get(doc, frozenset()):
-        out += "9"
-    return out
+def _unknown_target(enf, doc: str, req: dict, k: int) -> dict:
+    """A target absent from the known draws of the version in force (P49): an absent section
+    (k = 0), an absent draw of the request's own section (k = 1), a section with rule cards
+    but no draw, § 117.5 (k = 2)."""
+    known = enf.known.get(doc, frozenset())
+    if k == 0:
+        section, draw = "117.9999", 1
+        while any(s == section for s, _ in known):
+            section += "9"
+    elif k == 1:
+        section = req["args"]["section"]
+        draw = max([n for s, n in known if s == section] or [0]) + 1
+    else:
+        section, draw = "117.5", 1
+        while (section, draw) in known:
+            draw += 1
+    return _with_args(req, section=section, draw=draw)
 
 
 def _with_args(req: dict, **update) -> dict:
@@ -291,8 +337,7 @@ def gate_failclosed(store_path: Path, work_dir: Path, *, bindings_id: str | None
         for tool, k, req in cases:
             rows.append(_row("unknown_tool", tool, k, *_act(client, _unknown_tool(req, k))))
         for tool, k, req in cases:
-            base = ("117.9999", "118.1", "117.0")[k]
-            target = _with_args(req, section=_absent_section(enf, doc, base))
+            target = _unknown_target(enf, doc, req, k)
             rows.append(_row("unknown_target", tool, k, *_act(client, target)))
         for tool, k, req in cases:
             stale = ("0" * 64, req["units"][:-1] + ("0" if req["units"][-1] != "0" else "1"),
@@ -323,6 +368,7 @@ def gate_failclosed(store_path: Path, work_dir: Path, *, bindings_id: str | None
             finally:
                 path.rmdir()
                 path.write_bytes(saved)
+        before = max(r["seq"] for r in [*baseline, *rows] if isinstance(r["seq"], int))
         quick = GateClient(sock, key, deadline=TIMEOUT_DEADLINE)
         os.kill(proc.pid, signal.SIGSTOP)
         try:
@@ -330,9 +376,15 @@ def gate_failclosed(store_path: Path, work_dir: Path, *, bindings_id: str | None
                 rows.append(_row("timeout", tool, k, *_act(quick, req)))
         finally:
             os.kill(proc.pid, signal.SIGCONT)
-        # the gate now serves the connections the stopped process queued (their clients gone);
-        # a last request waits behind them, so the log is complete before the gate is killed
+        # the gate now serves the connections the stopped process queued (their clients gone)
+        # and one more request; wait until all of them are logged before the gate is killed
         client.judge(cases[0][2])
+        expected = before + len(cases) + 1
+        log_path = log_dir / gate_log.LOG_NAME
+        end = time.monotonic() + 15
+        while len(gate_log.read_lines(log_path)) < expected and time.monotonic() < end:
+            time.sleep(0.05)
+        logs["expected_lines"] = expected
         bad_id = _unsigned_set(shadow, bindings_id)
         bad_sock = private_socket()
         with GateProcess(shadow, bad_id, work_dir / "gate-log-unsigned", bad_sock, key,
@@ -359,20 +411,12 @@ def gate_failclosed(store_path: Path, work_dir: Path, *, bindings_id: str | None
     return rows + separate
 
 
-def _raw(client: GateClient, data: bytes) -> tuple[dict, bool]:
-    reply, why = client.exchange(data)
-    if reply is None:
-        from adr_store.gate.client import fail_closed_reply
-
-        reply = fail_closed_reply(why)
-    return reply, False
-
-
-def log_checks(log_path: Path, store_path: Path) -> dict:
-    """G1 (the chain and a rule id and version on every line) and G3 (every line replays to
-    the same decision) over a probe gate's log, run against `store_path` (the shadow)."""
-    ok, n, bad = gate_log.verify_chain(log_path)
-    mism = gate_log.replay(log_path, store_path)
+def log_checks(log_path: Path, store_path: Path, expected_lines: int | None = None) -> dict:
+    """G1 (the chain and a rule id and version on every line; with `expected_lines`, the
+    number of lines the probe caused) and G3 (every line replays to the same decision) over a
+    probe gate's log, run against `store_path` (the shadow)."""
+    ok, n, bad = gate_log.verify_chain(log_path, expected_lines)
+    mism = gate_log.replay(log_path, store_path, expected_lines)
     return {"g1": {"lines": n, "chain_ok": ok, "first_bad": bad},
             "g3": {"lines": n, "identical": n - len(mism), "differ": len(mism)}}
 

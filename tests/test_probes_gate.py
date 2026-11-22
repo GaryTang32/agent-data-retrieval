@@ -58,6 +58,8 @@ def test_gate_failclosed_probes_144_all_deny(probed):
     assert all("oversized" in x for x in reasons["oversized"])
     assert all("unknown tool" in x for x in reasons["unknown_tool"])
     assert all("unknown target" in x for x in reasons["unknown_target"])
+    targets = {r["seed"]: r for r in main if r["condition"] == "unknown_target"}
+    assert set(targets) == {0, 1, 2}         # an absent section, an absent draw, § 117.5
     assert all("no longer verifies" in x for x in reasons["manifest_altered"])
     assert all("refused to start" in x for x in reasons["unsigned_binding"])
     assert all("stale units" in x for x in reasons["stale_units"])
@@ -71,8 +73,17 @@ def test_gate_failclosed_probes_144_all_deny(probed):
 
 def test_the_probe_log_verifies_and_replays(probed):                              # G1, G3
     store, root, rows, logs, before = probed
-    checks = pg.log_checks(logs["log"], root / "work" / "shadow")
-    assert checks["g1"]["chain_ok"] and checks["g1"]["lines"] > 100
+    checks = pg.log_checks(logs["log"], root / "work" / "shadow", logs["expected_lines"])
+    assert checks["g1"]["chain_ok"] and checks["g1"]["lines"] == logs["expected_lines"] > 100
+    # a probe log missing its last line fails both checks once the count is known
+    log = Path(logs["log"])
+    raw = log.read_bytes()
+    try:
+        log.write_bytes(raw[:raw.rstrip(b"\n").rfind(b"\n") + 1])
+        cut = pg.log_checks(log, root / "work" / "shadow", logs["expected_lines"])
+        assert not cut["g1"]["chain_ok"] and cut["g3"]["differ"] == 1
+    finally:
+        log.write_bytes(raw)
     assert checks["g3"]["differ"] == 0 and checks["g3"]["identical"] == checks["g1"]["lines"]
 
 
@@ -84,6 +95,53 @@ def test_a_gate_that_fails_open_is_caught(tmp_path, monkeypatch):
     rows = gate_failclosed(store.path, tmp_path / "work")
     bad = {r["condition"] for r in rows if r["executed"]}
     assert {"forged_token", "replayed_token", "mismatched_token"} <= bad
+
+
+def _overlay(tmp_path: Path, file: str, old: str, new: str) -> Path:
+    """A copy of `adr_store` with one planted fault, put first on the gate subprocess's path
+    (the editable install is a plain path entry, so PYTHONPATH wins); the repo is never
+    edited."""
+    import shutil
+
+    import adr_store
+
+    root = tmp_path / "overlay"
+    shutil.copytree(Path(adr_store.__file__).parent, root / "adr_store",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    path = root / "adr_store" / file
+    text = path.read_text(encoding="utf-8")
+    assert text.count(old) == 1
+    path.write_text(text.replace(old, new), encoding="utf-8")
+    return root
+
+
+def test_a_gate_that_allows_a_malformed_request_is_reported(tmp_path, monkeypatch, capsys):
+    """I3: with the extra-argument check removed from the gate, the request carrying a fact in
+    its arguments is allowed; the probe records the gate's allow (and the environment executes
+    it), so the summary and the CLI report the failure."""
+    import json
+    import os
+
+    from adr_eval.cli import main
+
+    store = make_units_built_with_bindings(tmp_path / "store")
+    overlay = _overlay(tmp_path, "bindings/decide.py", "    if extra:\n",
+                       "    if extra and False:\n")
+    monkeypatch.setenv("PYTHONPATH", f"{overlay}{os.pathsep}{os.environ.get('PYTHONPATH', '')}")
+    rows = gate_failclosed(store.path, tmp_path / "work")
+    bad = [r for r in rows if r["outcome"] == "allow"]
+    assert bad and {(r["condition"], r["seed"]) for r in bad} == {("malformed", 1)}
+    assert all(r["gate_decision"] == "allow" and r["executed"] for r in bad)
+    s = pg.summarize(rows)
+    assert s["total"]["allowed"] == len(bad) == 4 and s["total"]["passed"] == 140
+    assert s["conditions"]["malformed"]["allowed"] == 4
+    out = tmp_path / "runs"
+    assert main(["probes", "gate-failclosed", "gov", "--store", str(store.path), "--clones",
+                 str(tmp_path / "w2"), "--out", str(out)]) == 1
+    (run,) = out.glob("probes-gate-failclosed-gov-*")
+    summary = json.loads((run / "summary.json").read_text())["summary"]
+    assert summary["total"]["allowed"] == 4 and "4 allowed" in (run / "summary.md").read_text()
+    capsys.readouterr()
 
 
 def test_without_bindings_there_is_nothing_to_probe(tmp_path):
