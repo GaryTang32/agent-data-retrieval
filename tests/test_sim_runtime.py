@@ -1192,3 +1192,13 @@ def test_cli_runtime_check_writes_the_profiles_entry(sim_store, tasks, tmp_path,
     assert cli.main(["sim", "runtime-check", str(good), str(disciplined), "--profile",
                      SONNET]) == 0
     assert runtime_enabled(SONNET) and _sha(REAL_CONFIG) == real_before
+
+
+def test_a_fail_closed_check_moves_no_step():                    # re-review: malformed intent
+    """A check the gate could not judge (a fail-closed deny with no next_allowed) says nothing
+    about the request: the runtime stays on s2 and a well-formed check still moves it."""
+    r = to_s2()
+    fail_closed = {**rules("deny"), "rule_ids": [["adr.gate.fail-closed@1", "1"]]}
+    r.advance("check_rules", fail_closed, INTENT)
+    assert r.active == "s2" and "outcome" not in r.learned
+    assert walk(r, ("check_rules", rules("allow"), INTENT)) == ["s4"]

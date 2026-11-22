@@ -397,6 +397,8 @@ class Runtime:
         s = self.step
         if s.type != "tool_call" or s.tool != tool or self._args_problem(s, args):
             return
+        if tool == "check_rules" and _judged_fail_closed(result):
+            return                                  # not an evaluation: stay on the step
         facts = result_facts(tool, result)
         nxt = self._follow(s, facts)
         if nxt is None:
@@ -428,6 +430,18 @@ class Runtime:
                 return None
             nxt = self.steps[true[0].to]
         return nxt
+
+
+def _judged_fail_closed(result: dict) -> bool:
+    """Whether a `check_rules` result is the gate's fail-closed deny (a malformed check the gate
+    could not judge), which says nothing about the request and so moves no step."""
+    ids = result.get("rule_ids") if isinstance(result, dict) else None
+    ids = ids if isinstance(ids, list) else []
+    return bool(ids) and all(isinstance(r, (list, tuple)) and r and r[0] == _FAIL_CLOSED
+                             for r in ids)
+
+
+_FAIL_CLOSED = "adr.gate.fail-closed@1"
 
 
 # -- the per-profile flag ------------------------------------------------------------------------
