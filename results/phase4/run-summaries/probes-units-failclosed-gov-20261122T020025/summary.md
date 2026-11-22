@@ -1,6 +1,6 @@
 # Unit probes: failclosed (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+Store `<private copy of .cache/store-p2/gov>` (snapshot `f002821f2cb3`, units `3fae4bc9cd7b`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
 
 120 probes (6 conditions × 4 tools × 5 callers), 120 passed, 0 with content; "no entry" callers who saw the tool's target before the change: define 5 of 5, procedure_lookup 5 of 5, rule_lookup 3 of 5, unit_search 5 of 5.
 

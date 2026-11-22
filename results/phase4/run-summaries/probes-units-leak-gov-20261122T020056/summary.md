@@ -1,6 +1,6 @@
 # Unit probes: leak (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+Store `<private copy of .cache/store-p2/gov>` (snapshot `f002821f2cb3`, units `3fae4bc9cd7b`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
 
 300 leak probes, 0 leaks, 0 invalid; 300 compared with a reference store.
 

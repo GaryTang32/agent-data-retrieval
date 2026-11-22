@@ -1,35 +1,29 @@
 {
   "config": {
     "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
+    "calls_per_view": 25,
     "corpus": "gov",
     "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
-    "kind": "units-leak",
+    "kind": "units-equivalence",
     "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
     "seed": 20261121,
-    "sizes": {
-      "by-closure": 40,
-      "by-error": 40,
-      "by-id": 100,
-      "by-query": 60,
-      "by-term": 60
-    },
     "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
-    "store": ".cache/store-p2/gov",
+    "store": "<private copy of .cache/store-p2/gov>",
     "tools": [
       "define",
       "rule_lookup",
       "procedure_lookup",
       "unit_search"
     ],
-    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7",
+    "units": "3fae4bc9cd7b59cf746ff9c36bb55164661eb53bc8b0c86d049b8a550b5f6d42",
     "views": [
       {
         "caller": "user:acme-0",
         "documents": 88,
         "path": "0e09ae6e7c74",
-        "units": "3cb77ecf1048fbb4a0846eccf3ae194663893fc909364799babc16bd982a0a2a",
-        "units_equal": 11497,
-        "units_of_view": 11497,
+        "units": "694afda4e7a5d73fa9dbb682377fcc453241d197c96ca6446cbcb66f4a747b19",
+        "units_equal": 11639,
+        "units_of_view": 11639,
         "users": [
           "user:acme-0"
         ],
@@ -39,9 +33,9 @@
         "caller": "user:acme-1",
         "documents": 88,
         "path": "892f63f0a090",
-        "units": "3defceb245932fd933432524efde4dfdb0958ec0bf0c98a95a3ebb7607c1606b",
-        "units_equal": 11412,
-        "units_of_view": 11412,
+        "units": "0d0b9d90d39cdadcad64cf7e3dc311031792b78aef322066f5ba6b071f728c9f",
+        "units_equal": 11554,
+        "units_of_view": 11554,
         "users": [
           "user:acme-1"
         ],
@@ -51,9 +45,9 @@
         "caller": "user:acme-2",
         "documents": 88,
         "path": "b30abb0676be",
-        "units": "8de54a3e1182d34a9a31e1d846663af19851742e95b0eb001daff8eb28b8a146",
-        "units_equal": 11412,
-        "units_of_view": 11412,
+        "units": "9a118c942255d973797d966f361c387ea410b8a844317551af71e7cc56ae797f",
+        "units_equal": 11554,
+        "units_of_view": 11554,
         "users": [
           "user:acme-2"
         ],
@@ -63,9 +57,9 @@
         "caller": "user:acme-3",
         "documents": 85,
         "path": "c127e9c8da8b",
-        "units": "61919f1308cce1a78828eee66ee3f7a714d61332ca626b6f773754e5200674d1",
-        "units_equal": 11400,
-        "units_of_view": 11400,
+        "units": "62b40f3429cf2ee9099c13971fa7b9f7a02663d8967821c6ffc641082c6e317b",
+        "units_equal": 11542,
+        "units_of_view": 11542,
         "users": [
           "user:acme-3"
         ],
@@ -75,9 +69,9 @@
         "caller": "user:acme-4",
         "documents": 93,
         "path": "bb1445f0f103",
-        "units": "f4666ebec73685f9756654898e9fac264e75f18af7b0b3a89367aa1ce8b38a23",
-        "units_equal": 11517,
-        "units_of_view": 11517,
+        "units": "b800fe0eae29ed9cea80fcc1053d42faa54be74291196e900f6f781e5ff13b01",
+        "units_equal": 11659,
+        "units_of_view": 11659,
         "users": [
           "user:acme-4"
         ],
@@ -87,13 +81,25 @@
         "caller": "user:acme-5",
         "documents": 93,
         "path": "f7914abd432b",
-        "units": "31ff8656d170e4b2bc6e5c890230a5df6afc9259116cb1529f3af536bb397327",
-        "units_equal": 11432,
-        "units_of_view": 11432,
+        "units": "6c28a9b4829b798e048ffb1d68e458df61cb5e682a9d8943201b3d122cf844af",
+        "units_equal": 11574,
+        "units_of_view": 11574,
         "users": [
           "user:acme-5"
         ],
         "view": "f7914abd432b25c2660392497e3e38bc5186b16446510bf36fcb689cda1c365e"
+      },
+      {
+        "caller": "user:auditor",
+        "documents": 180,
+        "path": "2deeb06c025c",
+        "units": "3fae4bc9cd7b59cf746ff9c36bb55164661eb53bc8b0c86d049b8a550b5f6d42",
+        "units_equal": 16459,
+        "units_of_view": 16459,
+        "users": [
+          "user:auditor"
+        ],
+        "view": "2deeb06c025c2457bf2b4b16f2731fe6c341e07fb0aec02e0301f4c091028337"
       },
       {
         "caller": "user:globex-0",
@@ -256,15 +262,15 @@
   "logs": {
     "by_store": {
       "reference/0d3e6fbe0674": {
-        "allowed": 46,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 46,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 46
+          "allowed": 25
         },
-        "lines": 46,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -274,25 +280,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 12,
-          "procedure_lookup": 5,
-          "rule_lookup": 15,
-          "unit_search": 14
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 46,
-        "unit_lines": 46,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/0e09ae6e7c74": {
-        "allowed": 45,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 45,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 45
+          "allowed": 25
         },
-        "lines": 45,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -302,25 +308,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 11,
-          "procedure_lookup": 4,
-          "rule_lookup": 24,
-          "unit_search": 6
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 45,
-        "unit_lines": 45,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/1b66796bc4f0": {
-        "allowed": 27,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 27,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 27
+          "allowed": 25
         },
-        "lines": 27,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -330,25 +336,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 9,
-          "procedure_lookup": 7,
-          "rule_lookup": 5,
-          "unit_search": 6
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 27,
-        "unit_lines": 27,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/23837e39e574": {
-        "allowed": 35,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 35,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 35
+          "allowed": 25
         },
-        "lines": 35,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -358,25 +364,53 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 17,
-          "procedure_lookup": 4,
-          "rule_lookup": 10,
-          "unit_search": 4
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 35,
-        "unit_lines": 35,
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/2deeb06c025c": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/2e0e37977b8e": {
-        "allowed": 32,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 32,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 32
+          "allowed": 25
         },
-        "lines": 32,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -386,25 +420,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 10,
-          "procedure_lookup": 11,
-          "rule_lookup": 9,
-          "unit_search": 2
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 32,
-        "unit_lines": 32,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/34acf4c9af1d": {
-        "allowed": 23,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 23,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 23
+          "allowed": 25
         },
-        "lines": 23,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -414,25 +448,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 2,
-          "procedure_lookup": 10,
-          "rule_lookup": 9,
-          "unit_search": 2
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 23,
-        "unit_lines": 23,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/49b770ae9ad9": {
-        "allowed": 43,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 43,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 43
+          "allowed": 25
         },
-        "lines": 43,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -442,25 +476,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 9,
-          "procedure_lookup": 13,
-          "rule_lookup": 13,
-          "unit_search": 8
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 43,
-        "unit_lines": 43,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/596f526de1a8": {
-        "allowed": 17,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 17,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 17
+          "allowed": 25
         },
-        "lines": 17,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -471,107 +505,24 @@
         "text_lines": 0,
         "tools": {
           "define": 6,
-          "procedure_lookup": 8,
-          "rule_lookup": 3
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 17,
-        "unit_lines": 17,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/7725c0807189": {
-        "allowed": 39,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 39,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 39
+          "allowed": 25
         },
-        "lines": 39,
-        "logs_missing": 0,
-        "missing": {
-          "acl_decision": 0,
-          "acl_snapshot": 0,
-          "caller": 0,
-          "principals": 0
-        },
-        "text_lines": 0,
-        "tools": {
-          "define": 5,
-          "procedure_lookup": 10,
-          "rule_lookup": 14,
-          "unit_search": 10
-        },
-        "unit_calls": 39,
-        "unit_lines": 39,
-        "units_missing": 0
-      },
-      "reference/7f0549a3bf0c": {
-        "allowed": 34,
-        "allowed_unresolved": 0,
-        "calls_mismatch": 0,
-        "complete": true,
-        "complete_lines": 34,
-        "decisions": {
-          "allowed": 34
-        },
-        "lines": 34,
-        "logs_missing": 0,
-        "missing": {
-          "acl_decision": 0,
-          "acl_snapshot": 0,
-          "caller": 0,
-          "principals": 0
-        },
-        "text_lines": 0,
-        "tools": {
-          "define": 10,
-          "procedure_lookup": 8,
-          "rule_lookup": 12,
-          "unit_search": 4
-        },
-        "unit_calls": 34,
-        "unit_lines": 34,
-        "units_missing": 0
-      },
-      "reference/892f63f0a090": {
-        "allowed": 32,
-        "allowed_unresolved": 0,
-        "calls_mismatch": 0,
-        "complete": true,
-        "complete_lines": 32,
-        "decisions": {
-          "allowed": 32
-        },
-        "lines": 32,
-        "logs_missing": 0,
-        "missing": {
-          "acl_decision": 0,
-          "acl_snapshot": 0,
-          "caller": 0,
-          "principals": 0
-        },
-        "text_lines": 0,
-        "tools": {
-          "define": 12,
-          "procedure_lookup": 9,
-          "rule_lookup": 7,
-          "unit_search": 4
-        },
-        "unit_calls": 32,
-        "unit_lines": 32,
-        "units_missing": 0
-      },
-      "reference/973c55c7a6c9": {
-        "allowed": 19,
-        "allowed_unresolved": 0,
-        "calls_mismatch": 0,
-        "complete": true,
-        "complete_lines": 19,
-        "decisions": {
-          "allowed": 19
-        },
-        "lines": 19,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -582,23 +533,108 @@
         "text_lines": 0,
         "tools": {
           "define": 6,
-          "procedure_lookup": 8,
-          "rule_lookup": 5
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 19,
-        "unit_lines": 19,
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/7f0549a3bf0c": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/892f63f0a090": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
+        "units_missing": 0
+      },
+      "reference/973c55c7a6c9": {
+        "allowed": 25,
+        "allowed_unresolved": 0,
+        "calls_mismatch": 0,
+        "complete": true,
+        "complete_lines": 25,
+        "decisions": {
+          "allowed": 25
+        },
+        "lines": 25,
+        "logs_missing": 0,
+        "missing": {
+          "acl_decision": 0,
+          "acl_snapshot": 0,
+          "caller": 0,
+          "principals": 0
+        },
+        "text_lines": 0,
+        "tools": {
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
+        },
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/9a736e45e75c": {
-        "allowed": 42,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 42,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 42
+          "allowed": 25
         },
-        "lines": 42,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -608,25 +644,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 12,
-          "procedure_lookup": 8,
-          "rule_lookup": 14,
-          "unit_search": 8
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 42,
-        "unit_lines": 42,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/ae740a69a400": {
-        "allowed": 37,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 37,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 37
+          "allowed": 25
         },
-        "lines": 37,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -636,25 +672,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 2,
-          "procedure_lookup": 14,
-          "rule_lookup": 9,
-          "unit_search": 12
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 37,
-        "unit_lines": 37,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/b30abb0676be": {
-        "allowed": 49,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 49,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 49
+          "allowed": 25
         },
-        "lines": 49,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -664,25 +700,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 15,
-          "procedure_lookup": 9,
-          "rule_lookup": 11,
-          "unit_search": 14
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 49,
-        "unit_lines": 49,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/ba24cbed2c4f": {
-        "allowed": 33,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 33,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 33
+          "allowed": 25
         },
-        "lines": 33,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -692,25 +728,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 5,
-          "procedure_lookup": 9,
-          "rule_lookup": 13,
-          "unit_search": 6
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 33,
-        "unit_lines": 33,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/bb1445f0f103": {
-        "allowed": 58,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 58,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 58
+          "allowed": 25
         },
-        "lines": 58,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -720,25 +756,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 17,
-          "procedure_lookup": 10,
-          "rule_lookup": 27,
-          "unit_search": 4
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 58,
-        "unit_lines": 58,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/c127e9c8da8b": {
-        "allowed": 28,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 28,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 28
+          "allowed": 25
         },
-        "lines": 28,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -748,25 +784,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 4,
-          "procedure_lookup": 7,
-          "rule_lookup": 13,
-          "unit_search": 4
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 28,
-        "unit_lines": 28,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "reference/f7914abd432b": {
-        "allowed": 43,
+        "allowed": 25,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 43,
+        "complete_lines": 25,
         "decisions": {
-          "allowed": 43
+          "allowed": 25
         },
-        "lines": 43,
+        "lines": 25,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -776,25 +812,25 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 11,
-          "procedure_lookup": 10,
-          "rule_lookup": 10,
-          "unit_search": 12
+          "define": 6,
+          "procedure_lookup": 6,
+          "rule_lookup": 6,
+          "unit_search": 7
         },
-        "unit_calls": 43,
-        "unit_lines": 43,
+        "unit_calls": 25,
+        "unit_lines": 25,
         "units_missing": 0
       },
       "store": {
-        "allowed": 682,
+        "allowed": 500,
         "allowed_unresolved": 0,
         "calls_mismatch": 0,
         "complete": true,
-        "complete_lines": 682,
+        "complete_lines": 500,
         "decisions": {
-          "allowed": 682
+          "allowed": 500
         },
-        "lines": 682,
+        "lines": 500,
         "logs_missing": 0,
         "missing": {
           "acl_decision": 0,
@@ -804,26 +840,26 @@
         },
         "text_lines": 0,
         "tools": {
-          "define": 175,
-          "procedure_lookup": 164,
-          "rule_lookup": 223,
-          "unit_search": 120
+          "define": 120,
+          "procedure_lookup": 120,
+          "rule_lookup": 120,
+          "unit_search": 140
         },
-        "unit_calls": 682,
-        "unit_lines": 682,
+        "unit_calls": 500,
+        "unit_lines": 500,
         "units_missing": 0
       }
     },
     "total": {
-      "allowed": 1364,
+      "allowed": 1000,
       "allowed_unresolved": 0,
       "calls_mismatch": 0,
       "complete": true,
-      "complete_lines": 1364,
+      "complete_lines": 1000,
       "decisions": {
-        "allowed": 1364
+        "allowed": 1000
       },
-      "lines": 1364,
+      "lines": 1000,
       "logs_missing": 0,
       "missing": {
         "acl_decision": 0,
@@ -833,161 +869,46 @@
       },
       "text_lines": 0,
       "tools": {
-        "define": 350,
-        "procedure_lookup": 328,
-        "rule_lookup": 446,
-        "unit_search": 240
+        "define": 240,
+        "procedure_lookup": 240,
+        "rule_lookup": 240,
+        "unit_search": 280
       },
-      "unit_calls": 1364,
-      "unit_lines": 1364,
+      "unit_calls": 1000,
+      "unit_lines": 1000,
       "units_missing": 0
     }
   },
   "summary": {
-    "families": {
-      "by-closure": {
-        "callers": 17,
-        "checked_kinds": {
-          "count_differs": 40,
-          "error_differs": 40,
-          "hidden_value": 40,
-          "id_outside_view": 40,
-          "rows_differ": 40
-        },
-        "invalid": 0,
-        "leak_kinds": {
-          "count_differs": 0,
-          "error_differs": 0,
-          "hidden_value": 0,
-          "id_outside_view": 0,
-          "rows_differ": 0
-        },
-        "leaks": 0,
-        "n": 40,
-        "outcomes": {
-          "ok,ok": 20,
-          "refused,ok": 20
-        }
+    "by_tool": {
+      "define": {
+        "identical": 120,
+        "n": 120,
+        "refused": 0
       },
-      "by-error": {
-        "callers": 18,
-        "checked_kinds": {
-          "count_differs": 40,
-          "error_differs": 40,
-          "hidden_value": 40,
-          "id_outside_view": 40,
-          "rows_differ": 40
-        },
-        "invalid": 0,
-        "leak_kinds": {
-          "count_differs": 0,
-          "error_differs": 0,
-          "hidden_value": 0,
-          "id_outside_view": 0,
-          "rows_differ": 0
-        },
-        "leaks": 0,
-        "n": 40,
-        "outcomes": {
-          "refused,refused,refused": 40
-        }
+      "procedure_lookup": {
+        "identical": 120,
+        "n": 120,
+        "refused": 38
       },
-      "by-id": {
-        "callers": 19,
-        "checked_kinds": {
-          "count_differs": 100,
-          "error_differs": 100,
-          "hidden_value": 100,
-          "id_outside_view": 100,
-          "rows_differ": 100
-        },
-        "invalid": 0,
-        "leak_kinds": {
-          "count_differs": 0,
-          "error_differs": 0,
-          "hidden_value": 0,
-          "id_outside_view": 0,
-          "rows_differ": 0
-        },
-        "leaks": 0,
-        "n": 100,
-        "outcomes": {
-          "refused,refused": 100
-        }
+      "rule_lookup": {
+        "identical": 120,
+        "n": 120,
+        "refused": 32
       },
-      "by-query": {
-        "callers": 17,
-        "checked_kinds": {
-          "count_differs": 60,
-          "error_differs": 60,
-          "hidden_value": 60,
-          "id_outside_view": 60,
-          "rows_differ": 60
-        },
-        "invalid": 0,
-        "leak_kinds": {
-          "count_differs": 0,
-          "error_differs": 0,
-          "hidden_value": 0,
-          "id_outside_view": 0,
-          "rows_differ": 0
-        },
-        "leaks": 0,
-        "n": 60,
-        "outcomes": {
-          "ok,ok": 18,
-          "ok,ok,ok": 42
-        }
-      },
-      "by-term": {
-        "callers": 19,
-        "checked_kinds": {
-          "count_differs": 60,
-          "error_differs": 60,
-          "hidden_value": 60,
-          "id_outside_view": 60,
-          "rows_differ": 60
-        },
-        "invalid": 0,
-        "leak_kinds": {
-          "count_differs": 0,
-          "error_differs": 0,
-          "hidden_value": 0,
-          "id_outside_view": 0,
-          "rows_differ": 0
-        },
-        "leaks": 0,
-        "n": 60,
-        "outcomes": {
-          "ok,ok": 60
-        }
+      "unit_search": {
+        "identical": 140,
+        "n": 140,
+        "refused": 0
       }
     },
-    "targets_by_type": {
-      "concept": 92,
-      "procedure": 63,
-      "rule_card": 117,
-      "table_record": 28
-    },
+    "differing": 0,
+    "identical": 500,
+    "n": 500,
     "total": {
-      "checked_kinds": {
-        "count_differs": 300,
-        "error_differs": 300,
-        "hidden_value": 300,
-        "id_outside_view": 300,
-        "rows_differ": 300
-      },
-      "compared": 300,
-      "invalid": 0,
-      "leak_kinds": {
-        "count_differs": 0,
-        "error_differs": 0,
-        "hidden_value": 0,
-        "id_outside_view": 0,
-        "rows_differ": 0
-      },
-      "leaks": 0,
-      "n": 300
-    }
+      "n": 500,
+      "passed": 500
+    },
+    "views": 20
   }
 }

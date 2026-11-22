@@ -1,6 +1,6 @@
 # Unit probes: applicability (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+Store `<private copy of .cache/store-p2/gov>` (snapshot `f002821f2cb3`, units `3fae4bc9cd7b`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
 
 255 probes (5 default, 250 as_of over 50 dates), 255 passed, 0 units of documents not in force.
 

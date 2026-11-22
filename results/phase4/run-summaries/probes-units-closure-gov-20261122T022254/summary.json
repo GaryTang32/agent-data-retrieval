@@ -3,18 +3,18 @@
     "acl_entries_sha256": "053acb4a6d76a8b5cadb683fa64dbbec528c44b4b8d0d9ca46d63063fa50293e",
     "corpus": "gov",
     "directory_sha256": "d83f6043cffc57653fa0ac12e9a412bcded3f35661089246731550145675c65e",
-    "kind": "units-procedures",
+    "kind": "units-closure",
     "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
     "seed": 20261121,
     "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
-    "store": ".cache/store-p2/gov",
+    "store": "<private copy of .cache/store-p2/gov>",
     "tools": [
       "define",
       "rule_lookup",
       "procedure_lookup",
       "unit_search"
     ],
-    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+    "units": "3fae4bc9cd7b59cf746ff9c36bb55164661eb53bc8b0c86d049b8a550b5f6d42"
   },
   "logs": {
     "by_store": {
@@ -63,22 +63,51 @@
     }
   },
   "summary": {
-    "checks": {
-      "labels_ok": 101,
-      "mermaid_round_trip": 101,
-      "skill_round_trip": 101,
-      "stable": 101,
-      "valid_ir": 101
+    "all": {
+      "cards": 10719,
+      "duplicate_provision_ids": 47,
+      "in_part": 3386,
+      "in_part_resolved": 3337,
+      "part_references": 21,
+      "reasons": {
+        "paragraph_missing": 36,
+        "part_reference": 21,
+        "section_missing": 13
+      },
+      "resolution": {
+        "dangling": 49,
+        "external": 421,
+        "resolved": 3358
+      },
+      "resolved_rate": 0.9855286473715298,
+      "unresolved": 49
     },
-    "max_body_lines": 191,
-    "max_description_chars": 116,
-    "max_name_chars": 64,
-    "n": 101,
-    "names_unique": true,
-    "passed": 101,
+    "matches_build_report": true,
+    "newest": {
+      "cards": 3527,
+      "documents": 3,
+      "duplicate_provision_ids": 15,
+      "in_part": 1138,
+      "in_part_resolved": 1123,
+      "part_references": 9,
+      "reasons": {
+        "paragraph_missing": 10,
+        "part_reference": 9,
+        "section_missing": 5
+      },
+      "resolution": {
+        "dangling": 15,
+        "external": 144,
+        "resolved": 1132
+      },
+      "resolved_rate": 0.9868189806678384,
+      "unresolved": 15
+    },
+    "pass": false,
+    "threshold": 0.99,
     "total": {
-      "n": 101,
-      "passed": 101
+      "n": 3386,
+      "passed": 3337
     }
   }
 }

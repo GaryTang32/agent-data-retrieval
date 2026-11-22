@@ -1,6 +1,6 @@
 # Unit probes: equivalence (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+Store `<private copy of .cache/store-p2/gov>` (snapshot `f002821f2cb3`, units `3fae4bc9cd7b`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
 
 500 of 500 identical over 20 views.
 
@@ -8,7 +8,7 @@ Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). See
 |---|---|---|---|
 | define | 120 | 120 | 0 |
 | procedure_lookup | 120 | 120 | 38 |
-| rule_lookup | 120 | 120 | 22 |
+| rule_lookup | 120 | 120 | 32 |
 | unit_search | 140 | 140 | 0 |
 
 ## Log fields

@@ -1,6 +1,6 @@
 # Unit probes: procedures (gov)
 
-Store `.cache/store-p2/gov` (snapshot `f002821f2cb3`, units `a405942225cb`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
+Store `<private copy of .cache/store-p2/gov>` (snapshot `f002821f2cb3`, units `3fae4bc9cd7b`). Seed 20261121. Tools: define, rule_lookup, procedure_lookup, unit_search. No model calls.
 
 101 of 101 procedures pass (valid IR, both round trips, description at most 1,024 characters, body under 500 lines, labels at most 80 characters, stable renderings); names unique: True.
 

@@ -8,14 +8,14 @@
     "policy_sha256": "0e3024f237fc4ed6d6ae1f536882bf7893f557357372cb269a2a562b3ffc9ba5",
     "seed": 20261121,
     "snapshot": "f002821f2cb3db8b3fd0a374a7824df147316f0e539831551bc6c555507987f9",
-    "store": ".cache/store-p2/gov",
+    "store": "<private copy of .cache/store-p2/gov>",
     "tools": [
       "define",
       "rule_lookup",
       "procedure_lookup",
       "unit_search"
     ],
-    "units": "a405942225cb2ecbf5029144e20b4db79e00bb3b021ce953746503e97b1b89e7"
+    "units": "3fae4bc9cd7b59cf746ff9c36bb55164661eb53bc8b0c86d049b8a550b5f6d42"
   },
   "logs": {
     "by_store": {
@@ -126,8 +126,8 @@
     "unit_context_types": {
       "concept": 422,
       "procedure": 15,
-      "rule_card": 325,
-      "table_record": 82
+      "rule_card": 324,
+      "table_record": 83
     }
   }
 }

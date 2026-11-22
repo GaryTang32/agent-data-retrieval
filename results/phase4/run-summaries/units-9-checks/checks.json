@@ -4,7 +4,7 @@
   "S1": {
    "equivalence": "1,000 of 1,000 (gov 500, bench 500; 20 views each)",
    "leaks": "0 of 400 (gov 300, bench 100)",
-   "mcp_leg": "0 leaks of 60 (gov 46, bench 14)"
+   "mcp_leg": "0 leaks of 60 (gov 46, bench 14) (Task 9 run on gov units a405942225cb; not re-run after Task 2b)"
   },
   "S2": {
    "failclosed": "120 of 120 on the four read tools (check_rules: Task 22)",
@@ -25,8 +25,8 @@
      "concept": 1205,
      "faq": 3,
      "procedure": 30,
-     "rule_card": 325,
-     "table_record": 117
+     "rule_card": 324,
+     "table_record": 118
     },
     "by_corpus": {
      "bench": 103,
@@ -74,7 +74,7 @@
  "heads_unchanged": {
   "bench units": "d50f23029eed",
   "gov tables": "fec2a2b12e31",
-  "gov units": "a405942225cb",
+  "gov units": "3fae4bc9cd7b",
   "research units": "a2e70511c9c5"
  },
  "llm_cache_files": {
@@ -87,5 +87,26 @@
   "after": "923ca5f71744",
   "before": "923ca5f71744",
   "of": "sorted path, size and mtime of every file under .cache/store and .cache/index"
+ },
+ "task_2b": {
+  "ruling": "P47: restricted-opening phrases in the exemption lexicon; gov units rebuilt and units/HEAD re-promoted by the pre-gold reset (a405942225cb -> 3fae4bc9cd7b)",
+  "rerun": "units-closure, units-define, units-applicability, units-failclosed, units-leak, units-equivalence, units-procedures on gov, twice each in fresh processes, on a private copy of .cache/store-p2/gov (ACL synced on the copy only, access entries 053acb4a6d76); probes.json, results.json, summary.json and summary.md byte-identical between the passes in 7 of 7 sets; the committed gov summaries are the first pass, store path written as <private copy of .cache/store-p2/gov>",
+  "changes": {
+   "rule_cards": "10,577 -> 10,719 (newest 3,479 -> 3,527)",
+   "gov_units": "16,317 -> 16,459",
+   "leak_reference_units": "103,997 -> 104,849",
+   "equivalence_rule_lookup_refused_alike": "22 -> 32",
+   "define_unit_context_types_gov": "rule_card 325 -> 324, table_record 82 -> 83"
+  },
+  "unchanged": "leaks 0/300, equivalence 500/500, fail closed 120/120, applicability 255/255, U1 gov 4,226/4,226 with 0 hidden senses, U2 98.55% / 98.68% (fail), U3 gov 101/101",
+  "not_rerun": "bench and research sets (no eCFR documents); the MCP leg",
+  "llm_cache_files": {
+   "before": 12010,
+   "after": 12010
+  },
+  "read_only_stores_sha256": {
+   "before": "923ca5f71744",
+   "after": "923ca5f71744"
+  }
  }
 }
