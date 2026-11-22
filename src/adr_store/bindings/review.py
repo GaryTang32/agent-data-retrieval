@@ -29,6 +29,12 @@ an input rejection) is not approved. A reply still unparseable after the retry a
 (`review_unparseable`: sections, draws, bindings), never dropped silently; replies whose
 output reached `max_tokens` are counted too (`replies_at_max_tokens`).
 
+**Draws** are keyed by document and target (`checks._draw_key`) over all the bindings given:
+only a draw whose every binding is `analysed` is reviewed; a draw mixing statuses is rejected
+whole (`incomplete_draw`, P48), never reviewed on a subset. A section whose reply names a
+served model other than the review profile's (`claude_code_opus`, the only profile `adr units
+review` takes) gives no verdict (`served_model_mismatch`).
+
 **Sign-off** (`review_all`). The record is stored on the binding (validated): its `review`
 keeps the compiler's flags and gains `verdict`, `reason`, `prompt_version` and `served_model`,
 and `verifier` is `model-review:claude_code_opus` (never a human sign-off). A draw passes or
@@ -47,23 +53,27 @@ from importlib import resources
 from typing import Any
 
 from adr_eval.llm import ModelOutputError, parse_json_recovering
-from adr_store.bindings.checks import _draw_key, _under
+from adr_store.bindings.checks import _draw_key, _under, _with
 from adr_store.bindings.compile import EMERGENCY, GENERAL_DUTY
 from adr_store.bindings.dsl import Binding
 from adr_store.bindings.enrich import _Recorder, in_section, read_sentence, section_key
 from adr_store.tables import extract as ex
 from adr_store.units.envelope import Unit
 
-__all__ = ["FLAGS", "MAX_TOKENS", "PROMPT_VERSION", "UNPARSEABLE", "VERIFIER", "flagged",
-           "review_all", "review_message", "review_section", "review_sections", "system_prompt",
-           "target_section"]
+__all__ = ["FLAGS", "INCOMPLETE", "MAX_TOKENS", "PROMPT_VERSION", "REVIEW_PROFILE",
+           "SERVED_MISMATCH", "UNPARSEABLE", "VERIFIER", "flagged", "review_all",
+           "review_message", "review_model", "review_section", "review_sections",
+           "served_problem", "system_prompt", "target_section", "verdict_records"]
 
 PROMPT_VERSION = "binding-review@1"
 MAX_TOKENS = 2000
-VERIFIER = "model-review:claude_code_opus"
+REVIEW_PROFILE = "claude_code_opus"     # the only profile `adr units review` takes (I2)
+VERIFIER = f"model-review:{REVIEW_PROFILE}"
 FLAGS = ("sentence_qualifiers", "sentence_conditions")
 VERDICTS = ("approve", "reject")
 UNPARSEABLE = "review_unparseable"
+INCOMPLETE = "incomplete_draw"
+SERVED_MISMATCH = "served_model_mismatch"
 _FLAG_TEXT = {
     "sentence_qualifiers": "the sentence states qualifiers the parameters lack",
     "sentence_conditions": "the sentence says only, unless or notice around the window",
@@ -75,6 +85,26 @@ def system_prompt() -> str:
     """The review prompt (`prompts/binding_review.txt`), naming its version on line 1."""
     return resources.files("adr_store.units").joinpath(
         "prompts/binding_review.txt").read_text(encoding="utf-8")
+
+
+@functools.cache
+def review_model() -> str:
+    """The model of the review profile (`REVIEW_PROFILE` in config/models.json): a served
+    model a provider reports for a review must be this one."""
+    from adr_eval import runner
+
+    config = runner.load_config()
+    profiles = runner.load_profiles(runner.REPO_ROOT / config.get("models", runner.MODELS_PATH))
+    return profiles[REVIEW_PROFILE]["model"]
+
+
+def served_problem(served: str | None) -> str | None:
+    """Why a review record's served model (comma-joined, or None when the provider reported
+    none) is not the review profile's model, or None."""
+    if served is None:
+        return None
+    other = sorted(set(served.split(",")) - {review_model()})
+    return f"served model {', '.join(other)} != {review_model()}" if other else None
 
 
 def flagged(b: Binding) -> bool:
@@ -268,18 +298,24 @@ def _cards_for(section: str, bindings: list[Binding], cards: list[Unit]) -> list
     return list(out.values())
 
 
-def _with(b: Binding, **update) -> Binding:
-    """`b` with `update`, validated as a new binding (statuses go through validation)."""
-    return Binding.model_validate({**b.model_dump(), **update})
-
-
 def review_all(store, bindings: list[Binding], client, *, limit: int | None = None,
                cards: list[Unit] | None = None) -> tuple[list[Binding], dict]:
     """(the bindings in order, with the review's statuses and records, the report) (module
-    text). `cards` are the rule cards the messages quote (default: the store's newest
-    33 CFR 117 cards, built by code; `store` is read only then); with `limit` only the first
-    sections are reviewed (the canary)."""
-    eligible = [b for b in bindings if b.status == "analysed"]
+    text). Draws are keyed by document and target (`checks._draw_key`) over **all** the
+    bindings: a draw is reviewed only when every one of its bindings is `analysed`; a draw that
+    mixes statuses (P48 forbids it) is rejected whole with reason `incomplete_draw`, and a
+    draw wholly rejected is left as it is. A section whose reply names a served model other
+    than the review profile's gives its bindings no verdict (`served_model_mismatch`, the
+    model's verdict kept beside it). `cards` are the rule cards the messages quote (default:
+    the store's newest 33 CFR 117 cards, built by code; `store` is read only then); with
+    `limit` only the first sections are reviewed (the canary)."""
+    draws: dict[str, list[Binding]] = {}
+    for b in bindings:
+        draws.setdefault(_draw_key(b), []).append(b)
+    reviewable = {k for k, bs in draws.items() if all(b.status == "analysed" for b in bs)}
+    incomplete = {k for k, bs in draws.items() if k not in reviewable
+                  and not all(b.status == "rejected" for b in bs)}
+    eligible = [b for b in bindings if _draw_key(b) in reviewable]
     sections = review_sections(eligible)
     chosen = sections if limit is None else sections[:limit]
     if cards is None and chosen:
@@ -293,9 +329,16 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
     served_of: dict[str, str | None] = {}
     counts, outcomes, served_all = Counter(), Counter(), set()
     per_section = []
+    mismatched = Counter()
     for s in chosen:
         bs = groups[s]
         got, outcome, c, served = _review(s, _cards_for(s, bs, cards), bs, client)
+        if served_problem(",".join(served) or None):
+            mismatched["sections"] += 1
+            mismatched["bindings"] += len(got)
+            got = {bid: {"verdict": None, "reason": SERVED_MISMATCH,
+                         "model_verdict": v["verdict"], "model_reason": v["reason"]}
+                   for bid, v in got.items()}
         verdicts.update(got)
         served_of.update({b.binding_id: ",".join(served) or None for b in bs})
         counts += c
@@ -306,17 +349,21 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
                             "flagged": sum(flagged(b) for b in bs),
                             "approved": tally["approve"], "rejected": tally["reject"],
                             "no_verdict": tally[None], "outcome": outcome})
-    draws: dict[str, list[Binding]] = {}
-    for b in eligible:
-        draws.setdefault(_draw_key(b), []).append(b)
     updated: dict[str, Binding] = {}
     blocked = 0
-    for draw in draws.values():
+    for key in incomplete:
+        for b in draws[key]:
+            updated[b.binding_id] = _with(b, status="rejected",
+                                          review={**b.review, "reason": INCOMPLETE})
+    for key in reviewable:
+        draw = draws[key]
         bad = [b.binding_id for b in draw if b.binding_id in verdicts
                and verdicts[b.binding_id]["verdict"] != "approve"]
         whole = all(b.binding_id in verdicts for b in draw)
         for b in draw:
             v = verdicts.get(b.binding_id)
+            if v is None and not bad:
+                continue
             review = dict(b.review)
             update: dict[str, Any] = {}
             if v is not None:
@@ -327,16 +374,15 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
                 review["blocked_by"] = sorted(bad)
                 blocked += 1
             status = "rejected" if bad else "signed_off" if whole else b.status
-            if v is None and not bad:
-                continue
             updated[b.binding_id] = _with(b, status=status, review=review, **update)
-    out = [updated.get(b.binding_id, b) if b.status == "analysed" else b for b in bindings]
+    out = [updated.get(b.binding_id, b) for b in bindings]
     tally = Counter(v["verdict"] for v in verdicts.values())
     statuses = Counter(b.status for b in out)
     unparseable = [b for b in eligible if verdicts.get(b.binding_id, {}).get("reason")
                    == UNPARSEABLE]
     report = {
         "prompt_version": PROMPT_VERSION, "max_tokens": MAX_TOKENS, "limit": limit,
+        "review_profile": REVIEW_PROFILE, "review_model": review_model(),
         "sections_total": len(sections), "sections_reviewed": len(chosen),
         "calls": {k: counts[k] for k in ("made", "cached", "failed")},
         "served_models": sorted(served_all), "outcomes": dict(sorted(outcomes.items())),
@@ -344,6 +390,9 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
         "review_unparseable": {
             "sections": sum(s["outcome"] == "unparseable" for s in per_section),
             "draws": len({_draw_key(b) for b in unparseable}), "bindings": len(unparseable)},
+        "served_by_another_model": {k: mismatched[k] for k in ("sections", "bindings")},
+        "incomplete_draws": {"draws": len(incomplete),
+                             "bindings": sum(len(draws[k]) for k in incomplete)},
         "flagged": sum(s["flagged"] for s in per_section), "sections": per_section,
         "bindings": {"candidates": len(bindings), "eligible": len(eligible),
                      "approved": tally["approve"], "rejected_by_review": tally["reject"],
@@ -351,3 +400,23 @@ def review_all(store, bindings: list[Binding], client, *, limit: int | None = No
                      "not_reviewed": sum(b.binding_id not in verdicts for b in eligible),
                      "signed_off": statuses["signed_off"], "rejected": statuses["rejected"]}}
     return out, report
+
+
+def verdict_records(bindings: list[Binding]) -> list[dict]:
+    """One record per reviewed or rejected-at-review binding (M2): id, draw, rule, status,
+    verdict, reason, served model and what blocked it; for the local review file."""
+    out = []
+    for b in bindings:
+        r = b.review
+        if "verdict" not in r and r.get("reason") is None:
+            continue
+        sel = b.target.get("selector", {})
+        out.append({"binding_id": b.binding_id, "doc_id": b.doc_id,
+                    "section": sel.get("section"), "draw": sel.get("draw"),
+                    "rule_id": b.rule_id, "effect": b.effect, "status": b.status,
+                    "verdict": r.get("verdict"), "reason": r.get("reason"),
+                    "model_verdict": r.get("model_verdict"),
+                    "model_reason": r.get("model_reason"),
+                    "served_model": r.get("served_model"),
+                    "blocked_by": r.get("blocked_by", [])})
+    return sorted(out, key=lambda x: x["binding_id"])

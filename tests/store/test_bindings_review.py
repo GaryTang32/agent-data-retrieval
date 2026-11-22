@@ -10,12 +10,14 @@ import json
 import re
 import sys
 import types
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
 from adr_eval.cache import Cache
 from adr_eval.llm import CachedStubClient
+from adr_store.bindings import build as bb
 from adr_store.bindings import manifest as bm
 from adr_store.bindings import review as br
 from adr_store.bindings.checks import mark_tested
@@ -48,11 +50,13 @@ from tests.store.bindings_fixtures import (
     CARD_B,
     EMERGENCY_CARD,
     GENERAL_CARD,
+    rebuild,
     shift,
     stamp_analysed,
 )
 from tests.store.test_bindings_compile import WEEKDAYS, card, closed, draw, run
 from tests.store.units_fixtures import (  # noqa: F401
+    D1,
     DOC_117_NEW,
     ENRICH_ABSENT,
     enrich_reply_821,
@@ -134,16 +138,86 @@ def test_only_tested_analysed_approved_bindings_are_signed_off_and_written(tmp_p
     assert {b.binding_id for b in load_bindings(tmp_path, bindings_id)[1]} == \
         DRAW_821 | DRAW_DUTY
     # a tested binding that was never analysed is not reviewed nor signed off, even if the
-    # reviewer would approve it, and a rejected one stays rejected
+    # reviewer would approve it: its draw is not wholly analysed, so it is rejected whole
+    # (incomplete_draw); a draw wholly rejected stays as it is
     tested = mark_tested(list(BINDINGS_821))
     off = mark_tested(list(BINDINGS_OFF))
     assert {b.status for b in tested} == {"tested"} and {b.status for b in off} == {"rejected"}
     client = stub_review(tmp_path, name="tested")
     out2, report = review_all(None, tested + off, client, cards=CARDS)
     assert client.calls == 0 and report["calls"] == {"made": 0, "cached": 0, "failed": 0}
-    assert out2 == tested + off
+    assert out2[len(tested):] == off
+    assert {b.status for b in out2[:len(tested)]} == {"rejected"}
+    assert {b.review["reason"] for b in out2[:len(tested)]} == {"incomplete_draw"}
+    assert report["incomplete_draws"] == {"draws": 1, "bindings": len(tested)}
     assert all(b.verifier is None and "verdict" not in b.review for b in out2)
     assert load_bindings(tmp_path, write_bindings(tmp_path, SNAP, U, T, out2)[0])[1] == []
+
+
+DUTY_GENERAL = next(b.binding_id for b in CANDIDATES if b.binding_id in DRAW_DUTY
+                    and b.rule_id == GENERAL_CARD.canonical_ref)
+
+
+@pytest.mark.parametrize("status", ["rejected", "tested"])
+def test_a_draw_with_a_binding_not_analysed_is_rejected_whole(tmp_path, status):     # I1
+    # the reviewer's case: § 117.5 of DRAW_DUTY is not analysed, the rest of the draw is
+    mixed = [Binding.model_validate({**b.model_dump(), "status": status})
+             if b.binding_id == DUTY_GENERAL else b for b in CANDIDATES]
+    client = stub_review(tmp_path)
+    out, report = review_all(None, mixed, client, cards=CARDS)
+    st = {b.binding_id: b for b in out}
+    assert {st[x].status for x in DRAW_DUTY} == {"rejected"}
+    assert {st[x].review["reason"] for x in DRAW_DUTY} == {"incomplete_draw"}
+    assert all(st[x].verifier is None for x in DRAW_DUTY)
+    assert report["incomplete_draws"] == {"draws": 1, "bindings": len(DRAW_DUTY)}
+    assert client.calls == 1 and report["sections_reviewed"] == 1        # § 117.901 not sent
+    assert {st[x].status for x in DRAW_821 | DRAW_SIGNAL} == {"signed_off"}
+    bindings_id, _ = write_bindings(tmp_path, SNAP, U, T, out,
+                                    candidate_draws=bm.draw_sizes(CANDIDATES))
+    loaded = {b.binding_id for b in load_bindings(tmp_path, bindings_id)[1]}
+    assert loaded == DRAW_821 | DRAW_SIGNAL and not loaded & DRAW_DUTY
+    promote_bindings(tmp_path, bindings_id)
+    assert not {b.binding_id for b in load_bindings(
+        tmp_path, read_bindings_head(tmp_path))[1]} & DRAW_DUTY
+
+
+def test_a_draw_is_keyed_by_its_document_and_target(tmp_path):                  # M3, P31
+    # the same section and draw in another document version is another draw
+    doc = "e" * 64
+    other = [rebuild(b, doc_id=doc) for b in BINDINGS_821 if b.effect == "forbid"]
+    emergency = next(b for b in BINDINGS_821 if b.rule_id == EMERGENCY_CARD.canonical_ref)
+    other += [rebuild(b, doc_id=doc) for b in BINDINGS_821
+              if b.effect == "basis" and b.binding_id != emergency.binding_id]
+    other.append(rebuild(emergency, doc_id=doc, overrides=sorted(
+        b.binding_id for b in other if b.effect == "forbid")))
+    cands = candidates(BINDINGS_821, other)
+    assert {b.status for b in cands} == {"analysed"}
+    sizes = bm.draw_sizes(cands)
+    assert [(d[0], d[1], d[2]) for d in sizes] == [(D1, "117.821", 1), (doc, "117.821", 1)]
+    assert [d[3] for d in sizes] == [len(BINDINGS_821)] * 2
+    victim = next(b.binding_id for b in cands if b.doc_id == doc and b.effect == "forbid")
+    out, _ = review_all(None, cands, stub_review(tmp_path, {victim: "reject"}), cards=CARDS)
+    assert {b.status for b in out if b.doc_id == doc} == {"rejected"}
+    assert {b.status for b in out if b.doc_id == D1} == {"signed_off"}
+
+
+def test_write_bindings_refuses_an_incomplete_draw(tmp_path):                       # I1
+    out, _ = reviewed(tmp_path)
+    assert {b.status for b in out} == {"signed_off"}
+    # signed off in part: one binding of the draw is not signed off
+    part = [Binding.model_validate({**b.model_dump(), "status": "analysed"})
+            if b.binding_id == DUTY_GENERAL else b for b in out]
+    with pytest.raises(BindingsError, match="signed off in part"):
+        write_bindings(tmp_path, SNAP, U, T, part)
+    # a binding the candidates list for the draw is missing from the input altogether
+    short = [b for b in out if b.binding_id != DUTY_GENERAL]
+    with pytest.raises(BindingsError, match="holds 2 binding.s., not the 3"):
+        write_bindings(tmp_path, SNAP, U, T, short, candidate_draws=bm.draw_sizes(CANDIDATES))
+    # a draw without its § 117.31(b) emergency basis
+    emergency = next(b.binding_id for b in out if b.binding_id in DRAW_DUTY
+                     and b.rule_id == EMERGENCY_CARD.canonical_ref)
+    with pytest.raises(BindingsError, match="no § 117.31.b. emergency basis"):
+        write_bindings(tmp_path, SNAP, U, T, [b for b in out if b.binding_id != emergency])
 
 
 def test_review_record_is_labelled_model_review(tmp_path):
@@ -340,6 +414,24 @@ def test_review_message_holds_verbatim_cards_quotes_and_rendered_sentences():
     assert "FLAG" not in msg                     # these bindings carry no flags
 
 
+def test_review_message_names_overrides_and_auto_accepted_values():          # F31, F33
+    bs = [b for b in CANDIDATES if b.target["selector"]["draw"] == 1]
+    emergency = next(b for b in bs if b.rule_id == EMERGENCY_CARD.canonical_ref)
+    assert len(emergency.overrides) == 2
+    auto = next(b for b in bs if b.effect == "forbid")
+    auto = Binding.model_validate({**auto.model_dump(), "review": {
+        "auto_accepted": ["periods[0].end", "periods[0].start"]}})
+    bs = [auto if b.binding_id == auto.binding_id else b for b in bs]
+    msg = review_message("117.821", CARDS, bs)
+    labels = {bid: lab for lab, bid in re.findall(r"^\[(B\d+)\] binding ([0-9a-f]{64})$", msg,
+                                                   re.M)}
+    over = ", ".join(labels[x] for x in emergency.overrides)
+    assert f"  overrides 2 forbid(s): {over}\n" in msg
+    assert (f"  FLAG auto_accepted (periods[0].end, periods[0].start) on binding "
+            f"{auto.binding_id}: a value code did not find in its quote; check it against the "
+            f"quote\n") in msg
+
+
 # -- the review surfaces the flags (Task 15 carried ruling) ---------------------------------------
 
 FLAG_TEXT = ("(a) The draw of the Main Street drawbridge need not open from 7 a.m. to 9 a.m. "
@@ -372,6 +464,7 @@ def test_flagged_bindings_name_the_flag_and_quote_the_full_sentence():
     for line in msg.splitlines():
         if line.lstrip().startswith("FLAG sentence_"):
             assert line.endswith(f'full sentence: "{FLAG_SENTENCE}"')
+    assert len(FLAG_TEXT) > 100 and f"[{FLAG_CARD.canonical_ref}] {FLAG_TEXT}\n" in msg  # F8
     assert "The owner keeps a log" not in msg.split("BINDINGS")[1]
     assert msg.count("FLAG sentence_qualifiers") == sum(
         "sentence_qualifiers" in b.review for b in bs if b.rule_id.startswith("33 CFR 117.821"))
@@ -408,6 +501,9 @@ def test_a_flag_on_real_section_text_quotes_its_sentence(units_store, tmp_path):
             f"states qualifiers the parameters lack; judge it against the full sentence: "
             f'"{sentence}"') in msg
     assert "FLAG sentence_conditions" not in msg
+    a = next(c for c in cards if c.canonical_ref == "33 CFR 117.821(a)")
+    assert a.body["text"].startswith("(a) The draw") and len(a.body["text"]) > 100
+    assert f"[33 CFR 117.821(a)] {a.body['text']}\n" in msg                          # F8
 
 
 def test_flagged_bindings_are_counted_per_review(tmp_path):
@@ -487,16 +583,28 @@ def test_write_bindings_refuses_an_agreement_draw_or_override_it_cannot_hold(tmp
         write_bindings(tmp_path, SNAP, U, T, partial)
 
 
-def _rewrite(tmp_path, bindings_id: str, lines: list[bytes]) -> str:
-    """Write `lines` as a data file with a matching manifest, bypassing every check but the
-    format; the new bindings id."""
+def _draws_of(lines: list[bytes]) -> list[tuple]:
+    """The manifest `draws` of raw binding lines (doc_id, section, draw, count), sorted."""
+    from adr_store.bindings.enrich import section_key
+
+    c = Counter()
+    for x in lines:
+        r = json.loads(x)
+        c[(r["doc_id"], r["target"]["selector"]["section"], r["target"]["selector"]["draw"])] += 1
+    return sorted(((*k, n) for k, n in c.items()), key=lambda d: (d[0], section_key(d[1]), d[2]))
+
+
+def _rewrite(tmp_path, bindings_id: str, lines: list[bytes], draws=None) -> str:
+    """Write `lines` as a data file with a matching manifest (`draws` counted from the lines
+    unless given), bypassing every check but the format; the new bindings id."""
     m = BindingsManifest.model_validate_json(manifest_path(tmp_path, bindings_id).read_bytes())
     data = b"".join(x if x.endswith(b"\n") else x + b"\n" for x in lines)
     sha = hashlib.sha256(data).hexdigest()
     d = tmp_path / BINDINGS_DIR / SNAP
     (d / f"bindings-data-{sha[:16]}.jsonl").write_bytes(data)
     m2 = m.model_copy(update={"file": f"bindings-data-{sha[:16]}.jsonl", "sha256": sha,
-                              "bindings": len(lines)})
+                              "bindings": len(lines),
+                              "draws": _draws_of(lines) if draws is None else draws})
     mb = canonical_json(m2)
     new_id = hashlib.sha256(mb).hexdigest()
     (d / f"bindings-{new_id[:16]}.json").write_bytes(mb)
@@ -551,7 +659,6 @@ def test_load_bindings_refuses_a_tampered_file_and_an_unsigned_binding(tmp_path)
         load_bindings(tmp_path, swap(0, analysis={}))
     # content that does not match its ids is refused by the model's own validation
     raw = json.loads(lines[0])
-    raw["derivation"] = raw["derivation"]
     raw["when"] = {"const": False}
     with pytest.raises(BindingsError, match="binding 1"):
         load_bindings(tmp_path, _rewrite(tmp_path, bindings_id,
@@ -570,7 +677,9 @@ def test_load_bindings_refuses_a_tampered_file_and_an_unsigned_binding(tmp_path)
                                              "\n", " ").encode(), *lines[1:]]))
     # a count the manifest does not state, an unknown id
     m = BindingsManifest.model_validate_json(mgood)
-    bad = canonical_json(m.model_copy(update={"bindings": m.bindings + 1}))
+    first = m.draws[0]
+    bad = canonical_json(m.model_copy(update={"bindings": m.bindings + 1, "draws": [
+        (*first[:3], first[3] + 1), *m.draws[1:]]}))
     bad_id = hashlib.sha256(bad).hexdigest()
     (mpath.parent / f"bindings-{bad_id[:16]}.json").write_bytes(bad)
     with pytest.raises(BindingsError, match="hold"):
@@ -580,6 +689,44 @@ def test_load_bindings_refuses_a_tampered_file_and_an_unsigned_binding(tmp_path)
     with pytest.raises(BindingsError, match="content hash is not the bindings id"):
         load_bindings(tmp_path, bindings_id)
     mpath.write_bytes(mgood)
+    # F20: the data file missing (a store error, not an unexpected one)
+    data_path.rename(data_path.with_suffix(".gone"))
+    with pytest.raises(BindingsError, match="missing or unreadable"):
+        load_bindings(tmp_path, bindings_id)
+    data_path.with_suffix(".gone").rename(data_path)
+    # F21: a manifest that is valid JSON of the right content but not canonical, under the
+    # name and id of its own bytes
+    loose = json.dumps(json.loads(mgood), indent=1).encode()
+    loose_id = hashlib.sha256(loose).hexdigest()
+    (mpath.parent / f"bindings-{loose_id[:16]}.json").write_bytes(loose)
+    with pytest.raises(BindingsError, match="not canonical"):
+        load_bindings(tmp_path, loose_id)
+    # F12: the right manifest under another snapshot's directory
+    other = tmp_path / BINDINGS_DIR / "other-snapshot"
+    other.mkdir()
+    (other / mpath.name).write_bytes(mgood)
+    mpath.unlink()
+    with pytest.raises(BindingsError, match="describes snapshot"):
+        load_bindings(tmp_path, bindings_id)
+    (other / mpath.name).rename(mpath)
+    assert load_bindings(tmp_path, bindings_id)[0] == manifest
+    # I1: a set whose draw lacks a binding its record lists (the counts kept as written,
+    # another draw's binding in its place so the totals still agree)
+    duty_general = next(x for x in lines if json.loads(x)["binding_id"] == DUTY_GENERAL)
+    stray = rebuild(next(b for b in signed_off if b.binding_id in DRAW_SIGNAL
+                         and b.rule_id == EMERGENCY_CARD.canonical_ref),
+                    target={"tool": "schedule_opening",
+                            "selector": {"section": "117.821", "draw": 9}})
+    swapped = sorted([x for x in lines if x != duty_general] + [_line(stray)],
+                     key=lambda x: json.loads(x)["binding_id"])
+    with pytest.raises(BindingsError, match="incomplete draw"):
+        load_bindings(tmp_path, _rewrite(tmp_path, bindings_id, swapped, draws=m.draws))
+    # I2: a review record that names another served model
+    with pytest.raises(BindingsError, match="reviewed by another model"):
+        load_bindings(tmp_path, swap(0, review={**signed_off[0].review,
+                                                "served_model": "claude-haiku-5-5"}))
+    ok = swap(0, review={**signed_off[0].review, "served_model": br.review_model()})
+    assert load_bindings(tmp_path, ok)[1][0].review["served_model"] == "claude-opus-5-5"
     with pytest.raises(BindingsError, match="no bindings manifest"):
         load_bindings(tmp_path, "e" * 64)
 
@@ -758,11 +905,14 @@ def test_bindings_build_writes_candidates_with_statuses_and_prints_b1_b2(flow_st
     grid = [t for b in bs if b.target["selector"] == {"section": "117.821", "draw": 2}
             for t in b.tests if t["kind"] == "grid"]
     assert grid and all(t["mismatches"] == 0 and t["points"] > 0 for t in grid)
-    assert "B1: tests passed by" in out and "grid equal on 1 of 1 agreement-set draw(s)" in out
+    assert (f"B1: {len(bs)} of {len(bs)} binding(s) passed their tests, 0 of 3 draw(s) "
+            "rejected whole; grid equal on 1 of 1 agreement-set draw(s)") in out
     assert "B2: 0 conflict(s), 0 vacuous binding(s) over 3 analysed draw(s)" in out
     rep = json.loads((flow_store["store"].path / BINDINGS_DIR / flow_store["store"].snapshot_id
                       / f"bindings-candidates-{cid[:16]}.report.json").read_text())
     assert rep["b1"]["agreement_draws"] == 1 and rep["b2"]["conflicts"] == 0
+    assert rep["b1"]["bindings_passed"] == rep["b1"]["bindings"] == len(bs)
+    assert m.draws == bm.draw_sizes(bs) and sum(d[3] for d in m.draws) == len(bs)
     assert rep["candidates_id"] == cid and rep["calls"]["made"] == 0
     # the same inputs give the same candidates id (write-once, deterministic)
     code, out2, _ = build(flow_store, capsys)
@@ -792,17 +942,17 @@ def test_period_specific_or_flagged_draws_leave_the_agreement_set(flow_store, ca
     from tests.store.test_bindings_compile import notice_period, on_signal
 
     plain = draw(opening_basis="advance_notice", notice_hours=4)
-    assert not bm._period_specific(plain)
-    assert bm._period_specific(draw(opening_basis="advance_notice", notice_hours=4,
+    assert not bb._period_specific(plain)
+    assert bb._period_specific(draw(opening_basis="advance_notice", notice_hours=4,
                                     qualifiers=["times"]))         # P46: a limited notice
-    assert bm._period_specific(draw(periods=[closed(420, 540, conditions=["only"])]))
-    assert bm._period_specific(draw(periods=[closed(420, 540, qualifiers=["days"])]))
-    assert not bm._period_specific(draw(periods=[closed(420, 540), on_signal("04-01", "10-31"),
+    assert bb._period_specific(draw(periods=[closed(420, 540, conditions=["only"])]))
+    assert bb._period_specific(draw(periods=[closed(420, 540, qualifiers=["days"])]))
+    assert not bb._period_specific(draw(periods=[closed(420, 540), on_signal("04-01", "10-31"),
                                                  notice_period(0, 600)]))
     # the build drops them: with every draw period-specific the agreement set is empty
     profiles(monkeypatch, flow_store["llm"])
     fake_analysis(monkeypatch)
-    monkeypatch.setattr(bm, "_period_specific", lambda d: True)
+    monkeypatch.setattr(bb, "_period_specific", lambda d: True)
     code, out, err = build(flow_store, capsys)
     assert code == 0, err
     m, bs = bm.load_candidates(flow_store["store"].path, candidates_id(out))
@@ -828,9 +978,75 @@ def test_load_candidates_verifies_its_files(flow_store, capsys, monkeypatch):
         data.write_bytes(good)
     with pytest.raises(BindingsError, match="no candidates manifest"):
         bm.load_candidates(path, "f" * 64)
+    # I1: a draw that mixes statuses (one binding rejected, its siblings analysed), under
+    # hashes that verify, is refused; write_candidates refuses to write one
+    lines = good.splitlines()
+    b0 = Binding.model_validate_json(lines[0])
+    mixed = [canonical_json(Binding.model_validate({**b0.model_dump(), "status": "rejected"})),
+             *[x + b"\n" for x in lines[1:]]]
+    raw = b"".join(mixed)
+    sha = hashlib.sha256(raw).hexdigest()
+    (data.parent / f"bindings-candidates-data-{sha[:16]}.jsonl").write_bytes(raw)
+    mb = canonical_json(m.model_copy(update={
+        "file": f"bindings-candidates-data-{sha[:16]}.jsonl", "sha256": sha}))
+    mid = hashlib.sha256(mb).hexdigest()
+    (data.parent / f"bindings-candidates-{mid[:16]}.json").write_bytes(mb)
+    with pytest.raises(BindingsError, match="mixes statuses analysed, rejected"):
+        bm.load_candidates(path, mid)
+    with pytest.raises(BindingsError, match="mixes statuses"):
+        bm.write_candidates(path, m.snapshot, m.units_id, m.tables_id,
+                            [Binding.model_validate_json(x) for x in mixed], facts_id=None,
+                            enrichment_id=None, agreement_pairs=[], report={})
     # a bindings id is no candidates id
     with pytest.raises(BindingsError):
         load_bindings(path, cid)
+
+
+def test_bindings_build_reads_units_head_without_units(flow_store, capsys, monkeypatch):
+    from adr_store.units import overlay as units_overlay  # C6, F25
+
+    path = flow_store["store"].path
+    profiles(monkeypatch, flow_store["llm"])
+    fake_analysis(monkeypatch)
+    units_overlay._set_units_head(path, flow_store["units_id"])      # as the units gate does
+    try:
+        code, out, err = adr(["bindings", "build", "--store", path, "--facts",
+                              flow_store["facts_id"], "--max-calls", 0], capsys)
+    finally:
+        (path / units_overlay.UNITS_DIR / "HEAD").unlink()
+    assert code == 0, err
+    m, _ = bm.load_candidates(path, candidates_id(out))
+    assert m.units_id == flow_store["units_id"]
+    assert f"units {flow_store['units_id'][:12]}" in out
+
+
+def reversed_821(system: str, user: str, repeat: int) -> str:
+    """The enrichment of § 117.821 naming its draws in the other order (railroad first)."""
+    if user.split(" ", 2)[1] == "117.821":
+        reply = enrich_reply_821()
+        return json.dumps({**reply, "draws": reply["draws"][::-1]})
+    return units_enrich_reply(system, user, repeat)
+
+
+def test_agreement_pairs_keep_the_phase3_and_the_bindings_draw_apart(flow_store, capsys,
+                                                                     monkeypatch, tmp_path):
+    from adr_eval import runner  # F23
+    from adr_store.bindings import enrich
+
+    monkeypatch.setattr(enrich, "POOL", {"closed_window": 1, "notice": 1})
+    monkeypatch.setattr(runner, "make_client", lambda name, profiles, cache, max_retries=5:
+                        CachedStubClient(f"stub-{name}", Cache(tmp_path / "rev"),
+                                         reversed_821))
+    fake_analysis(monkeypatch)
+    code, out, err = build(flow_store, capsys, "--max-calls", 6)
+    assert code == 0, err
+    m, bs = bm.load_candidates(flow_store["store"].path, candidates_id(out))
+    # the railroad bridge is the enrichment's draw 1 and the Phase 3 second pass's draw 2
+    assert m.agreement_pairs == [("117.821", 2, 1)]
+    grid = {t["phase3_draw"] for b in bs if b.target["selector"] == {"section": "117.821",
+                                                                       "draw": 1}
+            for t in b.tests if t["kind"] == "grid"}
+    assert grid == {2}
 
 
 def test_bindings_build_stops_at_the_cap_and_needs_units(flow_store, capsys, monkeypatch,
@@ -884,6 +1100,11 @@ def test_review_sign_off_and_promote_end_to_end(flow_store, capsys, monkeypatch,
     assert report["sections_reviewed"] == 2 and report["bindings"]["signed_off"] == len(cands)
     assert report["review_unparseable"] == {"sections": 0, "draws": 0, "bindings": 0}
     assert "flagged binding(s)" in out
+    records = [json.loads(x) for x in (path / BINDINGS_DIR / manifest.snapshot /
+                                       report["verdicts_file"]).read_text().splitlines()]
+    assert {r["binding_id"] for r in records} == {b.binding_id for b in cands}
+    assert {(r["verdict"], r["status"]) for r in records} == {("approve", "signed_off")}
+    assert all(r["reason"] for r in records)
     # show and promote
     code, out, err = adr(["bindings", "show", "--store", path, "--bindings", bindings_id],
                          capsys)
@@ -917,9 +1138,49 @@ def test_units_review_fails_on_a_served_model_mismatch_after_writing(flow_store,
                          f"review-{bindings_id[:16]}.report.json").read_text())
     assert report["served_model_mismatch"] is True
     assert report["served_models"] == ["served-other"] and report["limit"] == 1
-    # one section reviewed (§ 117.821): its two draws are whole and signed off, § 117.901's not
-    assert {b.target["selector"]["section"] for b in load_bindings(path, bindings_id)[1]} == \
-        {"117.821"}
+    # one section reviewed (§ 117.821), but served by another model than the review profile's:
+    # no verdict counts, so nothing is signed off (the model's verdicts are kept)
+    assert report["served_by_another_model"] == {"sections": 1, "bindings": report[
+        "sections"][0]["bindings"]}
+    assert load_bindings(path, bindings_id)[1] == []
+    records = [json.loads(x) for x in (path / BINDINGS_DIR / flow_store["store"].snapshot_id /
+                                       report["verdicts_file"]).read_text().splitlines()]
+    assert records and {r["reason"] for r in records} == {"served_model_mismatch"}
+    assert {r["model_verdict"] for r in records} == {"approve"}
+
+
+def test_units_review_refuses_a_profile_other_than_opus(flow_store, capsys, monkeypatch,
+                                                        tmp_path):                   # I2
+    made = profiles(monkeypatch, flow_store["llm"], review_cache=tmp_path / "haiku")
+    code, out, err = adr(["units", "review", "--store", flow_store["store"].path,
+                          "--candidates", "c" * 64, "--generator", "claude_code_haiku",
+                          "--max-calls", 4], capsys)
+    assert code == 2 and made == []
+    assert "--generator claude_code_haiku: the binding review runs only under the " \
+           "claude_code_opus profile" in err
+
+
+def test_a_review_served_by_another_model_signs_nothing_off(tmp_path):              # I2
+    from dataclasses import replace
+
+    class Served(CachedStubClient):
+        served = "claude-haiku-5-5"
+
+        def _attempt(self, system, user, max_tokens, repeat):
+            return replace(super()._attempt(system, user, max_tokens, repeat),
+                           served_model=self.served)
+
+    client = Served("stub-opus", Cache(tmp_path / "haiku"), review_reply())
+    out, report = review_all(None, CANDIDATES, client, cards=CARDS)
+    assert {b.status for b in out} == {"rejected"}
+    assert {b.review["reason"] for b in out} == {"served_model_mismatch"}
+    assert {b.review["model_verdict"] for b in out} == {"approve"}
+    assert report["served_by_another_model"] == {"sections": 2, "bindings": len(CANDIDATES)}
+    Served.served = br.review_model()                  # the review profile's model
+    client = Served("stub-opus", Cache(tmp_path / "opus"), review_reply())
+    out, _ = review_all(None, CANDIDATES, client, cards=CARDS)
+    assert {b.status for b in out} == {"signed_off"}
+    assert {b.review["served_model"] for b in out} == {"claude-opus-5-5"}
 
 
 # -- the real analysis (z3 only) ------------------------------------------------------------------

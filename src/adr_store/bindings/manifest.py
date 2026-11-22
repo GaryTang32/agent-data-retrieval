@@ -16,27 +16,26 @@ its own SHA-256; its manifest names it with that hash, and the SHA-256 of the ma
 id (N16: data and manifest have their own stems and hashes). Every file is written once: the
 same bytes again are a no-op, other bytes under the name are refused.
 
-**The build** (`build_candidates`, `adr bindings build`): the enrichment is read again from the
-model cache (`--max-calls 0`) and written (write-once, so its id is the file the units pass
-read); the compiler (§12.2) runs on it with the rule cards of the units build named by
-`units_id` (C6); every binding is tested (§12.3, `checks.mark_tested`); every draw whose
-bindings all passed is analysed with Z3 (§12.4, `analysis`, the `[analysis]` extra; imported
-here only, at build time); the agreement set (C5) is computed with `reference.agreement_set`
-over the reference draws of the Phase 3 second-pass facts `facts_id` (draws paired by bridge
-key, then mile), less the draws whose parameters are period-specific or flagged (a period-less
-notice or basis whose sentence states times, days, holidays or dates, P46, or a period with
-sentence qualifiers or conditions), and each agreement draw is compared with the reference on
-the B1 grid; a draw with a mismatch is rejected whole (P48). The candidates manifest records
-the units, tables, facts and enrichment ids and the agreement pairs
-`[section, Phase 3 draw, bindings' draw]` of the draws still `analysed`.
+**The candidates** (`write_candidates`, from `bindings.build.build_candidates`) record the
+units, tables, facts and enrichment ids, the agreement pairs `[section, Phase 3 draw, bindings'
+draw]` of the draws still `analysed`, and every draw with its number of bindings (`draws`:
+`[doc_id, section, draw, bindings]`). `load_candidates` refuses a draw that mixes statuses
+(P48: a draw's bindings are analysed, or rejected, together).
 
 **The bindings manifest** (`write_bindings`) holds the signed-off set only (§12.5, B3): the
 same ids, plus `agreement_set` (Phase 3 `[section, draw]` keys) and `agreement_pairs`, kept
-only for draws whose bindings are in the set. `load_bindings` re-validates every binding
+only for draws whose bindings are in the set, and `draws`, each draw of the set with its
+number of bindings. Only **complete** draws are written (P48, defence in depth): a draw with
+a binding of the input that is not signed off is refused, and with the candidates' `draws`
+given each written draw must hold every binding the candidates list for it; every draw holds
+its § 117.31(b) emergency basis. `load_bindings` re-validates every binding
 (`Binding.model_validate`: ids, version and required facts are those of its content) and
 verifies every hash, the order, canonical bytes, and that each binding is `signed_off` with
-its tests, its analysis and an approving `model-review` record, that every override names a
-forbid of the set, and that each agreement draw is in the set. `promote_bindings` moves
+its tests, its analysis and an approving `model-review:claude_code_opus` record whose served
+model, when the provider reported one, is the review profile's; that every override names a
+forbid of its draw in the set; that each draw holds its emergency basis and as many bindings
+as `draws` records; and that each agreement draw is in the set. Draws are keyed by document
+and target (`checks._draw_key`). `promote_bindings` moves
 `bindings/HEAD` only to a set that loads and is not empty (builder note 17: no flip gate);
 `read_bindings_head` returns the id only when it still loads.
 """
@@ -44,32 +43,29 @@ forbid of the set, and that each agreement draw is in the set. `promote_bindings
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from adr_store.bindings import checks
+from adr_store.bindings.checks import _draw_key, _under
+from adr_store.bindings.compile import EMERGENCY
 from adr_store.bindings.dsl import LANGUAGE, Binding
 from adr_store.bindings.enrich import section_key
-from adr_store.bindings.review import VERIFIER
+from adr_store.bindings.review import VERIFIER, served_problem
 from adr_store.records import _HEX64, canonical_json
 from adr_store.store import StoreError, write_atomic
 from adr_store.tables.overlay import TablesError, _write_once
 
 __all__ = ["BINDINGS_DIR", "INSTALL_ANALYSIS", "BindingsError", "BindingsManifest",
-           "Candidates", "CandidatesManifest", "build_candidates", "load_bindings",
-           "load_candidates", "promote_bindings", "read_bindings_head", "write_bindings",
-           "write_candidates"]
+           "CandidatesManifest", "by_draw", "draw_sizes", "load_bindings", "load_candidates",
+           "promote_bindings", "read_bindings_head", "write_bindings", "write_candidates"]
 
 BINDINGS_DIR = "bindings"
 FORMAT_VERSION = "0.1"
 INSTALL_ANALYSIS = "install the analysis extra: pip install -e '.[analysis]'"
-_HEX16 = r"[0-9a-f]{16}"
 
 
 class BindingsError(StoreError):
@@ -78,6 +74,27 @@ class BindingsError(StoreError):
 
 def _pair_list(v: list) -> list:
     return sorted(v, key=lambda p: (section_key(p[0]), *p[1:]))
+
+
+def _draw_order(d) -> tuple:
+    return (d[0], section_key(d[1]), d[2])
+
+
+def by_draw(bindings: list[Binding]) -> dict[str, list[Binding]]:
+    """The bindings grouped by draw (`checks._draw_key`: document and target), in order."""
+    out: dict[str, list[Binding]] = {}
+    for b in bindings:
+        out.setdefault(_draw_key(b), []).append(b)
+    return out
+
+
+def draw_sizes(bindings: list[Binding]) -> list[tuple[str, str, int, int]]:
+    """(doc_id, section, draw, number of bindings) of every draw of `bindings`, sorted."""
+    out = []
+    for bs in by_draw(bindings).values():
+        sel = bs[0].target.get("selector", {})
+        out.append((bs[0].doc_id, sel.get("section"), sel.get("draw"), len(bs)))
+    return sorted(out, key=_draw_order)
 
 
 class _Manifest(BaseModel):
@@ -90,6 +107,7 @@ class _Manifest(BaseModel):
     facts_id: str | None = Field(pattern=_HEX64)        # the Phase 3 second-pass facts (C5)
     enrichment_id: str | None = Field(pattern=_HEX64)   # the enrichment compiled (C5)
     agreement_pairs: list[tuple[str, int, int]]          # [section, Phase 3 draw, bindings' draw]
+    draws: list[tuple[str, str, int, int]]               # [doc_id, section, draw, bindings]
     file: str
     sha256: str = Field(pattern=_HEX64)
     bindings: int = Field(ge=0)
@@ -99,6 +117,11 @@ class _Manifest(BaseModel):
     def _checked(self):
         if list(self.agreement_pairs) != _pair_list(list(set(self.agreement_pairs))):
             raise ValueError("agreement_pairs must be sorted and distinct")
+        keys = [d[:3] for d in self.draws]
+        if list(self.draws) != sorted(self.draws, key=_draw_order) or len(set(keys)) != len(keys):
+            raise ValueError("draws must be sorted and distinct")
+        if sum(d[3] for d in self.draws) != self.bindings:
+            raise ValueError("draws must count every binding")
         return self
 
 
@@ -208,7 +231,7 @@ def _read(store_path: Path, path: Path, cls, what: str):
     return m, out
 
 
-def _draw(b: Binding) -> tuple[str, int]:
+def _selector(b: Binding) -> tuple[str, int]:
     sel = b.target.get("selector", {})
     return sel.get("section"), sel.get("draw")
 
@@ -220,12 +243,15 @@ def write_candidates(store_path: Path, snapshot: str, units_id: str, tables_id: 
                      enrichment_id: str | None, agreement_pairs, report: dict
                      ) -> tuple[str, Path]:
     """Write a build's bindings (every status) once, their manifest and `report` (unhashed);
-    (candidates id, manifest path)."""
+    (candidates id, manifest path). Refuses a draw that mixes statuses (P48)."""
+    if problems := _uniform_problems(bindings):
+        raise BindingsError("; ".join(problems))
     data = _data(bindings)
     sha = _sha256(data)
     m = CandidatesManifest(format_version=FORMAT_VERSION, snapshot=snapshot, units_id=units_id,
                            tables_id=tables_id, facts_id=facts_id, enrichment_id=enrichment_id,
                            agreement_pairs=_pair_list([tuple(p) for p in agreement_pairs]),
+                           draws=draw_sizes(bindings),
                            file=f"bindings-candidates-data-{sha[:16]}.jsonl", sha256=sha,
                            bindings=len(bindings), language=LANGUAGE)
     d = _dir(store_path, snapshot)
@@ -240,11 +266,30 @@ def write_candidates(store_path: Path, snapshot: str, units_id: str, tables_id: 
     return cid, path
 
 
+def _uniform_problems(bindings: list[Binding]) -> list[str]:
+    """The draws whose bindings do not share one status (P48 forbids it)."""
+    out = []
+    for bs in by_draw(bindings).values():
+        statuses = sorted({b.status for b in bs})
+        if len(statuses) > 1:
+            sel = _selector(bs[0])
+            out.append(f"§ {sel[0]} draw {sel[1]} mixes statuses {', '.join(statuses)} (P48: "
+                       f"a draw passes or fails as a whole)")
+    return out
+
+
 def load_candidates(store_path: Path, candidates_id: str
                     ) -> tuple[CandidatesManifest, list[Binding]]:
-    """The candidates `candidates_id`, every hash verified and every binding re-validated."""
+    """The candidates `candidates_id`, every hash verified, every binding re-validated, every
+    draw counted as the manifest records it and of one status (P48)."""
     path = _find(store_path, "bindings-candidates", candidates_id, "candidates")
-    return _read(store_path, path, CandidatesManifest, "candidates")
+    m, out = _read(store_path, path, CandidatesManifest, "candidates")
+    problems = _uniform_problems(out)
+    if [tuple(d) for d in m.draws] != draw_sizes(out):
+        problems.append("the draws do not hold the bindings the manifest counts")
+    if problems:
+        raise BindingsError(f"candidates {candidates_id[:12]}: {'; '.join(problems)}")
+    return m, out
 
 
 # -- the bindings manifest -------------------------------------------------------------------------
@@ -258,6 +303,8 @@ def _signed_problems(b: Binding) -> list[str]:
         out.append(f"has verifier {b.verifier!r}, not a {VERIFIER} model-review record")
     elif b.review.get("verdict") != "approve":
         out.append(f"has no approving review (verdict {b.review.get('verdict')!r})")
+    elif problem := served_problem(b.review.get("served_model")):
+        out.append(f"was reviewed by another model ({problem})")
     if not b.tests or any(t.get("failures") or t.get("mismatches") for t in b.tests):
         out.append("has no passing tests")
     if not b.analysis or b.analysis.get("conflicts") or b.analysis.get("vacuous"):
@@ -265,15 +312,28 @@ def _signed_problems(b: Binding) -> list[str]:
     return out
 
 
-def _set_problems(bindings: list[Binding], pairs) -> list[str]:
-    forbids = {b.binding_id: _draw(b) for b in bindings if b.effect == "forbid"}
+def _set_problems(bindings: list[Binding], pairs, sizes) -> list[str]:
+    """Problems of a signed-off set: overrides that name no forbid of their draw, draws
+    without their emergency basis or with other than `sizes` bindings (P48), agreement pairs
+    that name no draw of the set or a draw twice."""
+    forbids = {b.binding_id: _draw_key(b) for b in bindings if b.effect == "forbid"}
     out = []
     for b in bindings:
         for x in b.overrides:
-            if forbids.get(x) != _draw(b):
+            if forbids.get(x) != _draw_key(b):
                 out.append(f"binding {b.binding_id[:12]} overrides {x[:12]}, which is no "
                            f"forbid of its draw in the set")
-    present = {_draw(b) for b in bindings}
+    counts = {d[:3]: d[3] for d in sizes}
+    for bs in by_draw(bindings).values():
+        sel = _selector(bs[0])
+        key = (bs[0].doc_id, *sel)
+        if not any(b.effect == "basis" and _under(b.rule_id, EMERGENCY) for b in bs):
+            out.append(f"§ {sel[0]} draw {sel[1]} has no § 117.31(b) emergency basis (an "
+                       f"incomplete draw, P48)")
+        if counts.get(key) != len(bs):
+            out.append(f"§ {sel[0]} draw {sel[1]} holds {len(bs)} binding(s), not the "
+                       f"{counts.get(key, 0)} its record lists (an incomplete draw, P48)")
+    present = {_selector(b) for b in bindings}
     for s, p, d in pairs:
         if (s, d) not in present:
             out.append(f"agreement draw § {s} draw {d} (Phase 3 draw {p}) has no binding in "
@@ -287,25 +347,40 @@ def _set_problems(bindings: list[Binding], pairs) -> list[str]:
 
 def write_bindings(store_path: Path, snapshot: str, units_id: str, tables_id: str,
                    bindings: list[Binding], *, facts_id: str | None = None,
-                   enrichment_id: str | None = None, agreement_pairs=()) -> tuple[str, Path]:
+                   enrichment_id: str | None = None, agreement_pairs=(),
+                   candidate_draws=None) -> tuple[str, Path]:
     """Write the signed-off bindings of `bindings` (the others are left out) once, with their
-    manifest; (bindings id, manifest path). `agreement_pairs` ([section, Phase 3 draw,
-    bindings' draw]) are kept for the draws whose bindings are in the set. Refuses
-    (BindingsError) a set an override or an agreement pair cannot be read in."""
+    manifest; (bindings id, manifest path). Only whole draws are written: a draw with any
+    binding of `bindings` not signed off is refused, and with `candidate_draws` (the
+    candidates' `draws`) each draw must hold every binding they list for it.
+    `agreement_pairs` ([section, Phase 3 draw, bindings' draw]) are kept for the draws whose
+    bindings are in the set. Refuses (BindingsError) a set an override, a draw or an agreement
+    pair cannot be read in."""
     kept = [b for b in bindings if b.status == "signed_off"]
     for b in kept:
         if problems := _signed_problems(b):
             raise BindingsError(f"binding {b.binding_id[:12]} {'; '.join(problems)}")
-    present = {_draw(b) for b in kept}
+    partial = [bs for bs in by_draw(bindings).values()
+               if any(b.status == "signed_off" for b in bs)
+               and not all(b.status == "signed_off" for b in bs)]
+    if partial:
+        raise BindingsError("; ".join(
+            f"§ {_selector(bs[0])[0]} draw {_selector(bs[0])[1]} is signed off in part (an "
+            f"incomplete draw, P48)" for bs in partial))
+    sizes = draw_sizes(kept)
+    if candidate_draws is not None:
+        listed = {tuple(d[:3]): d[3] for d in candidate_draws}
+        sizes = [(*d[:3], listed.get(d[:3], 0)) for d in sizes]
+    present = {_selector(b) for b in kept}
     pairs = _pair_list(list({tuple(p) for p in agreement_pairs if (p[0], p[2]) in present}))
-    if problems := _set_problems(kept, pairs):
+    if problems := _set_problems(kept, pairs, sizes):
         raise BindingsError("; ".join(problems))
     data = _data(kept)
     sha = _sha256(data)
     m = BindingsManifest(format_version=FORMAT_VERSION, snapshot=snapshot, units_id=units_id,
                          tables_id=tables_id, facts_id=facts_id, enrichment_id=enrichment_id,
                          agreement_set=[(s, p) for s, p, _ in pairs], agreement_pairs=pairs,
-                         file=f"bindings-data-{sha[:16]}.jsonl", sha256=sha,
+                         draws=sizes, file=f"bindings-data-{sha[:16]}.jsonl", sha256=sha,
                          bindings=len(kept), language=LANGUAGE)
     d = _dir(store_path, snapshot)
     _once(d / m.file, data, "bindings file")
@@ -318,15 +393,18 @@ def write_bindings(store_path: Path, snapshot: str, units_id: str, tables_id: st
 
 def load_bindings(store_path: Path, bindings_id: str) -> tuple[BindingsManifest, list[Binding]]:
     """The bindings `bindings_id` (module text): every hash verified, every binding
-    re-validated and signed off with an approving model-review record; BindingsError
-    otherwise."""
+    re-validated and signed off with an approving model-review record, every draw complete;
+    BindingsError otherwise."""
     path = _find(store_path, "bindings", bindings_id, "bindings")
     m, out = _read(store_path, path, BindingsManifest, "bindings")
     for b in out:
         if problems := _signed_problems(b):
             raise BindingsError(f"bindings {bindings_id[:12]}: binding {b.binding_id[:12]} "
                                 f"{'; '.join(problems)}")
-    if problems := _set_problems(out, m.agreement_pairs):
+    problems = _set_problems(out, m.agreement_pairs, [tuple(d) for d in m.draws])
+    if {tuple(d[:3]) for d in m.draws} != {d[:3] for d in draw_sizes(out)}:
+        problems.append("the draws recorded are not the draws of the set")
+    if problems:
         raise BindingsError(f"bindings {bindings_id[:12]}: {'; '.join(problems)}")
     return m, out
 
@@ -352,119 +430,3 @@ def promote_bindings(store_path: Path, bindings_id: str) -> None:
     if m.bindings == 0:
         raise BindingsError(f"bindings {bindings_id[:12]} hold no binding; nothing to enforce")
     write_atomic(Path(store_path) / BINDINGS_DIR / "HEAD", f"{bindings_id}\n".encode())
-
-
-# -- the build -----------------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Candidates:
-    bindings: list[Binding]
-    tables_id: str
-    enrichment_id: str
-    agreement_pairs: list[tuple[str, int, int]]
-    served_models: list[str]
-    report: dict
-
-
-def analysis_module():
-    """The Z3 analysis (`adr_store.bindings.analysis`); BindingsError naming the `[analysis]`
-    extra when z3 is not installed."""
-    try:
-        return importlib.import_module("adr_store.bindings.analysis")
-    except ImportError as e:
-        raise BindingsError(INSTALL_ANALYSIS) from e
-
-
-def _by_draw(bindings: list[Binding]) -> dict[tuple[str, int], list[Binding]]:
-    out: dict[tuple[str, int], list[Binding]] = {}
-    for b in bindings:
-        out.setdefault(_draw(b), []).append(b)
-    return out
-
-
-def _with(b: Binding, **update) -> Binding:
-    return Binding.model_validate({**b.model_dump(), **update})
-
-
-def _period_specific(d) -> bool:
-    """A draw whose parameters a sentence limits beyond what they state (P46, Task 15 flags)."""
-    return bool(d.sentence_qualifiers) or any(p.sentence_qualifiers or p.sentence_conditions
-                                              for p in d.periods)
-
-
-def _b2(bindings: list[Binding]) -> dict:
-    draws = [bs for bs in _by_draw(bindings).values() if all(b.analysis for b in bs)]
-    return {"draws_analysed": len(draws),
-            "conflicts": sum(len(bs[0].analysis.get("conflicts", [])) for bs in draws),
-            "vacuous": sum(bool(b.analysis.get("vacuous")) for bs in draws for b in bs),
-            "redundant": sum(bool(b.analysis.get("redundant")) for bs in draws for b in bs),
-            "draws_with_gaps": sum(bool(bs[0].analysis.get("gaps")) for bs in draws)}
-
-
-def build_candidates(store, client, *, units_id: str, facts_id: str) -> Candidates:
-    """The candidate bindings of `store` (module text): compiled from the enrichment `client`
-    reads (from the cache under `--max-calls 0`), against the rule cards of `units_id`, tested,
-    analysed and compared with the reference evaluator over `facts_id`. Raises BindingsError
-    without z3 (before any work), and what the enrichment raises at the cap."""
-    from adr_store.bindings import enrich, reference
-    from adr_store.bindings.compile import compile_bindings
-    from adr_store.tables import extract as ex
-    from adr_store.units import overlay as units_overlay
-
-    analysis = analysis_module()
-    units = units_overlay.load_units_manifest(store.path, units_id)
-    cards = units_overlay.load_units(store.path, units, "rule_card")
-    facts = ex.load_facts(store.path, facts_id)
-    items, enrich_report = enrich.enrich_all(store, client)
-    enrichment_id, _ = enrich.write_enrichment(store.path, store.snapshot_id, items)
-    compiled, compile_report = compile_bindings(items, cards)
-    tested = checks.mark_tested(compiled)
-    passed = sum(not t["failures"] for b in tested for t in b.tests)
-    out: list[Binding] = []
-    for bs in _by_draw(tested).values():
-        if all(b.status == "tested" for b in bs):
-            out += analysis.mark_analysed(bs, analysis.analyse_draw(bs))
-        else:
-            out += bs
-    # B1: the agreement set (C5) and the grid on each of its draws
-    docs = sorted({i.doc_id for i in items})
-    refs = {}
-    for doc in docs:
-        refs.update(reference.ref_draws(facts, ex.units(store), doc_id=doc))
-    by_draw = {k: [b for b in bs if b.status == "analysed"] for k, bs in _by_draw(out).items()}
-    agree = reference.agreement_set(by_draw, items, refs)
-    params = {(i.section, d.draw): d for i in items for d in i.draws}
-    agree = [k for k in agree if not _period_specific(params[k])]
-    pairs = reference.paired_refs(items, refs)
-    grid_ok, grid_bad = [], []
-    stamped: dict[str, Binding] = {}
-    for key in agree:
-        ref = refs[pairs[key]]
-        mismatches = checks.grid_equivalence(by_draw[key], ref)
-        summary = {"kind": "grid", "phase3_draw": pairs[key][1],
-                   "points": checks.grid_size(ref), "mismatches": len(mismatches),
-                   "first": mismatches[:3]}
-        (grid_bad if mismatches else grid_ok).append(key)
-        for b in by_draw[key]:
-            update = {"tests": [*b.tests, summary]}
-            if mismatches:
-                update["status"] = "rejected"
-            stamped[b.binding_id] = _with(b, **update)
-    out = [stamped.get(b.binding_id, b) for b in out]
-    agreement_pairs = [(s, pairs[(s, d)][1], d) for s, d in grid_ok]
-    statuses = {k: sum(b.status == k for b in out) for k in ("analysed", "rejected")}
-    report = {
-        "units_id": units_id, "facts_id": facts_id, "enrichment_id": enrichment_id,
-        "tables_id": enrich_report["tables_id"], "calls": enrich_report["calls"],
-        "served_models": enrich_report["served_models"], "compile": compile_report,
-        "statuses": statuses,
-        "b1": {"bindings": len(tested), "tests_passed": passed,
-               "tests_failed": len(tested) - passed,
-               "draws": len(_by_draw(tested)),
-               "draws_rejected_by_tests": sum(any(b.status == "rejected" for b in bs)
-                                              for bs in _by_draw(tested).values()),
-               "agreement_draws": len(agree), "grid_equal": len(grid_ok),
-               "grid_mismatch": [list(k) for k in grid_bad]},
-        "b2": _b2(out)}
-    return Candidates(out, enrich_report["tables_id"], enrichment_id, agreement_pairs,
-                      enrich_report["served_models"], report)

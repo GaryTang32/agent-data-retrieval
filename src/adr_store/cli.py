@@ -1447,9 +1447,10 @@ def _bindings_build(a: argparse.Namespace) -> int:
     run (exit 1) after writing them."""
     from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.bindings import build as bb
     from adr_store.bindings import manifest as bm
 
-    bm.analysis_module()          # "install the analysis extra" before any work
+    bb.analysis_module()          # "install the analysis extra" before any work
     store = Store.open(a.store)
     units_id = a.units or units_overlay.read_units_head(store.path)
     if units_id is None:
@@ -1460,7 +1461,7 @@ def _bindings_build(a: argparse.Namespace) -> int:
     except eval_runner.ProfileError as e:
         raise tools.ToolError(str(e)) from e
     try:
-        c = bm.build_candidates(store, meter, units_id=units_id, facts_id=a.facts)
+        c = bb.build_candidates(store, meter, units_id=units_id, facts_id=a.facts)
     except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
         print(stop_status(meter.budget, e))
         return 1
@@ -1477,9 +1478,9 @@ def _bindings_build(a: argparse.Namespace) -> int:
     print(f"{len(c.bindings)} binding(s) of {b1['draws']} draw(s): {st['analysed']} analysed, "
           f"{st['rejected']} rejected; units {units_id[:12]}, enrichment "
           f"{c.enrichment_id[:12]}, facts {a.facts[:12]}")
-    print(f"B1: tests passed by {b1['tests_passed']} of {b1['bindings']} binding(s) "
-          f"({b1['draws_rejected_by_tests']} draw(s) rejected); grid equal on "
-          f"{b1['grid_equal']} of {b1['agreement_draws']} agreement-set draw(s)")
+    print(f"B1: {b1['bindings_passed']} of {b1['bindings']} binding(s) passed their tests, "
+          f"{b1['draws_rejected_by_tests']} of {b1['draws']} draw(s) rejected whole; grid "
+          f"equal on {b1['grid_equal']} of {b1['agreement_draws']} agreement-set draw(s)")
     print(f"B2: {b2['conflicts']} conflict(s), {b2['vacuous']} vacuous binding(s) over "
           f"{b2['draws_analysed']} analysed draw(s); {b2['redundant']} redundant, "
           f"{b2['draws_with_gaps']} draw(s) with gaps")
@@ -1503,12 +1504,18 @@ def _units_review(a: argparse.Namespace) -> int:
     other than a stored input rejection stops it with exit 1 and nothing written; otherwise it
     writes the signed-off set with its manifest and the review report, prints the bindings id
     `adr bindings promote` takes (N16), and a served model other than the profile's fails the
-    run (exit 1) after writing them."""
+    run (exit 1) after writing them. Only the `claude_code_opus` profile is taken (exit 2
+    before any call otherwise), since the records are labelled `model-review:claude_code_opus`.
+    Beside the report it writes a local per-binding verdicts file (never committed)."""
     from adr_eval.llm import ModelError
     from adr_eval.pipeline import BudgetExceeded, stop_status
     from adr_store.bindings import manifest as bm
     from adr_store.bindings import review as br
 
+    if a.generator != br.REVIEW_PROFILE:   # the record says model-review:claude_code_opus (I2)
+        raise _UsageError(f"--generator {a.generator}: the binding review runs only under "
+                          f"the {br.REVIEW_PROFILE} profile (its records are labelled "
+                          f"{br.VERIFIER})")
     store = Store.open(a.store)
     m, cands = bm.load_candidates(store.path, a.candidates)
     cards = units_overlay.load_units(store.path, units_overlay.load_units_manifest(
@@ -1529,7 +1536,8 @@ def _units_review(a: argparse.Namespace) -> int:
         return 1
     bindings_id, path = bm.write_bindings(store.path, m.snapshot, m.units_id, m.tables_id, out,
                                           facts_id=m.facts_id, enrichment_id=m.enrichment_id,
-                                          agreement_pairs=m.agreement_pairs)
+                                          agreement_pairs=m.agreement_pairs,
+                                          candidate_draws=m.draws)
     written = bm.load_bindings(store.path, bindings_id)[0]
     other = [x for x in report["served_models"] if x != meter.model]
     full = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
@@ -1537,12 +1545,22 @@ def _units_review(a: argparse.Namespace) -> int:
             "served_model_mismatch": bool(other), "candidates_id": a.candidates,
             "bindings_id": bindings_id, "store": str(store.path)}
     out_path = path.parent / f"review-{bindings_id[:16]}.report.json"
+    verdicts_path = path.parent / f"review-{bindings_id[:16]}.verdicts.jsonl"   # local only
+    write_atomic(verdicts_path, b"".join(
+        (json.dumps(r, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+        for r in br.verdict_records(out)))
+    full["verdicts_file"] = verdicts_path.name
     write_atomic(out_path, (json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False)
                             + "\n").encode("utf-8"))
     n = report["bindings"]
     print(f"{report['sections_reviewed']} section(s) reviewed: {n['approved']} approved, "
           f"{n['rejected_by_review']} rejected, {n['no_verdict']} without a verdict, "
           f"{n['blocked']} blocked by their draw; {report['flagged']} flagged binding(s)")
+    inc, srv, unp = (report["incomplete_draws"], report["served_by_another_model"],
+                     report["review_unparseable"])
+    print(f"rejected unreviewed: {inc['draws']} incomplete draw(s); {unp['draws']} draw(s) of "
+          f"{unp['sections']} unparseable repl(ies); {srv['bindings']} binding(s) of "
+          f"{srv['sections']} section(s) served by another model")
     for sec in report["sections"]:
         print(f"  § {sec['section']}: {sec['bindings']} binding(s), {sec['flagged']} flagged, "
               f"{sec['approved']} approved, {sec['rejected']} rejected, "
@@ -1551,7 +1569,7 @@ def _units_review(a: argparse.Namespace) -> int:
     print(f"{written.bindings} signed-off binding(s) written; agreement set "
           f"{len(written.agreement_set)} draw(s); {n['rejected']} rejected kept in the "
           f"candidates; {n['not_reviewed']} not reviewed")
-    print(f"report {out_path}")
+    print(f"report {out_path}; verdicts {verdicts_path.name}")
     print(f"  promote: adr bindings promote --store {store.path} --bindings {bindings_id}")
     calls = report["calls"]
     served = ", ".join(report["served_models"]) or "none reported"
