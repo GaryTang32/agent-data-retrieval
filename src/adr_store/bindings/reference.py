@@ -3,9 +3,9 @@ Python reading of the desk's decision for draws of the simple shape, from the *P
 second-pass facts* and the window grammar, never from a binding, the DSL evaluator or the
 enrichment parameters (the tests of §12.3 must not share the bindings' source).
 
-**The simple shape** (`ref_draws`). One `RefDraw` per second-pass draw of a section unit of
-the requested document (key: the section and the draw's 1-based position in the facts, the
-Phase 3 numbering, which differs from the enrichment's), when its facts give: an opening basis
+**The simple shape** (`ref_draws`). One `RefDraw` per second-pass draw of a section unit of the
+requested document (key: the section and the draw's 1-based position in the facts, the Phase 3
+numbering, which differs from the enrichment's), when its facts give: an opening basis
 (`opens_on_signal` known; `False` needs a notice threshold), at most one whole-hour notice
 threshold that holds wherever no closed window does (0 hours is none), and closed windows the
 grammar reads. `opens_on_signal` True with a threshold is read as one threshold at all times:
@@ -13,9 +13,12 @@ the facts cannot tell it from a period-specific rule (§4.5), and the agreement 
 keeps only draws whose enrichment states the simple shape. A draw is left out, counted under
 the first reason that applies (`ref_census`): `signal_unknown`, `notice_failed` (the notice
 answer failed its checks), `notice_not_whole`, `no_basis` (does not open on signal and states
-no notice), `closed_failed`, a closed period that does not read (below), or `seasonal` (the
-section's rules differ by season and none of the draw's closed windows is dated: the season
-must lie in a period-specific opening rule, P46).
+no notice), `closed_failed`, a closed period that does not read (below), `notice_limited` (the
+notice quote's own clause states times, days, a holiday exception or dates,
+`enrich.stated_kinds` on `read_sentence` as Task 15 reads a period-less notice: the threshold
+holds only in some periods), or `seasonal` (the section's rules differ by season and none of
+the draw's closed windows is dated: the season must lie in a period-specific opening rule,
+P46).
 
 **Closed windows** (`read_closed`, the Task 14/15 rulings). The second pass quotes one string
 per draw. It is expanded to its sentence in the section text (`enrich.read_sentence`, anchored
@@ -28,16 +31,19 @@ too broad). `ref_census` counts each rule and whether the sentence read the same
 the quote alone.
 
 **The decision** (`ref_decide`), on the facts of `facts.derive_facts` (the fact module the gate
-shares; builder note 15): an emergency class (`EMERGENCY_CLASSES`) with no conflicting local
-procedure allows (§ 117.31(b), P32). Otherwise an opening inside a closed window
-(`dsl.in_window`, P44 for crossing windows) is denied, and outside one a draw with a threshold
-escalates when notice is unknown and denies when it is short; the deny names the draw's section
-("117.821", P34). Everything else is allowed (on signal, advance notice given, or § 117.5).
-P37: where the outcome would be deny or escalate and § 117.31(b) could still apply (the vessel
-class unknown, or an emergency class with the conflict unknown, and no known conflict), the
-reference escalates and lists the unknown facts that could change the outcome, sorted: the
-class and the conflict, and the notice when it is unknown. `ref_next_allowed` scans minute by
-minute over the seven days after the requested minute for the first `allow`.
+shares; builder note 15; the reference reads its time, notice, class and conflict, never its
+holiday flag): an emergency class (`EMERGENCY_CLASSES`) with no conflicting local procedure
+allows (§ 117.31(b), P32). Otherwise an opening inside a closed window (`ref_in_window` with
+its own federal-holiday rule `ref_federal_holiday`, P44 for crossing windows; independent of
+`dsl.in_window` and the fact module's holidays) is denied, and outside one a draw with a
+threshold escalates when notice is unknown and denies when it is short; the deny names the
+draw's section ("117.821", P34). Everything else is allowed (on signal, advance notice given,
+or § 117.5). P37: where the outcome would be deny or escalate and § 117.31(b) could still apply
+(the vessel class unknown, or an emergency class with the conflict unknown, and no known
+conflict), the reference escalates and lists the unknown facts that could change the outcome,
+sorted: the class and the conflict, and the notice when it is unknown. `ref_next_allowed` scans
+minute by minute over the seven days after the requested minute for §12.6's condition: no
+denying condition True and a basis True (Unknown is not True).
 
 **The agreement set** (`agreement_set`, §12.3, criterion B1's domain): the draws, numbered as
 the bindings target them, that have bindings, whose enrichment parameters have the simple shape
@@ -52,10 +58,10 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
-from adr_store.bindings.dsl import Window, in_window
+from adr_store.bindings.dsl import DAYS, Window
 from adr_store.bindings.enrich import (
     FAILED,
     PERIOD_FIELDS,
@@ -64,6 +70,7 @@ from adr_store.bindings.enrich import (
     period_window,
     read_sentence,
     section_key,
+    stated_kinds,
 )
 from adr_store.bindings.facts import EMERGENCY_CLASSES, derive_facts
 from adr_store.bindings.windows import parse_windows
@@ -71,7 +78,8 @@ from adr_store.tables import extract as ex
 from adr_store.units.grounding import clock_times
 
 __all__ = ["EXCLUSIONS", "RefDecision", "RefDraw", "agreement_set", "paired_refs",
-           "read_closed", "ref_census", "ref_decide", "ref_draws", "ref_next_allowed"]
+           "read_closed", "ref_census", "ref_decide", "ref_draws", "ref_federal_holiday",
+           "ref_in_window", "ref_next_allowed"]
 
 SCAN_DAYS = 7
 NOTICE = "notice_minutes"
@@ -79,7 +87,7 @@ VESSEL = "vessel_class"
 CONFLICT = "local_procedure_conflict"
 EXCLUSIONS = ("signal_unknown", "notice_failed", "notice_not_whole", "no_basis", "closed_failed",
               "closed_unquoted", "closed_conditioned", "closed_unreadable", "closed_qualifiers",
-              "seasonal")
+              "notice_limited", "seasonal")
 READINGS = ("same_as_quote", "sentence_only", "sentence_differs", "conditioned", "unreadable",
             "unreadable_quote_reads", "qualifiers", "unquoted")
 
@@ -107,6 +115,62 @@ class RefDecision:
     missing: tuple[str, ...]
 
 
+# -- windows and holidays, the reference's own (M4: not `dsl.in_window` nor the fact module) -----
+
+_FIXED_HOLIDAYS = ((1, 1), (7, 4), (11, 11), (12, 25))      # and 19 June from 2021
+
+
+def _fixed_holiday(d: date) -> bool:
+    return (d.month, d.day) in _FIXED_HOLIDAYS or (d.year >= 2021 and (d.month, d.day) == (6, 19))
+
+
+def ref_federal_holiday(d: date) -> bool:
+    """Whether `d` is a federal holiday under 5 U.S.C. 6103(a)-(b), read off the day itself: a
+    fixed-date holiday, its Friday (when it falls on a Saturday) or Monday (on a Sunday), or a
+    Monday-holiday by its week of the month (Martin Luther King Jr. Day from 1986, Washington's
+    Birthday, Memorial Day, Labor Day, Columbus Day) or Thanksgiving. Inauguration Day is
+    excluded. ValueError before 1978, as in the fact module."""
+    if d.year < 1978:
+        raise ValueError(f"federal holidays before 1978 are not modelled: {d}")
+    if _fixed_holiday(d):
+        return True
+    wd = d.weekday()
+    if wd == 4 and _fixed_holiday(d + timedelta(days=1)):
+        return True
+    if wd == 0 and _fixed_holiday(d - timedelta(days=1)):
+        return True
+    if wd == 0:
+        week = (d.day - 1) // 7 + 1          # the nth Monday of its month
+        last = (d + timedelta(days=7)).month != d.month
+        return ((d.month == 1 and week == 3 and d.year >= 1986) or (d.month == 2 and week == 3)
+                or (d.month == 5 and last) or (d.month == 9 and week == 1)
+                or (d.month == 10 and week == 2))
+    return wd == 3 and d.month == 11 and 22 <= d.day <= 28
+
+
+def _day_admitted(w: Window, d: date) -> bool:
+    if DAYS[d.weekday()] not in w.days:
+        return False
+    if w.except_federal_holidays and ref_federal_holiday(d):
+        return False
+    if w.date_from is None:
+        return True
+    md = (d.month, d.day)
+    lo, hi = tuple(map(int, w.date_from.split("-"))), tuple(map(int, w.date_to.split("-")))
+    return lo <= md <= hi if lo <= hi else (md >= lo or md <= hi)
+
+
+def ref_in_window(w: Window, minute: int, d: date) -> bool:
+    """Whether minute `minute` of day `d` lies in `w`; a window crossing midnight belongs to the
+    night that starts on a listed day, so its minutes before `end` are judged on the day before
+    (P44)."""
+    if w.start < w.end:
+        return w.start <= minute < w.end and _day_admitted(w, d)
+    if minute >= w.start:
+        return _day_admitted(w, d)
+    return minute < w.end and _day_admitted(w, d - timedelta(days=1))
+
+
 # -- the decision ----------------------------------------------------------------------------------
 
 def _override(facts: dict[str, Any]) -> bool | None:
@@ -127,7 +191,7 @@ def decide_facts(d: RefDraw, facts: dict[str, Any]) -> RefDecision:
     at = datetime.fromisoformat(facts["open_at"])
     minute, day = at.hour * 60 + at.minute, at.date()
     missing: list[str] = []
-    if any(in_window(w, minute, day) for w in d.closed):
+    if any(ref_in_window(w, minute, day) for w in d.closed):
         outcome = "deny"
     elif d.notice_hours is not None:
         notice = facts.get(NOTICE)
@@ -154,13 +218,34 @@ def ref_decide(d: RefDraw, open_at: datetime, record: dict) -> RefDecision:
     return decide_facts(d, derive_facts(open_at, record))
 
 
+def _next_ok(d: RefDraw, facts: dict[str, Any]) -> bool:
+    """§12.6's `next_allowed` condition in the reference's terms: no denying condition is True
+    and an opening basis is True, an Unknown counting as not True. Denying: inside a closed
+    window, or a threshold with known short notice, unless § 117.31(b) is True. Basis:
+    § 117.31(b) True; or outside every closed window, opening on signal (the on-signal basis
+    needs no notice), or with no threshold, or with known enough notice."""
+    if _override(facts) is True:
+        return True
+    at = datetime.fromisoformat(facts["open_at"])
+    minute, day = at.hour * 60 + at.minute, at.date()
+    inside = any(ref_in_window(w, minute, day) for w in d.closed)
+    notice = facts.get(NOTICE)
+    short = d.notice_hours is not None and notice is not None and notice < 60 * d.notice_hours
+    enough = d.notice_hours is None or (notice is not None and notice >= 60 * d.notice_hours)
+    return not inside and not short and (d.opens_on_signal or enough)
+
+
 def ref_next_allowed(d: RefDraw, open_at: datetime, record: dict) -> datetime | None:
-    """The first minute after `open_at` (seconds dropped), within seven days, at which the
-    reference allows the opening; None when there is none."""
+    """The first minute after `open_at` (seconds dropped), within seven days, at which no
+    denying condition is True and an opening basis is (§12.6 `next_allowed`, `_next_ok`; an
+    Unknown fact counts as not True); None when there is none. The gate (Task 18) computes
+    `next_allowed` the same way over the bindings: the first minute with no True forbid and a
+    True basis. It is not "the first minute the decision is allow": with notice unknown, an
+    on-signal draw is next allowed at the end of its closed window."""
     start = open_at.replace(second=0, microsecond=0)
     for k in range(1, SCAN_DAYS * 1440 + 1):
         at = start + timedelta(minutes=k)
-        if ref_decide(d, at, record).outcome == "allow":
+        if _next_ok(d, derive_facts(at, record)):
             return at
     return None
 
@@ -241,6 +326,9 @@ def _read_draw(section: str, n: int, d: dict[str, ex.Value], text: str, seasonal
         return out("closed_failed")
     if windows is None:
         return out(f"closed_{rule.removesuffix('_quote_reads')}")
+    if notice and notice_v.start is not None and stated_kinds(
+            read_sentence(text, notice_v.start, notice_v.end)):
+        return out("notice_limited")
     if seasonal and not any(w.date_from is not None for w in windows):
         return out("seasonal")
     return out(None)

@@ -5,6 +5,7 @@ give. Runs without z3; no model call."""
 
 from __future__ import annotations
 
+import random
 import subprocess
 import sys
 from datetime import date, datetime
@@ -25,15 +26,17 @@ from adr_store.bindings.checks import (
     mark_tested,
     notice_grid,
 )
-from adr_store.bindings.compile import ALL_TIMES
-from adr_store.bindings.dsl import Binding, Tri, evaluate
+from adr_store.bindings.compile import ALL_TIMES, compile_draw
+from adr_store.bindings.dsl import DAYS, Binding, Tri, Window, evaluate
 from adr_store.bindings.facts import derive_facts
 from adr_store.bindings.reference import RefDecision, RefDraw
 from tests.store.bindings_fixtures import (
     BINDINGS_821,
+    BINDINGS_821_GROUPED,
     BINDINGS_CROSSING,
     BINDINGS_GENERAL,
     BINDINGS_NOTICE_PERIOD,
+    BINDINGS_SAME_CARD_SIGNAL,
     BINDINGS_SIGNAL,
     CARD_A,
     CARD_B,
@@ -47,6 +50,15 @@ from tests.store.bindings_fixtures import (
     record,
     shift,
     with_when,
+)
+from tests.store.test_bindings_compile import (
+    CARDS,
+    IN_A,
+    IN_B,
+    WEEKDAYS,
+    draw,
+    g,
+    period,
 )
 
 FORBID_821 = by_rule(BINDINGS_821, CARD_A.canonical_ref, "forbid")          # the 7-9 window
@@ -95,8 +107,10 @@ def test_boundary_and_complement_cases_are_at_least_four_each():
         allow, forbid = boundary_cases(b)
         assert len(allow) >= MIN_CASES and len(forbid) >= MIN_CASES, b.derivation
         assert {c["expect"] for c in allow} == {"T"}
-        assert {c["expect"] for c in forbid} <= {"F", "not_T"}
-        if b.effect == "basis" and has_threshold_or_window(b):
+        assert {c["expect"] for c in forbid} <= {"F", "U"}
+        # probes are owed where the condition depends on its windows or thresholds
+        if b.effect == "basis" and has_threshold_or_window(b) and any(
+                c["expect"] == "F" for c in forbid):
             probes = complement_probes(b)
             assert len(probes) >= MIN_CASES, b.derivation
             assert {c["expect"] for c in probes} == {"F"}
@@ -120,6 +134,26 @@ def test_complement_probes_sit_just_outside_each_window_and_threshold():
 def test_compiled_bindings_pass_their_tests():
     for b in [*FIXTURE_BINDINGS, *BINDINGS_GENERAL]:
         assert checks.test_binding(b) == [], b.derivation
+    for bs in (BINDINGS_SAME_CARD_SIGNAL, BINDINGS_821_GROUPED):
+        assert {b.status for b in mark_tested(bs)} == {"tested"}
+
+
+def test_same_card_rules_keep_their_or_semantics():
+    """C1: one binding per card and effect joins parts with `or`, and `or(T, U)` is T."""
+    # on signal and its notice in one card: the basis is true at all times, so it owes no probe
+    (basis,) = [b for b in BINDINGS_SAME_CARD_SIGNAL
+                if b.effect == "basis" and b.rule_id == CARD_A.canonical_ref]
+    assert "or" in basis.when and complement_probes(basis) == []
+    allow, forbid = boundary_cases(basis)
+    dropped = [c for c in allow if "notice_minutes" not in c["facts"]]
+    assert dropped and all(evaluate(basis.when, c["facts"]) is Tri.T for c in dropped)
+    # the closure and its notice complement in one card: inside the window, a missing notice
+    # leaves the forbid true
+    (forbid_b,) = [b for b in BINDINGS_821_GROUPED if b.effect == "forbid"]
+    allow, _ = boundary_cases(forbid_b)
+    inside = [c for c in allow if "notice_minutes" not in c["facts"]
+              and 420 <= c["facts"]["minute"] < 540]
+    assert inside and checks.test_binding(forbid_b) == []
 
 
 def test_a_binding_encoding_the_wrong_window_fails_its_tests():
@@ -172,7 +206,7 @@ def test_a_basis_one_minute_too_wide_fails_a_complement_probe():
 
 def test_unknown_and_ill_typed_facts_never_make_a_binding_true():
     _, forbid = boundary_cases(NOTICE_BASIS_821)
-    unknown = [c for c in forbid if c["expect"] == "not_T"]
+    unknown = [c for c in forbid if c["expect"] == "U"]
     assert unknown
     dropped = {f for c in unknown for f in ("open_at", "notice_minutes")
                if c["facts"].get(f) is None}
@@ -183,8 +217,8 @@ def test_unknown_and_ill_typed_facts_never_make_a_binding_true():
     assert checks.test_binding(with_when(NOTICE_BASIS_821, lenient))
     # P37 for § 117.31(b): an unknown class or conflict is never a True override
     _, forbid = boundary_cases(EMERGENCY_821)
-    assert any(c["expect"] == "not_T" and "vessel_class" not in c["facts"] for c in forbid)
-    assert any(c["expect"] == "not_T" and "local_procedure_conflict" not in c["facts"]
+    assert any(c["expect"] == "U" and "vessel_class" not in c["facts"] for c in forbid)
+    assert any(c["expect"] == "U" and "local_procedure_conflict" not in c["facts"]
                for c in forbid)
 
 
@@ -253,6 +287,36 @@ def test_grid_equivalence_holds_on_a_simple_draw_and_catches_a_shifted_window():
     assert grid_equivalence(shift(BINDINGS_821, minutes=15), REF_821)
 
 
+def test_grid_equivalence_holds_on_grouped_rules_and_missing_counts_only_unknown_forbids():
+    """I2: a True forbid listed by an Unknown overriding basis contributes no missing fact; the
+    grouped 821 shape (closure and notice in one card) agrees with the reference everywhere."""
+    fri = datetime(2026, 8, 14, 7, 30)
+    d = decide_bindings(BINDINGS_821_GROUPED, facts(fri, conflict=False))
+    assert d == RefDecision("escalate", frozenset(), ("vessel_class",))
+    assert grid_equivalence(BINDINGS_821_GROUPED, REF_821) == []
+    assert grid_equivalence(BINDINGS_SAME_CARD_SIGNAL, RefDraw(**{
+        **REF_821.__dict__, "closed": ()})) == []
+
+
+def test_grid_compares_denying_sections_and_missing_not_only_outcomes(monkeypatch):
+    """M1: a mismatch in the denying sections or in the missing facts alone is a mismatch."""
+    other = RefDraw(**{**REF_821.__dict__, "section": "117.999"})
+    mism = grid_equivalence(BINDINGS_821, other)
+    assert mism and all(m["bindings"]["outcome"] == m["reference"]["outcome"] == "deny"
+                        for m in mism)
+    real = checks._decide
+
+    def extra_missing(*a, **k):
+        d = real(*a, **k)
+        return RefDecision(d.outcome, d.denying_sections, (*d.missing, "zzz")) \
+            if d.outcome == "escalate" else d
+
+    monkeypatch.setattr(checks, "_decide", extra_missing)
+    mism = grid_equivalence(BINDINGS_821, REF_821)
+    assert mism and all(m["bindings"]["outcome"] == m["reference"]["outcome"] == "escalate"
+                        for m in mism)
+
+
 def test_grid_equivalence_holds_on_signal_with_a_crossing_closure():
     assert grid_equivalence(BINDINGS_SIGNAL, REF_SIGNAL) == []
 
@@ -317,6 +381,56 @@ def test_mark_tested_passes_good_draws_and_rejects_a_failing_draw_whole():
         mark_tested(good)
 
 
+def test_emergency_must_override_every_forbid_of_its_draw():
+    """I3 (P32), without z3: an empty, partial or foreign override list rejects the draw."""
+    for overrides in ([], [FORBID_821.binding_id],
+                      [*EMERGENCY_821.overrides, "f" * 64]):
+        bad = rebuild(EMERGENCY_821, overrides=overrides)
+        assert checks.test_binding(bad) == []        # the binding alone cannot see its draw
+        out = mark_tested([bad if b.binding_id == EMERGENCY_821.binding_id else b
+                           for b in BINDINGS_821])
+        assert {b.status for b in out} == {"rejected"}
+        (em,) = [b for b in out if b.binding_id == EMERGENCY_821.binding_id]
+        assert "§ 117.31(b)" in em.tests[0]["failures"][0]
+
+
+def test_complements_must_negate_exactly_the_draws_periods():
+    """Ruling 3: a period-less rule's "all other times" is checked against the periods its
+    sibling bindings record (P46); a notice forbid over the wrong window fails."""
+    w = window_of(FORBID_821)
+    wrong = {"and": [{"not": {"in_window": {"fact": "open_at"}, "window": {**w, "start": 480}}},
+                     NOTICE_FORBID_821.when["and"][1]]}
+    bad = with_when(NOTICE_FORBID_821, wrong)
+    assert checks.test_binding(bad) == []           # its own parameters hold no period
+    out = mark_tested([bad if b.binding_id == NOTICE_FORBID_821.binding_id else b
+                       for b in BINDINGS_821])
+    assert {b.status for b in out} == {"rejected"}
+    (nf,) = [b for b in out if b.binding_id == NOTICE_FORBID_821.binding_id]
+    assert "P46" in nf.tests[0]["failures"][0]
+    # all times instead of "not the window"
+    everywhere = {"and": [{"in_window": {"fact": "open_at"}, "window": ALL_TIMES.model_dump()},
+                          NOTICE_FORBID_821.when["and"][1]]}
+    out = mark_tested([with_when(NOTICE_FORBID_821, everywhere)
+                       if b.binding_id == NOTICE_FORBID_821.binding_id else b
+                       for b in BINDINGS_821])
+    assert {b.status for b in out} == {"rejected"}
+    # § 117.5 over the wrong complement, in a draw with a gap
+    (duty,) = [b for b in BINDINGS_NOTICE_PERIOD if b.rule_id == GENERAL_CARD.canonical_ref]
+    inner = duty.when["not"]["or"]
+    short = with_when(duty, {"not": inner[0]})
+    assert checks.test_binding(short)               # its own parameters do hold the periods
+    out = mark_tested([short if b.binding_id == duty.binding_id else b
+                       for b in BINDINGS_NOTICE_PERIOD])
+    assert {b.status for b in out} == {"rejected"}
+    # § 117.5 at all times in a draw with periods, its own parameters stripped
+    always = rebuild(duty, when={"const": True}, params_prov={})
+    assert checks.test_binding(always) == []
+    out = mark_tested([always if b.binding_id == duty.binding_id else b
+                       for b in BINDINGS_NOTICE_PERIOD])
+    (d,) = [b for b in out if b.binding_id == duty.binding_id]
+    assert d.status == "rejected" and "§ 117.5 at all times" in d.tests[0]["failures"][0]
+
+
 def test_mark_tested_validates_the_new_status(monkeypatch):
     monkeypatch.setattr(checks, "TESTED", "passed")       # not a binding status
     with pytest.raises(ValueError):
@@ -331,3 +445,95 @@ def test_only_analysis_imports_z3():
                           "adr_store.bindings.checks, sys; print('z3' in sys.modules)"],
                          capture_output=True, text=True)
     assert out.stdout.strip() == "False"     # Task 18 adds decide and gate.server to this list
+
+
+# -- compiler fuzz: every binding the compiler writes passes its tests (C1, ruling 3) --------------
+
+FUZZ_SEED = 20261121
+FUZZ_DRAWS = 200
+_TIMES = [None, *range(0, 1441, 90)]
+_DAY_SETS = [None, WEEKDAYS, ("Sat", "Sun"), ("Mon",), ("Tue", "Thu", "Sat"), DAYS]
+_DATES = [None, None, ("04-01", "10-31"), ("11-01", "03-31"), ("12-31", "12-31"),
+          ("02-28", "02-29"), ("06-15", "09-15")]
+
+
+def _fuzz_period(rng: random.Random, simple: bool):
+    effect = "need_not_open" if simple else rng.choice(
+        ["need_not_open", "need_not_open", "on_signal", "notice_required"])
+    start, end = rng.choice(_TIMES), rng.choice(_TIMES[1:])
+    if start is None or rng.random() < 0.15:
+        start = end = None                               # the whole day
+    elif start == end % 1440:
+        end = None if start is None else (start + 120) % 1440 or 1440
+    dates = rng.choice(_DATES)
+    return period(effect, start, end, days=rng.choice(_DAY_SETS),
+                  holidays=rng.choice([None, True, False]), date_from=dates and dates[0],
+                  date_to=dates and dates[1], at=rng.choice([IN_A, IN_B]))
+
+
+def fuzz_draws(seed: int = FUZZ_SEED, n: int = FUZZ_DRAWS):
+    """`n` random draws the compiler accepts (mixed shapes: closures, on-signal and notice
+    periods, crossing windows, weekday sets, holiday exceptions, wrapping and leap-day dates,
+    period-less rules, parameters in the same card or not), with their bindings."""
+    rng = random.Random(seed)
+    out = []
+    while len(out) < n:
+        simple = rng.random() < 0.4
+        periods = [_fuzz_period(rng, simple) for _ in range(rng.choice([0, 1, 1, 2, 3]))]
+        basis = rng.choice(["on_signal", "advance_notice"] if simple else
+                           [None, "on_signal", "on_signal", "advance_notice"])
+        notice = rng.choice([None, 0, 1, 4, 24] if basis != "advance_notice" else [1, 4, 24])
+        d = draw(n=len(out) + 1, notice_hours=notice, notice_at=rng.choice([IN_A, IN_B]),
+                 periods=periods)
+        if basis is not None:
+            d = d.model_copy(update={"opening_basis": g(basis, rng.choice([IN_A, IN_B]))})
+        bindings, problems = compile_draw("117.821", d, CARDS, GENERAL_CARD, EMERGENCY_CARD)
+        if not problems:
+            out.append((d, bindings))
+    return out
+
+
+def _ref_from_params(d) -> RefDraw | None:
+    """The reference draw a simple-shape draw's parameters state, built here from the values
+    (not by the compiler's `period_window`); None for any other draw."""
+    basis = d.opening_basis.value
+    if basis not in ("on_signal", "advance_notice") or any(
+            p.effect.value != "need_not_open" for p in d.periods):
+        return None
+    windows = []
+    for p in d.periods:
+        start, end = p.start.value, p.end.value
+        windows.append(Window(start=0 if start is None else start,
+                              end=1440 if end is None else end,
+                              days=tuple(p.days.value or DAYS),
+                              except_federal_holidays=p.except_federal_holidays.value is True,
+                              date_from=p.date_from.value, date_to=p.date_to.value))
+    return RefDraw(section="117.821", draw=1, bridge=None, opens_on_signal=basis == "on_signal",
+                   notice_hours=d.notice_hours.value or None, closed=tuple(windows))
+
+
+def test_compiler_fuzz_every_binding_passes_its_tests():
+    draws = fuzz_draws()
+    assert len(draws) == FUZZ_DRAWS
+    shapes = {(bool(d.periods), d.opening_basis.value, bool(d.notice_hours.value),
+               any(p.start.value is not None and p.end.value is not None
+                   and p.start.value > p.end.value for p in d.periods)) for d, _ in draws}
+    assert len(shapes) >= 12             # the shapes are mixed, crossing windows among them
+    failures = []
+    for d, bindings in draws:
+        for b in mark_tested(bindings):
+            if b.status != "tested":
+                failures.append((d.draw, b.derivation, b.tests[0]["failures"][:2]))
+    assert failures == []
+
+
+def test_compiler_fuzz_simple_draws_agree_with_the_reference_on_the_grid():
+    simple = [(d, bs, _ref_from_params(d)) for d, bs in fuzz_draws()]
+    simple = [x for x in simple if x[2] is not None]
+    assert len(simple) >= 40
+    # the grid is costly (1-3 s a draw): a fixed spread of the simple draws, closures and
+    # crossing windows among them
+    picked = simple[::max(1, len(simple) // 8)][:8]
+    assert any(r.closed for _, _, r in picked) and any(r.notice_hours for _, _, r in picked)
+    for d, bindings, ref in picked:
+        assert grid_equivalence(bindings, ref) == [], d

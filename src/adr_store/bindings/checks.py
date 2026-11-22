@@ -19,26 +19,37 @@ all-other-times condition, or a condition the compiler never writes are failures
 
 **Cases** (`boundary_cases`, at least `MIN_CASES` each way): for every window of the binding
 (its parameters' and its `when`'s), the minutes just before, at, just inside the end of and at
-the end, on two days the window admits and on the days it shuts out (a weekday it lacks, a
-federal holiday it excepts, the days just outside its dates), each also on the next day (a
-crossing window's early minutes are judged on the day before, P44); the notice values at and
-one below each threshold, 0 and 48 hours; each vessel class with the conflict true and false
-for § 117.31(b). Each is labelled by the intended condition (`expect` "T" or "F"). From two
-true cases, every fact the binding reads is then dropped, nulled or given the wrong type:
-the binding must not be true there (`not_T`, strong Kleene: a missing fact is no value). A
-constant has no boundary: § 117.5 at all times gets true cases only (ruling). Complement
-probes (`complement_probes`, bases with a window or threshold): false cases one minute, one
-day or one notice minute from a true one ("one minute before a window opens, one minute after
-it closes, notice one minute short"; a day for a weekday or date-range limit). `test_binding`
-runs them all; any mismatch, too few cases or an exception is a failure.
+the end, on two days each window admits and on the days it shuts out (a weekday it lacks, a
+federal holiday it excepts, the days just outside its dates), each also on the day before and
+after (a crossing window's early minutes are judged on the day before, P44), every day with
+every window's edge minutes; the notice values
+at and one below each threshold, 0 and 48 hours; each vessel class with the conflict true and
+false for § 117.31(b). Each is labelled by the intended condition (`expect` "T" or "F"), its
+windows judged by the reference's own `ref_in_window`, not by the evaluator's. Then, in two
+true cases and in one where each part holds, every fact the binding reads is dropped, nulled
+or given the wrong type, and the case is labelled with the intended condition's strong Kleene
+value with that fact unknown ("T", "F" or "U": an `or` of T and U is T, so a part that does
+not read the fact can keep the binding true). A constant has no boundary: § 117.5 at all
+times gets true cases only (ruling). Complement probes (`complement_probes`, bases with a
+window or threshold): false cases one minute, one day or one notice minute from a true one
+("one minute before a window opens, one minute after it closes, notice one minute short"; a
+day for a weekday or date-range limit), owed (at least `MIN_CASES`) only by a basis whose
+intended condition is false somewhere, i.e. depends on its windows or thresholds.
+`test_binding` runs them all; any mismatch, too few cases or an exception is a failure.
 
 **The grid** (`grid_equivalence`, criterion B1): every 15 minutes of 2026-08-10…16 and of
 2026-09-07…13 (Labor Day week), × `notice_grid(ref.notice_hours)` (none for a missing notice)
 × each vessel class and unknown × conflict true and false; at each point the draw's bindings
 (`decide_bindings`, the gate's steps 1-6 of §12.6) and the reference must give the same
-outcome, denying sections and missing facts. An exception is a mismatch.
+outcome, denying sections and missing facts. An exception is a mismatch. Missing facts are
+the absent facts of the Unknown forbids and of the Unknown overriding bases listing an unsure
+forbid (a True forbid stays True whatever its absent facts), then of the Unknown bases.
 
-**Statuses** (`mark_tested`): a draw's bindings pass or fail together. A failing binding is
+**Statuses** (`mark_tested`): it also checks what only the whole draw shows
+(`_draw_problems`): § 117.31(b) must override every forbid of its draw and nothing else (P32),
+and each "all other times" condition (a period-less rule's, § 117.5's) must leave out exactly
+the union of the periods the draw's bindings record (P46). A draw's bindings pass or fail
+together. A failing binding is
 `rejected`, and so are the others of its draw ("blocked"), since a partial set changes the
 draw's decision (a dropped forbid allows what the rule forbids; dropped overrides dangle); the
 gate then escalates the draw's calls for lack of a binding. Passing bindings become `tested`.
@@ -55,14 +66,14 @@ from itertools import product
 from typing import Any
 
 from adr_store.bindings.compile import ALL_TIMES, EMERGENCY, GENERAL_DUTY
-from adr_store.bindings.dsl import DAYS, Binding, Tri, Window, evaluate, in_window
+from adr_store.bindings.dsl import DAYS, Binding, Tri, Window, evaluate
 from adr_store.bindings.facts import (
     EMERGENCY_CLASSES,
     VESSEL_CLASSES,
     derive_facts,
     federal_holidays,
 )
-from adr_store.bindings.reference import RefDecision, RefDraw, decide_facts
+from adr_store.bindings.reference import RefDecision, RefDraw, decide_facts, ref_in_window
 from adr_store.units.ecfr import normalise_rule_id
 
 __all__ = ["GRID_STEP", "GRID_WEEKS", "MIN_CASES", "boundary_cases", "complement_probes",
@@ -153,7 +164,9 @@ def _decide(bindings: list[Binding], values: dict[str, Tri], facts: dict) -> Ref
               or (values[f.binding_id] is Tri.T and f.binding_id in listed)]
     if unsure:
         ids = {f.binding_id for f in unsure}
-        missing = set().union(*(_absent(f, facts) for f in unsure),
+        # a True forbid stays True whatever its absent facts: only an Unknown one's count
+        missing = set().union(*(_absent(f, facts) for f in unsure
+                                if values[f.binding_id] is Tri.U),
                               *(_absent(o, facts) for o in unknown_over
                                 if ids & set(o.overrides)))
         return RefDecision("escalate", frozenset(), tuple(sorted(missing)))
@@ -168,9 +181,10 @@ def decide_bindings(bindings: list[Binding], facts: dict) -> RefDecision:
     """The gate's decision for `schedule_opening` over one draw's bindings (§12.6 steps 1-6):
     forbids listed by a True overriding basis are discarded; a True forbid no Unknown
     overriding basis lists denies, naming its section; an Unknown forbid, or a True one an
-    Unknown overriding basis lists, escalates with the absent facts of those forbids and
-    bases; then a True basis allows; an Unknown basis escalates with its absent facts; no
-    basis escalates. Exceptions propagate (the caller fails closed)."""
+    Unknown overriding basis lists, escalates with the absent facts of the Unknown ones
+    among those forbids and of those bases; then a True basis allows; an Unknown basis
+    escalates with its absent facts; no basis escalates. Exceptions propagate (the caller
+    fails closed)."""
     return _decide(bindings, {b.binding_id: evaluate(b.when, facts) for b in bindings}, facts)
 
 
@@ -315,6 +329,29 @@ def _prov_window(vals: dict) -> Window | None:
         return None
 
 
+def _periods(b: Binding) -> dict[int, dict]:
+    """The binding's recorded periods: index -> {field: value}."""
+    out: dict[int, dict] = {}
+    for key, entry in b.params_prov.items():
+        m = _PERIOD_KEY.fullmatch(key)
+        if m and isinstance(entry, dict):
+            out.setdefault(int(m[1]), {})[m[2]] = entry.get("value")
+    return out
+
+
+def _complements(b: Binding, own: set[Window]) -> list[tuple[tuple[Window, ...], tuple | None]]:
+    """The "all other times" conditions of the binding's `when`: (the windows left out, the
+    notice comparison or None); an all-times window is one leaving out nothing when the
+    binding has no all-times period of its own."""
+    out = []
+    for s in _parts_of(b.when):
+        if s.kind == "elsewhere":
+            out.append((s.windows, s.cmp))
+        elif s.kind == "window" and s.windows == (ALL_TIMES,) and ALL_TIMES not in own:
+            out.append(((), s.cmp))
+    return out
+
+
 def _intended(b: Binding) -> tuple[list[_Part], list[str], list[_Shape]]:
     """(the intended condition's parts, the problems found, the `when`'s shapes) (module
     text)."""
@@ -325,11 +362,7 @@ def _intended(b: Binding) -> tuple[list[_Part], list[str], list[_Shape]]:
         if b.effect != "basis":
             problems.append("§ 117.31(b) binds as a basis")
         return [_Part(emergency=True)], problems, shapes
-    periods: dict[int, dict] = {}
-    for key, entry in b.params_prov.items():
-        m = _PERIOD_KEY.fullmatch(key)
-        if m and isinstance(entry, dict):
-            periods.setdefault(int(m[1]), {})[m[2]] = entry.get("value")
+    periods = _periods(b)
     windows: dict[int, Window] = {}
     for i, vals in sorted(periods.items()):
         w = _prov_window(vals)
@@ -357,13 +390,8 @@ def _intended(b: Binding) -> tuple[list[_Part], list[str], list[_Shape]]:
     has_notice_period = any(p.get("effect") == "notice_required" for p in periods.values())
     pl_notice = n is not None and (basis == "advance_notice" or not has_notice_period)
     pl_basis = basis == "on_signal"
-    own = {w for w in windows.values()}
-    elsewhere = []
-    for s in shapes:
-        if s.kind == "elsewhere":
-            elsewhere.append((s.windows, s.cmp))
-        elif s.kind == "window" and s.windows == (ALL_TIMES,) and ALL_TIMES not in own:
-            elsewhere.append(((), s.cmp))       # "at all other times" with no period at all
+    own = set(windows.values())
+    elsewhere = _complements(b, own)
     for ws, cmp in elsewhere:
         if not own <= set(ws):
             problems.append("its all-other-times condition does not leave out its own periods")
@@ -385,51 +413,85 @@ def _intended(b: Binding) -> tuple[list[_Part], list[str], list[_Shape]]:
     return parts, problems, shapes
 
 
+def _and3(vals: list[str]) -> str:
+    return "F" if "F" in vals else "U" if "U" in vals else "T"
+
+
+def _or3(vals: list[str]) -> str:
+    return "T" if "T" in vals else "U" if "U" in vals else "F"
+
+
+def _value(parts: list[_Part], at: datetime, notice: int | None, vessel: str | None,
+           conflict: bool | None, unknown: frozenset[str] = frozenset()) -> str:
+    """The intended condition's strong Kleene value ("T", "F", "U") with the facts in `unknown`
+    (or None) unknown; windows judged by the reference's own `ref_in_window` (P44)."""
+    def b(x: bool) -> str:
+        return "T" if x else "F"
+
+    minute, day = at.hour * 60 + at.minute, at.date()
+    no_time = "open_at" in unknown
+    vals = []
+    for p in parts:
+        conds = []
+        if p.inside is not None:
+            conds.append("U" if no_time else b(any(ref_in_window(w, minute, day)
+                                                   for w in p.inside)))
+        if p.outside is not None:
+            conds.append("U" if no_time else b(not any(ref_in_window(w, minute, day)
+                                                       for w in p.outside)))
+        if p.notice is not None:
+            op, k = p.notice
+            conds.append("U" if NOTICE in unknown or notice is None else
+                         b(notice >= k if op == ">=" else notice < k))
+        if p.emergency:
+            conds.append("U" if "vessel_class" in unknown or vessel is None else
+                         b(vessel in EMERGENCY_CLASSES))
+            conds.append("U" if "local_procedure_conflict" in unknown or conflict is None else
+                         b(conflict is not True))
+        vals.append(_and3(conds))
+    return _or3(vals)
+
+
 def _holds(parts: list[_Part], at: datetime, notice: int | None, vessel: str | None,
            conflict: bool | None) -> bool:
-    minute, day = at.hour * 60 + at.minute, at.date()
-    for p in parts:
-        if p.inside is not None and not any(in_window(w, minute, day) for w in p.inside):
-            continue
-        if p.outside is not None and any(in_window(w, minute, day) for w in p.outside):
-            continue
-        if p.notice is not None and (notice is None or not (
-                notice >= p.notice[1] if p.notice[0] == ">=" else notice < p.notice[1])):
-            continue
-        if p.emergency and not (vessel in EMERGENCY_CLASSES and conflict is False):
-            continue
-        return True
-    return False
+    return _value(parts, at, notice, vessel, conflict) == "T"
 
 
 # -- cases -----------------------------------------------------------------------------------------
 
 def _admits(w: Window, d: date) -> bool:
-    return in_window(w, w.start, d)
+    return ref_in_window(w, w.start, d)
 
 
 def _grid_days() -> list[date]:
     return [start + timedelta(days=k) for start in GRID_WEEKS for k in range(7)]
 
 
-def _md_date(md: str) -> date:
-    return date(2028 if md == "02-29" else 2026, int(md[:2]), int(md[3:]))
+def _bound_dates(md: str) -> list[date]:
+    """The month-day `md` in years that put it on every weekday at least twice: 2026-2040, or
+    14 leap years for 29 February."""
+    years = range(2028, 2084, 4) if md == "02-29" else range(2026, 2041)
+    return [date(y, int(md[:2]), int(md[3:])) for y in years]
 
 
 def _pool(ws: list[Window]) -> list[date]:
-    days = set(_grid_days())
+    """Candidate days: seven weeks around the grid weeks, the federal holidays of 2026-2027,
+    and the days around each date bound of the windows, in many years."""
+    start = GRID_WEEKS[0] - timedelta(days=7)
+    days = {start + timedelta(days=k) for k in range(49)} | set(_grid_days())
     for y in (2026, 2027):
         days |= set(federal_holidays(y))
     for w in ws:
         for md in (w.date_from, w.date_to):
             if md is not None:
-                days |= {_md_date(md) + timedelta(days=k) for k in range(-8, 9)}
+                days |= {b + timedelta(days=k) for b in _bound_dates(md) for k in range(-8, 9)}
     return sorted(days)
 
 
 def _days_for(w: Window, pool: list[date]) -> list[date]:
-    """Two days `w` admits, then the days it shuts out by each limit it has: a weekday it
-    lacks, a federal holiday it excepts, and the day nearest each end of its date range."""
+    """Two days `w` admits, then the days it shuts out by each limit it has: two with a weekday
+    it lacks, two federal holidays it excepts, and the day nearest each end of its date
+    range."""
     out = [d for d in pool if _admits(w, d)][:2]
     relax = {"days": {"days": DAYS}, "holidays": {"except_federal_holidays": False},
              "dates": {"date_from": None, "date_to": None}}
@@ -439,10 +501,11 @@ def _days_for(w: Window, pool: list[date]) -> list[date]:
             continue
         found = [d for d in pool if _admits(relaxed, d) and not _admits(w, d)]
         if limit == "dates":
-            for bound in (_md_date(w.date_from), _md_date(w.date_to)):
-                out += sorted(found, key=lambda d, b=bound: (abs((d - b).days), d))[:1]
+            for md in (w.date_from, w.date_to):
+                near = [(min(abs((d - b).days) for b in _bound_dates(md)), d) for d in found]
+                out += [d for _, d in sorted(near)[:1]]
         else:
-            out += found[:1]
+            out += found[:2]
     return list(dict.fromkeys(out))
 
 
@@ -457,6 +520,7 @@ class _Cases:
     true: list[dict]
     false: list[dict]
     probes: list[dict]
+    need_probes: bool
 
 
 def _facts(at: datetime, notice: int | None, vessel: str | None, conflict: bool | None
@@ -468,10 +532,11 @@ def _case(at, notice, vessel, conflict, expect: str) -> dict:
     return {"facts": _facts(at, notice, vessel, conflict), "expect": expect}
 
 
-def _variants(case: dict, fact: str) -> list[dict]:
-    """`case` with `fact` dropped, nulled and given each wrong type (`not_T`)."""
+def _variants(case: dict, fact: str, expect: str) -> list[dict]:
+    """`case` with `fact` dropped, nulled and given each wrong type, all expecting `expect`
+    (the intended condition's Kleene value with `fact` unknown)."""
     base = {k: v for k, v in case["facts"].items() if k != fact}
-    return [{"facts": f, "expect": "not_T"} for f in
+    return [{"facts": f, "expect": expect} for f in
             [base, {**base, fact: None},
              *({**base, fact: v} for v in _WRONG_TYPE.get(fact, ("?", 1.5)))]]
 
@@ -488,13 +553,13 @@ def _cases(b: Binding) -> _Cases:
     reads_notice = NOTICE in b.required_facts or bool(thresholds)
     reads_vessel = any(p.emergency for p in parts) or "vessel_class" in b.required_facts
     pool = _pool(windows)
-    points: list[datetime] = []
-    for w in windows:
-        for d in _days_for(w, pool):
-            for m in sorted(_edge_minutes(w)):
-                for day in (d, d + timedelta(days=1)):
-                    points.append(datetime.combine(day, datetime.min.time())
-                                  + timedelta(minutes=m))
+    # every candidate day with every window's edge minutes: where windows meet, the edges of
+    # one fall on the days of another
+    days = dict.fromkeys(day for w in windows for d in _days_for(w, pool)
+                         for day in (d - timedelta(days=1), d, d + timedelta(days=1)))
+    minutes = sorted(set().union(*(_edge_minutes(w) for w in windows)))
+    points: list[datetime] = [datetime.combine(day, datetime.min.time()) + timedelta(minutes=m)
+                              for day in days for m in minutes]
     if reads_time or not windows:      # far points: midnight and noon of the working week
         points += [datetime.combine(d, datetime.min.time()) + timedelta(minutes=m)
                    for d in _grid_days()[:7] for m in (0, 720)]
@@ -506,6 +571,7 @@ def _cases(b: Binding) -> _Cases:
     true: dict[str, dict] = {}
     false: dict[str, dict] = {}
     probes: dict[str, dict] = {}
+    raw: dict[str, tuple] = {}
     for at in dict.fromkeys(points):
         for notice in notices:
             for vessel, conflict in people:
@@ -513,15 +579,26 @@ def _cases(b: Binding) -> _Cases:
                 case = _case(at, notice, vessel, conflict, "T" if holds else "F")
                 key = json.dumps(case["facts"], sort_keys=True)
                 (true if holds else false)[key] = case
+                raw[key] = (at, notice, vessel, conflict)
                 if not holds and b.effect == "basis" and (
                         any(_holds(parts, at + step, notice, vessel, conflict) for step in _STEPS)
                         or (notice is not None
                             and _holds(parts, at, notice + 1, vessel, conflict))):
                     probes[key] = case
-    unknown = [v for case in list(true.values())[:2] for f in b.required_facts
-               for v in _variants(case, f)]
-    return _Cases(parts, problems, list(true.values()), [*false.values(), *unknown],
-                  list(probes.values()) if has_threshold_or_window(b) else [])
+    # every fact the binding reads, unknown in two true cases: the expectation is the intended
+    # condition's Kleene value without it (an `or` of T and U is T)
+    # (from the first two true cases, and the first in which each part holds)
+    seeds = list(true)[:2] + [next((k for k in true if _value([p], *raw[k]) == "T"), None)
+                              for p in parts]
+    variants = [v for key in dict.fromkeys(k for k in seeds if k is not None)
+                for f in b.required_facts
+                for v in _variants(true[key], f, _value(parts, *raw[key],
+                                                        unknown=frozenset({f})))]
+    # probes are owed only where the condition depends on its windows or thresholds at all
+    need = b.effect == "basis" and has_threshold_or_window(b) and bool(false)
+    return _Cases(parts, problems, [*true.values(), *(v for v in variants if v["expect"] == "T")],
+                  [*false.values(), *(v for v in variants if v["expect"] != "T")],
+                  list(probes.values()) if has_threshold_or_window(b) else [], need)
 
 
 def has_threshold_or_window(b: Binding) -> bool:
@@ -543,7 +620,7 @@ def has_threshold_or_window(b: Binding) -> bool:
 
 def boundary_cases(b: Binding) -> tuple[list[dict], list[dict]]:
     """(cases where the binding must be true, cases where it must not be): each
-    `{"facts", "expect"}` with `expect` "T", or "F" / "not_T" (module text)."""
+    `{"facts", "expect"}` with `expect` "T", or "F" / "U" (module text)."""
     c = _cases(b)
     return c.true, c.false
 
@@ -565,13 +642,12 @@ def _test(b: Binding) -> tuple[_Cases | None, list[str]]:
         if b.required_facts and (len(c.true) < MIN_CASES or len(c.false) < MIN_CASES):
             failures.append(f"fewer than {MIN_CASES} cases each way: {len(c.true)} true, "
                             f"{len(c.false)} false")
-        if b.effect == "basis" and has_threshold_or_window(b) and len(c.probes) < MIN_CASES:
+        if c.need_probes and len(c.probes) < MIN_CASES:
             failures.append(f"fewer than {MIN_CASES} complement probes: {len(c.probes)}")
         when = _fast(b.when)
         for case in [*c.true, *c.false, *c.probes]:
             got = evaluate(when, case["facts"])
-            ok = got is not Tri.T if case["expect"] == "not_T" else got.value == case["expect"]
-            if not ok:
+            if got.value != case["expect"]:
                 f = case["facts"]
                 failures.append(f"expected {case['expect']}, got {got.value} at "
                                 + ", ".join(f"{k}={f[k]!r}" for k in sorted(f)
@@ -604,6 +680,42 @@ def _draw_key(b: Binding) -> str:
     return json.dumps([b.doc_id, b.target], sort_keys=True)
 
 
+def _draw_problems(draw: list[Binding]) -> dict[str, list[str]]:
+    """Problems only the whole draw shows, by binding id: a § 117.31(b) basis must override
+    every forbid of its draw and nothing else (P32); every "all other times" condition (a
+    period-less rule's, § 117.5's) must leave out exactly the draw's periods, the union of the
+    periods its bindings record (P46). § 117.5 written as a constant needs a draw with no
+    period."""
+    forbids = {b.binding_id for b in draw if b.effect == "forbid"}
+    periods: dict[int, Window | None] = {}
+    for b in draw:
+        for i, vals in _periods(b).items():
+            periods.setdefault(i, _prov_window(vals))
+    every = {w for w in periods.values() if w is not None}
+    out: dict[str, list[str]] = {}
+    for b in draw:
+        found = []
+        if _under(b.rule_id, EMERGENCY):
+            missing, extra = forbids - set(b.overrides), set(b.overrides) - forbids
+            if missing:
+                found.append("§ 117.31(b) must override every forbid of its draw (P32); it "
+                             f"leaves out {', '.join(sorted(x[:12] for x in missing))}")
+            if extra:
+                found.append(f"§ 117.31(b) overrides {', '.join(sorted(x[:12] for x in extra))},"
+                             " which is no forbid of the draw")
+            out[b.binding_id] = found
+            continue
+        own = {w for w in (_prov_window(v) for v in _periods(b).values()) if w is not None}
+        for ws, _ in _complements(b, own):
+            if set(ws) != every:
+                found.append("its all-other-times condition is not the negation of the draw's "
+                             f"{len(every)} period(s) (P46)")
+        if _under(b.rule_id, GENERAL_DUTY) and b.when == {"const": True} and every:
+            found.append("§ 117.5 at all times in a draw with periods")
+        out[b.binding_id] = found
+    return out
+
+
 def mark_tested(bindings: list[Binding]) -> list[Binding]:
     """The bindings, in order, each `tested` with its test summary, or `rejected` with its
     failures; a draw with a failing binding is rejected whole (module text). ValueError for a
@@ -612,9 +724,21 @@ def mark_tested(bindings: list[Binding]) -> list[Binding]:
         if b.status != "proposed":
             raise ValueError(f"only proposed bindings are tested; {b.binding_id[:12]} is "
                              f"{b.status}")
+    draws: dict[str, list[Binding]] = {}
+    for b in bindings:
+        draws.setdefault(_draw_key(b), []).append(b)
+    whole: dict[tuple[str, str], list[str]] = {}
+    for key, draw in draws.items():
+        try:
+            for bid, found in _draw_problems(draw).items():
+                whole[(key, bid)] = found
+        except Exception as err:  # noqa: BLE001 - an exception is a failure, never a pass
+            for b in draw:
+                whole[(key, b.binding_id)] = [f"error: {type(err).__name__}: {err}"]
     results = []
     for b in bindings:
         c, failures = _test(b)
+        failures = [*failures, *whole.get((_draw_key(b), b.binding_id), [])]
         counts = (len(c.true), len(c.false), len(c.probes)) if c is not None else (0, 0, 0)
         results.append((*counts, failures))
     failing: dict[str, list[str]] = {}

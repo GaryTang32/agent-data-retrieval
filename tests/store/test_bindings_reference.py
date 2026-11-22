@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import ast
 import inspect
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
 from adr_store.bindings import reference
-from adr_store.bindings.dsl import DAYS, Window
+from adr_store.bindings.dsl import DAYS, Window, in_window
 from adr_store.bindings.enrich import SectionEnrichment
-from adr_store.bindings.facts import EMERGENCY_CLASSES
+from adr_store.bindings.facts import EMERGENCY_CLASSES, is_federal_holiday
 from adr_store.bindings.reference import (
     RefDecision,
     RefDraw,
@@ -24,6 +24,8 @@ from adr_store.bindings.reference import (
     ref_census,
     ref_decide,
     ref_draws,
+    ref_federal_holiday,
+    ref_in_window,
     ref_next_allowed,
 )
 from adr_store.tables import extract as ex
@@ -137,6 +139,18 @@ def test_reference_next_allowed_is_the_first_minute_after_the_window():
     rec = record(datetime(2026, 8, 14, 7, 0), notice=0, vessel="commercial", conflict=False)
     assert ref_next_allowed(REF_CLOSED, datetime(2026, 8, 14, 9, 30), rec) == \
         datetime(2026, 8, 14, 11, 0)
+    # §12.6 (M3): an unknown fact counts as not True. With the notice unknown, an on-signal draw
+    # has no True denying condition and its on-signal basis once the window ends; an
+    # advance-notice draw never has a True basis, so it is never next allowed
+    unknown = record(FRI, vessel="commercial", conflict=False)
+    assert ref_decide(REF_CLOSED, datetime(2026, 8, 14, 9, 0), unknown).outcome == "escalate"
+    assert ref_next_allowed(REF_CLOSED, FRI, unknown) == datetime(2026, 8, 14, 9, 0)
+    advance = RefDraw(**{**REF_CLOSED.__dict__, "opens_on_signal": False})
+    assert ref_next_allowed(advance, FRI, unknown) is None
+    # a True denying condition listed by an unknown § 117.31(b) still blocks: short notice
+    rec = record(datetime(2026, 8, 14, 7, 0), notice=0, conflict=False)
+    assert ref_next_allowed(REF_CLOSED, datetime(2026, 8, 14, 9, 30), rec) == \
+        datetime(2026, 8, 14, 11, 0)
     # a draw closed at all times never opens within seven days
     shut = RefDraw(section="117.900", draw=1, bridge=None, opens_on_signal=True,
                    notice_hours=None, closed=(Window(start=0, end=1440, days=DAYS,
@@ -152,12 +166,68 @@ def test_reference_never_reads_bindings_or_the_dsl_evaluator():
     imported = {(n.module, a.name) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
                 for a in n.names}
     names = {name for _, name in imported}
-    assert not names & {"Binding", "evaluate", "Tri", "compile_draw", "compile_bindings"}
+    assert not names & {"Binding", "evaluate", "Tri", "compile_draw", "compile_bindings",
+                        "in_window", "is_federal_holiday", "federal_holidays"}
     assert not any(m and m.endswith(("bindings.compile", "bindings.checks", "analysis"))
                    for m, _ in imported)
     for fn in (reference.ref_decide, reference.ref_next_allowed, reference.read_closed):
         src = inspect.getsource(fn)
         assert "SectionEnrichment" not in src and "DrawParams" not in src
+
+
+# -- the reference's own windows and holidays (M4) -------------------------------------------------
+
+def test_reference_holidays_match_the_fact_module_every_day_1978_to_2100():
+    day, end = date(1978, 1, 1), date(2101, 1, 1)
+    differ = []
+    while day < end:
+        if ref_federal_holiday(day) != is_federal_holiday(day):
+            differ.append(day)
+        day += timedelta(days=1)
+    assert differ == []
+    assert ref_federal_holiday(date(2026, 9, 7)) and ref_federal_holiday(date(2027, 12, 31))
+    assert ref_federal_holiday(date(2026, 7, 3)) and not ref_federal_holiday(date(2026, 7, 6))
+    assert not ref_federal_holiday(date(2020, 6, 19)) and ref_federal_holiday(date(2022, 6, 20))
+    with pytest.raises(ValueError):
+        ref_federal_holiday(date(1977, 12, 31))
+
+
+CROSS_WINDOWS = [
+    Window(start=s, end=e, days=days, except_federal_holidays=hol, date_from=df, date_to=dt)
+    for s, e in ((420, 540), (1380, 360), (0, 1440), (1350, 1440), (1200, 60))
+    for days in (DAYS, ("Mon",), ("Fri", "Sat", "Sun"))
+    for hol in (False, True)
+    for df, dt in ((None, None), ("12-31", "12-31"), ("11-01", "03-31"), ("02-28", "02-29"),
+                   ("01-01", "01-01"))]
+
+
+def test_reference_window_matches_dsl_in_window_over_years():
+    """The reference's own P44 window logic and the evaluator's `dsl.in_window`, brute-forced
+    against each other at every boundary minute of every day of a year and of the year ends and
+    leap days around it, for windows that cross midnight, wrap the year and end on 29 February:
+    a bug in either shows."""
+    days = [date(2026, 1, 1) + timedelta(days=k) for k in range(366)]
+    days += [date(2027, 12, 25) + timedelta(days=k) for k in range(14)]
+    days += [date(y, 2, 26) + timedelta(days=k) for y in (2028, 2029) for k in range(5)]
+    differ = 0
+    for w in CROSS_WINDOWS:
+        minutes = sorted({m % 1440 for b in (w.start, w.end) for m in (b - 1, b, b + 1)}
+                         | {0, 1439})
+        for d in days:
+            for m in minutes:
+                differ += ref_in_window(w, m, d) != in_window(w, m, d)
+    assert differ == 0
+    # literal P44 values: a 31 December night holds 1 January's early hours, a 28 February
+    # night 1 March's in a common year and 29 February's in a leap year
+    nye = CROSS_WINDOWS[0].model_copy(update={"start": 1380, "end": 360, "days": DAYS,
+                                              "except_federal_holidays": False,
+                                              "date_from": "12-31", "date_to": "12-31"})
+    assert ref_in_window(nye, 120, date(2027, 1, 1)) and not ref_in_window(nye, 120,
+                                                                          date(2026, 12, 31))
+    feb = nye.model_copy(update={"date_from": "02-28", "date_to": "02-28"})
+    assert ref_in_window(feb, 120, date(2027, 3, 1))
+    assert ref_in_window(feb, 120, date(2028, 2, 29)) and not ref_in_window(feb, 120,
+                                                                           date(2028, 3, 1))
 
 
 # -- ref_draws: the Phase 3 facts read into the simple shape ---------------------------------------
@@ -178,7 +248,9 @@ TEXT = (
     "(f) The draw of the Ash bridge, mile 10.0, shall open on signal; except that, the draw "
     "need not be opened from 5 p.m. to 7 p.m.\n"
     "(g) The draw of the Fir bridge, mile 11.0, shall open on signal if at least 0 hours "
-    "notice is given.\n")
+    "notice is given.\n"
+    "(h) The draw of the Yew bridge, mile 16.0, shall open on signal; except that, from 6 p.m. "
+    "to 10 a.m. the draw shall open on signal if at least 8 hours notice is given.\n")
 TEXT_901 = (
     "§ 117.901 Other River.\n"
     "(a) The draw of the Cedar bridge, mile 1.0, shall open on signal from April 1 through "
@@ -210,11 +282,12 @@ def val(value, text: str | None = None, quote: str | None = None, *, null: str |
 
 
 def p3_draw(text: str, bridge: str, mile: float, *, signal=True, notice=None, closed_quote=None,
-            closed_value=None, notice_null=None, closed_null=None) -> dict:
+            closed_value=None, notice_null=None, closed_null=None, notice_quote=None) -> dict:
     out = {"bridge": val(bridge, text, bridge if bridge in text else None), "mile": val(mile),
            "opens_on_signal": val(signal, text, "shall open on signal") if signal is not None
            else val(None),
-           "notice_hours": val(notice) if notice_null is None else val(None, null=notice_null),
+           "notice_hours": val(notice, text, notice_quote) if notice_null is None
+           else val(None, null=notice_null),
            "closed_periods": val(None)}
     if closed_quote is not None:
         out["closed_periods"] = val(closed_value or [closed_quote], text, closed_quote)
@@ -227,7 +300,7 @@ def facts_821() -> ex.Facts:
     t = TEXT
     return ex.Facts(unit(t, SECTION).text_sha256, {"seasonal": val(None)}, [
         p3_draw(t, "Main Street bridge", 3.4, closed_quote="from 7 a.m. to 9 a.m."),
-        p3_draw(t, "Oak bridge", 5.0, notice=4),
+        p3_draw(t, "Oak bridge", 5.0, notice=4, notice_quote="at least 4 hours notice"),
         p3_draw(t, "Elm bridge", 7.0, signal=False, notice=2,
                 closed_quote="from 6 p.m. to 6 a.m."),
         p3_draw(t, "Rail bridge", 8.0, closed_quote="need not be opened during rail traffic"),
@@ -239,6 +312,7 @@ def facts_821() -> ex.Facts:
         p3_draw(t, "Shut bridge", 13.0, signal=False),
         p3_draw(t, "Garbled bridge", 14.0, notice_null="unparseable"),
         p3_draw(t, "Ungrounded bridge", 15.0, closed_null="ungrounded"),
+        p3_draw(t, "Yew bridge", 16.0, notice=8, notice_quote="at least 8 hours notice"),
     ])
 
 
@@ -306,7 +380,9 @@ def test_ref_draws_simple_shape_and_its_exclusions():
     # rule and is left out; one whose closed window is dated is simple
     assert ("117.901", 1) not in refs and excluded["seasonal"] == 1
     assert ("117.901", 2) in refs
-    assert census["draws"] == 13 and census["simple"] == len(refs) == 5
+    # a notice whose own clause limits it to some hours holds only then: no simple shape
+    assert (SECTION, 12) not in refs and excluded["notice_limited"] == 1
+    assert census["draws"] == 14 and census["simple"] == len(refs) == 5
     assert sum(excluded.values()) == census["draws"] - census["simple"]
 
 

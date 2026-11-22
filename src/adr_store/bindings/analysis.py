@@ -18,8 +18,10 @@ bool fact, the weekday or the month-day; `known` is True; `const`; `in_window`. 
 is a fresh variable of its comparand's type.
 
 **Per draw** (`analyse_draw`), the bindings given:
-- **conflicts**: an overriding basis and a forbid of the draw that its `overrides` does not
-  list, satisfiable together (an emergency would still be denied); an `overrides` entry that
+- **conflicts**: a § 117.31(b) basis (overriding by definition, even with an empty list)
+  that does not list every forbid of the draw (P32); another overriding basis and a forbid of
+  the draw that its `overrides` does not list, satisfiable together (an emergency would still
+  be denied); an `overrides` entry that
   names no forbid of the draw; a cycle of overrides. A listed forbid is a declared override,
   and a plain basis True with a forbid is the decision rule's (the forbid wins): neither is a
   conflict.
@@ -45,8 +47,10 @@ from typing import Any
 
 import z3
 
+from adr_store.bindings.compile import EMERGENCY
 from adr_store.bindings.dsl import DAYS, Binding, Window
 from adr_store.bindings.facts import VESSEL_CLASSES
+from adr_store.units.ecfr import normalise_rule_id
 
 __all__ = ["Analysis", "analyse_draw", "mark_analysed"]
 
@@ -153,6 +157,14 @@ def _encode(e: dict, v: _Vars) -> Any:
     return _window(w, v)
 
 
+def _emergency(b: Binding) -> bool:
+    """A basis at or under § 117.31(b): an overriding basis by definition (§12.1, P32), even
+    with an empty `overrides`."""
+    r = normalise_rule_id(b.rule_id)
+    return b.effect == "basis" and r is not None and (r == EMERGENCY
+                                                      or r.startswith(EMERGENCY + "("))
+
+
 def _any(fs: list) -> Any:
     return z3.Or(fs) if fs else z3.BoolVal(False)
 
@@ -207,12 +219,18 @@ def analyse_draw(bindings: list[Binding]) -> Analysis:
     bases = [b for b in bs if b.effect == "basis"]
     forbid_ids = {b.binding_id for b in forbids}
     conflicts = []
-    for o in (b for b in bases if b.overrides):
+    for o in (b for b in bases if b.overrides or _emergency(b)):
         for x in sorted(set(o.overrides) - forbid_ids):
             conflicts.append(f"{o.rule_id} basis {o.binding_id[:12]} overrides {x[:12]}, "
                              "which is no forbid of the draw")
         for f in forbids:
-            if f.binding_id not in o.overrides and sat(enc[o.binding_id], enc[f.binding_id]):
+            if f.binding_id in o.overrides:
+                continue
+            if _emergency(o):       # P32: § 117.31(b) lists every forbid of its draw
+                conflicts.append(f"{o.rule_id} basis {o.binding_id[:12]} does not override "
+                                 f"{f.rule_id} forbid {f.binding_id[:12]}: § 117.31(b) must "
+                                 "list every forbid of its draw")
+            elif sat(enc[o.binding_id], enc[f.binding_id]):
                 conflicts.append(f"{o.rule_id} basis {o.binding_id[:12]} does not override "
                                  f"{f.rule_id} forbid {f.binding_id[:12]}, and both can hold")
     for cycle in _cycles(bs):

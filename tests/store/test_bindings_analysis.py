@@ -13,7 +13,7 @@ from datetime import datetime  # noqa: E402
 
 from adr_store.bindings.analysis import Analysis, analyse_draw, mark_analysed  # noqa: E402
 from adr_store.bindings.checks import mark_tested  # noqa: E402
-from adr_store.bindings.dsl import DAYS, Tri, evaluate  # noqa: E402
+from adr_store.bindings.dsl import DAYS, Binding, Tri, evaluate  # noqa: E402
 from adr_store.bindings.facts import derive_facts  # noqa: E402
 from tests.store.bindings_fixtures import (  # noqa: E402
     BINDINGS_821,
@@ -67,16 +67,37 @@ def test_missing_override_entry_is_a_conflict():
     a = analyse_draw(replace(BINDINGS_821, EMERGENCY_821, partial))
     assert len(a.conflicts) == 1
     assert NOTICE_FORBID_821.binding_id[:12] in a.conflicts[0]
-    assert "both can hold" in a.conflicts[0]
+    assert "must list every forbid" in a.conflicts[0]
 
 
-def test_an_unlisted_forbid_that_cannot_hold_with_the_override_is_no_conflict():
-    partial = rebuild(EMERGENCY_821, overrides=[NOTICE_FORBID_821.binding_id])
-    never_with_emergency = with_when(FORBID_821, {"and": [
-        FORBID_821.when, {"in": ["vessel_class", ["commercial", "recreational"]]}]})
-    bs = replace(replace(BINDINGS_821, EMERGENCY_821, partial), FORBID_821,
-                 never_with_emergency)
+def test_an_unlisted_forbid_that_cannot_hold_with_another_override_is_no_conflict():
+    """For an overriding basis other than § 117.31(b), only an unlisted forbid that can hold
+    with it is a conflict."""
+    signal = by_rule(BINDINGS_821, CARD_A.canonical_ref, "basis")
+    priority = rebuild(signal, rule_id="33 CFR 117.821(c)", overrides=[FORBID_821.binding_id],
+                       when={"eq": ["vessel_class", "distress"]})
+    never_with_it = with_when(NOTICE_FORBID_821, {"and": [
+        NOTICE_FORBID_821.when, {"in": ["vessel_class", ["commercial", "recreational"]]}]})
+    bs = [*replace(BINDINGS_821, NOTICE_FORBID_821, never_with_it), priority]
     assert analyse_draw(bs).conflicts == []
+    a = analyse_draw([*BINDINGS_821, priority])
+    assert len(a.conflicts) == 1 and NOTICE_FORBID_821.binding_id[:12] in a.conflicts[0]
+
+
+def test_emergency_basis_must_list_every_forbid():
+    """I3 (P32): § 117.31(b) is an overriding basis by definition; an empty or partial list is
+    a conflict, whether or not the unlisted forbid can hold with it."""
+    empty = rebuild(EMERGENCY_821, overrides=[])
+    a = analyse_draw(replace(BINDINGS_821, EMERGENCY_821, empty))
+    assert len(a.conflicts) == 2 and all("must list every forbid" in c for c in a.conflicts)
+    never = with_when(NOTICE_FORBID_821, {"and": [
+        NOTICE_FORBID_821.when, {"in": ["vessel_class", ["commercial"]]}]})
+    partial = rebuild(EMERGENCY_821, overrides=[FORBID_821.binding_id])
+    a = analyse_draw(replace(replace(BINDINGS_821, NOTICE_FORBID_821, never), EMERGENCY_821,
+                             partial))
+    assert len(a.conflicts) == 1 and NOTICE_FORBID_821.binding_id[:12] in a.conflicts[0]
+    # with no forbid, an empty list is right
+    assert analyse_draw(BINDINGS_GENERAL).conflicts == []
 
 
 def test_override_naming_no_forbid_and_override_cycles_are_conflicts():
@@ -138,6 +159,22 @@ def test_holidays_are_free_variables():
     assert gap["federal_holiday"] is True and gap["weekday"] in DAYS[:5]
 
 
+def test_previous_day_holiday_is_its_own_variable():
+    """M2: a crossing window "except federal holidays" is judged on the previous day's holiday.
+    Bases cover every minute except the early hours of a day that follows a holiday and is
+    none itself: that gap exists only if the two holiday flags are independent."""
+    signal = by_rule(BINDINGS_SIGNAL, CARD_A.canonical_ref, "basis")
+    emergency = rebuild(by_rule(BINDINGS_SIGNAL, EMERGENCY_CARD.canonical_ref, "basis"),
+                        overrides=[])
+    night = rebuild(signal, rule_id="33 CFR 117.821(b)", when=win(1380, 360, holidays=True))
+    day = with_when(signal, win(360, 1440))
+    holiday_dawn = rebuild(signal, rule_id="33 CFR 117.821(c)", when={"and": [
+        win(0, 360), {"eq": ["federal_holiday", True]}]})
+    (gap,) = analyse_draw([night, day, holiday_dawn, emergency]).gaps
+    assert gap["previous_day_holiday"] is True and gap["federal_holiday"] is False
+    assert gap["minute"] < 360
+
+
 def test_crossing_windows_take_the_previous_day():
     """P44: a Monday 23:00-06:00 closure holds Tuesday 00:00-06:00, so a Tuesday 00:00-06:00
     closure is implied by it (redundant), and a forbid on that night's minutes that falls on
@@ -180,7 +217,9 @@ def test_redundancy_is_reported_and_kept():
     a = analyse_draw([*BINDINGS_821, twin])
     assert a.redundant == sorted([notice_basis.binding_id, twin.binding_id])
     assert a.vacuous == [] and a.conflicts == []
-    out = mark_analysed(mark_tested([*BINDINGS_821, twin]), a)
+    tested = [Binding.model_validate({**b.model_dump(), "status": "tested"})
+              for b in [*BINDINGS_821, twin]]
+    out = mark_analysed(tested, a)
     assert {b.status for b in out} == {"analysed"}
     assert [b.analysis["redundant"] for b in out] == [b.binding_id in a.redundant for b in out]
 
@@ -200,9 +239,11 @@ def test_mark_analysed_statuses():
     assert {b.status for b in out} == {"rejected"}
     assert [b.analysis["vacuous"] for b in out].count(True) == 1
     assert all(b.analysis["blocked_by"] for b in out if not b.analysis["vacuous"])
-    # so does a conflict
-    partial = rebuild(EMERGENCY_821, overrides=[FORBID_821.binding_id])
-    bad = mark_tested(replace(BINDINGS_821, EMERGENCY_821, partial))
+    # so does a conflict: the on-signal basis made to override the window's forbid but not the
+    # notice forbid it can hold with
+    signal = by_rule(BINDINGS_821, CARD_A.canonical_ref, "basis")
+    overriding = rebuild(signal, overrides=[FORBID_821.binding_id])
+    bad = mark_tested(replace(BINDINGS_821, signal, overriding))
     assert {b.status for b in bad} == {"tested"}
     out = mark_analysed(bad, analyse_draw(bad))
     assert {b.status for b in out} == {"rejected"} and out[0].analysis["conflicts"]

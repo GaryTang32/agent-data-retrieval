@@ -16,6 +16,7 @@ from tests.store.test_bindings_compile import (
     CARD_B,
     EMERGENCY_CARD,
     GENERAL_CARD,
+    IN_A,
     IN_B,
     WEEKDAYS,
     closed,
@@ -25,7 +26,8 @@ from tests.store.test_bindings_compile import (
     run,
 )
 
-__all__ = ["BINDINGS_821", "BINDINGS_CROSSING", "BINDINGS_GENERAL", "BINDINGS_NOTICE_PERIOD",
+__all__ = ["BINDINGS_821", "BINDINGS_821_GROUPED", "BINDINGS_SAME_CARD_SIGNAL",
+           "BINDINGS_CROSSING", "BINDINGS_GENERAL", "BINDINGS_NOTICE_PERIOD",
            "BINDINGS_SHUT", "BINDINGS_SIGNAL", "CARD_A", "CARD_B", "EMERGENCY_CARD",
            "FIXTURE_BINDINGS", "GENERAL_CARD", "REF_821", "REF_SIGNAL", "W_821", "by_rule",
            "record", "rebuild", "shift", "with_when"]
@@ -71,8 +73,19 @@ BINDINGS_CROSSING = run(draw(opening_basis="on_signal",
 # emits its always-firing forbid, which the analysis rejects as vacuous (§12.4)
 BINDINGS_SHUT = run(draw(opening_basis="on_signal", periods=[closed(None, None)]))[0]
 
+# the same rules quoted in one card, as 33 CFR 117 usually writes them: "shall open on signal
+# if at least 4 hours notice is given" (on signal and the notice in one phrase, so the basis is
+# `or(notice at all times, at all times)`), and § 117.821's closure with its notice in one
+# paragraph (the forbid is `or(window, not window and notice short)`)
+BINDINGS_SAME_CARD_SIGNAL = run(draw(opening_basis="on_signal", notice_hours=4,
+                                     notice_at=IN_A))[0]
+DRAW_821_GROUPED = draw(opening_basis="on_signal", notice_hours=4, notice_at=IN_A,
+                        periods=[closed(420, 540, days=WEEKDAYS, holidays=True)])
+BINDINGS_821_GROUPED = run(DRAW_821_GROUPED)[0]
+
 FIXTURE_BINDINGS = [b for bs in (BINDINGS_821, BINDINGS_SIGNAL, BINDINGS_NOTICE_PERIOD,
-                                 BINDINGS_CROSSING, BINDINGS_SHUT) for b in bs]
+                                 BINDINGS_CROSSING, BINDINGS_SHUT, BINDINGS_SAME_CARD_SIGNAL,
+                                 BINDINGS_821_GROUPED) for b in bs]
 
 
 def by_rule(bindings: list[Binding], rule_id: str, effect: str) -> Binding:
