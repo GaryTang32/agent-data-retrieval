@@ -9,7 +9,9 @@ cannot read gets no bindings (the gate escalates). The grammar, case-insensitive
   `12 p.m.` is noon and `12:01 a.m.` is minute 1; `12 a.m.` is refused (midnight is written
   "12 midnight"). A window ending at midnight ends at 1440.
 - **Time ranges** (half-open): `[from] T to|until T` and `between [the hours of] T and T`.
-  "T through T" is refused (whether the last minute is in is unsure).
+  An end written `H:59` ("to 5:59 p.m.") runs through that minute, so the window ends at the
+  next one (P45); every other end is excluded. "T through T" is refused (whether the last
+  minute is in is unsure).
 - **Days:** `[from|on|every] Monday through Friday` (cyclic ranges, plurals), `on Saturdays and
   Sundays` and other lists, `on Sunday`, `[on] weekdays`, `[on] weekends`, `daily`,
   `seven days a week`, `every day`. Default: every day.
@@ -43,6 +45,7 @@ import re
 from adr_store.bindings.dsl import DAYS, Window, is_month_day
 
 _CLOCK = re.compile(r"(\d{1,2})(?::(\d{2}))?\s*([ap])\.m\.")
+_THROUGH_MINUTE = re.compile(r":59\s*[ap]\.m\.", re.IGNORECASE)
 _MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august",
            "september", "october", "november", "december")
 
@@ -183,6 +186,8 @@ def read_windows(quote: str) -> tuple[list[Window] | None, str]:
             a, b = parse_time(m["a"]), parse_time(m["b"])
             if a is None or b is None:
                 return None, "an unreadable time"
+            if _THROUGH_MINUTE.search(m["b"]):
+                b += 1                               # P45: "to 5:59 p.m." includes 17:59
             ranges.append((a, b or 1440))
     if ranges and "all_times" in by:
         return None, "all times and a time range"

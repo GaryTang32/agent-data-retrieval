@@ -11,20 +11,24 @@
   `{"const": bool}`.
 - **Three values.** A fact that is missing, null or not of the construct's type (a str where
   `cmp` needs an int, a bool where `eq` names a str) is no value, and the leaf reading it is
-  Unknown. `known` is never Unknown. `and`, `or` and `not` follow the strong Kleene tables: `and`
-  is F if any operand is F, else U if any is U, else T; `or` is the dual; `not U` is U.
+  Unknown. `known` is never Unknown: it is T for a present value some construct can read (an
+  int, a str or a bool) and F otherwise, so it is F exactly where every leaf on the fact is U.
+  `and`, `or` and `not` follow the strong Kleene tables: `and` is F if any operand is F, else U
+  if any is U, else T; `or` is the dual; `not U` is U.
 - **Windows** are half-open minute ranges `[start, end)` of a day (0–1440; `start > end`
   crosses midnight; 0–1440 is the whole day), a set of weekdays, an optional exception for
-  federal holidays and an optional inclusive month-day range that may wrap the year end. Every
-  condition is read on the calendar day of the minute being judged: after midnight, a window
-  that crosses midnight is in force on a day only if that day's weekday, holiday and date admit
-  it (the window grammar declines a crossing window with such limits, `windows.py`).
-  `in_window` on the fact `open_at` reads the facts `derive_facts` computes from it (`minute`,
-  `weekday`, `month_day`, `federal_holiday`); any of them missing is Unknown.
+  federal holidays and an optional inclusive month-day range that may wrap the year end. A
+  window that crosses midnight belongs to the night that starts on a listed day (P44): minutes
+  in `[start, 1440)` are judged on their own calendar day, minutes in `[0, end)` on the day
+  before, for the weekdays, the holiday exception and the date range alike. `in_window` on the
+  fact `open_at` (a naive ISO datetime with a time, as `derive_facts` writes it) computes the
+  minute, the day and the day before from it, holidays by `facts.is_federal_holiday`; a
+  missing or malformed `open_at` is Unknown.
 - **Ids.** `binding_ids` hashes the canonical JSON (sorted keys, no padding, UTF-8) of the
   identity fields (`rule_id`, `rule_version`, `doc_id`, `target`, `effect`) into the
   `binding_id`, and of the logic (the language, `when`, and `overrides` as a sorted set) into
-  the `binding_version`. A changed condition is a new version of the same binding; a changed
+  the `binding_version`. `Binding` checks that its ids and `required_facts` are those of its
+  own content. A changed condition is a new version of the same binding; a changed
   rule, document version, target or effect is a different binding. The identity holds no
   ordinal, so a compiler emits at most one binding per identity (two windows of one rule
   paragraph and effect are one `or`).
@@ -36,6 +40,7 @@ import hashlib
 import json
 import operator
 import re
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Literal
 
@@ -51,8 +56,9 @@ from pydantic import (
     model_validator,
 )
 
+from adr_store.bindings.facts import DAYS, is_federal_holiday, parse_local_datetime
+
 LANGUAGE = "adr-dsl@1"
-DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 # the same literal as `adr_store.units.envelope.BindingStatus` (a test pins it); declared here
 # so the gate's evaluator imports nothing beyond the standard library and pydantic
 BindingStatus = Literal["proposed", "tested", "analysed", "signed_off", "rejected"]
@@ -61,7 +67,6 @@ CONSTRUCTS = ("and", "or", "not", "cmp", "eq", "in", "in_window", "known", "cons
 OPS = {"<": operator.lt, "<=": operator.le, ">": operator.gt, ">=": operator.ge,
        "==": operator.eq, "!=": operator.ne}
 TIME_FACT = "open_at"
-WINDOW_FACTS = ("minute", "weekday", "month_day", "federal_holiday")
 IDENTITY_FIELDS = ("rule_id", "rule_version", "doc_id", "target", "effect")
 LOGIC_FIELDS = ("when", "overrides")
 _MONTH_DAYS = (31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -117,26 +122,32 @@ class Window(BaseModel):
         return self
 
 
-def in_window(w: Window, minute: int, weekday: str, month_day: str, holiday: bool) -> bool:
-    """Whether minute `minute` of a day (`weekday`, `month_day`, federal `holiday` or not) lies
-    in `w`. ValueError for inputs outside their domain."""
-    if type(minute) is not int or not 0 <= minute < 1440:
-        raise ValueError(f"minute {minute!r} is not in 0..1439")
-    if weekday not in DAYS:
-        raise ValueError(f"weekday {weekday!r} is not one of {DAYS}")
-    if not is_month_day(month_day):
-        raise ValueError(f"month_day {month_day!r} is not a calendar day written MM-DD")
-    if weekday not in w.days or (w.except_federal_holidays and holiday):
+def _admits(w: Window, day: date) -> bool:
+    """Whether `w`'s weekdays, holiday exception and date range admit the calendar day `day`."""
+    if DAYS[day.weekday()] not in w.days or (w.except_federal_holidays
+                                             and is_federal_holiday(day)):
         return False
     if w.date_from is not None and w.date_to is not None:
+        md = f"{day.month:02d}-{day.day:02d}"
         if w.date_from <= w.date_to:
-            if not w.date_from <= month_day <= w.date_to:
-                return False
-        elif w.date_to < month_day < w.date_from:
-            return False
+            return w.date_from <= md <= w.date_to
+        return not w.date_to < md < w.date_from
+    return True
+
+
+def in_window(w: Window, minute: int, day: date) -> bool:
+    """Whether minute `minute` of the calendar day `day` lies in `w`. The minutes after midnight
+    of a window that crosses midnight are judged on the day before (P44). ValueError for inputs
+    outside their domain (a datetime is not a day)."""
+    if type(minute) is not int or not 0 <= minute < 1440:
+        raise ValueError(f"minute {minute!r} is not in 0..1439")
+    if not isinstance(day, date) or isinstance(day, datetime):
+        raise ValueError(f"day {day!r} is not a date")
     if w.start < w.end:
-        return w.start <= minute < w.end
-    return minute >= w.start or minute < w.end
+        return w.start <= minute < w.end and _admits(w, day)
+    if minute >= w.start:
+        return _admits(w, day)
+    return minute < w.end and _admits(w, day - timedelta(days=1))
 
 
 # -- checking --------------------------------------------------------------------------------
@@ -277,19 +288,22 @@ def _eval(e: Expr, facts: dict[str, Any]) -> Tri:
         v = facts.get(arg[0])
         return Tri.U if type(v) is not str else _tri(v in arg[1])
     if op == "known":
-        return _tri(facts.get(arg) is not None)
+        return _tri(type(facts.get(arg)) in (int, str, bool))
     if op == "const":
         return _tri(arg)
     w = e["window"] if isinstance(e["window"], Window) else Window.model_validate(e["window"])
-    minute, weekday, month_day, holiday = (facts.get(k) for k in WINDOW_FACTS)
-    if (type(minute) is not int or not 0 <= minute < 1440 or weekday not in DAYS
-            or not is_month_day(month_day) or type(holiday) is not bool):
+    at = parse_local_datetime(facts.get(arg["fact"]))
+    if at is None:
         return Tri.U
-    return _tri(in_window(w, minute, weekday, month_day, holiday))
+    return _tri(in_window(w, at.hour * 60 + at.minute, at.date()))
 
 
 def required_facts(e: Expr) -> list[str]:
-    """The facts `e` reads, sorted and distinct (`open_at` for a window)."""
+    """The facts `e` reads, sorted and distinct (`open_at` for a window). ValueError when `e`
+    is not an `adr-dsl@1` expression."""
+    problems = check_expr(e)
+    if problems:
+        raise ValueError("; ".join(problems))
     found: set[str] = set()
 
     def walk(x: Expr) -> None:
@@ -327,22 +341,25 @@ def _sha256_canonical(obj: Any) -> str:
 
 def binding_ids(core: dict) -> tuple[str, str]:
     """(binding_id, binding_version): the SHA-256 of the canonical JSON of the identity fields,
-    and of the logic (language, `when`, sorted `overrides`). Other keys of `core` are ignored;
-    `overrides` defaults to none. ValueError when an identity field or `when` is missing."""
+    and of the logic (language, `when`, `overrides` sorted and distinct). Other keys of `core`
+    are ignored; `overrides` defaults to none. ValueError when an identity field or `when` is
+    missing."""
     missing = [k for k in (*IDENTITY_FIELDS, "when") if k not in core]
     if missing:
         raise ValueError(f"binding core lacks {', '.join(missing)}")
     identity = {k: core[k] for k in IDENTITY_FIELDS}
     logic = {"language": LANGUAGE, "when": core["when"],
-             "overrides": sorted(core.get("overrides") or [])}
+             "overrides": sorted(set(core.get("overrides") or []))}
     return _sha256_canonical(identity), _sha256_canonical(logic)
 
 
 # -- the binding -----------------------------------------------------------------------------
 
 class Binding(BaseModel):
-    """One binding (§12.1). `when` must be an `adr-dsl@1` expression; only a `basis` may carry
-    `overrides` (the `forbid`s it sets aside when True, P32)."""
+    """One binding (§12.1). `when` must be an `adr-dsl@1` expression; `binding_id`,
+    `binding_version` and `required_facts` must be those of the binding's own content
+    (`binding_ids`, `required_facts(when)`); only a `basis` may carry `overrides` (the `forbid`s
+    it sets aside when True, P32)."""
 
     model_config = ConfigDict(extra="forbid", title="Binding")
 
@@ -371,4 +388,13 @@ class Binding(BaseModel):
             raise ValueError(f"when: {'; '.join(problems)}")
         if self.effect == "forbid" and self.overrides:
             raise ValueError("overrides: only a basis overrides forbids")
+        bid, version = binding_ids(self.model_dump())
+        if self.binding_id != bid:
+            raise ValueError(f"binding_id {self.binding_id!r} is not {bid} (from the identity)")
+        if self.binding_version != version:
+            raise ValueError(f"binding_version {self.binding_version!r} is not {version} "
+                             "(from the logic)")
+        wanted = required_facts(self.when)
+        if self.required_facts != wanted:
+            raise ValueError(f"required_facts {self.required_facts} is not {wanted}")
         return self

@@ -126,9 +126,43 @@ def test_crossing_midnight():                                       # Review Foc
      [W(660, 840, ("Sat", "Sun"))]),
     ("From December 1 through April 30, at all times.",
      [W(0, 1440, date_from="12-01", date_to="04-30")]),
+    # the review's surviving mutants: an inclusion is not an exception, midnight to midnight is
+    # the whole day, and a day range may wrap the week
+    ("from 7 a.m. to 7 p.m. daily, including Federal holidays", [W(420, 1140)]),
+    ("from 7 a.m. to 9 a.m., Monday through Friday, including Federal holidays",
+     [W(420, 540, WEEKDAYS)]),
+    ("midnight to midnight", [W(0, 1440)]),
+    ("from 7 a.m. to 9 a.m., Friday through Monday", [W(420, 540, ("Mon", "Fri", "Sat", "Sun"))]),
+    ("from 7 a.m. to 9 a.m., Saturday through Sunday", [W(420, 540, ("Sat", "Sun"))]),
+    ("from 7 a.m. to 9 a.m., Sunday through Tuesday", [W(420, 540, ("Mon", "Tue", "Sun"))]),
 ])
 def test_readable_quotes(quote, want):
     assert parse_windows(quote) == want
+
+
+# -- P45: an end written H:59 runs through that minute --------------------------------------
+
+@pytest.mark.parametrize("quote,want", [
+    ("4:35 p.m. to 5:59 p.m.", [W(995, 1080)]),
+    ("from 7:35 a.m. to 8:59 a.m., 12:05 p.m. to 12:59 p.m. and 4:35 p.m. to 5:59 p.m., Monday "
+     "through Friday, except Federal holidays",
+     [W(455, 540, WEEKDAYS, True), W(725, 780, WEEKDAYS, True), W(995, 1080, WEEKDAYS, True)]),
+    ("from 12 p.m. to 11:59 p.m.", [W(720, 1440)]),
+    ("from 6 a.m. to 7:59 a.m. the draw need not open", [W(360, 480)]),
+    ("10 p.m. to 5:59 a.m.", [W(1320, 360)]),
+    # a start at :59 and other ends stay as written, half-open
+    ("5:59 p.m. to 7 p.m.", [W(1079, 1140)]),
+    ("4:05 p.m. to 6:58 p.m.", [W(965, 1138)]),
+    ("between 4:35 p.m. and 5:59 p.m.", [W(995, 1080)]),
+])
+def test_an_end_at_59_includes_its_minute(quote, want):
+    assert parse_windows(quote) == want
+
+
+def test_59_end_is_closed_at_that_minute_and_open_after():
+    (w,) = parse_windows("4:45 p.m. to 5:59 p.m., Monday through Friday")
+    friday = datetime(2026, 8, 14).date()
+    assert in_window(w, 17 * 60 + 59, friday) and not in_window(w, 18 * 60, friday)
 
 
 # -- parse_windows: near misses are None, never a guess ---------------------------------------
@@ -201,7 +235,7 @@ def test_near_misses_are_unreadable(quote):
 def test_weekday_window_does_not_close_on_an_observed_holiday(when, closed):
     (w,) = parse_windows("7 a.m. to 9 a.m., Monday through Friday, except federal holidays")
     f = derive_facts(when, {})
-    assert in_window(w, f["minute"], f["weekday"], f["month_day"], f["federal_holiday"]) is closed
+    assert in_window(w, f["minute"], when.date()) is closed
 
 
 @pytest.mark.parametrize("quote,reason", [

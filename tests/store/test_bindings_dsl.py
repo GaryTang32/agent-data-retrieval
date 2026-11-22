@@ -5,6 +5,7 @@ and versions, and the `Binding` model (Phase 4 spec §12.1, §12.6; plan Task 14
 
 import hashlib
 import json
+from datetime import date, datetime
 from typing import get_args
 
 import pytest
@@ -117,6 +118,11 @@ def test_a_null_or_ill_typed_fact_is_no_value():
     assert evaluate({"eq": ["vessel_class", "distress"]}, {"vessel_class": 3}) is Tri.U
     assert evaluate({"in": ["vessel_class", ["distress"]]}, {"vessel_class": None}) is Tri.U
     assert evaluate({"known": "vessel_class"}, {"vessel_class": None}) is Tri.F
+    # known agrees: a fact no construct can read is not known (P: Minor 4 of the review)
+    for bad in (None, 2.5, [1], {"a": 1}, b"x"):
+        assert evaluate({"known": "notice_minutes"}, {"notice_minutes": bad}) is Tri.F, bad
+    for good in (0, -1, "distress", False, "2026-08-14T07:30:00"):
+        assert evaluate({"known": "notice_minutes"}, {"notice_minutes": good}) is Tri.T, good
 
 
 def test_eq_in_known_const():
@@ -152,64 +158,108 @@ def test_emergency_basis_shape_is_three_valued():
 
 # -- windows ---------------------------------------------------------------------------------
 
+def D(md: str, year: int = 2028) -> date:
+    """A day of a leap year, so 02-29 exists (2028-01-03 is a Monday)."""
+    return date.fromisoformat(f"{year}-{md}")
+
+
 @pytest.mark.parametrize("minute,inside", [(419, False), (420, True), (539, True), (540, False)])
 def test_window_is_half_open(minute, inside):                      # Review Focus 2
-    assert in_window(W(420, 540, WEEKDAYS), minute, "Mon", "08-14", False) is inside
+    assert in_window(W(420, 540, WEEKDAYS), minute, date(2026, 8, 10)) is inside   # a Monday
 
 
 def test_window_crossing_midnight_and_wrapping_dates():
     w = Window(start=1380, end=360, days=DAYS, except_federal_holidays=False, date_from="11-01",
                date_to="03-31")
-    assert in_window(w, 1400, "Tue", "12-31", False) and in_window(w, 100, "Wed", "01-01", False)
-    assert not in_window(w, 1400, "Tue", "04-01", False)
+    assert in_window(w, 1400, date(2026, 12, 31)) and in_window(w, 100, date(2027, 1, 1))
+    assert not in_window(w, 1400, date(2027, 4, 1))
 
 
 @pytest.mark.parametrize("minute,inside", [(1379, False), (1380, True), (1439, True), (0, True),
                                            (359, True), (360, False), (720, False)])
 def test_crossing_midnight_minutes(minute, inside):
-    assert in_window(W(1380, 360), minute, "Sat", "06-01", False) is inside
+    assert in_window(W(1380, 360), minute, date(2026, 6, 6)) is inside
+
+
+# P44: the minutes after midnight of a crossing window belong to the night that started the
+# day before, for the days, the holiday exception and the date range alike
+
+@pytest.mark.parametrize("day,minute,inside", [
+    (date(2026, 8, 10), 1390, True),     # Monday 23:10: the Monday night
+    (date(2026, 8, 11), 60, True),       # Tuesday 01:00: still the Monday night
+    (date(2026, 8, 10), 60, False),      # Monday 01:00: the Sunday night
+    (date(2026, 8, 11), 1390, False),    # Tuesday 23:10: the Tuesday night
+    (date(2026, 8, 11), 360, False),     # Tuesday 06:00: half-open end
+])
+def test_crossing_window_belongs_to_the_night_it_starts(day, minute, inside):
+    assert in_window(W(1380, 360, ("Mon",)), minute, day) is inside
+
+
+@pytest.mark.parametrize("day,minute,inside", [
+    (date(2027, 4, 1), 120, True),       # the night of 03-31 into 04-01
+    (date(2026, 12, 1), 120, False),     # the night of 11-30 into 12-01
+    (date(2026, 12, 1), 1230, True),     # 12-01 20:30 starts the first night
+    (date(2027, 3, 31), 1230, True),
+    (date(2027, 4, 1), 1230, False),
+    (date(2027, 1, 1), 120, True),       # the year wrap: the night of 12-31
+    (date(2027, 4, 1), 240, False),
+])
+def test_crossing_window_date_range_follows_the_start_night(day, minute, inside):
+    w = W(1200, 240, date_from="12-01", date_to="03-31")      # Dec 1 - Mar 31, 8 p.m. - 4 a.m.
+    assert in_window(w, minute, day) is inside
+
+
+def test_crossing_window_holiday_exception_covers_the_next_morning():
+    w = W(1380, 360, WEEKDAYS, hol=True)
+    # Friday 2026-07-03 is the observed Independence Day: no window that night...
+    assert not in_window(w, 1400, date(2026, 7, 3))
+    assert not in_window(w, 60, date(2026, 7, 4))          # ...nor in its early hours
+    # Thursday 2026-07-02 is an ordinary day: its night runs into the holiday morning
+    assert in_window(w, 1400, date(2026, 7, 2)) and in_window(w, 60, date(2026, 7, 3))
+    # Monday 2026-09-07 is Labor Day: the early hours belong to Sunday's night (not a weekday)
+    assert not in_window(w, 60, date(2026, 9, 7)) and in_window(w, 60, date(2026, 9, 8)) is False
+    assert in_window(w, 60, date(2026, 9, 9))               # Tuesday's night, Wednesday 01:00
+    # New Year's Day 2027 is a Friday holiday; the night of Thursday 12-31 runs into it
+    assert in_window(w, 60, date(2027, 1, 1)) and not in_window(w, 60, date(2027, 1, 2))
 
 
 @pytest.mark.parametrize("md,inside", [("10-31", False), ("11-01", True), ("12-31", True),
                                        ("01-01", True), ("02-29", True), ("03-31", True),
                                        ("04-01", False), ("07-04", False)])
 def test_wrapping_date_range_is_inclusive_at_both_ends(md, inside):
-    assert in_window(W(0, 1440, date_from="11-01", date_to="03-31"), 600, "Mon", md,
-                     False) is inside
+    assert in_window(W(0, 1440, date_from="11-01", date_to="03-31"), 600, D(md)) is inside
 
 
 @pytest.mark.parametrize("md,inside", [("03-31", False), ("04-01", True), ("07-04", True),
                                        ("10-31", True), ("11-01", False)])
 def test_plain_date_range(md, inside):
-    assert in_window(W(0, 1440, date_from="04-01", date_to="10-31"), 600, "Mon", md,
-                     False) is inside
+    assert in_window(W(0, 1440, date_from="04-01", date_to="10-31"), 600, D(md)) is inside
 
 
 def test_single_day_date_range():
     w = W(1320, 1440, date_from="07-04", date_to="07-04")
-    assert in_window(w, 1320, "Sat", "07-04", False)
-    assert not in_window(w, 1320, "Fri", "07-03", False)
+    assert in_window(w, 1320, date(2026, 7, 4))
+    assert not in_window(w, 1320, date(2026, 7, 3))
 
 
 def test_days_and_holiday_exception():
     w = W(420, 540, WEEKDAYS, hol=True)
-    assert in_window(w, 450, "Fri", "08-14", False)
-    assert not in_window(w, 450, "Sat", "08-15", False)
-    assert not in_window(w, 450, "Fri", "07-03", True)          # a holiday Friday: no window
-    assert in_window(W(420, 540, WEEKDAYS, hol=False), 450, "Fri", "07-03", True)
+    assert in_window(w, 450, date(2026, 8, 14))                 # an ordinary Friday
+    assert not in_window(w, 450, date(2026, 8, 15))             # Saturday
+    assert not in_window(w, 450, date(2026, 7, 3))              # a holiday Friday: no window
+    assert in_window(W(420, 540, WEEKDAYS, hol=False), 450, date(2026, 7, 3))
+    assert not in_window(w, 450, date(2027, 12, 31))            # observed New Year's Day 2028
 
 
 def test_all_day_window():
     w = W(0, 1440)
-    assert all(in_window(w, m, d, "05-05", h) for m in (0, 719, 1439) for d in DAYS
-               for h in (True, False))
+    assert all(in_window(w, m, date(2026, 7, d)) for m in (0, 719, 1439) for d in range(1, 8))
 
 
 def test_in_window_refuses_inputs_outside_its_domain():
     w = W(420, 540)
-    for args in [(1440, "Mon", "08-14", False), (-1, "Mon", "08-14", False),
-                 (420, "Monday", "08-14", False), (420, "Mon", "8-14", False),
-                 (420, "Mon", "02-30", False)]:
+    for args in [(1440, date(2026, 8, 14)), (-1, date(2026, 8, 14)), (True, date(2026, 8, 14)),
+                 (420, "2026-08-14"), (420, datetime(2026, 8, 14, 7, 0))]:
         with pytest.raises(ValueError):
             in_window(w, *args)
 
@@ -234,19 +284,21 @@ def test_window_is_frozen_and_accepts_leap_day():
         w.start = 5
 
 
-def test_in_window_expression_reads_the_open_at_facts():
+def test_in_window_expression_reads_the_open_at_fact():
     e = {"in_window": {"fact": "open_at"}, "window": win_dict()}
-    base = {"minute": 450, "weekday": "Fri", "month_day": "08-14", "federal_holiday": False}
-    assert evaluate(e, base) is Tri.T
-    assert evaluate(e, {**base, "minute": 540}) is Tri.F
-    assert evaluate(e, {**base, "federal_holiday": True}) is Tri.F
-    assert evaluate(e, {**base, "weekday": "Sun"}) is Tri.F
-    for k in base:                              # any part of the time missing: Unknown
-        assert evaluate(e, {f: v for f, v in base.items() if f != k}) is Tri.U
-    assert evaluate(e, {**base, "minute": "450"}) is Tri.U
+    assert evaluate(e, {"open_at": "2026-08-14T07:30:00"}) is Tri.T     # an ordinary Friday
+    assert evaluate(e, {"open_at": "2026-08-14T09:00:00"}) is Tri.F     # half-open end
+    assert evaluate(e, {"open_at": "2026-07-03T07:30:00"}) is Tri.F     # observed holiday
+    assert evaluate(e, {"open_at": "2026-08-16T07:30:00"}) is Tri.F     # Sunday
+    # the derived parts are not read: open_at is the fact (P44 needs the day before)
+    assert evaluate(e, {"minute": 450, "weekday": "Fri", "month_day": "08-14",
+                        "federal_holiday": False}) is Tri.U
+    for bad in (None, "2026-08-14", "2026-08-14T07:30:00+00:00", "yesterday", 450,
+                datetime(2026, 8, 14, 7, 30)):
+        assert evaluate(e, {"open_at": bad}) is Tri.U, bad
     # a Window instance and its dict evaluate alike
     e2 = {"in_window": {"fact": "open_at"}, "window": Window(**win_dict())}
-    assert evaluate(e2, base) is Tri.T
+    assert evaluate(e2, {"open_at": "2026-08-14T07:30:00"}) is Tri.T
 
 
 # -- check_expr ------------------------------------------------------------------------------
@@ -359,6 +411,12 @@ def test_required_facts_sorted_unique():
     assert required_facts({"const": False}) == []
 
 
+def test_required_facts_refuses_what_check_expr_refuses():
+    for bad in ({"python": "x"}, {"and": [{"known": "x"}, {"cmp": ["y", "=>", 1]}]}, [], {}):
+        with pytest.raises(ValueError):
+            required_facts(bad)
+
+
 # -- ids and versions ------------------------------------------------------------------------
 
 CORE = {"rule_id": "33 CFR 117.1081(b)", "rule_version": "0123456789ab", "doc_id": "d" * 64,
@@ -434,10 +492,12 @@ def test_binding_ids_need_the_identity_and_the_logic():
 # -- the Binding model -----------------------------------------------------------------------
 
 def binding(**over) -> Binding:
-    bid, ver = binding_ids(CORE)
-    fields = {**CORE, "binding_id": bid, "binding_version": ver, "required_facts": ["open_at"],
-              "derivation": "need not open 7 to 9 a.m. weekdays", "params_prov": {},
-              "status": "proposed", **over}
+    """A binding whose ids are computed from its fields unless given."""
+    fields = {**CORE, "required_facts": ["open_at"], "params_prov": {}, "status": "proposed",
+              "derivation": "need not open 7 to 9 a.m. weekdays", **over}
+    bid, ver = binding_ids(fields)
+    fields.setdefault("binding_id", bid)
+    fields.setdefault("binding_version", ver)
     return Binding(**fields)
 
 
@@ -460,6 +520,31 @@ def test_binding_model_refuses_bad_fields():
     with pytest.raises(ValidationError):
         binding(surprise=1)
     assert binding(effect="basis", overrides=["a" * 64]).overrides == ["a" * 64]
+
+
+def test_binding_model_checks_its_own_ids_and_required_facts():
+    bid, ver = binding_ids(CORE)
+    with pytest.raises(ValidationError, match="binding_id"):
+        binding(binding_id="0" * 64)
+    with pytest.raises(ValidationError, match="binding_version"):
+        binding(binding_version="0" * 64)
+    with pytest.raises(ValidationError, match="binding_id"):      # ids of another identity
+        binding(binding_id=bid, binding_version=ver, rule_id="33 CFR 117.1081(c)")
+    with pytest.raises(ValidationError, match="binding_version"):  # ids of another condition
+        binding(binding_id=bid, binding_version=ver, when={"const": True}, required_facts=[])
+    with pytest.raises(ValidationError, match="required_facts"):
+        binding(required_facts=["open_at", "notice_minutes"])
+    with pytest.raises(ValidationError, match="required_facts"):
+        binding(required_facts=[])
+    b = binding(when={"and": [{"in_window": {"fact": "open_at"}, "window": win_dict()},
+                              {"cmp": ["notice_minutes", "<", 240]}]},
+                required_facts=["notice_minutes", "open_at"])
+    assert (b.binding_id, b.binding_version) == binding_ids(b.model_dump())
+
+
+def test_duplicate_overrides_hash_as_one():
+    one = {**CORE, "effect": "basis", "overrides": ["a" * 64]}
+    assert binding_ids({**one, "overrides": ["a" * 64, "a" * 64]}) == binding_ids(one)
 
 
 def test_binding_status_is_the_envelope_literal():

@@ -107,9 +107,15 @@ def test_every_year_has_eleven_holidays_and_dates_stay_in_the_year():
         assert is_federal_holiday(date(y, 12, 25))
 
 
-def test_year_before_the_monday_holiday_rules_is_refused():
-    with pytest.raises(ValueError):
-        federal_holidays(1970)
+def test_years_before_1978_are_refused():
+    # 1971-1977 kept Veterans Day on the fourth Monday of October: out of scope
+    for y in (1970, 1975, 1977):
+        with pytest.raises(ValueError):
+            federal_holidays(y)
+        with pytest.raises(ValueError):
+            is_federal_holiday(date(y, 11, 11))
+    assert federal_holidays(1978)[date(1978, 11, 10)] == "Veterans Day (observed)"  # a Saturday
+    assert date(1978, 1, 16) not in federal_holidays(1978)       # no MLK Day before 1986
 
 
 def test_federal_holidays_returns_a_fresh_dict():
@@ -160,6 +166,8 @@ def test_notice_minutes_floors_and_can_be_negative():
     {"notice_received_at": {"value": "yesterday", "source": "record"}},
     {"notice_received_at": {"value": "2026-08-13T18:00:00+00:00", "source": "record"}},
     {"notice_received_at": {"value": 1755100000, "source": "record"}},
+    {"notice_received_at": {"value": "2026-08-13", "source": "record"}},          # no time
+    {"notice_received_at": {"value": "20260813T180000", "source": "record"}},
     {"vessel_class": {"value": "battleship", "source": "user"}},
     {"vessel_class": {"value": ["distress"], "source": "user"}},
     {"local_procedure_conflict": {"value": "no", "source": "record"}},

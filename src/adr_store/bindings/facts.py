@@ -10,32 +10,38 @@ rule, and the facts of a request derived from `open_at` and the request record.
   Monday after (6103(b), Executive Order 11582). Both the legal and the observed date count.
   `federal_holidays(year)` holds every such date that falls in `year`, so 2027 holds
   2027-12-31, the observed New Year's Day of 2028. Inauguration Day (6103(c)) is excluded: it
-  applies only in the Washington area. Years before the 1971 Monday-holiday rules are refused.
+  applies only in the Washington area. Years before 1978 are refused (from 1971 to 1977
+  Veterans Day was the fourth Monday of October, which is not modelled).
   No calendar file and no rule parameter: the gate and the reference evaluator share this
   module and it keeps the reference independent of the bindings.
 - **Facts.** `open_at` (a naive datetime, the simulated local time) gives `open_at` (ISO),
   `minute` (of the day), `weekday`, `month_day` ("MM-DD") and `federal_holiday`. From the record
   (`{fact: {"value", "source", ...}}`; values only are read): `notice_minutes` = `open_at` −
-  `notice_received_at` in whole minutes, rounded down (negative when the notice came after the
-  requested time), `vessel_class` (one of `VESSEL_CLASSES`) and `local_procedure_conflict`
-  (bool). A fact missing from the record, or null, is absent from the facts, so every
-  comparison on it is Unknown. A malformed value (wrong type, unknown class, an unparseable or
-  zoned time) is a ValueError: the caller fails closed.
+  `notice_received_at` (a naive ISO datetime with a time) in whole minutes, rounded down
+  (negative when the notice came after the requested time), `vessel_class` (one of
+  `VESSEL_CLASSES`) and `local_procedure_conflict` (bool). A fact missing from the record, or
+  null, is absent from the facts, so every comparison on it is Unknown. A malformed value
+  (wrong type, unknown class, an unparseable or zoned time, a date with no time) is a
+  ValueError: the caller fails closed.
+- `DAYS`, the weekday names, live here so that the DSL (`dsl.py`, which re-exports them) can
+  read holidays from this module without an import cycle.
 """
 
 from __future__ import annotations
 
 import functools
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from adr_store.bindings.dsl import DAYS
+DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 VESSEL_CLASSES = ("commercial", "recreational", "public_safety", "distress", "rescue_salvage",
                   "severe_weather_shelter")
 EMERGENCY_CLASSES = ("public_safety", "distress", "rescue_salvage", "severe_weather_shelter")
-FIRST_YEAR = 1971   # the Uniform Monday Holiday Act's rules take effect
+FIRST_YEAR = 1978   # Veterans Day back on 11 November (fourth Monday of October 1971-1977)
 OBSERVED = " (observed)"
+_ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
 
 
 def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
@@ -89,6 +95,18 @@ def is_federal_holiday(d: date) -> bool:
     return any(h == d for h, _ in _holidays(d.year))
 
 
+def parse_local_datetime(value: object) -> datetime | None:
+    """A naive ISO datetime written with a time ("2026-08-14T09:30:00"), else None (a date
+    alone, a zone offset, another type or another format)."""
+    if not isinstance(value, str) or not _ISO_TIME.match(value):
+        return None
+    try:
+        at = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return at if at.tzinfo is None else None
+
+
 def _value(record: dict[str, dict], fact: str) -> Any:
     """The fact's value in the record, None when missing or null."""
     if fact not in record:
@@ -110,11 +128,8 @@ def derive_facts(open_at: datetime, record: dict[str, dict]) -> dict[str, Any]:
         "federal_holiday": is_federal_holiday(day)}
     received = _value(record, "notice_received_at")
     if received is not None:
-        try:
-            at = datetime.fromisoformat(received) if isinstance(received, str) else None
-        except ValueError:
-            at = None
-        if at is None or at.tzinfo is not None:
+        at = parse_local_datetime(received)
+        if at is None:
             raise ValueError(f"notice_received_at {received!r} is not a naive ISO datetime")
         facts["notice_minutes"] = (open_at - at) // timedelta(minutes=1)
     vessel = _value(record, "vessel_class")
