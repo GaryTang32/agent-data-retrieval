@@ -126,6 +126,79 @@ def test_modal_spans_hold_every_match_word_bounded():
     assert modality("The marshall put mustard on a shallow plate.") == (None, [])
 
 
+@pytest.mark.parametrize("text,phrase", [                                   # ruling P47
+    ("From 7 a.m. to 7 p.m. the draw need open only on the hour and half-hour.", "need open"),
+    ("The draw need be opened only on the hour and half hour.", "need be opened"),
+    ("The draw need only open on the hour.", "need only open"),
+    ("The draw need only be opened for commercial vessels.", "need only be opened"),
+    ("The draw NEED ONLY BE\nOPENED on signal.", "need only be opened"),   # case, whitespace
+])
+def test_restricted_opening_phrases_are_exemptions(text, phrase):
+    mod, spans = modality(text)
+    assert mod == "exemption"
+    assert [ph for _, _, ph in spans] == [phrase]
+    assert " ".join(text[spans[0][0]:spans[0][1]].lower().split()) == phrase
+
+
+def test_restricted_openings_keep_leftmost_longest():                         # ruling P47
+    # leftmost wins against "need not" and "shall", whichever comes first
+    assert modality("The draw need open only on the hour; it need not open at night.") == (
+        "exemption", [(9, 18, "need open"), (40, 48, "need not")])
+    text = "The owner shall see that the draw need only be opened on signal."
+    assert modality(text) == ("obligation", [(10, 15, "shall"), (34, 53, "need only be opened")])
+    text = "The draw need only be opened on signal and the tender shall log it."
+    assert modality(text) == ("exemption", [(9, 28, "need only be opened"), (54, 59, "shall")])
+    # "need not" still classifies as before when it comes first
+    assert modality("The draw need not open, and need be opened only by day.")[0] == "exemption"
+    assert [ph for _, _, ph in modality("It need not open; it need be opened only by day.")[1]] \
+        == ["need not", "need be opened"]
+    # longest at equal start: "need only be opened" is one span, not "need only" plus more
+    assert modality("need only be opened")[1] == [(0, 19, "need only be opened")]
+
+
+def test_restricted_opening_phrases_are_word_bounded():                      # ruling P47
+    for text in ("The kneed open hinge.", "Boats needs open water.", "We need openly said.",
+                 "A need opened door.", "The need only opener.", "They need only be openedly.",
+                 "Vessels in need of an opening.", "The bridge does not need to open."):
+        assert modality(text) == (None, []), text
+
+
+RESTRICTED_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
+<DIV5 N="117" TYPE="PART">
+<HEAD>PART 117&#8212;DRAWBRIDGE OPERATION REGULATIONS</HEAD>
+<DIV6 N="B" TYPE="SUBPART">
+<HEAD>Subpart B&#8212;Specific Requirements</HEAD>
+<DIV8 N="117.293" TYPE="SECTION">
+<HEAD>&#xA7; 117.293 Harbor River.</HEAD>
+<P>(a) Each day from 7 a.m. to 7 p.m., except Federal holidays, the draw need open only on the
+hour and half-hour;</P>
+<P>(b) The Harbor River drawbridge, mile 1.2, is operated by the county.</P>
+<P>(c) From 6:10 a.m. to 7:10 p.m., Monday through Saturday, the draw need only be opened at 10
+minutes after the hour.</P>
+</DIV8>
+</DIV6>
+</DIV5>
+"""
+
+
+def test_a_restricted_opening_paragraph_gets_a_card(tmp_path):              # ruling P47
+    doc = _doc(RESTRICTED_XML, "xml", ECFR_NEW, ecfr_url(33, "117", ECFR_NEW))
+    store = uf.make_units_store(tmp_path / "s", docs=[doc])
+    (d,) = ecfr_docs(store)
+    cards, provs = rule_cards(store, d, overlay_of(store))
+    assert [c.canonical_ref for c in cards] == ["33 CFR 117.293(a)", "33 CFR 117.293(c)"]
+    assert [c.body["modality"] for c in cards] == ["exemption", "exemption"]
+    assert [[s["phrase"] for s in c.body["modal_spans"]] for c in cards] == [
+        ["need open"], ["need only be opened"]]
+    text = store.text(d)
+    for c in cards:
+        for s in c.body["modal_spans"]:
+            a, b = s["span"]
+            assert " ".join(text[a:b].lower().split()) == s["phrase"]
+    # (b) is still a non-modal provision, a closure target of (a) and (c)
+    assert [p.provision_id for p in provs if p.modality is None] == ["33 CFR 117.293(b)"]
+
+
 def test_provision_modal_spans_are_document_offsets(units_store):
     text = units_store.text(DOC_117_NEW)
     provs = provisions(units_store, DOC_117_NEW)

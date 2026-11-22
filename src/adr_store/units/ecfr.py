@@ -26,7 +26,7 @@ A **provision** is one `P` element of a `DIV8` section of an eCFR part (33 CFR 1
   1. The provision id is `"<title> CFR <section>"` followed by `(<marker>)` per level:
   § 117.5 is one unmarked paragraph, so its id is `33 CFR 117.5(p1)`. Repeated markers in
   the source can give two provisions one id; `closure.duplicate_provision_ids` lists them.
-- **Modality** (§8.1). The leftmost match of a lexicon phrase (case-insensitive, word-bounded),
+- **Modality** (§8.1, P47). The leftmost match of a lexicon phrase (case-insensitive, word-bounded),
   the longest at equal start, gives the class; `modal_spans` hold every match, scanned left to
   right without overlap. Provision `modal_spans` are document offsets. A paragraph with no
   match is a non-modal provision: not a rule card, but a closure target (P4).
@@ -74,7 +74,10 @@ PARTS = ("ecfr:33:117", "ecfr:33:165", "ecfr:47:73")  # chain ids
 MODAL_LEXICON: dict[str, tuple[str, ...]] = {
     "prohibition": ("may not", "shall not", "must not", "no person may", "no vessel may",
                     "is prohibited", "are prohibited"),
-    "exemption": ("need not",),
+    # P47: a restricted opening ("the draw need open only on the hour") releases the general
+    # duty to open (§ 117.5) outside the stated times
+    "exemption": ("need not", "need open", "need be opened", "need only open",
+                  "need only be opened"),
     "obligation": ("shall", "must")}
 _TITLE_OF_PART = {"117": "33", "165": "33", "73": "47"}  # for bare numbers (normalise_rule_id)
 _MODEL_FIELDS = ("subject", "conditions", "thresholds", "exceptions")

@@ -335,7 +335,7 @@ def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Uni
 def listed_reason(problem: str) -> str:
     """The kind of a problem that gives a draw no bindings, for the report's counts."""
     if problem.endswith("no rule card holds its quote"):
-        return "no_card"        # e.g. a non-modal paragraph ("need open only"), no rule card
+        return "no_card"        # e.g. a non-modal paragraph, no rule card
     if problem.endswith("the window grammar cannot read its quote"):
         return "unreadable_window"
     if problem.rsplit(": ", 1)[-1] in FAILED:
