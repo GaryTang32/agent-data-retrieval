@@ -1195,3 +1195,12 @@ def test_bindings_build_with_z3_analyses_every_draw(flow_store, capsys, monkeypa
     assert all("stamped" not in b.analysis and "conflicts" in b.analysis for b in bs)
     assert "B2: 0 conflict(s), 0 vacuous binding(s) over 3 analysed draw(s)" in out
     assert m.agreement_pairs == [("117.821", 2, 2)]
+
+
+def test_a_recorded_draw_with_no_bindings_is_refused():          # re-review N7
+    fields = dict(format_version="0.1", snapshot="s", units_id="a" * 64, tables_id="b" * 64,
+                  facts_id=None, enrichment_id=None, agreement_set=[], agreement_pairs=[],
+                  draws=[["d", "117.821", 1, 2], ["d", "117.821", 2, 0]], file="f",
+                  sha256="c" * 64, bindings=2, language="adr-dsl@1")
+    with pytest.raises(ValueError, match="at least one binding"):
+        bm.BindingsManifest.model_validate(fields)

@@ -122,6 +122,8 @@ class _Manifest(BaseModel):
             raise ValueError("draws must be sorted and distinct")
         if sum(d[3] for d in self.draws) != self.bindings:
             raise ValueError("draws must count every binding")
+        if any(d[3] < 1 for d in self.draws):   # a recorded draw holds at least its emergency basis
+            raise ValueError("every recorded draw holds at least one binding")
         return self
 
 
