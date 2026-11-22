@@ -18,12 +18,14 @@ hours notice") and in how § 117.4 marks "Drawtender"; § 117.821(a) is the same
 that lists 33/117 and 33/165 (Coast Guard) and 47/73 (FCC), so eCFR issuers are known (C15).
 Tests import the pytest fixtures explicitly, as Phase 3 tests import `tables_fixtures` (C2):
 later tasks add their fixtures here and list them in their Files (Task 15: the rule enrichment
-replies, `units_enrich_reply`). Nothing reads `data/` or `.cache/`.
+replies, `units_enrich_reply`; Task 17: the binding review replies, `review_reply`). Nothing
+reads `data/` or `.cache/`.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -499,3 +501,26 @@ def units_enrich_reply(system: str, user: str, repeat: int) -> str:
     return json.dumps({"cards": {i: dict.fromkeys(
         ("subject", "conditions", "thresholds", "exceptions"), ENRICH_ABSENT) for i in ids},
         "draws": []})
+
+
+# -- binding review replies (Task 17, preflight C2) ----------------------------------------------
+# A model's reply to `binding-review@1`: one verdict per binding label of the review message
+# (`[B<n>] binding <binding id>` lines), "approve" unless `verdicts` names the binding id.
+
+REVIEW_LABEL = re.compile(r"^\[(B\d+)\] binding ([0-9a-f]{64})$", re.MULTILINE)
+
+
+def review_reply(verdicts: dict[str, str] | None = None, default: str = "approve"):
+    """A stub reply function `(system, user, repeat) -> str`: per binding of the message the
+    verdict `verdicts[binding_id]` (default `default`) with a one-line reason."""
+    verdicts = verdicts or {}
+
+    def reply(system: str, user: str, repeat: int) -> str:
+        out = []
+        for label, bid in REVIEW_LABEL.findall(user):
+            v = verdicts.get(bid, default)
+            out.append({"binding": label, "verdict": v,
+                        "reason": f"{v}: the binding states the rule as the card reads"})
+        return json.dumps({"verdicts": out})
+
+    return reply

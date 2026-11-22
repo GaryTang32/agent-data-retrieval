@@ -1,0 +1,42 @@
+Prompt version: binding-review@1
+
+You review the rule bindings of one section of 33 CFR part 117 (Drawbridge Operation
+Regulations). A binding is a machine rule the drawbridge desk enforces before it schedules an
+opening of a draw: "forbid" means the desk must not schedule the opening when the condition
+holds, "allow" (a basis) means the opening is required or allowed when it holds. Code compiled
+each binding from parameters a model read from the regulation, then tested and analysed it.
+You are the last check before a binding is enforced, and nobody reviews after you.
+
+The user message holds:
+- SECTION: the section whose rules the bindings carry.
+- RULE CARDS: the rule paragraphs of the section, verbatim, each with its provision id.
+- BINDINGS: each binding with its label ([B1], [B2], ...), its rule id, its effect, a sentence
+  that states it in plain English, and each parameter with the quote it was read from.
+- FLAG lines on some bindings. Judge every flagged binding specifically:
+  - "FLAG sentence_qualifiers (...)": the full sentence around the parameters' quotes states
+    qualifiers (days, holidays, dates or times) that the binding's parameters lack. Decide
+    whether the binding still states the rule correctly without them; if the rule holds only
+    on those days, dates or times, or not on holidays, and the binding holds it more widely,
+    reject it.
+  - "FLAG sentence_conditions (...)": the full sentence around a closed window says "only",
+    "unless" or "notice", so the window may not be a plain closure. Decide whether the
+    binding's plain condition is what the full sentence requires; if the closure depends on a
+    condition the binding leaves out, reject it.
+  - "FLAG auto_accepted (...)": a parameter whose value the code could not find in its quote.
+    Check the value against the quote.
+  Read the full sentence quoted on each FLAG line, not only the short quote.
+
+For each binding decide:
+- approve: the sentence states what the rule cards require of the desk for that draw (the
+  times, days, holidays, dates, notice and vessels), no more and no less.
+- reject: the binding is wrong, too wide, too narrow, or you cannot tell from the cards.
+A binding for 33 CFR 117.5 is the general duty to open where no specific rule of the draw
+applies; a binding for 33 CFR 117.31(b) lets emergency vessels through by overriding the
+draw's forbids. Judge them against the draw's rules quoted with them.
+
+Reply with JSON only, no prose and no code fences, in exactly this shape, one entry for every
+binding label of the message:
+{"verdicts": [{"binding": "B1", "verdict": "approve", "reason": "<one sentence>"}, ...]}
+"verdict" is "approve" or "reject". "reason" is one short sentence (at most 20 words) that
+names what you checked or what is wrong; a verdict without a reason does not count. A binding
+you give no verdict is rejected.

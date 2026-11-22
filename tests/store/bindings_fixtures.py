@@ -30,7 +30,7 @@ __all__ = ["BINDINGS_821", "BINDINGS_821_GROUPED", "BINDINGS_SAME_CARD_SIGNAL",
            "BINDINGS_CROSSING", "BINDINGS_GENERAL", "BINDINGS_NOTICE_PERIOD",
            "BINDINGS_SHUT", "BINDINGS_SIGNAL", "CARD_A", "CARD_B", "EMERGENCY_CARD",
            "FIXTURE_BINDINGS", "GENERAL_CARD", "REF_821", "REF_SIGNAL", "W_821", "by_rule",
-           "record", "rebuild", "shift", "with_when"]
+           "record", "rebuild", "shift", "stamp_analysed", "with_when"]
 
 UNIT_821 = "8" * 64
 W_821 = Window(start=420, end=540, days=WEEKDAYS, except_federal_holidays=True, date_from=None,
@@ -137,3 +137,15 @@ def record(open_at: datetime | None = None, *, notice: int | None = None,
     if conflict is not None:
         out["local_procedure_conflict"] = {"value": conflict, "source": "record"}
     return out
+
+
+STAMPED = {"conflicts": [], "vacuous": False, "redundant": False, "gaps": [],
+           "stamped": "tests: no z3 analysis"}
+
+
+def stamp_analysed(bindings: list[Binding]) -> list[Binding]:
+    """`tested` bindings `analysed` with the `STAMPED` record (validated); every other binding
+    as it is. A test helper standing in for `analysis.mark_analysed` where z3 is absent."""
+    return [Binding.model_validate({**b.model_dump(), "status": "analysed",
+                                    "analysis": dict(STAMPED)})
+            if b.status == "tested" else b for b in bindings]

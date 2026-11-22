@@ -40,7 +40,17 @@ enrichment file and `rules-pass-report.json` with the binding compiler's report 
 `--facts ID`, E2 against both Phase 3 passes; a served model other than the profile's fails
 the run after writing them), `adr units show` (a build's manifest, counts per
 type and its reports), `adr units gate` (the units merge gate; without gold sets only a
-first promotion, with no `units/HEAD`, can pass; exit 1 when refused), and the four unit tools
+first promotion, with no `units/HEAD`, can pass; exit 1 when refused), the rule bindings
+(Phase 4 spec §12.2-§12.5): `adr bindings build --store S --facts ID [--units ID] --max-calls
+N` (needs the `[analysis]` extra; compiles the cached enrichment against the rule cards of the
+units build, default units/HEAD, tests, grids the agreement set against the reference
+evaluator and analyses the bindings, then writes the candidates and prints their id and the
+B1 and B2 totals), `adr units review --store S --candidates ID --generator P --max-calls N
+[--limit N]` (one review call per section with bindings; approved, tested and analysed draws
+are signed off and written as a bindings set whose id it prints; a served model other than
+the profile's fails the run after writing), `adr bindings promote --store S --bindings ID`
+(moves bindings/HEAD to a set whose every binding verifies and is signed off) and `adr
+bindings show`, and the four unit tools
 (Phase 4 spec §11.2, code in `adr_store.tools`): `adr units define TERM`, `adr units rules
 [QUERY] [--rule-id ID]`, `adr units procedures [TASK] [--id ID --view V]` and `adr units search
 QUERY [--type T]`, each with `--store`, `--as-of`, `--as USER` and `--json`. `adr`
@@ -1428,6 +1438,167 @@ def _units_gate(a: argparse.Namespace) -> int:
     return 0 if r.promoted else EXIT_CONFORMANCE
 
 
+def _bindings_build(a: argparse.Namespace) -> int:
+    """`adr bindings build`: the candidate bindings of a gov store (preflight C5, C6). It needs
+    the `[analysis]` extra (z3), checked first. The enrichment is read under --max-calls
+    (0: the cache only); the cap or a model failure other than a stored input rejection stops
+    it with exit 1 and nothing written. It writes the candidates and their report, prints the
+    candidates id and the B1 and B2 totals; a served model other than the profile's fails the
+    run (exit 1) after writing them."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.bindings import manifest as bm
+
+    bm.analysis_module()          # "install the analysis extra" before any work
+    store = Store.open(a.store)
+    units_id = a.units or units_overlay.read_units_head(store.path)
+    if units_id is None:
+        raise tools.ToolError(f"{store.path}: no units/HEAD; give --units ID (the units build "
+                              f"whose rule cards the bindings cite)")
+    try:
+        meter = tables_extract.metered_client(a.max_calls, profile=a.generator)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    try:
+        c = bm.build_candidates(store, meter, units_id=units_id, facts_id=a.facts)
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
+        return 1
+    other = [m for m in c.served_models if m != meter.model]
+    report = {**c.report, "generator": a.generator, "adapter": meter.name,
+              "model": meter.model, "max_calls": a.max_calls,
+              "budget_units": meter.budget.calls, "served_model_mismatch": bool(other)}
+    cid, path = bm.write_candidates(store.path, store.snapshot_id, units_id, c.tables_id,
+                                    c.bindings, facts_id=a.facts,
+                                    enrichment_id=c.enrichment_id,
+                                    agreement_pairs=c.agreement_pairs, report=report)
+    b1, b2, st = c.report["b1"], c.report["b2"], c.report["statuses"]
+    print(f"candidates {cid}")
+    print(f"{len(c.bindings)} binding(s) of {b1['draws']} draw(s): {st['analysed']} analysed, "
+          f"{st['rejected']} rejected; units {units_id[:12]}, enrichment "
+          f"{c.enrichment_id[:12]}, facts {a.facts[:12]}")
+    print(f"B1: tests passed by {b1['tests_passed']} of {b1['bindings']} binding(s) "
+          f"({b1['draws_rejected_by_tests']} draw(s) rejected); grid equal on "
+          f"{b1['grid_equal']} of {b1['agreement_draws']} agreement-set draw(s)")
+    print(f"B2: {b2['conflicts']} conflict(s), {b2['vacuous']} vacuous binding(s) over "
+          f"{b2['draws_analysed']} analysed draw(s); {b2['redundant']} redundant, "
+          f"{b2['draws_with_gaps']} draw(s) with gaps")
+    print(f"report {path.with_suffix('.report.json')}")
+    print(f"  review: adr units review --store {store.path} --candidates {cid} --generator "
+          f"claude_code_opus --max-calls N")
+    calls = c.report["calls"]
+    served = ", ".join(c.served_models) or "none reported"
+    head = (f"served model mismatch: {', '.join(other)} != {meter.model}" if other
+            else "bindings build complete")
+    print(f"status: {head}; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {served}")
+    return 1 if other else 0
+
+
+def _units_review(a: argparse.Namespace) -> int:
+    """`adr units review`: one review call per section with analysed candidate bindings
+    (builder note 16) under --max-calls (every transport attempt counts); approved, tested and
+    analysed bindings become signed_off, whole draws only (P48). The cap or a model failure
+    other than a stored input rejection stops it with exit 1 and nothing written; otherwise it
+    writes the signed-off set with its manifest and the review report, prints the bindings id
+    `adr bindings promote` takes (N16), and a served model other than the profile's fails the
+    run (exit 1) after writing them."""
+    from adr_eval.llm import ModelError
+    from adr_eval.pipeline import BudgetExceeded, stop_status
+    from adr_store.bindings import manifest as bm
+    from adr_store.bindings import review as br
+
+    store = Store.open(a.store)
+    m, cands = bm.load_candidates(store.path, a.candidates)
+    cards = units_overlay.load_units(store.path, units_overlay.load_units_manifest(
+        store.path, m.units_id), "rule_card")
+    sections = br.review_sections(cands)
+    print(f"{len(cands)} candidate binding(s); {len(sections)} section(s) with analysed "
+          f"bindings to review")
+    if a.limit is not None:
+        print(f"canary: the first {a.limit} section(s)")
+    try:
+        meter = tables_extract.metered_client(a.max_calls, profile=a.generator)
+    except eval_runner.ProfileError as e:
+        raise tools.ToolError(str(e)) from e
+    try:
+        out, report = br.review_all(store, cands, meter, limit=a.limit, cards=cards)
+    except (BudgetExceeded, ModelError) as e:   # a stored input rejection never reaches here
+        print(stop_status(meter.budget, e))
+        return 1
+    bindings_id, path = bm.write_bindings(store.path, m.snapshot, m.units_id, m.tables_id, out,
+                                          facts_id=m.facts_id, enrichment_id=m.enrichment_id,
+                                          agreement_pairs=m.agreement_pairs)
+    written = bm.load_bindings(store.path, bindings_id)[0]
+    other = [x for x in report["served_models"] if x != meter.model]
+    full = {**report, "generator": a.generator, "adapter": meter.name, "model": meter.model,
+            "max_calls": a.max_calls, "budget_units": meter.budget.calls,
+            "served_model_mismatch": bool(other), "candidates_id": a.candidates,
+            "bindings_id": bindings_id, "store": str(store.path)}
+    out_path = path.parent / f"review-{bindings_id[:16]}.report.json"
+    write_atomic(out_path, (json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False)
+                            + "\n").encode("utf-8"))
+    n = report["bindings"]
+    print(f"{report['sections_reviewed']} section(s) reviewed: {n['approved']} approved, "
+          f"{n['rejected_by_review']} rejected, {n['no_verdict']} without a verdict, "
+          f"{n['blocked']} blocked by their draw; {report['flagged']} flagged binding(s)")
+    for sec in report["sections"]:
+        print(f"  § {sec['section']}: {sec['bindings']} binding(s), {sec['flagged']} flagged, "
+              f"{sec['approved']} approved, {sec['rejected']} rejected, "
+              f"{sec['no_verdict']} without a verdict ({sec['outcome']})")
+    print(f"bindings {bindings_id}")
+    print(f"{written.bindings} signed-off binding(s) written; agreement set "
+          f"{len(written.agreement_set)} draw(s); {n['rejected']} rejected kept in the "
+          f"candidates; {n['not_reviewed']} not reviewed")
+    print(f"report {out_path}")
+    print(f"  promote: adr bindings promote --store {store.path} --bindings {bindings_id}")
+    calls = report["calls"]
+    served = ", ".join(report["served_models"]) or "none reported"
+    head = (f"served model mismatch: {', '.join(other)} != {meter.model}" if other
+            else "review complete")
+    print(f"status: {head}; {calls['made']} model call(s) made, {calls['cached']} cached, "
+          f"{calls['failed']} failed; {meter.budget.calls} budget unit(s) of {a.max_calls} "
+          f"used; served {served}")
+    return 1 if other else 0
+
+
+def _bindings_promote(a: argparse.Namespace) -> int:
+    from adr_store.bindings import manifest as bm
+
+    bm.promote_bindings(a.store, a.bindings)
+    print(f"bindings/HEAD -> {a.bindings}")
+    return 0
+
+
+def _bindings_show(a: argparse.Namespace) -> int:
+    from collections import Counter
+
+    from adr_store.bindings import manifest as bm
+
+    head = bm.read_bindings_head(a.store)
+    bindings_id = a.bindings or head
+    if bindings_id is None:
+        raise tools.ToolError(f"{a.store}: no current bindings (bindings/HEAD); run `adr "
+                              f"units review` and `adr bindings promote`, or give --bindings ID")
+    m, bs = bm.load_bindings(a.store, bindings_id)
+    if a.json:
+        print(json.dumps({"bindings_id": bindings_id, "head": head,
+                          "manifest": m.model_dump(mode="json")}, indent=2,
+                         ensure_ascii=False))
+        return 0
+    state = "HEAD" if bindings_id == head else "not HEAD"
+    print(f"bindings {bindings_id[:12]} ({state}) for snapshot {m.snapshot[:12]}: "
+          f"{m.bindings} signed-off binding(s), {m.language}; units {m.units_id[:12]}, tables "
+          f"{m.tables_id[:12]}, facts {(m.facts_id or 'none')[:12]}, enrichment "
+          f"{(m.enrichment_id or 'none')[:12]}")
+    effects = Counter(b.effect for b in bs)
+    draws = {(b.target["selector"]["section"], b.target["selector"]["draw"]) for b in bs}
+    print(f"  {len(draws)} draw(s); {effects['forbid']} forbid, {effects['basis']} basis; "
+          f"agreement set {len(m.agreement_set)} draw(s)")
+    return 0
+
+
 def _units_pin(a: argparse.Namespace) -> int:
     """`adr units pin --store S`: pin the tuning file's entry in force for the store's
     units/HEAD, with its dense vectors when its `w` is below 1 (idempotent; spec P42). For a
@@ -1912,6 +2083,21 @@ def _parser() -> argparse.ArgumentParser:
     unc.add_argument("--concurrency", type=_positive, default=None,
                      help="calls in flight at once (default: config concurrency)")
     unc.set_defaults(fn=_units_compile)
+    unv = un_sub.add_parser("review", help="review candidate bindings: one model call per "
+                                           "section with bindings; approved, tested and "
+                                           "analysed draws are signed off and written")
+    unv.add_argument("--store", type=Path, required=True, help="store directory")
+    unv.add_argument("--candidates", required=True, metavar="ID",
+                     help="the candidates id `adr bindings build` printed")
+    unv.add_argument("--generator", metavar="PROFILE", required=True,
+                     help="model profile in config/models.json (the review profile, "
+                          "claude_code_opus)")
+    unv.add_argument("--max-calls", type=_non_negative, required=True,
+                     help="model calls (transport attempts, retries included) this command may "
+                          "make; 0 reads cached replies only")
+    unv.add_argument("--limit", type=_positive, default=None,
+                     help="review only the first N sections, in order (the canary)")
+    unv.set_defaults(fn=_units_review)
     uns = un_sub.add_parser("show", help="a build's manifest, counts per type and reports "
                                          "(default: units/HEAD)")
     uns.add_argument("--store", type=Path, required=True, help="store directory")
@@ -1987,6 +2173,38 @@ def _parser() -> argparse.ArgumentParser:
     unq.add_argument("--type", dest="types", action="append", default=None,
                      choices=tools.UNIT_TYPES, help="only this unit type (repeatable)")
     unit_limit(unq, 10)
+    bd = sub.add_parser("bindings", help="the rule bindings (Phase 4): build, promote and "
+                                         "show", description="Rule bindings of a gov store: "
+                        "`build` writes candidates (compiled, tested, analysed; needs the "
+                        "[analysis] extra), `adr units review` signs them off, `promote` moves "
+                        "bindings/HEAD, `show` prints a set. " + NOT_A_BOUNDARY)
+    bd_sub = bd.add_subparsers(dest="action", required=True)
+    bdb = bd_sub.add_parser("build", help="compile the cached enrichment into candidate bindings, "
+                                          "test them, compare the agreement set with the "
+                                          "reference on the grid, and analyse them (z3)")
+    bdb.add_argument("--store", type=Path, required=True, help="store directory")
+    bdb.add_argument("--facts", metavar="ID", required=True,
+                     help="the Phase 3 second-pass facts id the reference evaluator reads "
+                          "(preflight C5)")
+    bdb.add_argument("--units", metavar="ID", default=None,
+                     help="the units build whose rule cards the bindings cite (default "
+                          "units/HEAD; preflight C6)")
+    bdb.add_argument("--generator", metavar="PROFILE", default="claude_code_sonnet",
+                     help="model profile of the enrichment replies (default claude_code_sonnet)")
+    bdb.add_argument("--max-calls", type=_non_negative, required=True,
+                     help="model calls the enrichment may make; 0 reads cached replies only")
+    bdb.set_defaults(fn=_bindings_build)
+    bdp = bd_sub.add_parser("promote", help="move bindings/HEAD to a set whose every binding "
+                                            "verifies and is signed off")
+    bdp.add_argument("--store", type=Path, required=True, help="store directory")
+    bdp.add_argument("--bindings", metavar="ID", required=True, help="the bindings id")
+    bdp.set_defaults(fn=_bindings_promote)
+    bds = bd_sub.add_parser("show", help="a bindings manifest (default: bindings/HEAD)")
+    bds.add_argument("--store", type=Path, required=True, help="store directory")
+    bds.add_argument("--bindings", metavar="ID", default=None,
+                     help="a bindings id (default HEAD)")
+    bds.add_argument("--json", action="store_true", help="print the manifest as JSON")
+    bds.set_defaults(fn=_bindings_show)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "

@@ -478,7 +478,8 @@ def test_mark_tested_validates_the_new_status(monkeypatch):
 def test_only_analysis_imports_z3():
     out = subprocess.run([sys.executable, "-c", "import adr_store.bindings.dsl, "
                           "adr_store.bindings.compile, adr_store.bindings.reference, "
-                          "adr_store.bindings.checks, sys; print('z3' in sys.modules)"],
+                          "adr_store.bindings.checks, adr_store.bindings.review, "
+                          "adr_store.bindings.manifest, sys; print('z3' in sys.modules)"],
                          capture_output=True, text=True)
     assert out.stdout.strip() == "False"     # Task 18 adds decide and gate.server to this list
 
