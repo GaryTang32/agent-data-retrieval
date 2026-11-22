@@ -27,7 +27,9 @@ in the environment, beside the gate and never in the agent loop (N13). Arm `gate
 forces it on (the measured arm, builder note 19; a test may give its own `runtime`); in the
 other arms it is on only when the environment is given a `profile` whose flag in
 `runtime_config` (`config/runtime.json`) is enabled (A4), and `adr-eval sim drawbridge` gives
-none, so its arms `no-gate`, `prompt` and `gate` are §13.5's arms without it. With a runtime,
+none, so its arms `no-gate`, `prompt` and `gate` are §13.5's arms without it. The runtime is
+bound to the task's request (`Runtime.bind`), which its `from_request` arguments must match
+(P53). With a runtime,
 every well-formed call is put to `Runtime.allows` (with the record as facts) before anything
 else: a refusal executes nothing, never reaches the gate, and is logged with its rule id
 `adr.runtime.refused@1`; a side effect it allows then goes to the gate as above, so both must
@@ -93,6 +95,7 @@ FAIL_CLOSED = ["adr.gate.fail-closed@1", "1"]
 KEY_BYTES = 32
 MAX_LOGGED_CHARS = 1024      # a longer logged string keeps KEPT_CHARS, its SHA-256 and length
 KEPT_CHARS = 256
+PROCEDURE_LIMIT = 5          # `Tools.procedure_lookup`'s default limit (a test pins it)
 # per tool: {"required": {arg: kind}, "optional": {arg: kind}}; kinds are checked exactly
 ARG_SCHEMAS: dict[str, dict] = {
     "get_request": {"required": {"id": "str"}, "optional": {}},
@@ -265,6 +268,8 @@ class Env:
             runtime, source = runtime_mod.Runtime(runtime_mod.load_desk_procedure()), "profile"
         self.store_path = Path(store_path)
         self.task, self.arm, self.runtime = task, arm, runtime
+        if runtime is not None:
+            runtime.bind(task.request)        # `from_request` binds side effects to it (P53)
         self.log_dir = Path(log_dir)
         self.log_path = self.log_dir / "env.jsonl"
         if self.log_path.exists():
@@ -449,30 +454,40 @@ class Env:
         return {"ok": True, "result": _json_safe(res.to_dict())}
 
     def _procedure_lookup(self, kw: dict, day: str) -> dict:
-        """`procedure_lookup` with the desk procedure served first, in every arm (P52): a
-        catalog of a task is the desk procedure's entry (`runtime.desk_hit`, rank 1) and then
-        the store's own entries, ranks moved down by one; the id `procedure/desk-request@1`
-        (or `desk-request@1`) with no task gives its catalog entry, SKILL.md, Mermaid or IR,
-        with the store's snapshot and units id, no filters (it is the environment's, not a
-        unit of the store, so the view, the ACL and the filters do not apply) and no handle
-        (no part of the store was read). Anything else is the store's own result."""
-        from adr_store.tools import PROCEDURE_VIEWS
+        """`procedure_lookup` with the desk procedure served first, in every arm (P52).
 
-        view = kw.get("view", "catalog")
-        if kw.get("id") in (runtime_mod.DESK_UNIT_ID, runtime_mod.DESK_PROCEDURE) and \
-                kw.get("task") is None and view in PROCEDURE_VIEWS:
+        - A catalog of a task is the desk procedure's entry (`runtime.desk_hit`, rank 1) and
+          then the store's own entries, ranks moved down by one; the desk entry counts toward
+          `limit` (default the store's, 5), so the store gives at most `limit - 1`.
+        - The id `procedure/desk-request@1` (or `desk-request@1`) is first put to the store
+          with the same arguments, so the store validates the call as for any id (view, task,
+          `limit`, `as_of`) and refuses as it would; where it answers "no procedure with that
+          id", the environment gives the desk procedure's catalog entry, SKILL.md, Mermaid or
+          IR, with the store's snapshot and units id, no filters (it is the environment's, not
+          a unit of the store, so the view, the ACL and the filters do not apply) and no
+          handle (no part of the store was read for it).
+        - Anything else is the store's own result."""
+        from adr_store.tools import UNKNOWN_PROCEDURE, ToolError
+
+        task, as_of = kw.pop("task", None), kw.pop("as_of", day)
+        if kw.get("id") in (runtime_mod.DESK_UNIT_ID, runtime_mod.DESK_PROCEDURE):
+            try:
+                self.tools.procedure_lookup(task, as_of=as_of, **kw)
+            except ToolError as e:
+                if type(e) is not ToolError or str(e) != UNKNOWN_PROCEDURE:
+                    raise
+            view = kw.get("view", "catalog")
             return {"task": None, "id": kw["id"], "view": view,
                     "catalog": [runtime_mod.desk_hit()] if view == "catalog" else None,
                     "rendering": None if view == "catalog" else
                     runtime_mod.desk_rendering(view),
                     "snapshot": self.tools.snapshot, "units": self.units_id,
                     "applicability_filters": {}, "handle": None}
-        res = _json_safe(self.tools.procedure_lookup(kw.pop("task", None),
-                                                     as_of=kw.pop("as_of", day),
-                                                     **kw).to_dict())
+        res = _json_safe(self.tools.procedure_lookup(task, as_of=as_of, **kw).to_dict())
         if res.get("task") is not None and isinstance(res.get("catalog"), list):
+            keep = kw.get("limit", PROCEDURE_LIMIT) - 1
             res["catalog"] = [runtime_mod.desk_hit()] + [
-                {**e, "rank": e["rank"] + 1} for e in res["catalog"]]
+                {**e, "rank": e["rank"] + 1} for e in res["catalog"][:keep]]
         return res
 
     # -- side effects ----------------------------------------------------------------------------

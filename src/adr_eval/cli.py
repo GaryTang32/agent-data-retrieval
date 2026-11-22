@@ -2085,7 +2085,9 @@ def _sim_runtime_check(a: argparse.Namespace) -> int:
     which runs one task), written as profile P's entry of `--config` (default
     `config/runtime.json`, the only writer of that file; builder note 19): `{"enabled",
     "check"}`, the check holding totals only (P30). The runs must have been made by P's model:
-    their `model` and every served model. No model call. Exit 2 on a refusal, nothing written."""
+    their `model`, and every run's `summary.json` must report served models, all of them P's
+    (a run with none reported is refused). The config must parse and be writable. No model
+    call. Exit 2 on a refusal, nothing written."""
     from adr_eval.sim import runtime, score
     from adr_eval.sim.tasks import SimError
 
@@ -2101,22 +2103,29 @@ def _sim_runtime_check(a: argparse.Namespace) -> int:
             d = Path(run)
             if json.loads((d / "config.json").read_text(encoding="utf-8")).get("canary"):
                 raise SimError(f"{d} is a canary run: the check needs every task")
-            if (d / "summary.json").is_file():
-                served |= set(json.loads((d / "summary.json").read_text(
-                    encoding="utf-8")).get("served_models", []))
+            reported = json.loads((d / "summary.json").read_text(encoding="utf-8")).get(
+                "served_models") if (d / "summary.json").is_file() else None
+            if not isinstance(reported, list) or not reported:
+                raise SimError(f"{d} reports no served model: the check needs the model each "
+                               f"call was served by")
+            served |= set(reported)
         if first.get("model") != model or served - {model}:
             raise SimError(f"the runs ran under model {first.get('model')!r} (served "
                            f"{', '.join(sorted(served)) or 'none reported'}), not profile "
                            f"{a.profile}'s {model!r}")
         arms = score.public(score.summarize(rows, tasks))["arms"]
         result = runtime.discipline_check(arms, a.profile)
-    except (SimError, ValueError) as e:
+        target = Path(a.config or runtime.RUNTIME_CONFIG)
+        if not target.parent.is_dir():
+            raise SimError(f"{target}: its directory does not exist")
+        check = {**result["check"], "model": model, "bindings_id": first.get("bindings_id"),
+                 "tasks_sha256": hashlib.sha256(tasks_bytes).hexdigest(), "runs": len(a.runs)}
+        # it reads the config first: a malformed one is refused before anything is written
+        runtime.write_runtime_entry(a.profile, {"enabled": result["enabled"], "check": check},
+                                    target)
+    except (SimError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    check = {**result["check"], "model": model, "bindings_id": first.get("bindings_id"),
-             "tasks_sha256": hashlib.sha256(tasks_bytes).hexdigest(), "runs": len(a.runs)}
-    runtime.write_runtime_entry(a.profile, {"enabled": result["enabled"], "check": check},
-                                a.config)
     g, gr = check["gate"]["pass^1"], check["gate-runtime"]["pass^1"]
     print(f"{a.profile}: {'enabled' if result['enabled'] else 'disabled'}: pass^1 "
           f"gate-runtime {gr:.3f} against gate {g:.3f} - {runtime.DISCIPLINE_MARGIN} = "

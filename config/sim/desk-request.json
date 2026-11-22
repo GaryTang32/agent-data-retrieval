@@ -53,13 +53,19 @@
       {
         "id": "s2",
         "type": "tool_call",
-        "text": "Check the rules with check_rules on scheduling the requested opening: intent schedule_opening at the requested time, with the facts of the request record.",
+        "text": "Check the rules with check_rules on scheduling the requested opening: intent schedule_opening with the request's own request, section, draw and open_at (its requested time), with the facts of the request record.",
         "span": null,
         "tool": "check_rules",
         "subprocedure_ref": null,
         "args_schema": {
           "const": {
             "intent.tool": "schedule_opening"
+          },
+          "from_request": {
+            "intent.args.request": "id",
+            "intent.args.section": "section",
+            "intent.args.draw": "draw",
+            "intent.args.open_at": "requested_open_at"
           }
         },
         "condition": null,
@@ -76,7 +82,7 @@
       {
         "id": "s3",
         "type": "condition",
-        "text": "If the rules allow the opening, schedule it; if they deny it, offer another time; if they escalate, ask for the missing fact.",
+        "text": "If the rules allow the opening, schedule it; if they deny it with a next allowed time, offer that time; if they deny it with none, deny the request; if they escalate, ask for the missing fact.",
         "span": null,
         "tool": null,
         "subprocedure_ref": null,
@@ -89,7 +95,11 @@
           },
           {
             "to": "s5",
-            "guard": "{\"eq\":[\"outcome\",\"deny\"]}"
+            "guard": "{\"and\":[{\"eq\":[\"outcome\",\"deny\"]},{\"known\":\"next_allowed\"}]}"
+          },
+          {
+            "to": "s8",
+            "guard": "{\"and\":[{\"eq\":[\"outcome\",\"deny\"]},{\"not\":{\"known\":\"next_allowed\"}}]}"
           },
           {
             "to": "s9",
@@ -107,7 +117,14 @@
         "span": null,
         "tool": "schedule_opening",
         "subprocedure_ref": null,
-        "args_schema": null,
+        "args_schema": {
+          "from_request": {
+            "request": "id",
+            "section": "section",
+            "draw": "draw",
+            "open_at": "requested_open_at"
+          }
+        },
         "condition": null,
         "next": [
           {
@@ -152,7 +169,7 @@
       {
         "id": "s6",
         "type": "condition",
-        "text": "If the user accepts another time, schedule the earliest allowed one; otherwise deny the request.",
+        "text": "If the user accepts another time, schedule the earliest allowed one; if the user declines or does not know, deny the request.",
         "span": null,
         "tool": null,
         "subprocedure_ref": null,
@@ -165,7 +182,7 @@
           },
           {
             "to": "s8",
-            "guard": "{\"eq\":[\"accepts_alternative\",false]}"
+            "guard": "{\"or\":[{\"eq\":[\"accepts_alternative\",false]},{\"eq\":[\"fact_learned\",false]}]}"
           }
         ],
         "risk": "unknown",
@@ -180,6 +197,11 @@
         "tool": "schedule_opening",
         "subprocedure_ref": null,
         "args_schema": {
+          "from_request": {
+            "request": "id",
+            "section": "section",
+            "draw": "draw"
+          },
           "from_result": {
             "open_at": "next_allowed"
           }
@@ -211,11 +233,15 @@
       {
         "id": "s8",
         "type": "tool_call",
-        "text": "The user declines another time: deny the request with deny_request, citing the deciding section.",
+        "text": "The requested time is not allowed and no other time will be scheduled: deny the request with deny_request, citing the deciding section.",
         "span": null,
         "tool": "deny_request",
         "subprocedure_ref": null,
-        "args_schema": null,
+        "args_schema": {
+          "from_request": {
+            "request": "id"
+          }
+        },
         "condition": null,
         "next": [
           {
@@ -233,9 +259,24 @@
             ]
           },
           {
-            "eq": [
-              "accepts_alternative",
-              false
+            "or": [
+              {
+                "eq": [
+                  "accepts_alternative",
+                  false
+                ]
+              },
+              {
+                "eq": [
+                  "fact_learned",
+                  false
+                ]
+              },
+              {
+                "not": {
+                  "known": "next_allowed"
+                }
+              }
             ]
           }
         ]
@@ -243,11 +284,19 @@
       {
         "id": "s9",
         "type": "tool_call",
-        "text": "A needed fact is missing: ask the user for it with ask_user (a missing fact check_rules named).",
+        "text": "A needed fact is missing: ask the user for it with ask_user, by the user's field for the missing fact check_rules named: notice_minutes -> field notice_received_at, vessel_class -> field vessel_class (local_procedure_conflict is the desk's, not the user's; with nothing to ask, escalate).",
         "span": null,
         "tool": "ask_user",
         "subprocedure_ref": null,
-        "args_schema": null,
+        "args_schema": {
+          "ask_missing": {
+            "field": {
+              "local_procedure_conflict": null,
+              "notice_minutes": "notice_received_at",
+              "vessel_class": "vessel_class"
+            }
+          }
+        },
         "condition": null,
         "next": [
           {
@@ -289,7 +338,11 @@
         "span": null,
         "tool": "escalate_request",
         "subprocedure_ref": null,
-        "args_schema": null,
+        "args_schema": {
+          "from_request": {
+            "request": "id"
+          }
+        },
         "condition": null,
         "next": [
           {
@@ -359,6 +412,17 @@
       {
         "condition": "s3",
         "edge": 2,
+        "steps": [
+          "s1",
+          "s2",
+          "s3",
+          "s8",
+          "s12"
+        ]
+      },
+      {
+        "condition": "s3",
+        "edge": 3,
         "steps": [
           "s1",
           "s2",

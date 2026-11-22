@@ -55,12 +55,16 @@ TABLE = [  # Task 21's table: (id, type, tool, [(to, guard)])
     ("s1", "tool_call", "get_request", [("s2", None)]),
     ("s2", "tool_call", "check_rules", [("s3", None)]),
     ("s3", "condition", None, [("s4", {"eq": ["outcome", "allow"]}),
-                               ("s5", {"eq": ["outcome", "deny"]}),
+                               ("s5", {"and": [{"eq": ["outcome", "deny"]},
+                                               {"known": "next_allowed"}]}),
+                               ("s8", {"and": [{"eq": ["outcome", "deny"]},
+                                               {"not": {"known": "next_allowed"}}]}),
                                ("s9", {"eq": ["outcome", "escalate"]})]),
     ("s4", "tool_call", "schedule_opening", [("s12", None)]),
     ("s5", "tool_call", "ask_user", [("s6", None)]),
     ("s6", "condition", None, [("s7", {"eq": ["accepts_alternative", True]}),
-                               ("s8", {"eq": ["accepts_alternative", False]})]),
+                               ("s8", {"or": [{"eq": ["accepts_alternative", False]},
+                                              {"eq": ["fact_learned", False]}]})]),
     ("s7", "tool_call", "schedule_opening", [("s12", None)]),
     ("s8", "tool_call", "deny_request", [("s12", None)]),
     ("s9", "tool_call", "ask_user", [("s10", None)]),
@@ -88,13 +92,20 @@ def _config(tmp_path, enabled: bool, name: str = "runtime.json"):
 
 # -- results as the environment hands them to `advance` -----------------------------------------
 
-REQUEST = {"request": {"id": "r1"}, "record": {}, "registry": []}
+REQ = {"id": "r1", "vessel": "Pilot", "section": "117.1081", "draw": 1,
+       "requested_open_at": ARGS["open_at"]}
+REQUEST = {"request": REQ, "record": {}, "registry": []}
 INTENT = {"intent": {"tool": "schedule_opening", "args": ARGS}}
+AT = "2026-08-14T08:30:00"                   # a next allowed time
+DENY = {"request": "r1", "rule_id": "33 CFR 117.1081", "reason": "closed"}
+ESCALATE = {"request": "r1", "missing": ["notice_received_at"], "reason": "unknown"}
+NOTICE = ["notice_minutes"]
 
 
-def rules(outcome, next_allowed=None) -> dict:
-    return {"outcome": outcome, "rule_ids": [], "deciding_sections": [], "missing_facts": [],
-            "next_allowed": next_allowed, "evaluated_outcome": None}
+def rules(outcome, next_allowed=None, missing=()) -> dict:
+    return {"outcome": outcome, "rule_ids": [], "deciding_sections": [],
+            "missing_facts": list(missing), "next_allowed": next_allowed,
+            "evaluated_outcome": None}
 
 
 def answer(field, value=None, learned=True) -> dict:
@@ -112,8 +123,12 @@ def walk(r: Runtime, *calls) -> list[str]:
     return seen
 
 
+def desk() -> Runtime:
+    return Runtime(load_desk_procedure(), request=REQ)
+
+
 def to_s2() -> Runtime:
-    r = Runtime(load_desk_procedure())
+    r = desk()
     walk(r, ("get_request", REQUEST, {"id": "r1"}))
     assert r.active == "s2"
     return r
@@ -142,13 +157,13 @@ def test_desk_procedure_is_valid_and_renders():
     assert not any(s.requires_approval for s in body.steps)
     # tests: object[] of {condition, edge, steps}, one per condition outcome (Task 6 ruling)
     data = json.loads(rt_mod.DESK_PROCEDURE_PATH.read_text())["body"]
-    assert body.tests == branch_paths(body) and len(body.tests) == 7
+    assert body.tests == branch_paths(body) and len(body.tests) == 8
     assert all(set(t) == {"condition", "edge", "steps"} for t in data["tests"])
     # the Mermaid round trip, guards quoted (P40)
     text = render_mermaid(body)
     assert parse_mermaid(text) == ir_graph(body)
     guarded = [x for x in text.splitlines() if "-->|" in x]
-    assert len(guarded) == 7 and all('-->|"' in x and '"|' in x for x in guarded)
+    assert len(guarded) == 8 and all('-->|"' in x and '"|' in x for x in guarded)
     skill = render_skill(as_unit(body))
     assert "Tool: schedule_opening" in skill and 'description: "Use for every request' in skill
     assert render_skill(as_unit(load_desk_procedure())) == skill            # byte-stable
@@ -168,7 +183,7 @@ def test_load_desk_procedure_refuses_another_file(tmp_path):
 # -- the runtime ---------------------------------------------------------------------------------
 
 def test_side_effect_refused_off_its_step_with_active_step_and_tools():
-    rt = Runtime(load_desk_procedure())
+    rt = desk()
     ok, refusal = rt.allows("schedule_opening", ARGS, {})
     assert not ok and refusal["active_step"] == "s1" and "get_request" in refusal["allowed_tools"]
     assert refusal["allowed_tools"] == list(READ_ONLY)
@@ -184,7 +199,8 @@ def test_side_effect_refused_off_its_step_with_active_step_and_tools():
     walk(r, ("check_rules", rules("allow"), INTENT))
     assert r.active == "s4" and r.allowed_tools() == [*READ_ONLY, "schedule_opening"]
     assert r.allows("schedule_opening", ARGS, {}) == (True, None)
-    assert not r.allows("deny_request", {}, {})[0] and not r.allows("cancel_opening", {}, {})[0]
+    assert not r.allows("deny_request", DENY, {})[0]
+    assert not r.allows("cancel_opening", {"opening_id": "o1"}, {})[0]
 
 
 def test_reads_always_allowed_and_advance_follows_guards():
@@ -193,23 +209,37 @@ def test_reads_always_allowed_and_advance_follows_guards():
         r = Runtime(body)
         r.active = s.id
         assert all(r.allows(tool, {}, {}) == (True, None) for tool in READ_ONLY), s.id
-    r = Runtime(body)
+    r = Runtime(body, request=REQ)
     # a read that is not the active step's call leaves the step where it is
     for tool, result in (("check_rules", rules("allow")), ("rule_lookup", {"hits": []}),
                          ("ask_user", answer("vessel_class", "commercial"))):
         r.advance(tool, result, INTENT if tool == "check_rules" else {})
         assert r.active == "s1"
     assert walk(r, ("get_request", REQUEST, {"id": "r1"})) == ["s2"]
-    # s2 advances only on a check of the requested opening (args_schema)
-    r.advance("check_rules", rules("allow"), {"intent": {"tool": "deny_request", "args": {}}})
-    assert r.active == "s2"
-    for outcome, step in (("allow", "s4"), ("deny", "s5"), ("escalate", "s9")):
+    # s2 advances only on a check of the requested opening: the intent's tool, and its
+    # request, section, draw and open_at bound to the request (P53)
+    for args in ({"intent": {"tool": "deny_request", "args": ARGS}},
+                 {"intent": {"tool": "schedule_opening", "args": {**ARGS, "open_at": AT}}},
+                 {"intent": {"tool": "schedule_opening", "args": {**ARGS, "draw": 2}}},
+                 {"intent": {"tool": "schedule_opening", "args": {**ARGS, "draw": "1"}}},
+                 {"intent": {"tool": "schedule_opening", "args": {**ARGS, "section": "117.5"}}},
+                 {"intent": {"tool": "schedule_opening",
+                             "args": {k: v for k, v in ARGS.items() if k != "request"}}}):
+        r.advance("check_rules", rules("allow"), args)
+        assert r.active == "s2", args
+    for result, step in ((rules("allow"), "s4"), (rules("deny", AT), "s5"),
+                         (rules("deny"), "s8"), (rules("escalate", None, NOTICE), "s9")):
         r2 = to_s2()
-        assert walk(r2, ("check_rules", rules(outcome), INTENT)) == [step]
-        assert r2.learned["outcome"] == outcome
+        assert walk(r2, ("check_rules", result, INTENT)) == [step]
+        assert r2.learned["outcome"] == result["outcome"]
+    # an unbound runtime refuses what the request binds, and does not advance on it
+    loose = Runtime(body)
+    walk(loose, ("get_request", REQUEST, {"id": "r1"}))
+    loose.advance("check_rules", rules("allow"), INTENT)
+    assert loose.active == "s2"
     # the guards read the last result only: an earlier outcome does not satisfy s6
     r3 = to_s2()
-    walk(r3, ("check_rules", rules("deny", "2026-08-14T08:30:00"), INTENT))
+    walk(r3, ("check_rules", rules("deny", AT), INTENT))
     r3.advance("ask_user", answer("accepts_alternative", True), {"field": "vessel_class"})
     assert r3.active == "s5"                                 # not the step's question
 
@@ -231,58 +261,121 @@ def test_a_missing_or_malformed_outcome_fails_closed_on_s2(result):
 
 
 def test_reschedule_path_reaches_s7_and_escalate_loop_returns_to_s2():
-    at = "2026-08-14T08:30:00"
-    # deny -> s5 -> accepts -> s7: a schedule only at next_allowed
+    at = AT
+    # deny -> s5 -> accepts -> s7: a schedule of the request only at next_allowed
     r = to_s2()
     assert walk(r, ("check_rules", rules("deny", at), INTENT),
                 ("ask_user", answer("accepts_alternative", True),
                  {"field": "accepts_alternative"})) == ["s5", "s7"]
     ok, refusal = r.allows("schedule_opening", ARGS, {})
     assert not ok and "open_at must be 2026-08-14T08:30:00" in refusal["reason"]
+    for other in ({"draw": 2}, {"section": "117.5"}, {"request": "r2"}):
+        assert not r.allows("schedule_opening", {**ARGS, "open_at": at, **other}, {})[0]
     assert r.allows("schedule_opening", {**ARGS, "open_at": at}, {}) == (True, None)
-    assert not r.allows("deny_request", {}, {})[0]
+    assert not r.allows("deny_request", DENY, {})[0]
     r.advance("schedule_opening", {"executed": {}}, {**ARGS, "open_at": at})
     assert r.active == "s12"
     for tool in SIDE_EFFECTS:                       # the end step: nothing more, no cancel
         assert not r.allows(tool, {**ARGS, "open_at": at}, {})[0]
-    # declines -> s8 deny
+    # declines -> s8 deny, of the request only
     r = to_s2()
     walk(r, ("check_rules", rules("deny", at), INTENT),
          ("ask_user", answer("accepts_alternative", False), {"field": "accepts_alternative"}))
-    assert r.active == "s8" and r.allows("deny_request", {}, {}) == (True, None)
+    assert r.active == "s8" and r.allows("deny_request", DENY, {}) == (True, None)
+    assert not r.allows("deny_request", {**DENY, "request": "r2"}, {})[0]
     assert not r.allows("schedule_opening", {**ARGS, "open_at": at}, {})[0]
-    # an unknown acceptance stays on s5 (no guard holds) and refuses the side effects
+    # escalate -> s9 -> the user's field of the missing fact learned -> s2 again -> deny -> s5
     r = to_s2()
-    walk(r, ("check_rules", rules("deny", at), INTENT),
-         ("ask_user", answer("accepts_alternative", learned=False),
-          {"field": "accepts_alternative"}))
-    assert r.active == "s5" and not r.allows("deny_request", {}, {})[0]
-    # escalate -> s9 -> the fact learned -> s2 again -> deny -> s5
-    r = to_s2()
-    assert walk(r, ("check_rules", rules("escalate"), INTENT),
+    assert walk(r, ("check_rules", rules("escalate", None, NOTICE), INTENT),
                 ("ask_user", answer("notice_received_at", "2026-08-13T18:00:00"),
                  {"field": "notice_received_at"}),
                 ("check_rules", rules("deny", at), INTENT)) == ["s9", "s2", "s5"]
     assert r.learned["notice_received_at"] == "2026-08-13T18:00:00"
-    # escalate -> s9 -> unknown -> s11, where only the escalation is allowed
+    # escalate -> s9 -> unknown -> s11, where only the escalation of the request is allowed
     r = to_s2()
-    assert walk(r, ("check_rules", rules("escalate"), INTENT),
+    assert walk(r, ("check_rules", rules("escalate", None, NOTICE), INTENT),
                 ("ask_user", answer("notice_received_at", learned=False),
                  {"field": "notice_received_at"})) == ["s9", "s11"]
-    assert r.allows("escalate_request", {}, {}) == (True, None)
+    assert r.allows("escalate_request", ESCALATE, {}) == (True, None)
+    assert not r.allows("escalate_request", {**ESCALATE, "request": "r2"}, {})[0]
     assert not r.allows("schedule_opening", ARGS, {})[0]
-    r.advance("escalate_request", {"executed": {}}, {})
+    r.advance("escalate_request", {"executed": {}}, ESCALATE)
     assert r.active == "s12"
     # the s10 guard reads the last result only, never an earlier one: a fact learned on the
     # first pass does not carry a malformed second answer (no `learned`) back to s2
     r = to_s2()
-    walk(r, ("check_rules", rules("escalate"), INTENT),
+    walk(r, ("check_rules", rules("escalate", None, ["vessel_class"]), INTENT),
          ("ask_user", answer("vessel_class", "commercial"), {"field": "vessel_class"}),
-         ("check_rules", rules("escalate"), INTENT))
+         ("check_rules", rules("escalate", None, NOTICE), INTENT))
     assert r.active == "s9" and r.learned["fact_learned"] is True
     r.advance("ask_user", {"field": "notice_received_at", "answer": "?"},
               {"field": "notice_received_at"})
     assert r.active == "s9"
+
+
+def test_s9_advances_only_on_the_users_field_of_a_missing_fact():
+    """I-2 (P53): `check_rules` names `notice_minutes`; the user answers `notice_received_at`."""
+    r = to_s2()
+    walk(r, ("check_rules", rules("escalate", None, NOTICE), INTENT))
+    assert r.active == "s9"
+    # the derived name, another field, or no field: still a read, but s9 does not move
+    for field in ("notice_minutes", "vessel_class", "accepts_alternative"):
+        assert r.allows("ask_user", {"field": field}, {}) == (True, None)
+        r.advance("ask_user", answer(field, learned=False), {"field": field})
+        assert r.active == "s9", field
+    r.advance("ask_user", answer("notice_received_at", learned=False), {})
+    assert r.active == "s9"
+    # the reviewer's deny-notice-01 path now recovers: ask the user's field, recheck, deny
+    assert walk(r, ("ask_user", answer("notice_received_at", "2026-08-14T08:00:00"),
+                    {"field": "notice_received_at"}),
+                ("check_rules", rules("deny", AT), INTENT),
+                ("ask_user", answer("accepts_alternative", False),
+                 {"field": "accepts_alternative"}),
+                ("deny_request", {"executed": {}}, DENY)) == ["s2", "s5", "s8", "s12"]
+    # vessel_class maps to itself; local_procedure_conflict has no user field
+    r = to_s2()
+    walk(r, ("check_rules", rules("escalate", None, ["local_procedure_conflict",
+                                                     "vessel_class"]), INTENT))
+    assert r.active == "s9"
+    r.advance("ask_user", answer("local_procedure_conflict", learned=False),
+              {"field": "local_procedure_conflict"})
+    assert r.active == "s9"
+    assert walk(r, ("ask_user", answer("vessel_class", "public_safety"),
+                    {"field": "vessel_class"})) == ["s2"]
+    # a missing fact with no user field (or none named): s9 is passed as unknown -> s11
+    for missing in (["local_procedure_conflict"], [], ["something_else"]):
+        r = to_s2()
+        assert walk(r, ("check_rules", rules("escalate", None, missing), INTENT)) == ["s11"]
+        assert r.learned["fact_learned"] is False
+        assert r.allows("escalate_request", ESCALATE, {}) == (True, None)
+    # the last check's missing facts decide: an earlier check's do not
+    r = to_s2()
+    walk(r, ("check_rules", rules("escalate", None, ["vessel_class"]), INTENT),
+         ("ask_user", answer("vessel_class", "commercial"), {"field": "vessel_class"}),
+         ("check_rules", rules("escalate", None, NOTICE), INTENT))
+    r.advance("ask_user", answer("vessel_class", "commercial"), {"field": "vessel_class"})
+    assert r.active == "s9"
+
+
+def test_dead_ends_are_gone_unknown_acceptance_and_no_next_allowed_deny():
+    """M-1: an unknown acceptance declines (s6 -> s8); a deny without a next allowed time goes
+    straight to s8; an earlier check's next_allowed is not carried over."""
+    r = to_s2()
+    assert walk(r, ("check_rules", rules("deny", AT), INTENT),
+                ("ask_user", answer("accepts_alternative", learned=False),
+                 {"field": "accepts_alternative"})) == ["s5", "s8"]
+    assert r.allows("deny_request", DENY, {}) == (True, None)
+    assert not r.allows("schedule_opening", {**ARGS, "open_at": AT}, {})[0]
+    r = to_s2()
+    assert walk(r, ("check_rules", rules("deny"), INTENT)) == ["s8"]
+    assert r.allows("deny_request", DENY, {}) == (True, None)
+    # escalate with a next_allowed, then a deny with none: s8, not s5 on the stale time
+    r = to_s2()
+    walk(r, ("check_rules", rules("escalate", AT, NOTICE), INTENT),
+         ("ask_user", answer("notice_received_at", "2026-08-14T08:00:00"),
+          {"field": "notice_received_at"}),
+         ("check_rules", rules("deny"), INTENT))
+    assert r.active == "s8" and "next_allowed" not in r.learned
 
 
 def test_a_condition_with_two_true_guards_stays_put():
@@ -324,10 +417,11 @@ def test_preconditions_are_kleene_and_unknown_refuses():
     assert r.allows("schedule_opening", ARGS, {"notice_hours": 2})[0]
     # the record wins a name the runtime learned too; the desk's s8 reads both
     r = to_s2()
-    walk(r, ("check_rules", rules("deny"), INTENT),
+    walk(r, ("check_rules", rules("deny", AT), INTENT),
          ("ask_user", answer("accepts_alternative", False), {"field": "accepts_alternative"}))
-    assert not r.allows("deny_request", {}, {"accepts_alternative": {"value": True}})[0]
-    assert not r.allows("deny_request", {}, {"accepts_alternative": {"value": "no"}})[0]
+    assert r.allows("deny_request", DENY, {"accepts_alternative": {"value": False}})[0]
+    assert not r.allows("deny_request", DENY, {"accepts_alternative": {"value": True}})[0]
+    assert not r.allows("deny_request", DENY, {"accepts_alternative": {"value": "no"}})[0]
     # a step that needs an approval refuses: the simulation has no approval channel
     ok, refusal = Runtime(_one_step_body(requires_approval=True)).allows(
         "schedule_opening", ARGS, {})
@@ -356,9 +450,12 @@ def test_the_runtime_refuses_procedures_it_cannot_enforce():
 
 
 def test_result_facts_read_only_the_named_fields():
-    assert result_facts("check_rules", rules("deny", "2026-08-14T08:30:00")) == {
-        "outcome": "deny", "next_allowed": "2026-08-14T08:30:00"}
-    assert result_facts("check_rules", rules("allow")) == {"outcome": "allow"}
+    assert result_facts("check_rules", rules("deny", AT)) == {
+        "outcome": "deny", "next_allowed": AT, "missing_facts": []}
+    assert result_facts("check_rules", rules("escalate", None, NOTICE)) == {
+        "outcome": "escalate", "missing_facts": NOTICE}
+    assert result_facts("check_rules", {**rules("allow"), "missing_facts": [1]}) == {
+        "outcome": "allow"}
     assert result_facts("ask_user", answer("accepts_alternative", True)) == {
         "fact_learned": True, "accepts_alternative": True}
     assert result_facts("ask_user", answer("notice_received_at", learned=False)) == {
@@ -640,6 +737,221 @@ def test_env_log_with_the_desk_procedure_is_identical_twice(sim_store, tasks,  #
     assert [c["runtime"]["decision"] for c in lines[1:-1]] == ["allow"] * 4 + ["refuse", "allow"]
 
 
+def test_the_desk_id_views_are_identical_in_every_arm_and_respect_limit(sim_store, tasks,  # noqa: F811
+                                                                      tmp_path, monkeypatch):
+    """M-2 and M-4: the desk id gives the same result in all four arms; the desk entry counts
+    toward `limit`; the desk id is validated by the store as any id is."""
+    import dataclasses
+
+    from adr_store.tools import Tools
+
+    task = _of(tasks, "allow", 1)
+    calls = [{"id": ident, "view": view} for ident in ("procedure/desk-request@1",
+                                                       "desk-request@1")
+             for view in ("catalog", "skill", "mermaid", "ir")]
+    seen = {}
+    for arm in ("no-gate", "prompt", "gate", "gate-runtime"):
+        with Env(sim_store.path, task, arm, tmp_path / arm) as e:
+            seen[arm] = [e.call("procedure_lookup", c) for c in calls]
+    assert all(r["ok"] for r in seen["no-gate"])
+    assert all(v == seen["no-gate"] for v in seen.values())
+    real = Tools.procedure_lookup
+    monkeypatch.setattr(Tools, "procedure_lookup", lambda self, task=None, **kw: (
+        dataclasses.replace(real(self, task, **kw), catalog=[
+            {**h, "rank": i} for i, h in enumerate(STORE_HITS * 5, 1)][:kw.get("limit", 5)])
+        if task is not None else real(self, task, **kw)))
+    with Env(sim_store.path, task, "gate", tmp_path / "limit") as e:
+        for limit, size in ((None, 5), (1, 1), (2, 2), (5, 5)):
+            args = {**LOOKUP, **({} if limit is None else {"limit": limit})}
+            catalog = e.call("procedure_lookup", args)["result"]["catalog"]
+            assert len(catalog) == size and catalog[0] == rt_mod.desk_hit(), limit
+            assert [h["rank"] for h in catalog] == list(range(1, size + 1))
+        for bad in ({"limit": 0}, {"limit": True}, {"limit": "3"}, {"as_of": "not a date"}):
+            out = e.call("procedure_lookup", {"id": "desk-request@1", "view": "skill",
+                                              **bad})
+            store = e.call("procedure_lookup", {"id": "IRM 1.1", "view": "skill", **bad})
+            assert not out["ok"] and out["refusal"] == store["refusal"], bad
+            assert "no procedure with that id" not in out["refusal"]["message"]
+
+
+def test_the_environment_hands_the_runtime_its_record(sim_store, tasks, tmp_path):  # noqa: F811
+    """M-2: the runtime's facts are the environment's record (here the
+    `local_procedure_conflict` it writes at start), not an empty object."""
+    task = _of(tasks, "allow", 1)
+    want = registry_fact(task)["value"]
+    for value, allowed in ((want, True), (not want, False)):
+        body = _one_step_body(preconditions=[{"eq": ["local_procedure_conflict", value]}])
+        with Env(sim_store.path, task, "gate-runtime", tmp_path / f"rec-{value}",
+                 runtime=Runtime(body)) as e:
+            out = e.call("schedule_opening", _schedule(task))
+            assert out["ok"] is allowed, value
+            if not allowed:
+                assert "is false" in out["refusal"]["reason"]
+    # a fact the user writes reaches it too: unknown before the answer, true after
+    task = _of(tasks, "emergency", 0)
+    body = _one_step_body(preconditions=[{"known": "vessel_class"}],
+                          args_schema={"from_request": {"request": "id"}})
+    with Env(sim_store.path, task, "gate-runtime", tmp_path / "user",
+             runtime=Runtime(body)) as e:
+        assert "vessel_class" not in e.world.record
+        assert not e.call("schedule_opening", _schedule(task))["ok"]
+        assert e.call("ask_user", {"field": "vessel_class"})["ok"]
+        assert e.runtime.allows("schedule_opening", _schedule(task),
+                                e.world.record) == (True, None)
+
+
+# -- the request binds the side effects (I-1, P53) ----------------------------------------------
+
+def _next_allowed(sim_store, task) -> str:  # noqa: F811
+    from adr_store.tools import Tools
+
+    res = Tools(sim_store.path, acl=True, caller="user:auditor").check_rules(
+        {"tool": "schedule_opening", "args": _schedule(task)}, _facts(task, True),
+        as_of=task.as_of).to_dict()
+    assert res["outcome"] == "deny" and res["next_allowed"], task.task_id
+    return res["next_allowed"]
+
+
+@pytest.mark.parametrize("cls,i", [(c, i) for c in ("deny-closed", "reschedule")
+                                   for i in range(3)])
+def test_a_check_or_schedule_at_another_time_does_not_skip_the_procedure(sim_store, tasks,  # noqa: F811
+                                                                         tmp_path, cls, i):
+    """The reviewer's repro: check at the next allowed time instead of the requested one, then
+    schedule there. The check does not advance s2, and the schedule is refused."""
+    task = _of(tasks, cls, i)
+    alt = _next_allowed(sim_store, task)
+    with Env(sim_store.path, task, "gate-runtime", tmp_path / "e") as e:
+        assert e.call("get_request", {"id": "r1"})["ok"]
+        out = e.call("check_rules", {"intent": {"tool": "schedule_opening",
+                                                "args": _schedule(task, alt)},
+                                     "facts": _facts(task, True)})
+        assert out["ok"] and out["result"]["outcome"] == "allow"
+        assert e.runtime.active == "s2"
+        for at in (alt, task.request["requested_open_at"]):
+            out = e.call("schedule_opening", _schedule(task, at))
+            assert not out["ok"] and out["refusal"]["rule_ids"] == [REFUSED], at
+        assert e.world.end_state()["openings"] == []
+        # the check of the requested opening moves on: deny -> s5
+        out = e.call("check_rules", {"intent": {"tool": "schedule_opening",
+                                                "args": _schedule(task)},
+                                     "facts": _facts(task, True)})
+        assert out["result"]["outcome"] == "deny" and e.runtime.active == "s5"
+        assert not e.call("schedule_opening", _schedule(task, alt))["ok"]
+
+
+def test_s4_schedules_only_the_requested_opening(sim_store, tasks, tmp_path):  # noqa: F811
+    task = _of(tasks, "allow", 1)
+    with Env(sim_store.path, task, "gate-runtime", tmp_path / "e") as e:
+        e.call("get_request", {"id": "r1"})
+        e.call("check_rules", {"intent": {"tool": "schedule_opening", "args": _schedule(task)},
+                               "facts": _facts(task, True)})
+        assert e.runtime.active == "s4"
+        later = task.request["requested_open_at"][:11] + "23:00:00"
+        for other in ({"open_at": later}, {"draw": task.request["draw"] + 1}):
+            out = e.call("schedule_opening", {**_schedule(task), **other})
+            assert not out["ok"] and out["refusal"]["rule_ids"] == [REFUSED], other
+            assert out["refusal"]["active_step"] == "s4"
+        assert e.call("schedule_opening", _schedule(task))["ok"] and e.runtime.active == "s12"
+
+
+# -- an agent that follows the SKILL.md (I-2) ---------------------------------------------------
+
+USER_FIELD = {"notice_minutes": "notice_received_at", "vessel_class": "vessel_class"}
+
+
+def skill_agent(e) -> None:
+    """Follows desk-request@1's SKILL.md on the results it gets: read the request, check the
+    requested opening on the record's facts, then act on the outcome; on an escalation ask the
+    user's field of a missing fact (as s9 says) and check again."""
+    req = e.task.request
+    record = e.call("get_request", {"id": req["id"]})["result"]["record"]
+    for _ in range(4):
+        facts = {k: v["value"] for k, v in record.items()}
+        out = e.call("check_rules", {"intent": {"tool": "schedule_opening",
+                                                "args": _schedule(e.task)},
+                                     "facts": facts})["result"]
+        if out["outcome"] == "allow":
+            e.call("schedule_opening", _schedule(e.task))
+            return
+        if out["outcome"] == "deny":
+            if out["next_allowed"]:
+                e.call("ask_user", {"field": "accepts_alternative"})
+                accepts = e.call("get_request", {"id": req["id"]})["result"]["record"].get(
+                    "accepts_alternative", {}).get("value")
+                if accepts is True:
+                    e.call("schedule_opening", _schedule(e.task, out["next_allowed"]))
+                    return
+            section = (out["deciding_sections"] or [req["section"]])[0]
+            e.call("deny_request", {"request": req["id"], "rule_id": f"33 CFR {section}",
+                                    "reason": "the rules do not allow the requested time"})
+            return
+        fields = [USER_FIELD[m] for m in out["missing_facts"] if m in USER_FIELD]
+        answer = e.call("ask_user", {"field": fields[0]})["result"] if fields else None
+        if answer is None or answer["answer"] == "I don't know":
+            e.call("escalate_request", {"request": req["id"], "missing": fields or
+                                        out["missing_facts"], "reason": "unknown fact"})
+            return
+        record = e.call("get_request", {"id": req["id"]})["result"]["record"]
+
+
+def test_a_skill_following_agent_reaches_every_expected_end_state(sim_store, tasks,  # noqa: F811
+                                                                 tmp_path):
+    from adr_eval.sim.world import state_matches
+
+    assert len(tasks) == 18
+    reached = {}
+    for arm in ("gate", "gate-runtime"):
+        ok = []
+        for task in tasks:
+            with Env(sim_store.path, task, arm, tmp_path / arm / task.task_id) as e:
+                skill_agent(e)
+                ok.append(state_matches(e.world.end_state(), task.expected_state))
+                if arm == "gate-runtime":
+                    refused = [c for c in _calls(e.log_lines())
+                               if c["runtime"]["decision"] == "refuse"]
+                    assert not refused, (task.task_id, refused)
+                    assert e.runtime.active == "s12", task.task_id
+        reached[arm] = sum(ok)
+    assert reached == {"gate": 18, "gate-runtime": 18}
+
+
+def test_an_agent_that_asks_only_after_an_escalate_recovers(sim_store, tasks,  # noqa: F811
+                                                           tmp_path):
+    """The reviewer's deny-notice-01 path through the agent loop: check first, learn that the
+    notice is missing, ask the user's field (after a wrong name, which does not advance),
+    check again, ask about another time, deny."""
+    task = _of(tasks, "deny-notice", 0)
+    req = task.request
+
+    def script(t, turn, repeat, system, user):
+        check = {"tool": "check_rules", "args": {
+            "intent": {"tool": "schedule_opening", "args": _schedule(t)},
+            "facts": _facts(t, turn > 0)}}
+        if turn == 0:
+            return {"tool_calls": [{"tool": "get_request", "args": {"id": "r1"}}, check]}
+        if turn == 1:
+            return {"tool_calls": [{"tool": "ask_user", "args": {"field": "notice_minutes"}},
+                                   {"tool": "ask_user",
+                                    "args": {"field": "notice_received_at"}}, check]}
+        return {"tool_calls": [{"tool": "ask_user", "args": {"field": "accepts_alternative"}},
+                               {"tool": "deny_request", "args": {
+                                   "request": "r1", "rule_id": f"33 CFR {req['section']}",
+                                   "reason": "the notice is short"}}],
+                "reply": {"status": "denied", "text": f"Denied under 33 CFR {req['section']}."}}
+
+    row = run_trial(task, "gate-runtime", 0, stub_agent(tmp_path / "llm", script, tasks),
+                    local_env_factory(sim_store.path, tmp_path / "t"))
+    steps = [(c["tool"], c["args"].get("field"), c["runtime"]["step"], c["runtime"]["after"])
+             for c in _calls(row["log"])]
+    assert steps == [("get_request", None, "s1", "s2"), ("check_rules", None, "s2", "s9"),
+                     ("ask_user", "notice_minutes", "s9", "s9"),
+                     ("ask_user", "notice_received_at", "s9", "s2"),
+                     ("check_rules", None, "s2", "s5"),
+                     ("ask_user", "accepts_alternative", "s5", "s8"),
+                     ("deny_request", None, "s8", "s12")]
+    assert success(row, task) and not any(row["violations"].values())
+
+
 # -- trials in the gate-runtime arm -------------------------------------------------------------
 
 def _facts(task, asked: bool) -> dict:
@@ -796,7 +1108,11 @@ def _sha(path) -> str:
 
 def test_cli_runtime_check_writes_the_profiles_entry(sim_store, tasks, tmp_path,  # noqa: F811
                                                      monkeypatch, capsys):
+    import shutil
+    from dataclasses import replace
+
     from adr_eval import cli
+    from adr_eval.llm import CachedStubClient
     from adr_eval.runner import REPO_ROOT as root
     from adr_eval.runner import load_profiles
 
@@ -804,8 +1120,13 @@ def test_cli_runtime_check_writes_the_profiles_entry(sim_store, tasks, tmp_path,
     model = load_profiles(root / "config" / "models.json")[SONNET]["model"]
     two = [_of(tasks, "allow", 1), _of(tasks, "deny-closed", 0)]
 
-    def run(arms, script, out):
-        client = stub_agent(tmp_path / f"llm-{out}", script, tasks, model=model)
+    class Served(CachedStubClient):           # reports the profile's model as served
+        def _attempt(self, system, user, max_tokens, repeat):
+            return replace(super()._attempt(system, user, max_tokens, repeat),
+                           served_model=model)
+
+    def run(arms, script, out, cls=Served):
+        client = stub_agent(tmp_path / f"llm-{out}", script, tasks, model=model, cls=cls)
         _rounds(sim_store, two, arms, client, tmp_path / out, trials=1)
         return tmp_path / out
 
@@ -829,8 +1150,8 @@ def test_cli_runtime_check_writes_the_profiles_entry(sim_store, tasks, tmp_path,
     # refusals: a canary run, an arm missing, another profile's model, an unknown profile
     canary = tmp_path / "canary"
     _rounds(sim_store, two, ("gate", "gate-runtime"),
-            stub_agent(tmp_path / "llm-canary", procedure_script, tasks, model=model), canary,
-            canary=True)
+            stub_agent(tmp_path / "llm-canary", procedure_script, tasks, model=model,
+                       cls=Served), canary, canary=True)
     assert cli.main(["sim", "runtime-check", str(canary), "--profile", SONNET, "--config",
                      str(config)]) == 2
     assert "is a canary run" in capsys.readouterr().err
@@ -843,6 +1164,30 @@ def test_cli_runtime_check_writes_the_profiles_entry(sim_store, tasks, tmp_path,
             argv = [*argv, "--profile", SONNET]
         assert cli.main(["sim", "runtime-check", *argv, "--config", str(config)]) == 2, msg
         assert msg in capsys.readouterr().err, msg
+    # M-3: a run reporting no served model (a plain stub reports none), or with no
+    # summary.json, is refused; so is a malformed or unwritable config, and nothing is written
+    unserved = run(("gate-runtime",), procedure_script, "gr-unserved", cls=CachedStubClient)
+    assert json.loads((unserved / "summary.json").read_text())["served_models"] == []
+    bare = tmp_path / "gr-bare"
+    shutil.copytree(disciplined, bare)
+    (bare / "summary.json").unlink()
+    before = config.read_bytes()
+    for runs in ((good, unserved), (good, bare)):
+        assert cli.main(["sim", "runtime-check", *map(str, runs), "--profile", SONNET,
+                         "--config", str(config)]) == 2
+        assert "reports no served model" in capsys.readouterr().err
+    bad = tmp_path / "bad.json"
+    for text, msg in (("{not json", "Expecting"), (json.dumps({SONNET: {"enabled": 1}}),
+                                                   "not {\"enabled\": bool")):
+        bad.write_text(text)
+        assert cli.main(["sim", "runtime-check", str(good), str(disciplined), "--profile",
+                         SONNET, "--config", str(bad)]) == 2
+        assert msg in capsys.readouterr().err and bad.read_text() == text
+    missing_dir = tmp_path / "no-such-dir" / "runtime.json"
+    assert cli.main(["sim", "runtime-check", str(good), str(disciplined), "--profile", SONNET,
+                     "--config", str(missing_dir)]) == 2
+    assert "directory does not exist" in capsys.readouterr().err
+    assert not missing_dir.parent.exists() and config.read_bytes() == before
     # the default path is the conftest's copy, never the committed file (N9)
     assert cli.main(["sim", "runtime-check", str(good), str(disciplined), "--profile",
                      SONNET]) == 0

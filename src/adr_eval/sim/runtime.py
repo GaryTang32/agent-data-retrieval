@@ -28,31 +28,46 @@ tool or with other than one unguarded successor, a guard or precondition that is
   the tool_call step**: side effects stay refused there and the agent may call the step's tool
   again. So a `check_rules` result whose `outcome` is missing or malformed (absent, null, not a
   string, or none of allow, deny, escalate) fails closed: the runtime stays on s2. Only when
-  it moves are the result's facts added to `learned`.
-- `result_facts(tool, result)`: `check_rules` gives `outcome` and `next_allowed` (strings
-  only); `ask_user` gives `fact_learned` (the result's `learned`, which the environment adds:
-  whether the user knew the answer) and, when it is True, the field's value under the field's
-  name (`accepts_alternative`; the result's `value`, which the environment adds from the
-  record); every other tool gives none.
+  it moves are the result's facts added to `learned`, replacing the facts the same tool gave
+  before (a `check_rules` result replaces `outcome`, `next_allowed` and `missing_facts` as a
+  group, so a null `next_allowed` is not taken from an earlier check). A `tool_call` step with
+  nothing to ask (`ask_missing`, below, gives no field) is passed as an unknown answer: the
+  runtime goes on as if the question had been asked and the user did not know (s9 -> s11).
+- `result_facts(tool, result)`: `check_rules` gives `outcome` and `next_allowed` (strings only) and
+  `missing_facts` (a list of strings); `ask_user` gives `fact_learned` (the result's `learned`,
+  which the environment adds: whether the user knew the answer) and, when it is True, the field's
+  value under the field's name (`accepts_alternative`; the result's `value`, which the environment
+  adds from the record); every other tool gives none.
 
-**`args_schema`** (free in the IR, §5.3; the runtime reads this form): `{"const": {path:
-value}}`, the argument at the dotted path must equal the value (s2's `intent.tool` is
-`schedule_opening`, s5's `field` is `accepts_alternative`); `{"from_result": {arg: fact}}`,
-the argument must equal a string fact the runtime learned (s7's `open_at` is the
-`next_allowed` of the last `check_rules`; refused while none is learned).
+**`args_schema`** (free in the IR, §5.3; the runtime reads this form, P53; every path is
+dotted into the arguments):
+- `{"const": {path: value}}`: the argument must equal the value (s2's `intent.tool` is
+  `schedule_opening`, s5's `field` is `accepts_alternative`);
+- `{"from_request": {path: request field}}`: the argument must equal that field of the request
+  the runtime is bound to (`bind`, which the environment calls with the task's request; an
+  unbound runtime refuses). s2's `intent.args.{request,section,draw,open_at}` are the
+  request's `id`, `section`, `draw` and `requested_open_at`; so are s4's
+  `{request,section,draw,open_at}`; s7's `{request,section,draw}`; s8's and s11's `request`;
+- `{"from_result": {path: fact}}`: the argument must equal a string fact the runtime learned
+  (s7's `open_at` is the `next_allowed` of the last `check_rules`; refused while none is);
+- `{"ask_missing": {path: {missing fact: user field or null}}}`: the argument must be the
+  user's field of one of the last `check_rules` result's `missing_facts` (s9: `notice_minutes`
+  -> `notice_received_at`, `vessel_class` -> `vessel_class`, `local_procedure_conflict` ->
+  none, the environment writes it). Another question stays allowed (a read) but does not
+  advance; when no missing fact has a user field, the step is passed as unknown.
 
-**`desk-request@1`** (`config/sim/desk-request.json`, P17: authored as part of the
-environment, `source_kind: "authored"`, no spans): s1 `get_request` -> s2 `check_rules` of
-the requested opening -> s3 on its outcome: allow -> s4 `schedule_opening` (risk
-irreversible) -> s12; deny -> s5 `ask_user` whether another time is acceptable -> s6: accepts
--> s7 `schedule_opening` at `next_allowed` (irreversible) -> s12, declines -> s8
-`deny_request` -> s12; escalate -> s9 `ask_user` for a missing fact -> s10: learned -> s2
-again, unknown -> s11 `escalate_request` -> s12; s12 the reply (`end`). Guards are canonical
-JSON `adr-dsl@1` expressions over the last result (`{"eq":["outcome","allow"]}`). Its `tests`
-are `branch_paths` of its steps. `as_unit` wraps it in a unit for `render_skill`. The
-environment serves it through `procedure_lookup` in every arm (P52): `desk_hit` is its catalog
-entry (first in every catalog, the store's own entries after it) and `desk_rendering` its
-SKILL.md, Mermaid and IR views for the id `DESK_UNIT_ID` or `desk-request@1`.
+**`desk-request@1`** (`config/sim/desk-request.json`, P17: authored as part of the environment,
+`source_kind: "authored"`, no spans): s1 `get_request` -> s2 `check_rules` of the requested opening
+-> s3 on its outcome: allow -> s4 `schedule_opening` of the requested opening (risk irreversible) ->
+s12; deny with a `next_allowed` -> s5 `ask_user` whether another time is acceptable -> s6: accepts
+-> s7 `schedule_opening` at `next_allowed` (irreversible) -> s12, declines or does not know -> s8
+`deny_request` -> s12; deny with no `next_allowed` -> s8; escalate -> s9 `ask_user` for the user's
+field of a missing fact -> s10: learned -> s2 again, unknown -> s11 `escalate_request` -> s12; s12
+the reply (`end`). Guards are canonical JSON `adr-dsl@1` expressions over the last result
+(`{"eq":["outcome","allow"]}`). Its `tests` are `branch_paths` of its steps. `as_unit` wraps it in a
+unit for `render_skill`. The environment serves it through `procedure_lookup` in every arm (P52):
+`desk_hit` is its catalog entry (first in every catalog, the store's own entries after it) and
+`desk_rendering` its SKILL.md, Mermaid and IR views for the id `DESK_UNIT_ID` or `desk-request@1`.
 
 **Where it runs (§9.3, §12.6; N13).** In the environment process (`env.Env`; the CLI's factory
 starts `python -m adr_eval.sim.env` per trial), beside the gate, never in the agent loop. In arm
@@ -110,7 +125,10 @@ REFUSED = ["adr.runtime.refused@1", "1"]
 OUTCOMES = ("allow", "deny", "escalate")
 _PLACES = 9                     # the discipline rule is judged on figures rounded here
 _ENFORCED = ("tool_call", "condition", "end")
-_SCHEMA_KEYS = ("const", "from_result")
+_SCHEMA_KEYS = ("const", "from_request", "from_result", "ask_missing")
+# the facts a tool's result gives, replaced as a group when the runtime moves on it
+_GROUPS = {"check_rules": ("outcome", "next_allowed", "missing_facts"),
+           "ask_user": ("fact_learned",)}
 
 
 # -- the desk procedure -------------------------------------------------------------------------
@@ -193,8 +211,12 @@ def result_facts(tool: str, result: Any) -> dict:
     if not isinstance(result, dict):
         return {}
     if tool == "check_rules":
-        return {k: result[k] for k in ("outcome", "next_allowed")
-                if isinstance(result.get(k), str)}
+        out = {k: result[k] for k in ("outcome", "next_allowed")
+               if isinstance(result.get(k), str)}
+        missing = result.get("missing_facts")
+        if isinstance(missing, list) and all(isinstance(m, str) for m in missing):
+            out["missing_facts"] = list(missing)
+        return out
     if tool == "ask_user":
         learned = result.get("learned")
         if type(learned) is not bool:
@@ -232,7 +254,8 @@ def _same(a: Any, b: Any) -> bool:
 class Runtime:
     """The runtime of one procedure for one session (module text)."""
 
-    def __init__(self, body: ProcedureBody, *, name: str = DESK_PROCEDURE):
+    def __init__(self, body: ProcedureBody, *, name: str = DESK_PROCEDURE,
+                 request: dict | None = None):
         problems = validate_ir(body) + self._problems(body)
         if problems:
             raise ValueError(f"the runtime cannot enforce this procedure: {'; '.join(problems)}")
@@ -240,6 +263,7 @@ class Runtime:
         self.steps = {s.id: s for s in body.steps}
         self.active: str = body.steps[0].id
         self.learned: dict[str, Any] = {}
+        self.request: dict | None = None if request is None else dict(request)
         self._guards = {(s.id, i): json.loads(e.guard) for s in body.steps
                         for i, e in enumerate(s.next) if e.guard is not None}
 
@@ -267,11 +291,23 @@ class Runtime:
                 out += [f"{s.id}: precondition: {x}" for x in check_expr(p)]
             schema = s.args_schema or {}
             bad = sorted(k for k in schema if k not in _SCHEMA_KEYS)
-            if bad or not all(isinstance(schema.get(k, {}), dict) for k in _SCHEMA_KEYS):
-                out.append(f"{s.id}: args_schema takes only {', '.join(_SCHEMA_KEYS)} objects")
+            named = [schema.get(k, {}) for k in ("from_request", "from_result")]
+            asks = schema.get("ask_missing", {})
+            if bad or not all(isinstance(schema.get(k, {}), dict) for k in _SCHEMA_KEYS) or \
+                    not all(isinstance(v, str) for m in named if isinstance(m, dict)
+                            for v in m.values()) or \
+                    not all(isinstance(m, dict) and all(v is None or isinstance(v, str)
+                                                        for v in m.values())
+                            for m in (asks.values() if isinstance(asks, dict) else [None])):
+                out.append(f"{s.id}: args_schema takes only {', '.join(_SCHEMA_KEYS)} objects "
+                           f"of the forms the module text gives")
         return out
 
     # -- the active step --------------------------------------------------------------------
+
+    def bind(self, request: dict) -> None:
+        """Bind the runtime to the request its `from_request` arguments must match."""
+        self.request = dict(request)
 
     @property
     def step(self) -> Step:
@@ -292,20 +328,45 @@ class Runtime:
                 "allowed_tools": self.allowed_tools(), "step_text": s.text, "reason": reason,
                 "message": f"refused by the procedure {self.name} at step {s.id}: {reason}"}
 
+    @staticmethod
+    def _askable(mapping: dict, learned: dict) -> list[str]:
+        """The user's fields of the missing facts of the last `check_rules` (`ask_missing`)."""
+        missing = learned.get("missing_facts")
+        missing = missing if isinstance(missing, list) else []
+        return sorted({mapping[m] for m in missing if isinstance(mapping.get(m), str)})
+
     def _args_problem(self, s: Step, args: Any) -> str | None:
         schema = s.args_schema or {}
         for path, want in sorted(schema.get("const", {}).items()):
             found, got = _at(args, path)
             if not found or not _same(got, want):
                 return f"{path} must be {json.dumps(want)} at this step"
-        for arg, fact in sorted(schema.get("from_result", {}).items()):
+        for path, field in sorted(schema.get("from_request", {}).items()):
+            want = None if self.request is None else self.request.get(field)
+            if want is None:
+                return f"{path} must be the request's {field}, and no request is bound"
+            found, got = _at(args, path)
+            if not found or not _same(got, want):
+                return f"{path} must be {json.dumps(want)} (the request's {field})"
+        for path, fact in sorted(schema.get("from_result", {}).items()):
             want = self.learned.get(fact)
             if not isinstance(want, str):
-                return f"{arg} must be the {fact} of a result, and none is known"
-            found, got = _at(args, arg)
+                return f"{path} must be the {fact} of a result, and none is known"
+            found, got = _at(args, path)
             if not found or not _same(got, want):
-                return f"{arg} must be {want} (the {fact} of the last result)"
+                return f"{path} must be {want} (the {fact} of the last result)"
+        for path, mapping in sorted(schema.get("ask_missing", {}).items()):
+            fields = self._askable(mapping, self.learned)
+            found, got = _at(args, path)
+            if not found or got not in fields:
+                return (f"{path} must be one of {json.dumps(fields)}: the user's fields for the "
+                        f"missing facts {json.dumps(self.learned.get('missing_facts', []))}")
         return None
+
+    def _nothing_to_ask(self, s: Step, learned: dict) -> bool:
+        asks = (s.args_schema or {}).get("ask_missing", {})
+        return s.type == "tool_call" and bool(asks) and not any(
+            self._askable(m, learned) for m in asks.values())
 
     # -- the interface ----------------------------------------------------------------------
 
@@ -337,18 +398,36 @@ class Runtime:
         if s.type != "tool_call" or s.tool != tool or self._args_problem(s, args):
             return
         facts = result_facts(tool, result)
+        nxt = self._follow(s, facts)
+        if nxt is None:
+            return                                  # fail closed: stay on the tool_call
+        learned = {k: v for k, v in self.learned.items() if k not in _GROUPS.get(tool, ())}
+        learned.update(copy.deepcopy(facts))
+        seen = set()
+        while self._nothing_to_ask(nxt, learned) and nxt.id not in seen:
+            seen.add(nxt.id)                        # passed as an unknown answer (s9 -> s11)
+            unknown = {"fact_learned": False}
+            after = self._follow(nxt, unknown)
+            if after is None:
+                break
+            learned.update(unknown)
+            nxt = after
+        self.learned, self.active = learned, nxt.id
+
+    def _follow(self, s: Step, facts: dict) -> Step | None:
+        """The step after tool_call `s` on a result's `facts`: its successor, through condition
+        steps by the one True guard; None when a condition has no such guard."""
         nxt, seen = self.steps[s.next[0].to], set()
         while nxt.type == "condition":
             if nxt.id in seen:
-                return
+                return None
             seen.add(nxt.id)
             true = [e for i, e in enumerate(nxt.next)
                     if evaluate(self._guards[(nxt.id, i)], facts) is Tri.T]
             if len(true) != 1:
-                return                              # fail closed: stay on the tool_call
+                return None
             nxt = self.steps[true[0].to]
-        self.learned.update(copy.deepcopy(facts))
-        self.active = nxt.id
+        return nxt
 
 
 # -- the per-profile flag ------------------------------------------------------------------------
