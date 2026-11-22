@@ -299,6 +299,8 @@ def compile_draw(section: str, draw: DrawParams, cards: list[Unit], general: Uni
     # P46: a period-less notice or on-signal basis holds at all other times, wherever none of
     # the draw's periods does (with no period, at all times)
     notice, basis = period_less(draw)
+    if specific and covers_all(specific):  # nothing is left over: such a rule could never fire
+        notice = basis = False                # (§12.4, as builder note 13 gates § 117.5)
     elsewhere = {"not": _any([_in(w) for w in specific])} if specific else _in(ALL_TIMES)
     basis_prov = _prov("opening_basis", draw.opening_basis)
     if notice:

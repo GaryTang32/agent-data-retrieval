@@ -750,3 +750,16 @@ def test_a_large_draw_compiles_quickly_and_identically():
         range(0, 1380, 120), (WEEKDAYS, DAYS[5:]))]
     a, b = run(draw(periods=ps))[0], run(draw(periods=ps))[0]
     assert [x.binding_id for x in a] == [x.binding_id for x in b]
+
+
+def test_a_period_less_rule_is_not_emitted_where_the_periods_cover_all_times():   # §12.4
+    """Re-review: an opening basis from another card beside periods that already cover every
+    minute would compile to a binding that can never fire; none is emitted."""
+    d = draw(opening_basis="on_signal", notice_hours=1, periods=[
+        on_signal(start=360, end=1320, at=IN_B), notice_period(1320, 360, at=IN_B)])
+    bs = run(d)[0]
+    grid = [facts(datetime(2026, 8, 12, h, m), notice=nm)
+            for h in range(24) for m in (0, 30) for nm in (0, 59, 60, 1440)]
+    for b in specific(bs):
+        assert any(evaluate(b.when, f) is Tri.T for f in grid), b.when
+    assert not any(b.rule_id == GENERAL_CARD.canonical_ref for b in bs)
