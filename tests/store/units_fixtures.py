@@ -272,14 +272,15 @@ def units_ecfr_facts(section_text: str) -> dict:
     return facts
 
 
-def units_fixture_reply(system: str, user: str, repeat: int) -> str:
+def units_fixture_reply(system: str, user: str, repeat: int, *, facts_of=None) -> str:
     """A first-pass reply to an extraction prompt over `ecfr_117_units.xml`, as
-    `tables_fixtures.fixture_reply` gives for the Phase 3 fixture."""
+    `tables_fixtures.fixture_reply` gives for the Phase 3 fixture, from `facts_of(section_text)`
+    (default `units_ecfr_facts`)."""
     from adr_store.tables.extract import DRAW_COLUMNS, SECTION_COLUMNS
     from tests.store.tables_fixtures import _cell, asked_columns
 
     asked = asked_columns(system)
-    facts = units_ecfr_facts(user)
+    facts = (facts_of or units_ecfr_facts)(user)
     section = {c: _cell(facts["section"], c) for c in SECTION_COLUMNS if c in asked}
     draw_cols = [c for c in DRAW_COLUMNS if c in asked]
     if draw_cols and "bridge" not in draw_cols:
@@ -288,11 +289,14 @@ def units_fixture_reply(system: str, user: str, repeat: int) -> str:
     return json.dumps({"section": section, "draws": draws})
 
 
-def units_fixture_numbered(system: str, user: str, repeat: int) -> str:
-    """A second-pass reply (numbered answers) for a section of `ecfr_117_units.xml`."""
+def units_fixture_numbered(system: str, user: str, repeat: int, *,
+                           facts_of=None) -> str:
+    """A second-pass reply (numbered answers) for a section of `ecfr_117_units.xml`, from
+    `facts_of(section_text)` (default `units_ecfr_facts`; the simulation fixture gives its own,
+    Task 19)."""
     from tests.store.tables_fixtures import _answer
 
-    facts = units_ecfr_facts(user)
+    facts = (facts_of or units_ecfr_facts)(user)
     s = facts["section"]
     lines = [f"1. WATERWAY: {_answer(s, 'waterway')}",
              f"2. SEASONAL: {_answer(s, 'seasonal', 'bool')}",
@@ -312,11 +316,12 @@ def units_fixture_numbered(system: str, user: str, repeat: int) -> str:
 UNITS_RULES = [{"match": {"uri_prefix": "https://"}, "access": ["tenant:acme"]}]
 
 
-def make_units_store_with_tables(path: Path) -> Store:
+def make_units_store_with_tables(path: Path, reply=None) -> Store:
     """`UNITS_DOCS` and the Phase 3 Federal Register documents, with ACL state (`UNITS_RULES`,
     clock `T0`), a lexical index, and the Phase 3 tables built (metadata, entities and the
-    33 CFR 117 extraction from `units_fixture_reply` behind a cached stub whose cache sits
-    beside the store) and promoted to `tables/HEAD` through the Phase 3 merge gate."""
+    33 CFR 117 extraction from `reply`, default `units_fixture_reply`, behind a cached stub whose
+    cache sits beside the store) and promoted to `tables/HEAD` through the Phase 3 merge
+    gate."""
     from adr_eval.cache import Cache
     from adr_eval.llm import CachedStubClient
     from adr_store import tools
@@ -328,7 +333,7 @@ def make_units_store_with_tables(path: Path) -> Store:
     store = make_units_store(path, [*UNITS_DOCS, *FR_DOCS[:3]], rules=UNITS_RULES)
     tools.Tools(path).index("p1-struct", lexical_only=True)
     stub = CachedStubClient("stub-sonnet", Cache(Path(path).parent / f"{Path(path).name}-llm"),
-                            units_fixture_reply)
+                            reply or units_fixture_reply)
     tables_id = build_tables(path, "gov", with_extraction=True, client=stub,
                              max_calls=len(ex.units(store))).tables_id
     assert gate(path, tables_id, [], 0).promoted

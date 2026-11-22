@@ -1901,6 +1901,47 @@ def _run_dir(name: str, out: Path) -> Path:
     return d
 
 
+def _sim_tasks(a: argparse.Namespace) -> int:
+    """`adr-eval sim tasks --gen`: the 18 tasks of `sim-drawbridge v0.1` from the store's
+    signed-off bindings (default `bindings/HEAD`), written to `--out` (default
+    `golden/sim-drawbridge/v0.1/tasks.jsonl`). No model call. Exit 2 with `NO_BINDINGS` when the
+    store has no bindings, and when the file holds other tasks (unless `--overwrite`)."""
+    from adr_eval.sim import tasks as sim_tasks
+    from adr_store.bindings.manifest import BindingsError, read_bindings_head
+    from adr_store.store import Store, StoreError
+    from adr_store.tools import NO_BINDINGS
+
+    if not a.gen:
+        print("error: sim tasks takes --gen", file=sys.stderr)
+        return 2
+    try:
+        store = Store.open(a.store)
+    except StoreError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    bindings_id = a.bindings or read_bindings_head(store.path)
+    if bindings_id is None:
+        print(f"error: NO_BINDINGS: {NO_BINDINGS.format(store.snapshot_id[:12])}",
+              file=sys.stderr)
+        return 2
+    try:
+        made = sim_tasks.generate_tasks(store.path, bindings_id)
+    except (BindingsError, sim_tasks.SimError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    out = a.out or sim_tasks.TASKS_DIR / "tasks.jsonl"
+    data = b"".join(sim_tasks.canonical(t) for t in made)
+    if out.exists() and out.read_bytes() != data and not a.overwrite:
+        print(f"error: {out} holds other tasks; pass --overwrite to replace them",
+              file=sys.stderr)
+        return 2
+    sim_tasks.write_tasks(made, out)
+    counts = Counter(t.class_ for t in made)
+    print(f"{len(made)} task(s) from bindings {bindings_id[:12]} "
+          f"({', '.join(f'{c} {counts[c]}' for c in sim_tasks.CLASSES)}) -> {out}")
+    return 0
+
+
 def _report(a: argparse.Namespace) -> int:
     run_dir = _run_dir(a.run_id, a.out)
     rep = write_report(run_dir)
@@ -2277,6 +2318,22 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=None,
                    help="output root (default runs); writes probes-mcp-<time>/")
     p.set_defaults(fn=_mcp_probes)
+
+    p = sub.add_parser("sim", help="the drawbridge simulation (Phase 4 §13): `sim tasks --gen` "
+                                   "draws the 18 tasks of sim-drawbridge v0.1 from a store's "
+                                   "signed-off bindings (no model call)")
+    sim_sub = p.add_subparsers(dest="sim_command", required=True)
+    q = sim_sub.add_parser("tasks", help="generate the simulation tasks (no model call)")
+    q.add_argument("--gen", action="store_true", help="generate (required)")
+    q.add_argument("--store", type=Path, required=True,
+                   help="the store with signed-off bindings (e.g. .cache/store-p2/gov)")
+    q.add_argument("--bindings", default=None, metavar="ID",
+                   help="the bindings id (default the store's bindings/HEAD)")
+    q.add_argument("--out", type=Path, default=None,
+                   help="the tasks file (default golden/sim-drawbridge/v0.1/tasks.jsonl)")
+    q.add_argument("--overwrite", action="store_true",
+                   help="replace a tasks file that holds other tasks")
+    q.set_defaults(fn=_sim_tasks)
 
     p = sub.add_parser("report", help="write report.json/report.md for a run")
     p.add_argument("run_id")

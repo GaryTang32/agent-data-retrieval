@@ -93,7 +93,8 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     --gen` writes and gov-tables runs read) is a fresh empty directory per test, and so are the
     gov-rules, gov-procedures and bench-procedures directories (`golden.units.RULES_DIR`,
     `GOV_PROCEDURES_DIR`, `BENCH_PROCEDURES_DIR`, which `adr-eval golden rules --gen` and
-    `adr-eval golden procedures --gen` write).
+    `adr-eval golden procedures --gen` write), and so is the simulation tasks directory
+    (`sim.tasks.TASKS_DIR`, which `adr-eval sim tasks --gen` writes and `load_tasks` reads).
     The default output root of `adr-eval p4-retrieval` (`phase4.OUT_ROOT`) goes there too, and
     the unit-index tuning file (`units.index.TUNING_PATH`, which `adr-eval p4-tune` writes and
     the unit tools read) is a fresh file per test holding every corpus's default entry
@@ -154,6 +155,10 @@ def _isolate_writable_state(writable_state, monkeypatch, tmp_path_factory):
     from adr_store.units import index as units_index
 
     monkeypatch.setattr(phase4, "OUT_ROOT", writable_state / "runs")
+    from adr_eval.sim import tasks as sim_tasks
+
+    monkeypatch.setattr(sim_tasks, "TASKS_DIR",
+                        tmp_path_factory.mktemp("golden-sim-drawbridge") / "v0.1")
     tuning = _default_tuning_file(tmp_path_factory.mktemp("units-tuning") / "tuning.json")
     monkeypatch.setattr(units_index, "TUNING_PATH", tuning)
     monkeypatch.setenv(units_index.TUNING_ENV, str(tuning))
