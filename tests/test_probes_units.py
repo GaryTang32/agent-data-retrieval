@@ -110,8 +110,10 @@ def test_leak_probes_cover_every_family_and_find_no_leak(store, refs_root):
     summary = pu.summarize_leaks(results)
     assert summary["total"]["n"] == 15 and summary["total"]["leaks"] == 0
     assert summary["total"]["compared"] == 15
-    # the probes reach every tool and more than one caller
-    assert {c["tool"] for p in probes for c in p.call["calls"]} == set(pu.present_tools())
+    # the probes reach every read tool and more than one caller (check_rules discloses a
+    # blocking rule's id by design, P5, so it is not a leak probe; its hidden text is checked
+    # by the fail-closed probes and the gate's visibility tests)
+    assert {c["tool"] for p in probes for c in p.call["calls"]} == set(pu.READ_TOOLS)
     assert len({p.caller for p in probes}) > 1
 
 
@@ -303,7 +305,7 @@ def test_failclosed_six_conditions_by_tools_by_five_callers(store, tmp_path):
     present = pu.present_tools()
     logs: dict = {}
     rows = pu.failclosed(store.path, tmp_path / "c", "gov", logs=logs, **kw(store))
-    assert len(rows) == 6 * len(present) * 5    # 6 * 4 * 5 = 120 now; 150 after Task 18
+    assert len(rows) == 6 * len(present) * 5 == 150    # C10: 6 × 5 tools × 5 callers
     assert all(r["pass"] for r in rows), [r for r in rows if not r["pass"]]
     assert Counter(r["family"] for r in rows) == dict.fromkeys(CONDITIONS, len(present) * 5)
     assert Counter(r["tool"] for r in rows) == dict.fromkeys(present, 30)
@@ -344,6 +346,31 @@ def test_a_unit_tool_that_fails_open_is_caught(store, tmp_path, monkeypatch):
     bad = [r for r in rows if not r["pass"]]
     assert bad and {r["tool"] for r in bad} == {"define"}
     assert any(r["content"] for r in bad if r["family"] == "F4")
+
+
+def test_failclosed_check_rules_target_with_bindings(tmp_path, monkeypatch):
+    """With promoted bindings the check_rules target is a card whose text decides a call:
+    those who see its document get it before the change, and no fail-closed probe shows it."""
+    s = uf.make_units_built_with_bindings(tmp_path / "b")
+    rows = pu.failclosed(s.path, tmp_path / "c", "gov", tools=("check_rules",), **kw(s))
+    assert len(rows) == 6 * 5 and all(r["pass"] for r in rows), [r for r in rows
+                                                                 if not r["pass"]]
+    entry = [r for r in rows if r["family"] == "no_entry"]
+    assert any(r["visible_before"] for r in entry) and all(r["outcome"] == "ok" for r in entry)
+    assert not any(r["content"] for r in rows)
+    # a check_rules that answers as an unrestricted caller when access is denied is caught
+    real = tools.Tools.check_rules
+
+    def leaky(self, *a, **k):
+        try:
+            return real(self, *a, **k)
+        except AccessDenied:
+            return real(tools.Tools(self.store_path), *a, **k)
+
+    monkeypatch.setattr(tools.Tools, "check_rules", leaky)
+    bad = [r for r in pu.failclosed(s.path, tmp_path / "c", "gov", tools=("check_rules",),
+                                    **kw(s)) if not r["pass"]]
+    assert bad and any(r["content"] for r in bad)
 
 
 # -- applicability -----------------------------------------------------------------------------

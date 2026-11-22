@@ -246,6 +246,14 @@ envelope, the first span, a reader text (never aids) of at most `HIT_TEXT_MAX` c
 `truncated` beyond, and a table record's pointer. Results carry the units id, the filters
 applied (`applicability_filters`) and the handle; log lines carry `units`, `filters` and
 `applicability` beside the Phase 2 fields.
+
+`check_rules(intent, facts, as_of=)` (Phase 4 spec §12.7, Task 18) runs the gate's own decision
+(`bindings.decide.judge`) in the store process on an intended call `{tool, args}` and the
+caller's facts (`{name: {value, source}}` or bare values, N12) against `bindings/HEAD`
+(`NO_BINDINGS` without), under the 33 CFR 117 version in force on `as_of`. It executes nothing
+and issues no token; the rule ids are given whatever the caller may read, a rule's text only
+when its source is visible (P5); its log line carries `bindings`, the decision and the SHA-256
+of the facts, never the facts.
 """
 
 from __future__ import annotations
@@ -338,6 +346,11 @@ NO_HANDLE_UNITS = "the handle names no units; call without a handle or with a cu
 NO_UNIT_TUNING = "the unit index tuning cannot be read"
 NOT_PINNED = ("the unit-index tuning in force is not pinned for units {}; run `adr units pin "
               "--store {}` (or `adr-eval p4-tune`)")
+NO_BINDINGS = ("no bindings for snapshot {}…; run `adr units review` and `adr bindings "
+               "promote`")
+BINDINGS_UNITS = ("the current bindings {} were built against units {}, not the units {} this "
+                  "call reads; promote bindings built against them")
+ENFORCEMENT_CACHE = 4  # loaded bindings contexts kept in memory (by store, bindings, units)
 UNKNOWN_RULE = "no rule card with that rule_id is in force for this caller"
 UNKNOWN_PROCEDURE = "no procedure with that id"
 NO_DEFINITION = "no definition"
@@ -673,6 +686,24 @@ class UnitSearchResult(_Result):
     handle: dict | None = None
 
 
+@dataclass(frozen=True)
+class CheckRulesResult(_Result):
+    """The gate's decision on an intended call (§12.7): its outcome, (rule id, version) pairs,
+    each rule's text (None when its source document is hidden from the caller, P5),
+    deciding sections, missing facts and next allowed time, under the bindings id."""
+
+    outcome: str
+    rule_ids: list[list[str]]
+    rule_text: dict[str, str | None]
+    deciding_sections: list[str]
+    missing_facts: list[str]
+    next_allowed: str | None
+    bindings: str
+    snapshot: str
+    units: str
+    handle: dict | None = None
+
+
 # -- helpers ------------------------------------------------------------------------------
 
 
@@ -971,6 +1002,36 @@ def _unit_types(types: object) -> tuple[str, ...] | None:
 # -- the tools ------------------------------------------------------------------------------
 
 
+_ENFORCEMENT: OrderedDict = OrderedDict()  # (store, bindings id, units id) -> Enforcement
+
+
+def _caller_facts(facts: object) -> object:
+    """The agent's facts as a record (N12): `{name: {value, source?, seq?}}` kept (source
+    "caller" when absent), a bare value made `{value, source: "caller"}`; anything else is
+    returned as it is (the decision then fails closed on it)."""
+    if facts is None:
+        return {}
+    if not isinstance(facts, dict):
+        return facts
+    out = {}
+    for name, v in facts.items():
+        if isinstance(v, dict) and "value" in v and set(v) <= {"value", "source", "seq"}:
+            out[name] = {"source": "caller", **v}
+        elif isinstance(v, dict):
+            out[name] = v                     # malformed: the decision fails closed
+        else:
+            out[name] = {"value": v, "source": "caller"}
+    return out
+
+
+def _facts_sha256(facts: object) -> str:
+    try:
+        text = json.dumps(facts, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    except (TypeError, ValueError):
+        text = repr(facts)
+    return sha256_text(text)
+
+
 class Tools:
     """The tools over the store at `store_path`. Every call re-reads HEAD (and so sees a new
     content snapshot), `index/active.json`, the overlays and, with `acl`, `acl/HEAD`.
@@ -982,7 +1043,7 @@ class Tools:
 
     Only the tool methods (`search`, `read`, `grep`, `search_tools`, `load_tool`,
     `describe_tables`, `query_table`, `sql`, `define`, `rule_lookup`, `procedure_lookup`,
-    `unit_search`) serve a caller; the MCP layer must call nothing
+    `unit_search`, `check_rules`) serve a caller; the MCP layer must call nothing
     else. `index`, `tools_index`, `active_index`, `active_system` and `active_tool_index` are
     operator calls, refused with the ACL layer (`index` and `tools_index` after resolving
     access, so they are logged with the caller's decision)."""
@@ -2676,3 +2737,85 @@ class Tools:
         args = {"query": _filters_arg(query), "types": _filters_arg(types),
                 "as_of": _filters_arg(as_of), "limit": _filters_arg(limit)}
         return self._call("unit_search", args, run, fields, handle=handle)
+
+    def _enforcement(self, bindings_id: str, units_id: str):
+        """The loaded bindings context (`gate.server.load_enforcement`, which verifies every
+        binding), cached by store, bindings id and units id (bindings sets are write-once)."""
+        from adr_store.gate.server import load_enforcement
+
+        key = (str(self.store_path.resolve()), bindings_id, units_id)
+        with _VIEW_LOCK:
+            if key in _ENFORCEMENT:
+                _ENFORCEMENT.move_to_end(key)
+                return _ENFORCEMENT[key]
+        enf = load_enforcement(self.store_path, bindings_id)
+        with _VIEW_LOCK:
+            _ENFORCEMENT[key] = enf
+            while len(_ENFORCEMENT) > ENFORCEMENT_CACHE:
+                _ENFORCEMENT.popitem(last=False)
+        return enf
+
+    def check_rules(self, intent: dict, facts: dict | None = None, *, as_of: str | None = None,
+                    handle: handles_mod.Handle | dict | None = None) -> CheckRulesResult:
+        """The gate's decision (§12.6, `decide.judge`, the function the gate process runs) on
+        an intended call `intent` = `{tool, args}` with the caller's `facts` (§12.7, N12):
+        `{name: {value, source}}` or bare values (normalised to `{value, source: "caller"}`).
+        For `deny_request` the args carry `requested_open_at`, `rule_id` and `reason`, as the
+        gated tool does; every gated call names its `section` and `draw`. `as_of` (an ISO
+        date or datetime; default the version not superseded) picks the 33 CFR 117 version in
+        force. It executes nothing and issues no token. The bindings are `bindings/HEAD`'s
+        (NO_BINDINGS when there is none for the snapshot the call reads; refused when they
+        were built against other units than the call reads); bindings that do not load, or
+        anything the decision fails closed on, give a deny under `adr.gate.fail-closed@1`.
+        Enforcement ignores visibility: the rule ids and versions are given whatever the
+        caller can see, and a rule's text only when its source document is visible (P5).
+        Logged as a read, with the SHA-256 of the facts and never the facts. `handle` pins
+        the call's snapshot and units."""
+        from adr_store.bindings import decide as dm
+        from adr_store.bindings.manifest import BINDINGS_DIR
+
+        fields = {**self._unit_fields(), "bindings": None}
+
+        def run():
+            us = self._units(fields)
+            try:
+                bindings_id = (self.store_path / BINDINGS_DIR / "HEAD").read_text(
+                    encoding="utf-8").strip()
+            except (OSError, UnicodeDecodeError):
+                raise ToolError(NO_BINDINGS.format(self.snapshot[:12])) from None
+            fields["bindings"] = bindings_id
+            try:
+                enf = self._enforcement(bindings_id, us.units_id)
+            except Exception as e:  # noqa: BLE001 - bindings that do not load deny (P15)
+                enf, d = None, dm.fail_closed(f"the bindings do not load: {type(e).__name__}")
+            if enf is not None:
+                if enf.snapshot != self.snapshot:
+                    raise ToolError(NO_BINDINGS.format(self.snapshot[:12]))
+                if enf.units_id != us.units_id:
+                    raise ToolError(BINDINGS_UNITS.format(bindings_id[:12], enf.units_id[:12],
+                                                          us.units_id[:12]))
+                if isinstance(intent, dict) and set(intent) == {"tool", "args"}:
+                    d = dm.judge(enf, intent["tool"], intent["args"], _caller_facts(facts),
+                                 as_of)
+                else:
+                    d = dm.fail_closed("malformed intent: give {tool, args}")
+            a = self._access_now
+            text: dict[str, str | None] = {}
+            for rule_id, _ in d.rule_ids:
+                if rule_id in dm.SYSTEM_TEXT:
+                    text[rule_id] = dm.SYSTEM_TEXT[rule_id]
+                    continue
+                doc = d.sources.get(rule_id)
+                seen = a is None or doc in a.docs
+                text[rule_id] = enf.texts.get((rule_id, doc)) if seen and enf else None
+            res = CheckRulesResult(d.outcome, [list(r) for r in d.rule_ids], text,
+                                   list(d.deciding_sections), list(d.missing_facts),
+                                   d.next_allowed, bindings_id, self.snapshot, us.units_id,
+                                   handle=self._result_handle())
+            return res, [], {"decision": d.outcome,
+                             "rule_ids": [list(r) for r in d.rule_ids],
+                             "fail_closed": d.fail_closed}
+
+        args = {"intent": _filters_arg(intent), "facts_sha256": _facts_sha256(facts),
+                "as_of": _filters_arg(as_of)}
+        return self._call("check_rules", args, run, fields, handle=handle)

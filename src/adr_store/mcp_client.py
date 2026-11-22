@@ -50,7 +50,8 @@ def result_of(name: str, d: dict):
     return {"read": tools.ReadResult, "load_tool": tools.LoadToolResult,
             "describe_tables": tools.DescribeResult, "query_table": tools.QueryResult,
             "sql": tools.SqlResult, "procedure_lookup": tools.ProcedureLookupResult,
-            "unit_search": tools.UnitSearchResult}[name](**d)
+            "unit_search": tools.UnitSearchResult,
+            "check_rules": tools.CheckRulesResult}[name](**d)
 
 
 def error_of(text: str) -> tools.ToolError:
@@ -179,3 +180,6 @@ class McpTools:
     def unit_search(self, query, types=None, *, as_of=None, limit=None, handle=None):
         return self._run("unit_search", query=query, types=types, as_of=as_of, limit=limit,
                          handle=handle)
+
+    def check_rules(self, intent, facts=None, *, as_of=None, handle=None):
+        return self._run("check_rules", intent=intent, facts=facts, as_of=as_of, handle=handle)

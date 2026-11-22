@@ -59,7 +59,6 @@ exception while selecting or evaluating.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -129,13 +128,6 @@ class Decision:
     message: str
     fail_closed: str | None = None           # why the call failed closed, when it did
     sources: dict[str, str] = field(default_factory=dict)   # rule_id -> doc_id of its binding
-
-    def to_dict(self) -> dict:
-        return {"outcome": self.outcome, "rule_ids": [list(r) for r in self.rule_ids],
-                "deciding_sections": list(self.deciding_sections),
-                "missing_facts": list(self.missing_facts), "next_allowed": self.next_allowed,
-                "evaluated": [e.__dict__ for e in self.evaluated], "message": self.message,
-                "fail_closed": self.fail_closed}
 
     @property
     def message_sha256(self) -> str:
@@ -469,7 +461,3 @@ def judge(enf: Enforcement, tool: object, args: object, record: object, as_of: o
     except Exception as e:  # noqa: BLE001 - any failure on the enforcement path denies (P15)
         return fail_closed(f"error: {type(e).__name__}: {str(e)[:120]}")
 
-
-def canonical(obj: Any) -> str:
-    """Canonical JSON text (sorted keys, no padding, UTF-8)."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)

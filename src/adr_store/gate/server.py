@@ -53,6 +53,7 @@ import signal
 import socket
 import stat
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 from adr_store import acl as acl_mod
@@ -195,7 +196,7 @@ class Gate:
         lines = gate_log.read_lines(self.log_path)
         self.seq = n
         self.prev = gate_log.GENESIS if not lines else gate_log._sha256(lines[-1])
-        self._acl_cache: dict = {}
+        self._acl_cache: OrderedDict = OrderedDict()   # parsed ACL snapshots (acl.resolve)
 
     # -- state ----------------------------------------------------------------------------------
 

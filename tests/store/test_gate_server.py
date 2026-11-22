@@ -397,6 +397,11 @@ def test_hidden_rule_text_is_withheld(gate):  # noqa: F811
     assert seen["decision"] == "deny" and rule == "33 CFR 117.821(a)"
     assert seen["explanation"]["rule_text"][rule].startswith("(a) The draw of the Main Street")
     assert hidden["explanation"]["rule_text"] == {rule: None}
+    # the text is given on every later call too (the gate's ACL cache is reused)
+    for _ in range(2):
+        again = gate.client.judge(gate.request("schedule_opening", args, COMMERCIAL,
+                                               caller="user:acme-0"))
+        assert again["explanation"]["rule_text"] == seen["explanation"]["rule_text"]
     # an unknown caller sees no text either; system rules keep their fixed text
     nobody = gate.client.judge(gate.request("schedule_opening", args, COMMERCIAL,
                                             caller="user:nobody"))
@@ -453,3 +458,133 @@ def test_the_cli_serves_verifies_and_replays(gate, tmp_path, capsys):  # noqa: F
                           "--key-fd", str(r)], pass_fds=(r,), capture_output=True, text=True)
     os.close(r)
     assert out.returncode == 2 and "do not load" in out.stderr
+
+
+# -- check_rules (§12.7, N12) ----------------------------------------------------------------------
+
+def _bare(facts: dict) -> dict:
+    return {k: v["value"] for k, v in facts.items()}
+
+
+CHECKS = [
+    ("schedule_opening", opening(), COMMERCIAL),
+    ("schedule_opening", opening(CLOSED), COMMERCIAL),
+    ("schedule_opening", opening(CLOSED), {}),
+    ("schedule_opening", opening(NOON, draw=2), {**COMMERCIAL, "notice_received_at": {
+        "value": "2026-08-14T10:17:00", "source": "user"}}),
+    ("schedule_opening", opening("2026-12-02T12:00:00", "117.901"), COMMERCIAL),
+    ("schedule_opening", opening(NOON, draw=9), COMMERCIAL),
+    ("deny_request", deny_args(), COMMERCIAL),
+    ("deny_request", deny_args("33 CFR 117.5", "general duty"), COMMERCIAL),
+    ("deny_request", deny_args(at=NOON), COMMERCIAL),
+    ("escalate_request", {"section": "117.821", "draw": 1, "missing": ["notice_received_at"],
+                          "reason": "unknown"}, {}),
+    ("cancel_opening", {"opening_id": "o1", "section": "117.821", "draw": 1}, {}),
+    ("open_bridge", opening(), COMMERCIAL),
+    ("schedule_opening", opening(section="117.9999"), COMMERCIAL),
+    ("schedule_opening", {**opening(), "draw": 0}, COMMERCIAL),
+]
+
+
+def test_check_rules_equals_the_gate_decision_and_logs_facts_hash(
+        units_built_with_bindings, tmp_path):  # noqa: F811
+    from adr_store import tools
+    from adr_store.records import sha256_text
+
+    store = units_built_with_bindings
+    g = start_gate(store, tmp_path)
+    try:
+        outcomes = []
+        for caller in ("user:acme-0", "user:globex-0"):
+            t = tools.Tools(store.path, acl=True, caller=caller)
+            for tool, args, facts in CHECKS:
+                reply = g.client.judge(g.request(tool, args, facts, caller=caller))
+                for given in (facts, _bare(facts)):      # both shapes of the caller's facts
+                    res = t.check_rules({"tool": tool, "args": args}, given, as_of=AS_OF_GATE)
+                    assert (res.outcome, res.rule_ids, res.deciding_sections,
+                            res.missing_facts, res.next_allowed) == (
+                        reply["decision"], reply["rule_ids"], reply["deciding_sections"],
+                        reply["missing_facts"], reply["next_allowed"]), (caller, tool, args)
+                    assert res.rule_text == reply["explanation"]["rule_text"], (caller, tool, args)
+                    assert (res.bindings, res.units) == (g.bindings_id, g.units_id)
+                    assert not hasattr(res, "token") and "token" not in res.to_dict()
+                outcomes.append(reply["decision"])
+        assert {"allow", "deny", "escalate"} <= set(outcomes)
+        gate_lines = len(gate_log.read_lines(g.log_path))
+    finally:
+        g.process.stop()
+        import shutil
+
+        shutil.rmtree(g.process.socket_path.parent, ignore_errors=True)
+    assert gate_lines == 2 * len(CHECKS)            # check_rules wrote nothing to the gate log
+    # logged as a read: the SHA-256 of the facts, never the facts
+    facts = CHECKS[3][2]
+    tools.Tools(store.path, acl=True, caller="user:acme-0").check_rules(
+        {"tool": "schedule_opening", "args": CHECKS[3][1]}, facts, as_of=AS_OF_GATE)
+    line = json.loads((store.path / "log" / "retrieval.jsonl").read_bytes().splitlines()[-1])
+    assert line["tool"] == "check_rules" and line["acl_decision"] == "allowed"
+    assert line["args"]["facts_sha256"] == sha256_text(json.dumps(
+        facts, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+    assert "facts" not in line["args"] and "2026-08-14T10:17:00" not in json.dumps(line)
+    assert line["units"] == g.units_id and line["bindings"] == g.bindings_id
+    assert line["decision"] == "escalate" or line["decision"] in ("allow", "deny")
+
+
+AS_OF_GATE = "2026-08-14T05:30:00"
+
+
+def test_check_rules_refuses_without_bindings(tmp_path):
+    from adr_store import tools
+    from tests.store.units_fixtures import make_units_built
+
+    store = make_units_built(tmp_path / "s")
+    from tests.store.gate_fixtures import fresh_acl
+
+    fresh_acl(store.path)
+    t = tools.Tools(store.path, acl=True, caller="user:acme-0")
+    with pytest.raises(tools.ToolError) as e:
+        t.check_rules({"tool": "schedule_opening", "args": opening()}, {})
+    assert str(e.value) == tools.NO_BINDINGS.format(store.snapshot_id[:12])
+    # the ACL is checked first: an unknown caller is denied, not told about bindings
+    with pytest.raises(tools.AccessDenied):
+        tools.Tools(store.path, acl=True, caller="user:nobody").check_rules(
+            {"tool": "schedule_opening", "args": opening()}, {})
+
+
+def test_check_rules_fails_closed_on_bindings_that_no_longer_load(units_built_with_bindings):  # noqa: F811
+    from adr_store import tools
+
+    store = units_built_with_bindings
+    from tests.store.gate_fixtures import fresh_acl
+
+    fresh_acl(store.path)
+    head = (store.path / BINDINGS_DIR / "HEAD").read_text().strip()
+    (path,) = (store.path / BINDINGS_DIR).glob(f"*/bindings-{head[:16]}.json")
+    path.write_bytes(path.read_bytes() + b" ")
+    tools._ENFORCEMENT.clear()
+    res = tools.Tools(store.path, acl=True, caller="user:acme-0").check_rules(
+        {"tool": "schedule_opening", "args": opening()}, COMMERCIAL, as_of=AS_OF_GATE)
+    assert (res.outcome, res.rule_ids) == ("deny", [FC])
+    tools._ENFORCEMENT.clear()
+
+
+def test_check_rules_over_mcp_equals_the_python_api(units_built_with_bindings):  # noqa: F811
+    pytest.importorskip("mcp")
+    from adr_store import tools
+    from adr_store.mcp_client import McpTools
+    from tests.store.gate_fixtures import fresh_acl
+
+    store = units_built_with_bindings
+    fresh_acl(store.path)
+    t = tools.Tools(store.path, acl=True, caller="user:acme-0")
+    with McpTools(store.path, "user:acme-0") as m:
+        schema = {x.name: x for x in m.list_tools().tools}["check_rules"].input_schema
+        shapes = json.dumps(schema["properties"]["facts"])       # both shapes of a fact
+        assert '"#/$defs/Fact"' in shapes and '"string"' in shapes and '"boolean"' in shapes
+        assert set(schema["$defs"]["Fact"]["properties"]) == {"value", "source"}
+        for tool, args, facts in CHECKS[:9]:
+            for given in (facts, _bare(facts)):
+                a = t.check_rules({"tool": tool, "args": args}, given, as_of=AS_OF_GATE)
+                b = m.check_rules({"tool": tool, "args": args}, given, as_of=AS_OF_GATE)
+                assert {k: v for k, v in a.to_dict().items() if k != "handle"} == \
+                    {k: v for k, v in b.to_dict().items() if k != "handle"}

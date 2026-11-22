@@ -3,7 +3,8 @@ retrieval-compare, retrieval-identical, p2-compare, p3-q1, p3-q2, probes (tempor
 equivalence; the table probes tables-leak, tables-sql, tables-equivalence, tables-failclosed,
 tables-applicability, tables-mcp; the unit probes units-leak, units-equivalence,
 units-failclosed, units-applicability, units-define, units-closure, units-procedures,
-units-mcp), tools-retrieval, tools-probes, mcp-probes, report, doctor."""
+units-mcp; the gate probes gate-failclosed), tools-retrieval, tools-probes, mcp-probes, report,
+doctor."""
 
 from __future__ import annotations
 
@@ -869,6 +870,8 @@ def _probes(a: argparse.Namespace) -> int:
         return _probes_tables(a)
     if a.kind.startswith("units-"):
         return _probes_units(a)
+    if a.kind == GATE_KIND:
+        return _probes_gate(a)
     if a.corpus == "tools":
         raise runner.RunError(f"the {a.kind} probes take a content corpus, not tools")
     if a.kind == "temporal":
@@ -1512,6 +1515,63 @@ def _probes_tables_mcp(a, tp, ctx, refs, root, kw, started, t0, emb) -> int:
     return 0 if ok else 1
 
 
+GATE_KIND = "gate-failclosed"
+
+
+def _probes_gate(a: argparse.Namespace) -> int:
+    """`adr-eval probes gate-failclosed <corpus> --store S` (Phase 4 spec §15.4; G1-G3): the
+    gate fail-closed probes of `adr_eval.probes.gate` against a real gate over a shadow of the
+    store under --clones (default <p2_store_dir>/clones/gate-<corpus>; removed after), which
+    never writes the store. Needs the store's bindings/HEAD. Writes
+    <out>/probes-gate-failclosed-<corpus>-<time>/: results.json (per-probe rows), the probe
+    gate's log gate.jsonl, summary.json and summary.md (counts only). Exit 1 when a probe is
+    executed or allowed, or the log fails G1 or G3."""
+    import shutil
+    from datetime import UTC, datetime
+
+    from adr_eval.probes import gate as pg
+
+    t0 = time.perf_counter()
+    started = datetime.now(UTC)
+    config = runner.load_config()
+    p2 = runner.REPO_ROOT / config.get("p2_store_dir", ".cache/store-p2")
+    work = Path(a.clones) if a.clones is not None else p2 / "clones" / f"gate-{a.corpus}"
+    logs: dict = {}
+    try:
+        rows = pg.gate_failclosed(a.store, work, logs=logs)
+        checks = pg.log_checks(logs["log"], work / "shadow")
+        log_bytes = Path(logs["log"]).read_bytes()
+    except ValueError as e:
+        raise runner.RunError(str(e)) from e
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    summary = pg.summarize(rows)
+    summary["baseline"] = {"n": len(logs["baseline"]),
+                           "executed": sum(r["executed"] for r in logs["baseline"])}
+    summary.update(checks)
+    t, sep, g1, g3 = summary["total"], summary["separate"], summary["g1"], summary["g3"]
+    ok = (t["passed"] == t["n"] and sep["passed"] == sep["n"] and g1["chain_ok"]
+          and g3["differ"] == 0)
+    store = runner._display_path(Path(a.store))
+    md = (f"# Gate probes: fail closed ({a.corpus})\n\nStore `{store}`. Seed {pg.SEED4}. "
+          f"No model calls.\n\nG2: {t['n']} probes ({len(pg.CONDITIONS)} "
+          f"conditions × {len(pg.TOOLS)} gated tools × {pg.SEEDS} seeded requests), "
+          f"{t['allowed']} allowed, {t['executed']} executed; unwritable log "
+          f"{sep['n']} probes, {sep['allowed']} allowed. Baseline: {summary['baseline']['n']} "
+          f"seeded requests, {summary['baseline']['executed']} allowed and executed once.\n\n"
+          f"G1: {g1['lines']} log lines, chain verifies: {g1['chain_ok']}. G3: "
+          f"{g3['identical']} of {g3['lines']} lines replay to the same decision.\n\n"
+          "| condition | probes | allowed | executed |\n|---|---|---|---|\n" + "".join(
+              f"| {c} | {b['n']} | {b['allowed']} | {b['executed']} |\n"
+              for c, b in summary["conditions"].items()))
+    d = _write_probe_run(a, a.kind, started, {"results.json": {"results": rows},
+                                              "summary.json": {"summary": summary}}, md)
+    (d / "gate.jsonl").write_bytes(log_bytes)
+    print(md)
+    print(f"{d}: {a.kind}; wall-clock {time.perf_counter() - t0:.1f} s")
+    return 0 if ok else 1
+
+
 UNIT_KINDS = ("units-leak", "units-equivalence", "units-failclosed", "units-applicability",
               "units-define", "units-closure", "units-procedures", "units-mcp")
 
@@ -2063,9 +2123,10 @@ def _parser() -> argparse.ArgumentParser:
                                       "tables-failclosed, tables-applicability, tables-mcp; "
                                       "Phase 4 units-leak, units-equivalence, "
                                       "units-failclosed, units-applicability, units-define, "
-                                      "units-closure, units-procedures, units-mcp")
+                                      "units-closure, units-procedures, units-mcp; gate "
+                                      "gate-failclosed")
     p.add_argument("kind", choices=("temporal", "acl", "equivalence", *TABLE_KINDS,
-                                    *UNIT_KINDS))
+                                    *UNIT_KINDS, GATE_KIND))
     p.add_argument("corpus", choices=(*NAMES, "tools"),
                    help="the store's corpus (tools: the tool store, tables-equivalence only)")
     p.add_argument("--store", type=Path, required=True,
@@ -2080,9 +2141,10 @@ def _parser() -> argparse.ArgumentParser:
                         "units-leak, units-equivalence, units-mcp: keep the reference stores "
                         "(default: removed)")
     p.add_argument("--clones", type=Path, default=None, metavar="DIR",
-                   help="acl, tables-failclosed, units-failclosed: where the fail-closed "
-                        "clones go (default <p2_store_dir>/clones/<corpus>; units-failclosed: "
-                        "clones/units-<corpus>; removed)")
+                   help="acl, tables-failclosed, units-failclosed, gate-failclosed: where the "
+                        "fail-closed clones go (default <p2_store_dir>/clones/<corpus>; "
+                        "units-failclosed: clones/units-<corpus>; gate-failclosed: "
+                        "clones/gate-<corpus>, the store's shadow; removed)")
     acl_config = runner.REPO_ROOT / "config" / "acl"
     p.add_argument("--directory", type=Path, default=acl_config / "directory.json",
                    help="acl, equivalence and the tables-* and units-* kinds: the directory "

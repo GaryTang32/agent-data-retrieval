@@ -1,9 +1,9 @@
 r"""Unit probes (Phase 4 spec §15.4; criteria S1, S2, U1, U2, U3, the applicability probes and
 the MCP leg of D1) for the unit tools of `adr_store.tools.Tools` (`define`, `rule_lookup`,
-`procedure_lookup`, `unit_search`; `check_rules` joins in Task 18); deterministic (seed `SEED4`),
+`procedure_lookup`, `unit_search`, `check_rules`); deterministic (seed `SEED4`),
 no model calls, run through `Tools` with the ACL layer, as the Phase 3 table probes of
 `adr_eval.probes.tables` are. The tools probed are those of `UNIT_TOOLS` that `Tools` has
-(`present_tools`): the four read tools until Task 18 (preflight ruling C10).
+(`present_tools`): the four read tools until Task 18 added `check_rules` (preflight ruling C10).
 
 **Reference stores** (`UnitReferences`, `unit_reference`). A view's reference store holds the
 view's documents alone (`tables.bare_reference`: re-ingested from the store's blobs and texts,
@@ -70,8 +70,11 @@ of the Phase 2 probes (`acl.failclosed_callers`, `_F1`, `_cp`; clones removed). 
 target unit, by seeded hash among the units the most fail-closed callers see: a concept whose
 label only its document (chain) holds (`define`), a rule card whose provision only its chain
 holds (`rule_lookup` by id), a procedure (`procedure_lookup` by unit id), a unit its own words
-find (`unit_search`); before any change each caller that sees the target gets it, and no other
-does. The target documents are the targets' documents with every version of their chains.
+find (`unit_search`), a rule card of the 33 CFR 117 version in force whose rule decides a
+`check_rules` call (`check_rules_target`: its text is the content; without `bindings/HEAD` every
+caller is refused with `NO_BINDINGS` before and after); before any change each caller that sees
+the target gets it, and no other does. The target documents are the targets' documents with
+every version of their chains.
 Pass: F1–F5 refuse with that code and show nothing of the targets; "no entry" (an attribute
 rule mapping each target document's uri to `[]`, which must change those documents' access
 alone) shows nothing of the targets and, for a lookup by id, gives the same refusal as an id
@@ -164,6 +167,7 @@ from adr_eval.probes.acl import (
 )
 from adr_store import acl, handles
 from adr_store import applicability as ap
+from adr_store.bindings.decide import section_of
 from adr_store.store import Store
 from adr_store.tables.build import build_tables
 from adr_store.tables.gate import gate as tables_gate
@@ -1033,7 +1037,10 @@ def _unique_to(ctx: UnitContext, tool: str, u: Unit, docs: frozenset[str]) -> bo
 
 
 def _found(tool: str, out: tuple, u: Unit, docs: frozenset[str]) -> bool:
-    """Whether an answer returns target `u` (or, for `define`, a sense of its documents)."""
+    """Whether an answer returns target `u` (or, for `define`, a sense of its documents; for
+    `check_rules`, the text of its rule)."""
+    if tool == "check_rules":
+        return out[0] == "ok" and out[1].rule_text.get(u.canonical_ref) is not None
     got = _units_in(out)
     if tool == "define":
         return any(d in docs for _, d in got)
@@ -1049,6 +1056,9 @@ def failclosed_targets(ctx: UnitContext, users: list[str], tools: tuple[str, ...
     uris = {d: ctx.store.source(d).uri for d in ctx.store.doc_ids()}
     out = {}
     for tool in tools:
+        if tool == "check_rules":
+            out[tool] = check_rules_target(ctx, made, seed)
+            continue
         cands = [u for t in FAILCLOSED_TYPES.get(tool, ()) for u in ctx.by_type.get(t, ())]
         if tool not in FAILCLOSED_TYPES:
             raise ValueError(f"no fail-closed calls for tool {tool!r}")
@@ -1082,6 +1092,85 @@ def failclosed_targets(ctx: UnitContext, users: list[str], tools: tuple[str, ...
     return out
 
 
+CHECK_FACTS = {"vessel_class": "commercial", "local_procedure_conflict": False}
+
+
+def _check_call(card: Unit, day: date, draw: int = 1) -> dict:
+    """A `check_rules` call naming the card's section (an opening at noon of `day`)."""
+    return {"tool": "check_rules", "args": {
+        "intent": {"tool": "schedule_opening", "args": {
+            "section": section_of(card.canonical_ref), "draw": draw,
+            "open_at": f"{day.isoformat()}T12:00:00"}},
+        "facts": dict(CHECK_FACTS), "as_of": day.isoformat()}}
+
+
+def check_rules_target(ctx: UnitContext, made: dict, seed: int = SEED4) -> dict:
+    """The fail-closed target of `check_rules` (Task 18): a rule card of the 33 CFR 117 version
+    in force whose rule decides a call, so that its text is the content a caller who cannot
+    see the card's document must not get (P5: the rule id is disclosed by design). With
+    `bindings/HEAD`, the first draw (seeded order) whose decision names a rule card with every
+    caller that sees its document, and no other, given its text; without bindings (as on every
+    store before Task 22), a card seen by the most fail-closed callers, whose call every caller
+    is refused with `NO_BINDINGS` before any change (`bindings` None). ValueError when there
+    is no such card."""
+    from adr_store.bindings.decide import CHAIN, SYSTEM_TEXT
+    from adr_store.bindings.manifest import read_bindings_head
+    from adr_store.gate.server import load_enforcement
+
+    docs = [d for d in ctx.store.doc_ids() if ctx.chain(d) == CHAIN]
+    newest = [d for d in docs if ctx.overlay is not None
+              and ctx.overlay.records[d].superseded_by is None]
+    if len(newest) != 1:
+        raise ValueError("check_rules: no single 33 CFR 117 version in force")
+    doc = newest[0]
+    day = ctx.overlay.records[doc].valid_from + timedelta(days=7)
+    cards = [u for u in ctx.by_type.get("rule_card", ()) if u.doc_id == doc]
+    users = list(made)
+    bindings_id = read_bindings_head(ctx.store_path)
+    if bindings_id is None:
+        cards.sort(key=lambda u: (-sum(u.doc_id in ctx.visible(x) for x in users),
+                                  _h(seed, "failclosed", "check_rules", u.unit_id), u.unit_id))
+        for u in cards[:FAILCLOSED_TRIES]:
+            call = _check_call(u, day)
+            outs = {x: run_unit_call(t, call) for x, t in made.items()}
+            if all(o[0] == "refused" and o[1].startswith("no bindings") for o in outs.values()):
+                return {"unit_id": u.unit_id, "doc_id": u.doc_id, "type": u.type,
+                        "docs": sorted(ctx.chain_docs(u.doc_id)),
+                        "secret": " ".join(u.body["text"].split())[:SECRET_CHARS],
+                        "call": call, "control": None, "bindings": None,
+                        "before": {x: {"visible": u.doc_id in ctx.visible(x), "found": False}
+                                   for x in users}}
+        raise ValueError("check_rules: no card whose call every caller is refused for lack of "
+                         "bindings")
+    enf = load_enforcement(ctx.store_path, bindings_id)
+    by_ref = {u.canonical_ref: u for u in cards}
+    draws = sorted({(b.target["selector"]["section"], b.target["selector"]["draw"])
+                    for b in enf.bindings if b.doc_id == doc},
+                   key=lambda k: (_h(seed, "failclosed", "check_rules", *k), k))
+    for section, draw in draws[:FAILCLOSED_TRIES]:
+        probe = next((u for u in cards if section_of(u.canonical_ref) == section), None)
+        if probe is None:
+            continue
+        call = _check_call(probe, day, draw)
+        outs = {x: run_unit_call(t, call) for x, t in made.items()}
+        oks = [o[1] for o in outs.values() if o[0] == "ok"]
+        rules = [r for r, _ in oks[0].rule_ids if r not in SYSTEM_TEXT] if oks else []
+        if len(oks) != len(outs) or not rules or rules[0] not in by_ref:
+            continue
+        u = by_ref[rules[0]]
+        before = {x: {"visible": u.doc_id in ctx.visible(x),
+                      "found": _found("check_rules", o, u, frozenset())}
+                  for x, o in outs.items()}
+        if all(b["found"] == b["visible"] for b in before.values()) and \
+                any(b["visible"] for b in before.values()):
+            return {"unit_id": u.unit_id, "doc_id": u.doc_id, "type": u.type,
+                    "docs": sorted(ctx.chain_docs(u.doc_id)),
+                    "secret": " ".join(u.body["text"].split())[:SECRET_CHARS], "call": call,
+                    "control": None, "bindings": bindings_id, "before": before}
+    raise ValueError("check_rules: no draw whose decision names a card exactly those who see "
+                     "it can read")
+
+
 def _shows(text: str, target: dict) -> bool:
     return any(d in text or d[:12] in text for d in target["docs"]) or \
         target["secret"] in text
@@ -1098,7 +1187,11 @@ def judge_unit_failclosed(cond: str, tool: str, target: dict, out: tuple,
     if out[0] == "denied":
         return {"outcome": label, "content": False, "pass": False}
     if control is None:
-        return {"outcome": label, "content": shown, "pass": out[0] == "ok" and not shown}
+        # check_rules on a store without bindings is refused for everyone (no content)
+        no_bindings = target.get("bindings", "") is None and out[0] == "refused" and \
+            out[1].startswith("no bindings")
+        return {"outcome": label, "content": shown,
+                "pass": (out[0] == "ok" or no_bindings) and not shown}
     same = out[0] == control[0] == "refused" and out[1] == control[1] and \
         out[1] in (UNKNOWN_RULE, UNKNOWN_PROCEDURE)
     return {"outcome": label, "content": shown, "not_found_equal": same,
