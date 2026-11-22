@@ -524,3 +524,47 @@ def review_reply(verdicts: dict[str, str] | None = None, default: str = "approve
         return json.dumps({"verdicts": out})
 
     return reply
+
+
+# -- a promoted gov units build with promoted bindings (Task 18, preflight C2) -------------------
+# The bindings of §§ 117.821 (two draws) and 117.901 (one draw) of the newest 33 CFR 117
+# version, compiled from `units_enrich_reply` against the rule cards of the promoted units
+# build, tested (the real tests), stamped analysed by the test helper (CI has no z3), approved
+# by `review_reply` behind a cached stub, written and promoted to bindings/HEAD.
+
+def make_units_built_with_bindings(path: Path) -> Store:
+    """`make_units_built` with signed-off bindings promoted (module comment above). The
+    bindings manifest's tables id is the units build's, or zeros when it read no tables (the
+    fixture's units have none; the gate never reads it)."""
+    from adr_eval.cache import Cache
+    from adr_eval.llm import CachedStubClient
+    from adr_store.bindings.checks import mark_tested
+    from adr_store.bindings.compile import compile_bindings
+    from adr_store.bindings.enrich import enrich_section
+    from adr_store.bindings.manifest import promote_bindings, write_bindings
+    from adr_store.bindings.review import review_all
+    from adr_store.units import overlay as units_overlay
+    from tests.store.bindings_fixtures import stamp_analysed
+
+    store = make_units_built(path)
+    units_id = units_overlay.read_units_head(path)
+    m = units_overlay.load_units_manifest(path, units_id)
+    cards = [u for u in units_overlay.load_units(path, m, "rule_card")
+             if u.doc_id == DOC_117_NEW]
+    llm = Path(path).parent / f"{Path(path).name}-llm"
+    enrich = CachedStubClient("stub-sonnet", Cache(llm / "enrich"), units_enrich_reply)
+    items = [enrich_section(s, store, cards, enrich) for s in ("117.821", "117.901")]
+    compiled, _ = compile_bindings(items, cards)
+    candidates = stamp_analysed(mark_tested(compiled))
+    review = CachedStubClient("stub-opus", Cache(llm / "review"), review_reply())
+    reviewed, _ = review_all(None, candidates, review, cards=cards)
+    bindings_id, _ = write_bindings(path, store.snapshot_id, units_id,
+                                    m.tables_id or "0" * 64, reviewed)
+    promote_bindings(path, bindings_id)
+    return store
+
+
+@pytest.fixture
+def units_built_with_bindings(tmp_path) -> Store:
+    """`make_units_built_with_bindings` under `tmp_path`."""
+    return make_units_built_with_bindings(tmp_path / "units-bindings")

@@ -41,10 +41,11 @@ intended condition is false somewhere, i.e. depends on its windows or thresholds
 **The grid** (`grid_equivalence`, criterion B1): every 15 minutes of 2026-08-10…16 and of
 2026-09-07…13 (Labor Day week), × `notice_grid(ref.notice_hours)` (none for a missing notice)
 × each vessel class and unknown × conflict true and false; at each point the draw's bindings
-(`decide_bindings`, the gate's steps 1-6 of §12.6) and the reference must give the same
-outcome, denying sections and missing facts. An exception is a mismatch. Missing facts are
-the absent facts of the Unknown forbids and of the Unknown overriding bases listing an unsure
-forbid (a True forbid stays True whatever its absent facts), then of the Unknown bases.
+(`decide_bindings`: the gate's steps 1-6 of §12.6, implemented once in `decide.decide_values`)
+and the reference must give the same outcome, denying sections and missing facts. An
+exception is a mismatch. Missing facts follow `decide`'s rule: the absent facts of the
+Unknown forbids and of the Unknown overriding bases listing an unsure forbid (a True forbid
+stays True whatever its absent facts), then of the Unknown bases.
 
 **Statuses** (`mark_tested`): it also checks what only the whole draw shows
 (`_draw_problems`): § 117.31(b) must override every forbid of its draw and nothing else (P32),
@@ -67,6 +68,8 @@ from itertools import product
 from typing import Any
 
 from adr_store.bindings.compile import ALL_TIMES, EMERGENCY, GENERAL_DUTY
+from adr_store.bindings.decide import decide_values, section_of
+from adr_store.bindings.decide import prepared as _fast
 from adr_store.bindings.dsl import DAYS, Binding, Tri, Window, evaluate
 from adr_store.bindings.facts import (
     EMERGENCY_CLASSES,
@@ -79,7 +82,8 @@ from adr_store.units.ecfr import normalise_rule_id
 
 __all__ = ["GRID_STEP", "GRID_WEEKS", "MIN_CASES", "boundary_cases", "complement_probes",
            "decide_bindings", "grid_equivalence", "grid_size", "grid_times",
-           "has_threshold_or_window", "mark_tested", "notice_grid", "test_binding"]
+           "has_threshold_or_window", "mark_tested", "notice_grid", "section_of",
+           "test_binding"]
 
 GRID_STEP = 15
 MIN_CASES = 4
@@ -92,7 +96,6 @@ MAX_MESSAGES = 20
 # "just outside": one minute, or one day (a weekday or date-range limit), from a true case
 _STEPS = (timedelta(minutes=-1), timedelta(minutes=1), timedelta(days=-1), timedelta(days=1))
 _PERIOD_KEY = re.compile(r"periods\[(\d+)\]\.(\w+)")
-_SECTION = re.compile(r"CFR\s+(\d+\.\d+)")
 _WRONG_TYPE = {"open_at": ("2026-08-12", 0), NOTICE: ("240", True),
                "vessel_class": (1, True), "local_procedure_conflict": ("false", 0)}
 
@@ -140,63 +143,17 @@ def _record(at: datetime, notice: int | None, vessel: str | None, conflict: bool
 
 # -- the gate's decision over a draw's bindings (§12.6 steps 1-6) ---------------------------------
 
-def section_of(rule_id: str) -> str:
-    """The section-level ref of a rule id ("33 CFR 117.821(a)" -> "117.821", P34)."""
-    m = _SECTION.search(rule_id)
-    return m[1] if m else rule_id
-
-
-def _absent(b: Binding, facts: dict) -> set[str]:
-    return {f for f in b.required_facts if facts.get(f) is None}
-
-
 def _decide(bindings: list[Binding], values: dict[str, Tri], facts: dict) -> RefDecision:
-    forbids = [b for b in bindings if b.effect == "forbid"]
-    bases = [b for b in bindings if b.effect == "basis"]
-    overriding = [b for b in bases if b.overrides]
-    discarded = {f for o in overriding if values[o.binding_id] is Tri.T for f in o.overrides}
-    remaining = [f for f in forbids if f.binding_id not in discarded]
-    unknown_over = [o for o in overriding if values[o.binding_id] is Tri.U]
-    listed = {f for o in unknown_over for f in o.overrides}
-    deny = [f for f in remaining if values[f.binding_id] is Tri.T and f.binding_id not in listed]
-    if deny:
-        return RefDecision("deny", frozenset(section_of(f.rule_id) for f in deny), ())
-    unsure = [f for f in remaining if values[f.binding_id] is Tri.U
-              or (values[f.binding_id] is Tri.T and f.binding_id in listed)]
-    if unsure:
-        ids = {f.binding_id for f in unsure}
-        # a True forbid stays True whatever its absent facts: only an Unknown one's count
-        missing = set().union(*(_absent(f, facts) for f in unsure
-                                if values[f.binding_id] is Tri.U),
-                              *(_absent(o, facts) for o in unknown_over
-                                if ids & set(o.overrides)))
-        return RefDecision("escalate", frozenset(), tuple(sorted(missing)))
-    if any(values[b.binding_id] is Tri.T for b in bases):
-        return RefDecision("allow", frozenset(), ())
-    unknown = [b for b in bases if values[b.binding_id] is Tri.U]
-    return RefDecision("escalate", frozenset(),
-                       tuple(sorted(set().union(*(_absent(b, facts) for b in unknown)))))
+    """`decide.decide_values` (the gate's one decision) in the reference's terms."""
+    d = decide_values(bindings, values, facts)
+    return RefDecision(d.outcome, d.sections, d.missing)
 
 
 def decide_bindings(bindings: list[Binding], facts: dict) -> RefDecision:
-    """The gate's decision for `schedule_opening` over one draw's bindings (§12.6 steps 1-6):
-    forbids listed by a True overriding basis are discarded; a True forbid no Unknown
-    overriding basis lists denies, naming its section; an Unknown forbid, or a True one an
-    Unknown overriding basis lists, escalates with the absent facts of the Unknown ones
-    among those forbids and of those bases; then a True basis allows; an Unknown basis
-    escalates with its absent facts; no basis escalates. Exceptions propagate (the caller
-    fails closed)."""
+    """The gate's decision for `schedule_opening` over one draw's bindings (§12.6 steps 1-6,
+    `decide.decide_draw`, the one implementation the gate and `check_rules` use), as a
+    `RefDecision`. Exceptions propagate (the caller fails closed)."""
     return _decide(bindings, {b.binding_id: evaluate(b.when, facts) for b in bindings}, facts)
-
-
-def _fast(e: Any) -> Any:
-    """`e` with its windows as `Window` objects (validated once, not at every evaluation)."""
-    if isinstance(e, list):
-        return [_fast(x) for x in e]
-    if not isinstance(e, dict):
-        return e
-    return {k: (Window.model_validate(v) if k == "window" and isinstance(v, dict) else _fast(v))
-            for k, v in e.items()}
 
 
 def _as_dict(d: RefDecision | None, err: Exception | None) -> dict:

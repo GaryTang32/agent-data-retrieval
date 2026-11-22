@@ -50,6 +50,7 @@ import functools
 import json
 from collections import Counter
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from adr_eval.llm import ModelOutputError, parse_json_recovering
@@ -62,8 +63,10 @@ from adr_store.units.envelope import Unit
 
 __all__ = ["FLAGS", "INCOMPLETE", "MAX_TOKENS", "PROMPT_VERSION", "REVIEW_PROFILE",
            "SERVED_MISMATCH", "UNPARSEABLE", "VERIFIER", "flagged", "review_all",
-           "review_message", "review_model", "review_section", "review_sections",
-           "served_problem", "system_prompt", "target_section", "verdict_records"]
+           "models_file_model", "review_message", "review_model", "review_section",
+           "review_sections",
+           "served_problem", "system_prompt", "target_section", "use_models_file",
+           "verdict_records"]
 
 PROMPT_VERSION = "binding-review@1"
 MAX_TOKENS = 2000
@@ -87,15 +90,45 @@ def system_prompt() -> str:
         "prompts/binding_review.txt").read_text(encoding="utf-8")
 
 
-@functools.cache
+_PINNED: list[str] = []      # the review model read once by `use_models_file` (the gate)
+
+
 def review_model() -> str:
-    """The model of the review profile (`REVIEW_PROFILE` in config/models.json): a served
-    model a provider reports for a review must be this one."""
+    """The model of the review profile (`REVIEW_PROFILE` in config/models.json, or in the file
+    `use_models_file` read): a served model a provider reports for a review must be this
+    one."""
+    return _PINNED[0] if _PINNED else _configured_review_model()
+
+
+@functools.cache
+def _configured_review_model() -> str:
     from adr_eval import runner
 
     config = runner.load_config()
     profiles = runner.load_profiles(runner.REPO_ROOT / config.get("models", runner.MODELS_PATH))
     return profiles[REVIEW_PROFILE]["model"]
+
+
+def models_file_model(path: Path) -> str:
+    """The review profile's model in the models file `path`; ValueError when the file is
+    missing, unreadable, not JSON, lacks the profile or names a placeholder model."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        model = data["profiles"][REVIEW_PROFILE]["model"]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"{path}: no {REVIEW_PROFILE} model ({type(e).__name__})") from e
+    if not isinstance(model, str) or not model or model.startswith("<set"):
+        raise ValueError(f"{path}: the {REVIEW_PROFILE} model is not set")
+    return model
+
+
+def use_models_file(path: Path) -> str:
+    """Read the review profile's model from `path` once and use it for every later check in
+    this process (the gate reads it at startup, so a missing or invalid file fails then, not
+    at each request); the model. ValueError as `models_file_model`."""
+    model = models_file_model(path)
+    _PINNED[:] = [model]
+    return model
 
 
 def served_problem(served: str | None) -> str | None:

@@ -238,9 +238,10 @@ def _next_ok(d: RefDraw, facts: dict[str, Any]) -> bool:
 def ref_next_allowed(d: RefDraw, open_at: datetime, record: dict) -> datetime | None:
     """The first minute after `open_at` (seconds dropped), within seven days, at which no
     denying condition is True and an opening basis is (§12.6 `next_allowed`, `_next_ok`; an
-    Unknown fact counts as not True); None when there is none. The gate (Task 18) computes
-    `next_allowed` the same way over the bindings: the first minute with no True forbid and a
-    True basis. It is not "the first minute the decision is allow": with notice unknown, an
+    Unknown fact counts as not True); None when there is none. The gate computes
+    `next_allowed` by the same definition over the bindings (`decide.next_allowed`: the first
+    minute with no True forbid, after the overrides of a True overriding basis, and a True
+    basis). It is not "the first minute the decision is allow": with notice unknown, an
     on-signal draw is next allowed at the end of its closed window."""
     start = open_at.replace(second=0, microsecond=0)
     for k in range(1, SCAN_DAYS * 1440 + 1):

@@ -50,7 +50,10 @@ B1 and B2 totals), `adr units review --store S --candidates ID --generator P --m
 are signed off and written as a bindings set whose id it prints; a served model other than
 the profile's fails the run after writing), `adr bindings promote --store S --bindings ID`
 (moves bindings/HEAD to a set whose every binding verifies and is signed off) and `adr
-bindings show`, and the four unit tools
+bindings show`, the gate (Phase 4 spec §12.6, code in `adr_store.gate`): `adr gate serve
+--store S --bindings ID --log DIR --socket PATH --key-fd N` (the out-of-process gate; the key on
+an inherited file descriptor, never an argument), `adr gate verify --log DIR` (the hash chain
+and G1) and `adr gate replay --store S --log DIR` (G3), and the four unit tools
 (Phase 4 spec §11.2, code in `adr_store.tools`): `adr units define TERM`, `adr units rules
 [QUERY] [--rule-id ID]`, `adr units procedures [TASK] [--id ID --view V]` and `adr units search
 QUERY [--type T]`, each with `--store`, `--as-of`, `--as USER` and `--json`. `adr`
@@ -122,6 +125,7 @@ from adr_eval.corpora.registry import NAMES, LocalFilesMissing, check_local_file
 from adr_eval.corpora.toolret import ToolRetMissing
 from adr_eval.runner import RunError, load_checked_corpus
 from adr_store import acl, applicability, dedup, mcp_server, tool_catalog, tool_records, tools
+from adr_store.gate import server as gate_server
 from adr_store.store import (
     Added,
     ConformanceError,
@@ -1617,6 +1621,40 @@ def _bindings_show(a: argparse.Namespace) -> int:
     return 0
 
 
+def _gate_serve(a: argparse.Namespace) -> int:
+    return gate_server.serve(a.store, a.bindings, a.units, a.log, a.socket, a.key_fd,
+                             models=a.models, deadline=a.deadline)
+
+
+def _gate_log_file(path: Path) -> Path:
+    from adr_store.gate import log as gate_log
+
+    return path / gate_log.LOG_NAME if path.is_dir() else path
+
+
+def _gate_verify(a: argparse.Namespace) -> int:
+    """`adr gate verify --log DIR`: exit 1 when the chain or G1 fails."""
+    from adr_store.gate import log as gate_log
+
+    ok, n, bad = gate_log.verify_chain(_gate_log_file(a.log))
+    print(f"{n} line(s); " + ("the chain verifies and every line carries a rule id and "
+                              "version" if ok else f"FAILS at {bad}"))
+    return 0 if ok else 1
+
+
+def _gate_replay(a: argparse.Namespace) -> int:
+    """`adr gate replay --store S --log DIR`: exit 1 when a line replays differently (G3)."""
+    from adr_store.gate import log as gate_log
+
+    path = _gate_log_file(a.log)
+    n = len(gate_log.read_lines(path))
+    mism = gate_log.replay(path, a.store)
+    print(f"{n} line(s) replayed; {n - len(mism)} identical, {len(mism)} differ")
+    for m in mism[:20]:
+        print(f"  seq {m['seq']}: {', '.join(m['fields'])}")
+    return 0 if not mism else 1
+
+
 def _units_pin(a: argparse.Namespace) -> int:
     """`adr units pin --store S`: pin the tuning file's entry in force for the store's
     units/HEAD, with its dense vectors when its `w` is below 1 (idempotent; spec P42). For a
@@ -2223,6 +2261,25 @@ def _parser() -> argparse.ArgumentParser:
                      help="a bindings id (default HEAD)")
     bds.add_argument("--json", action="store_true", help="print the manifest as JSON")
     bds.set_defaults(fn=_bindings_show)
+    gt = sub.add_parser("gate", help="the gate (Phase 4): serve, replay and verify its log",
+                        description="`serve` runs the out-of-process gate (Phase 4 §12.6) on a "
+                        "Unix socket with the HMAC key on an inherited file descriptor; "
+                        "`verify` checks a decision log's hash chain and that every line "
+                        "carries a rule id and version (G1); `replay` re-evaluates every "
+                        "line against the store (G3). " + NOT_A_BOUNDARY)
+    gt_sub = gt.add_subparsers(dest="action", required=True)
+    gts = gt_sub.add_parser("serve", help="run the gate until terminated")
+    gate_server.add_arguments(gts)
+    gts.set_defaults(fn=_gate_serve)
+    gtv = gt_sub.add_parser("verify", help="verify a decision log (hash chain, G1)")
+    gtv.add_argument("--log", type=Path, required=True, metavar="DIR",
+                     help="the log directory (gate.jsonl) or the log file")
+    gtv.set_defaults(fn=_gate_verify)
+    gtr = gt_sub.add_parser("replay", help="replay every line of a decision log (G3)")
+    gtr.add_argument("--store", type=Path, required=True, help="store directory")
+    gtr.add_argument("--log", type=Path, required=True, metavar="DIR",
+                     help="the log directory (gate.jsonl) or the log file")
+    gtr.set_defaults(fn=_gate_replay)
     tl = sub.add_parser("tools", help="the tool catalog (Phase 2): tool records as data")
     tl_sub = tl.add_subparsers(dest="action", required=True)
     ti = tl_sub.add_parser("ingest", help="add the tools of one source to a store's tool "
